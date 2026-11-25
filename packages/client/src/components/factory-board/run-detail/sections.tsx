@@ -287,6 +287,23 @@ export function RunRiskCi({ run }: { run: FactoryQueueRun }) {
             : t('factoryRunDetail.riskLow', 'Low risk')}
         </p>
       )}
+      {run.riskWaiver && (
+        <div className="flex flex-col gap-0.5" data-testid="factory-run-detail-lint-cleanup">
+          <p>
+            {t(
+              'factoryRunDetail.lintCleanup',
+              'A member marked it as a lint cleanup: its size and its contract risks do not hold it.',
+            )}
+          </p>
+          {(run.risk?.waived ?? []).length > 0 && (
+            <ul className="text-muted-foreground flex flex-col gap-0.5 border-l pl-2">
+              {(run.risk?.waived ?? []).map((reason) => (
+                <li key={reason}>{reason}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
       {run.mergeApproval && <RunMergeApproval approval={run.mergeApproval} />}
       {ciRounds > 0 && (
         <p data-testid="factory-run-detail-ci">

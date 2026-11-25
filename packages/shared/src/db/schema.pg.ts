@@ -400,6 +400,8 @@ export const factoryRuns = pgTable('factory_runs', {
   /** JSON: the run this one is stacked on (D10: run id, issue, branch, retargeted), or null. */
   stackedOn: text('stacked_on'),
   mergeApproval: text('merge_approval'),
+  /** JSON `FactoryRiskWaiver`: a member marked the run as a lint cleanup; null otherwise. */
+  riskWaiver: text('risk_waiver'),
   /** The schedule trigger that started the run (change flow-triggers); null otherwise. */
   triggerId: text('trigger_id'),
   /** The trigger's name when the run started, kept for display after an edit or a delete. */

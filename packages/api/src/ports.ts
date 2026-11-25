@@ -466,6 +466,16 @@ export interface FactoryPort {
     expectedSha: string,
   ): PortResult<FactoryRun>;
   /**
+   * Mark (or unmark) a run of the caller's factory as a lint cleanup, which
+   * changes how its risk is classed; a run held for its risk is retried. Audited.
+   */
+  setLintCleanup(
+    userId: string,
+    projectId: string,
+    runId: string,
+    lintCleanup: boolean,
+  ): PortResult<FactoryRun>;
+  /**
    * The requests agents made that the caller approve a held merge, newest
    * first, each brought in line with its run. Empty without a factory.
    */

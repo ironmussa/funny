@@ -424,6 +424,18 @@ reads the role's prose as a decision:
   `merge` park it as `base keeps moving`. With neither moved it parks with GitHub's own message,
   which `pinnedMerge` now keeps next to the status. Seen on #450 (2026-11-25): a push to the base
   two seconds before the merge got a 405 and a run waiting for a person.
+  **Lint cleanups.** A member can mark a run as a lint cleanup (`factory.setLintCleanup`, the
+  "Lint cleanup" action on a run the factory classed high risk; `factory_runs.risk_waiver`,
+  migration 129). It is a statement by a person, sent from their session like an approval, and
+  never an agent's answer: it lowers the risk class. `classifyRisk` then sets aside the size
+  reason and the contract's risk hints (kept in the risk's `waived`), provided
+  `lintCleanupRefusals` finds, in the diff alone, no added suppression (`eslint-disable`,
+  `oxlint-disable`, `@ts-expect-error`, …), no change to a lint or type-check configuration
+  file, and no code file GitHub gave no patch for. Otherwise nothing is waived and the reason
+  says why. Weakened tests and sensitive paths hold whatever was marked. The check shows the
+  warnings were not hidden, not that the change does nothing else: tests, review and proof
+  answer that. Marking a run held for its risk puts it back in flight; with no risk reason left
+  it has no approval to lose when its head moves.
   **Paths.** A run that already has a pull request waits for no paths (`pathsHeld` in
   `factory-watcher.ts`, triage's `busyPaths`): it has no implementer to start, and queueing it
   behind later runs let them merge first. With the factory's `holdPathsAwaitingApproval` setting

@@ -233,6 +233,46 @@ export function createFactoryRunControl(runs = createFactoryRunsRepository()) {
     },
 
     /**
+     * Mark (or unmark) the run as a lint cleanup, as `userId`: its size and
+     * its contract's risk hints then do not make it high risk, when the
+     * factory's own checks of the diff pass. A run held for its risk is put
+     * back in flight so the mark is applied to it at once.
+     */
+    setLintCleanup(
+      userId: string,
+      factoryId: string,
+      runId: string,
+      on: boolean,
+    ): ResultAsync<FactoryRunView, FactoryRunControlError> {
+      return runOf(factoryId, runId).andThen((run) =>
+        runs
+          .setRiskWaiver(
+            run.id,
+            on ? { kind: 'lint-cleanup', userId, at: new Date().toISOString() } : null,
+          )
+          .mapErr(storage)
+          .andThen((written) =>
+            written
+              ? okAsync<undefined, FactoryRunControlError>(undefined)
+              : errAsync<undefined, FactoryRunControlError>({
+                  kind: 'conflict',
+                  message: 'The run has ended: there is nothing left to class.',
+                }),
+          )
+          .andThen(() => {
+            const held = run.state === 'waiting_human' && run.failureReason === HIGH_RISK_HOLD;
+            return on && held
+              ? reopened(run)
+              : okAsync<undefined, FactoryRunControlError>(undefined);
+          })
+          .andThen(() => {
+            wake(factoryId);
+            return reread(runId);
+          }),
+      );
+    },
+
+    /**
      * Approve merging the run's held high-risk head commit, then retry it.
      * Refused unless the run waits for a person because of that risk, and
      * unless `expectedSha` (the commit the member was shown) is the held one. When

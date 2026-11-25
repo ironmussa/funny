@@ -41,6 +41,29 @@ export const factoryRunInput = z.object({ projectId, runId: z.string().min(1) })
  * the member was shown: the approval is refused when the run is held on
  * another one (openspec factory-agent-tools).
  */
+/**
+ * A member marking (or unmarking) one run as a lint cleanup. Like an approval,
+ * only a member's own session sends it: never an agent.
+ */
+export const factoryLintCleanupInput = z
+  .object({ projectId, runId: z.string().min(1), lintCleanup: z.boolean() })
+  .strict();
+
+/**
+ * A member's statement about what a run is, which changes how its risk is
+ * classed. `lint-cleanup`: the change only clears lint warnings, so its size
+ * and the risk hints of its contract do not make it high risk, provided the
+ * factory finds no lint suppression added and no lint configuration touched.
+ * Weakened tests and sensitive paths still do.
+ */
+export const factoryRiskWaiverSchema = z.object({
+  kind: z.literal('lint-cleanup'),
+  /** Who marked it. */
+  userId: z.string(),
+  at: z.string(),
+});
+export type FactoryRiskWaiver = z.infer<typeof factoryRiskWaiverSchema>;
+
 export const factoryApproveMergeInput = z
   .object({ projectId, runId: z.string().min(1), expectedSha: z.string().min(7) })
   .strict();
@@ -362,6 +385,8 @@ export interface FactoryRun {
   stepOptions: FactoryStepOptionsRecord[];
   /** A member's approval to merge its high-risk head commit, or null. */
   mergeApproval: FactoryMergeApproval | null;
+  /** A member's statement that the run is a lint cleanup, or null. */
+  riskWaiver: FactoryRiskWaiver | null;
   /**
    * Each execution of a node of the run's flow, in the order they started
    * (openspec factory-step-timings), from the workflow engine's journal.
@@ -918,6 +943,11 @@ export const factoryRiskSchema = z.object({
    * a classification stored before the keys existed.
    */
   keys: z.array(z.string()).optional(),
+  /**
+   * The reasons a member's waiver set aside for this commit (a verified lint
+   * cleanup): they would have made it high risk. Absent when nothing was waived.
+   */
+  waived: z.array(z.string()).optional(),
 });
 export type FactoryRisk = z.infer<typeof factoryRiskSchema>;
 

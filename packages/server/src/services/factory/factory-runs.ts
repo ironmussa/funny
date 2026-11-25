@@ -19,6 +19,7 @@ import {
   factoryRegressionProofSchema,
   factoryReviewVerdictSchema,
   factoryMergeApprovalSchema,
+  factoryRiskWaiverSchema,
   factoryRiskSchema,
   factoryStackedOnSchema,
   factoryStepOptionsRecordSchema,
@@ -28,6 +29,7 @@ import {
   type FactoryApprovalGap,
   type FactoryApprovalMove,
   type FactoryMergeApproval,
+  type FactoryRiskWaiver,
   type FactoryRegressionProof,
   type FactoryReviewVerdict,
   type FactoryRisk,
@@ -316,6 +318,8 @@ export interface FactoryRunView {
   stackedOn: FactoryStackedOn | null;
   /** A member's approval to merge its high-risk head commit, or null. */
   mergeApproval: FactoryMergeApproval | null;
+  /** A member's statement that the run is a lint cleanup, or null. */
+  riskWaiver: FactoryRiskWaiver | null;
   /** The options each agent step ran with, in the order the steps started. */
   stepOptions: FactoryStepOptionsRecord[];
   /** Each flow node execution, in start order; only the run lists read it (openspec factory-step-timings). */
@@ -380,6 +384,7 @@ const queueAndFlowOf = (row: Row) => ({
   regenerateNode: row.regenerateNode ?? null,
   stackedOn: parseStackedOn(row.stackedOn ?? null),
   mergeApproval: parseMergeApproval(row.mergeApproval ?? null),
+  riskWaiver: parseRiskWaiver(row.riskWaiver ?? null),
 });
 
 /** An approval that moved to a commit with the same change. */
@@ -394,6 +399,13 @@ const MAX_MOVE_FILES = 20;
 function parseMergeApproval(raw: string | null): FactoryMergeApproval | null {
   if (!raw) return null;
   const parsed = parseStoredJson(factoryMergeApprovalSchema, raw, 'factory_runs.merge_approval');
+  return parsed.ok ? parsed.value : null;
+}
+
+/** The stored waiver, or null (none, or no longer readable: nothing is waived). */
+function parseRiskWaiver(raw: string | null): FactoryRiskWaiver | null {
+  if (!raw) return null;
+  const parsed = parseStoredJson(factoryRiskWaiverSchema, raw, 'factory_runs.risk_waiver');
   return parsed.ok ? parsed.value : null;
 }
 
@@ -719,6 +731,7 @@ function newRunRow(
     integrationPendingAt: null,
     stackedOn: null,
     mergeApproval: null,
+    riskWaiver: null,
     triggerId: null,
     triggerName: null,
     inputs: null,
@@ -1384,6 +1397,27 @@ export function createFactoryRunsRepository(
           .orderBy(desc(factoryRuns.completedAt)),
         storage,
       ).map((rows) => rows.map(({ run, userId }) => ({ ...toView(run), userId })));
+    },
+
+    /**
+     * Record (or, with null, remove) a member's statement that the run is a
+     * lint cleanup. Refused for a run that ended: nothing would read it.
+     * Resolves whether it was written.
+     */
+    setRiskWaiver(
+      runId: string,
+      waiver: FactoryRiskWaiver | null,
+    ): ResultAsync<boolean, FactoryRunsError> {
+      return ResultAsync.fromPromise(
+        db
+          .update(factoryRuns)
+          .set({ riskWaiver: waiver ? JSON.stringify(waiver) : null })
+          .where(
+            and(eq(factoryRuns.id, runId), notInArray(factoryRuns.state, [...TERMINAL_STATES])),
+          )
+          .returning({ id: factoryRuns.id }),
+        storage,
+      ).map((rows) => rows.length > 0);
     },
 
     /** The runs parked for a member's approval of a high-risk pull request. */

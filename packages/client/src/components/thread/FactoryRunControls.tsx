@@ -11,7 +11,11 @@ import { useTranslation } from 'react-i18next';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { PRBadge } from '@/components/PRBadge';
 import { Button } from '@/components/ui/button';
-import { approveFactoryMerge, controlFactoryRun } from '@/data/factory/actions';
+import {
+  approveFactoryMerge,
+  controlFactoryRun,
+  setFactoryRunLintCleanup,
+} from '@/data/factory/actions';
 import { useCanSteerProject } from '@/data/projects/hooks';
 import type { FactoryRun } from '@/lib/api/factory';
 import { ENDED_FACTORY_STATES, isFactoryRunAwaitingMergeApproval } from '@/lib/factory-run-labels';
@@ -31,7 +35,12 @@ const RETRYABLE = new Set<FactoryRun['state']>([
   'needs_info',
 ]);
 
-export type FactoryRunActionId = 'approve-merge' | 'retry' | 'stop';
+export type FactoryRunActionId =
+  | 'approve-merge'
+  | 'lint-cleanup'
+  | 'lint-cleanup-off'
+  | 'retry'
+  | 'stop';
 
 export interface FactoryRunAction {
   id: FactoryRunActionId;
@@ -51,6 +60,11 @@ export function useFactoryRunActions(
   const { t } = useTranslation();
   const canSteer = useCanSteerProject(projectId);
   const [confirmingMerge, setConfirmingMerge] = useState(false);
+  const [confirmingLint, setConfirmingLint] = useState(false);
+  const markLintCleanup = (on: boolean) =>
+    void setFactoryRunLintCleanup(projectId, run.id, on).orTee((error) =>
+      toastError(error, 'factory'),
+    );
   const control = (action: 'retry' | 'stop') =>
     void controlFactoryRun(action, projectId, run.id).orTee((error) =>
       toastError(error, 'factory'),
@@ -71,6 +85,22 @@ export function useFactoryRunActions(
       id: 'approve-merge',
       label: t('factory.approveMerge', 'Approve and merge'),
       run: () => setConfirmingMerge(true),
+    });
+  }
+  // A member's statement that the change only clears lint warnings: offered
+  // once the factory classed it high risk, and taken back while the run lives.
+  const ended = ENDED_FACTORY_STATES.has(run.state);
+  if (!ended && run.riskWaiver) {
+    actions.push({
+      id: 'lint-cleanup-off',
+      label: t('factory.lintCleanupOff', 'Not a lint cleanup'),
+      run: () => markLintCleanup(false),
+    });
+  } else if (!ended && run.risk?.level === 'high') {
+    actions.push({
+      id: 'lint-cleanup',
+      label: t('factory.lintCleanup', 'Lint cleanup'),
+      run: () => setConfirmingLint(true),
     });
   }
   if (RETRYABLE.has(run.state) && !awaitsApproval) {
@@ -108,11 +138,40 @@ export function useFactoryRunActions(
       }}
     />
   ) : null;
-  return { actions, dialog };
+  const lintDialog = (
+    <ConfirmDialog
+      open={confirmingLint}
+      onOpenChange={setConfirmingLint}
+      title={t('factory.lintCleanupTitle', 'Treat this run as a lint cleanup?')}
+      description={t(
+        'factory.lintCleanupBody',
+        'Its size and the risks its contract names will no longer hold it: the factory merges it by itself once its checks, review and regression proof pass, whatever commits follow. It still waits for you if it touches a sensitive path, weakens a test, adds a lint suppression or changes the lint configuration.',
+      )}
+      confirmLabel={t('factory.lintCleanupConfirm', 'Treat as a lint cleanup')}
+      cancelLabel={t('common.cancel', 'Cancel')}
+      variant="default"
+      onCancel={() => setConfirmingLint(false)}
+      onConfirm={() => {
+        setConfirmingLint(false);
+        markLintCleanup(true);
+      }}
+    />
+  );
+  return {
+    actions,
+    dialog: (
+      <>
+        {dialog}
+        {lintDialog}
+      </>
+    ),
+  };
 }
 
 const BUTTON_VARIANT: Record<FactoryRunActionId, 'default' | 'outline' | 'ghost'> = {
   'approve-merge': 'default',
+  'lint-cleanup': 'outline',
+  'lint-cleanup-off': 'ghost',
   retry: 'outline',
   stop: 'ghost',
 };

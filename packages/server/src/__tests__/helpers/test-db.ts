@@ -431,6 +431,7 @@ export function createTestDb() {
       integration_pending_at TEXT,
       stacked_on TEXT,
       merge_approval TEXT,
+      risk_waiver TEXT,
       trigger_id TEXT,
       trigger_name TEXT,
       inputs TEXT

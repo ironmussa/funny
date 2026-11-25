@@ -401,6 +401,21 @@ function createFactoryParts(
       return controlled('approve-merge', userId, projectId, runId, { expectedSha });
     },
 
+    async setLintCleanup(userId, projectId, runId, lintCleanup) {
+      return ownFactory(userId, projectId)
+        .andThen((factoryId) =>
+          control.setLintCleanup(userId, factoryId, runId, lintCleanup).mapErr(controlFailure),
+        )
+        .andTee((run) =>
+          audit({
+            action: 'factory.lint_cleanup_marked',
+            actorId: userId,
+            detail: `Factory run ${factoryRunLabel(run)} ${lintCleanup ? 'marked' : 'unmarked'} as a lint cleanup`,
+            meta: { projectId, runId, issueNumber: run.issueNumber, lintCleanup },
+          }),
+        );
+    },
+
     async approvalRequests(userId, projectId) {
       const factoryId = await settings.factoryId(userId, projectId).mapErr(settingsFailure);
       if (factoryId.isErr()) return errAsync(factoryId.error);

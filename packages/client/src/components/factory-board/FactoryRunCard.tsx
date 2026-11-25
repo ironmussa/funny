@@ -7,7 +7,7 @@
  */
 import type { GitStatusInfo } from '@funny/shared';
 import { approvalGapFor, implementingThreadOf } from '@funny/shared/contracts/factory';
-import { Check, Clock, MoreVertical, RotateCcw, Square } from 'lucide-react';
+import { Check, Clock, MoreVertical, RotateCcw, Sparkles, Square } from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -193,6 +193,8 @@ function FactoryRunCardBody({
 
 const ACTION_ICON: Record<FactoryRunActionId, typeof Check> = {
   'approve-merge': Check,
+  'lint-cleanup': Sparkles,
+  'lint-cleanup-off': Sparkles,
   retry: RotateCcw,
   stop: Square,
 };

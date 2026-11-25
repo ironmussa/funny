@@ -79,6 +79,79 @@ export interface RiskInput {
   sizeIgnoredPaths?: readonly string[];
   /** Risks the run's contract named (triage); absent for a run without a contract. */
   riskHints?: readonly string[];
+  /**
+   * A member marked the run as a lint cleanup. Never an agent's answer: it
+   * lowers the risk, so it has to come from a person and be checked here.
+   */
+  lintCleanup?: boolean;
+}
+
+/**
+ * Comments that silence a linter or the type checker. A lint cleanup that adds
+ * one cleared the warning by hiding it.
+ */
+const SUPPRESSION =
+  /(eslint-disable|oxlint-disable|biome-ignore|fallow-ignore|@ts-ignore|@ts-expect-error|@ts-nocheck)/;
+
+/** Files that decide what the linter and the type checker report. */
+const LINT_CONFIG =
+  /(^|\/)(\.?oxlintrc(\.[a-z]+)?|oxlint\.config\.[cm]?[jt]s|\.eslintrc(\.[a-z]+)?|eslint\.config\.[cm]?[jt]s|biome\.jsonc?|\.fallowrc\.json|fallow\.toml|tsconfig[^/]*\.json)$/;
+
+/** At most this many files are named in one refusal. */
+const MAX_NAMED_FILES = 3;
+
+const named = (paths: string[]) =>
+  paths.length > MAX_NAMED_FILES
+    ? `${paths.slice(0, MAX_NAMED_FILES).join(', ')} and ${paths.length - MAX_NAMED_FILES} more`
+    : paths.join(', ');
+
+/** The lines a patch adds, without the diff's own `+++` header. */
+const addedLines = (patch: string) =>
+  patch.split('\n').filter((line) => line.startsWith('+') && !line.startsWith('+++'));
+
+/**
+ * Why a change marked as a lint cleanup cannot be taken as one, from the diff
+ * alone: it touches what the linter is configured with, it adds a suppression,
+ * or part of it could not be read. Empty when it passes. This checks that the
+ * warnings were not hidden, not that the change does nothing else: its tests,
+ * its review and its checks answer that.
+ */
+export function lintCleanupRefusals(input: RiskInput): RiskReason[] {
+  const { files, truncated } = input.change;
+  const config = files.filter((file) => LINT_CONFIG.test(file.path)).map((file) => file.path);
+  const code = files.filter(
+    (file) => file.additions > 0 && countsTowardSize(file.path, input.sizeIgnoredPaths),
+  );
+  const unread = code.filter((file) => file.patch === undefined).map((file) => file.path);
+  const silenced = code
+    .filter(
+      (file) =>
+        file.patch !== undefined && addedLines(file.patch).some((line) => SUPPRESSION.test(line)),
+    )
+    .map((file) => file.path);
+  const refusals: RiskReason[] = [];
+  if (truncated) {
+    refusals.push({ key: 'lint-cleanup:truncated', text: 'the file list was not read whole' });
+  }
+  if (config.length > 0) {
+    refusals.push({
+      key: 'lint-cleanup:config',
+      text: `it changes the lint or type-check configuration (${named(config)})`,
+    });
+  }
+  if (silenced.length > 0) {
+    refusals.push({
+      key: 'lint-cleanup:suppression',
+      text: `it adds a lint or type-check suppression (${named(silenced)})`,
+    });
+  }
+  if (unread.length > 0) {
+    refusals.push({
+      key: 'lint-cleanup:unread',
+      text: `GitHub gave no diff for ${named(unread)}, so no suppression could be looked for`,
+    });
+  }
+  return refusals;
 }
 
 /** Whether `path` matches `glob`; a glob that cannot be compiled matches nothing. */
@@ -140,16 +213,30 @@ function capped(reasons: string[]): string[] {
 }
 
 export function classifyRisk(input: RiskInput): FactoryRisk {
-  const reasons: RiskReason[] = [
+  // What a verified lint cleanup sets aside: its size and what triage guessed about it.
+  const waivable: RiskReason[] = [
+    ...sizeReasons(input),
+    ...(input.riskHints ?? []).map((hint) => ({
+      key: hintKey(hint),
+      text: `the contract names a risk: ${hint.slice(0, 200)}`,
+    })),
+  ];
+  // What holds whatever a member said: weakened tests and sensitive paths.
+  const always: RiskReason[] = [
     ...input.findings.map((finding) => ({
       key: `finding:${finding.kind}:${finding.path ?? ''}`,
       text: `${finding.kind}${finding.path ? ` in ${finding.path}` : ''}: ${finding.detail}`,
     })),
-    ...sizeReasons(input),
     ...sensitiveReasons(input),
-    ...(input.riskHints ?? []).map((hint) => ({
-      key: hintKey(hint),
-      text: `the contract names a risk: ${hint.slice(0, 200)}`,
+  ];
+  const refusals = input.lintCleanup ? lintCleanupRefusals(input) : [];
+  const waived = input.lintCleanup && refusals.length === 0 ? waivable : [];
+  const reasons: RiskReason[] = [
+    ...always,
+    ...(waived.length > 0 ? [] : waivable),
+    ...refusals.map((refusal) => ({
+      key: refusal.key,
+      text: `marked as a lint cleanup, but ${refusal.text}`,
     })),
   ];
   return {
@@ -158,5 +245,6 @@ export function classifyRisk(input: RiskInput): FactoryRisk {
     reasons: capped(reasons.map((reason) => reason.text)),
     // Every key, not only those of the reasons shown: a hidden reason is still a reason.
     keys: [...new Set(reasons.map((reason) => reason.key))],
+    ...(waived.length > 0 && { waived: capped(waived.map((reason) => reason.text)) }),
   };
 }

@@ -72,6 +72,7 @@ mock.module('@/data/factory/hooks', () => ({
 mock.module('@/data/factory/actions', () => ({
   sendIssuesToFactory: (...args: unknown[]) => factory.send(...args),
   approveFactoryMerge: () => okAsync(null),
+  setFactoryRunLintCleanup: () => ({ orTee: () => undefined }),
   controlFactoryRun: (...args: unknown[]) => factory.control(...args),
   retryFactorySettings: (...args: unknown[]) => factory.retry(...args),
 }));

@@ -1880,6 +1880,11 @@
       "baseMoving": "O GitHub recusou o merge várias vezes porque a branch base ou o pull request continuavam mudando. Tente a execução de novo quando a branch estiver parada."
     },
     "approveMerge": "Aprovar e fazer merge",
+    "lintCleanup": "Limpeza de lint",
+    "lintCleanupOff": "Não é limpeza de lint",
+    "lintCleanupTitle": "Tratar esta execução como limpeza de lint?",
+    "lintCleanupBody": "O tamanho e os riscos que o contrato nomeia deixarão de retê-la: a fábrica faz o merge sozinha quando os checks, a revisão e a prova de regressão passarem, quaisquer que sejam os commits seguintes. Ela ainda espera por você se tocar um caminho sensível, enfraquecer um teste, adicionar uma supressão de lint ou mudar a configuração do lint.",
+    "lintCleanupConfirm": "Tratar como limpeza de lint",
     "approveMergeTitle": "Fazer merge desta mudança de risco alto?",
     "approveMergeBody": "O factory fará o merge do commit {{sha}} da issue #{{issue}} se os checks, o review e a prova de regressão ainda passarem. Um commit novo na branch precisa de uma nova aprovação.",
     "approvalGap": {
@@ -2097,6 +2102,7 @@
     }
   },
   "factoryRunDetail": {
+    "lintCleanup": "Um membro a marcou como limpeza de lint: o tamanho e os riscos do contrato não a retêm.",
     "approvalAdjustment": "{{lines}} linhas diferem em {{files}} arquivos",
     "approvalMovedTo": "movido para",
     "approvalSameChange": "mesma alteração",

@@ -2513,6 +2513,15 @@ const migrations: Migration[] = [
       await ctx().addColumn('factory_settings', 'hold_paths_awaiting_approval', 'INTEGER');
     },
   },
+  {
+    // A member's statement that a run is a lint cleanup: its size and the
+    // contract's risk hints then do not make it high risk, as long as the
+    // change adds no suppression and touches no lint configuration.
+    name: '129_factory_runs_risk_waiver',
+    async up() {
+      await ctx().addColumn('factory_runs', 'risk_waiver', 'TEXT');
+    },
+  },
 ];
 
 /**

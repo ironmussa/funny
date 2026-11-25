@@ -964,6 +964,10 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       split: splitDepsOf(job, scope),
       sensitivePaths: job.factory.sensitivePaths,
       maxLowRiskLines: job.factory.maxLowRiskLines,
+      lintCleanup: async () => {
+        const run = await deps.runs.get(job.run.id);
+        return run.isOk() && run.value?.riskWaiver?.kind === 'lint-cleanup';
+      },
       approvalAdjustMaxLines: job.factory.approvalAdjustMaxLines,
       sizeIgnoredPaths: job.factory.sizeIgnoredPaths,
       autoMerge: job.factory.autoMerge,

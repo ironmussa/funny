@@ -41,6 +41,7 @@ const run = (over: Partial<FactoryRun>): FactoryRun => ({
   flowCommit: null,
   stepOptions: [],
   mergeApproval: null,
+  riskWaiver: null,
   ...over,
 });
 

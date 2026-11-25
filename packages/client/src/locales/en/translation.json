@@ -1921,6 +1921,11 @@
       "baseMoving": "GitHub refused the merge several times because the base branch or the pull request kept changing. Retry the run when the branch is quiet."
     },
     "approveMerge": "Approve and merge",
+    "lintCleanup": "Lint cleanup",
+    "lintCleanupOff": "Not a lint cleanup",
+    "lintCleanupTitle": "Treat this run as a lint cleanup?",
+    "lintCleanupBody": "Its size and the risks its contract names will no longer hold it: the factory merges it by itself once its checks, review and regression proof pass, whatever commits follow. It still waits for you if it touches a sensitive path, weakens a test, adds a lint suppression or changes the lint configuration.",
+    "lintCleanupConfirm": "Treat as a lint cleanup",
     "approveMergeTitle": "Merge this high-risk change?",
     "approveMergeBody": "The factory will merge commit {{sha}} of issue #{{issue}} once its checks, review and regression proof still pass. A new commit on the branch needs a new approval.",
     "approvalGap": {
@@ -2138,6 +2143,7 @@
     }
   },
   "factoryRunDetail": {
+    "lintCleanup": "A member marked it as a lint cleanup: its size and its contract risks do not hold it.",
     "approvalAdjustment": "{{lines}} lines differ in {{files}} files",
     "approvalMovedTo": "moved to",
     "approvalSameChange": "same change",

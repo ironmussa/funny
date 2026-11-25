@@ -239,6 +239,11 @@ export interface FactoryActionProviderDeps {
   sensitivePaths?: readonly string[];
   /** The factory's size limit for a low-risk change. */
   maxLowRiskLines?: number;
+  /**
+   * Whether a member marked the run as a lint cleanup, read from the row when
+   * a commit is classed (a member may mark it while the run waits).
+   */
+  lintCleanup?: () => Promise<boolean>;
   /** The factory's globs left out of a change's size. */
   sizeIgnoredPaths?: readonly string[];
   /** Which reviewed changes the factory merges by itself (default: only low-risk ones). */
@@ -1010,6 +1015,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
           maxLowRiskLines: deps.maxLowRiskLines,
           sizeIgnoredPaths: deps.sizeIgnoredPaths,
           riskHints: contractOf({ triage: triager.current() })?.riskHints,
+          lintCleanup: (await deps.lintCleanup?.()) ?? false,
         })
       : {
           headSha: sha,

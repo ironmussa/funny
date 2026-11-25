@@ -13,6 +13,7 @@ interface FailureCardMocks {
   thread: Pick<Thread, 'id' | 'projectId' | 'source'> | undefined;
   control: Mock<(...args: any[]) => any>;
   approve: Mock<(...args: any[]) => any>;
+  lintCleanup: Mock<(...args: any[]) => any>;
 }
 
 const mocks = ((): FailureCardMocks => ({
@@ -20,6 +21,7 @@ const mocks = ((): FailureCardMocks => ({
   thread: { id: 't1', projectId: 'p1', source: 'factory' },
   control: vi.fn(),
   approve: vi.fn(),
+  lintCleanup: vi.fn(),
 }))();
 
 mock.module('@/data/factory/hooks', () => ({ useFactoryRunForThread: () => mocks.run }));
@@ -28,6 +30,7 @@ mock.module('@/data/projects/hooks', () => ({ useCanSteerProject: () => true }))
 mock.module('@/data/factory/actions', () => ({
   controlFactoryRun: (...args: unknown[]) => mocks.control(...args),
   approveFactoryMerge: (...args: unknown[]) => mocks.approve(...args),
+  setFactoryRunLintCleanup: (...args: unknown[]) => mocks.lintCleanup(...args),
 }));
 const toastError = vi.fn();
 mock.module('@/lib/toast-error', () => ({ toastError }));
@@ -152,6 +155,44 @@ describe('FactoryRunFailureCard', () => {
     // The approval names the commit the dialog showed.
     expect(mocks.approve).toHaveBeenCalledWith('p1', 'r1', 'c2b585c51b2e');
     expect(mocks.control).not.toHaveBeenCalled();
+  });
+
+  // A member's statement that the change only clears lint warnings.
+  test('a high-risk run can be marked as a lint cleanup after a confirmation, and unmarked', async () => {
+    const held = {
+      currentStep: 'merge',
+      failureReason: 'high risk',
+      risk: {
+        headSha: 'c2b585c51b2e',
+        level: 'high' as const,
+        reasons: ['1511 changed lines outside tests and docs (more than 400)'],
+        paths: [],
+      },
+    };
+    mocks.run = runOf(held);
+    mocks.lintCleanup.mockImplementation(() => okAsync(mocks.run));
+    const { unmount } = render(<FactoryRunFailureCard threadId="t1" agentRunning={false} />, {
+      wrapper: TooltipProvider,
+    });
+    expect(screen.queryByTestId('factory-run-failure-lint-cleanup-off')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('factory-run-failure-lint-cleanup'));
+    expect(mocks.lintCleanup).not.toHaveBeenCalled();
+    expect(await screen.findByText('Treat this run as a lint cleanup?')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('confirm-dialog-confirm'));
+    expect(mocks.lintCleanup).toHaveBeenCalledWith('p1', 'r1', true);
+    unmount();
+
+    // Marked: the mark can be taken back, with no confirmation.
+    mocks.run = runOf({
+      ...held,
+      riskWaiver: { kind: 'lint-cleanup', userId: 'u1', at: '2026-11-25T00:00:00.000Z' },
+    });
+    render(<FactoryRunFailureCard threadId="t1" agentRunning={false} />, {
+      wrapper: TooltipProvider,
+    });
+    expect(screen.queryByTestId('factory-run-failure-lint-cleanup')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('factory-run-failure-lint-cleanup-off'));
+    expect(mocks.lintCleanup).toHaveBeenLastCalledWith('p1', 'r1', false);
   });
 
   test('an approval refused because the commit changed says so', async () => {

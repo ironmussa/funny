@@ -212,6 +212,37 @@ describe('factory over tRPC', () => {
     return held;
   }
 
+  // A member's statement, like an approval: it needs steer and their session.
+  test('marking a held run as a lint cleanup records who did and retries it; a viewer may not', async () => {
+    const held = await heldRun();
+    const mark = { projectId: 'p1', runId: held.id, lintCleanup: true };
+    seedProjectMember(t.db, { projectId: 'p1', userId: 'vic', role: 'viewer' });
+    expect((await mutate('vic', 'setLintCleanup', mark)).status).toBe(403);
+    expect(
+      (await mutate('alice', 'setLintCleanup', { projectId: 'p1', runId: held.id })).status,
+    ).toBe(400);
+
+    const marked = await mutate('alice', 'setLintCleanup', mark);
+    expect(marked).toMatchObject({
+      status: 200,
+      // Held for its risk: back in flight, so the next classification reads the mark.
+      body: { state: 'queued', riskWaiver: { kind: 'lint-cleanup', userId: 'alice' } },
+    });
+
+    const unmarked = await mutate('alice', 'setLintCleanup', { ...mark, lintCleanup: false });
+    expect(unmarked).toMatchObject({ status: 200, body: { riskWaiver: null } });
+  });
+
+  test('a run that ended cannot be marked', async () => {
+    const ended = await seededRun('merged');
+    const marked = await mutate('alice', 'setLintCleanup', {
+      projectId: 'p1',
+      runId: ended.id,
+      lintCleanup: true,
+    });
+    expect(marked.status).toBe(409);
+  });
+
   const fromThread = { threadId: 't-ask', runnerId: 'laptop', runnerOwnerId: 'alice' };
 
   test("an agent's approval request is listed, declined by the owner only, and leaves the run held", async () => {

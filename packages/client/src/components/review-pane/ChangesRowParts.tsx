@@ -1,7 +1,7 @@
 import type { VirtualItem } from '@tanstack/react-virtual';
 import type { TFunction } from 'i18next';
 import { MoreHorizontal, FolderX } from 'lucide-react';
-import type { CSSProperties, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { TreeRow } from '@/components/FileTree';
@@ -14,6 +14,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { cn } from '@/lib/utils';
 
 /**
  * Shared building blocks for the virtualized rows of the Changes file list
@@ -27,17 +28,13 @@ export type RowPosition = Pick<VirtualItem, 'size' | 'start'>;
 
 type SubmoduleStatusRow = Extract<TreeRow, { kind: 'submodule-status' }>;
 
-/** Absolute positioning for a virtualized row, indented by tree depth. */
-export function virtualRowStyle(position: RowPosition, depth: number): CSSProperties {
-  return {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    width: '100%',
-    height: `${position.size}px`,
-    transform: `translateY(${position.start}px)`,
-    paddingLeft: `${8 + depth * INDENT_PX}px`,
-  };
+/**
+ * Left padding of a virtualized row, indented by tree depth. Each row sets it
+ * with `position` as `--changes-row-*` custom properties, read by its
+ * absolute-positioning classes.
+ */
+export function rowIndentPx(depth: number): number {
+  return 8 + depth * INDENT_PX;
 }
 
 type StopPropagationEvent = { stopPropagation(): void };
@@ -165,8 +162,15 @@ export function SubmoduleStatusRowView({
   const { t } = useTranslation();
   return (
     <div
-      className="text-muted-foreground/80 flex items-center gap-1.5 text-xs italic"
-      style={virtualRowStyle(position, row.depth)}
+      className={cn(
+        'absolute top-0 left-0 w-full h-[var(--changes-row-height)] [transform:translateY(var(--changes-row-top))] pl-[var(--changes-row-indent)]',
+        'text-muted-foreground/80 flex items-center gap-1.5 text-xs italic',
+      )}
+      style={{
+        '--changes-row-top': `${position.start}px`,
+        '--changes-row-height': `${position.size}px`,
+        '--changes-row-indent': `${rowIndentPx(row.depth)}px`,
+      }}
       data-testid={`review-submodule-status-${row.submodulePath}`}
     >
       <span className="truncate">{submoduleStatusLabel(row, t)}</span>

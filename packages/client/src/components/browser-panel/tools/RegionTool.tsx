@@ -138,12 +138,12 @@ export function RegionTool({ overlayRef, isActive }: RegionToolProps) {
       {liveRect && (
         <div
           aria-hidden="true"
-          className="border-primary bg-primary/10 pointer-events-none absolute border-2 border-dashed"
+          className="border-primary bg-primary/10 pointer-events-none absolute top-[var(--region-live-top)] left-[var(--region-live-left)] h-[var(--region-live-height)] w-[var(--region-live-width)] border-2 border-dashed"
           style={{
-            left: liveRect.x,
-            top: liveRect.y,
-            width: liveRect.w,
-            height: liveRect.h,
+            '--region-live-left': `${liveRect.x}px`,
+            '--region-live-top': `${liveRect.y}px`,
+            '--region-live-width': `${liveRect.w}px`,
+            '--region-live-height': `${liveRect.h}px`,
           }}
         />
       )}
@@ -159,13 +159,12 @@ export function RegionTool({ overlayRef, isActive }: RegionToolProps) {
               type="button"
               data-region-marker="true"
               data-testid={`browser-panel-region-${index}`}
-              className="border-primary bg-primary/5 hover:bg-primary/15 absolute flex items-start justify-end border-2 border-dashed transition-colors"
+              className="border-primary bg-primary/5 hover:bg-primary/15 pointer-events-auto absolute top-[var(--region-marker-top)] left-[var(--region-marker-left)] flex h-[var(--region-marker-height)] w-[var(--region-marker-width)] items-start justify-end border-2 border-dashed transition-colors"
               style={{
-                left: a.x,
-                top: a.y,
-                width: a.w,
-                height: a.h,
-                pointerEvents: 'auto',
+                '--region-marker-left': `${a.x}px`,
+                '--region-marker-top': `${a.y}px`,
+                '--region-marker-width': `${a.w}px`,
+                '--region-marker-height': `${a.h}px`,
               }}
               onClick={(e) => {
                 e.stopPropagation();
@@ -204,10 +203,6 @@ function RegionNoteEditor({
 }) {
   const [value, setValue] = useState(initial);
   const fontSize = useSettingsStore((s) => s.fontSize);
-  const fontStyle: React.CSSProperties = {
-    fontSize: PROSE_FONT_SIZE_PX[fontSize],
-    lineHeight: `${PROSE_LINE_HEIGHT_PX[fontSize]}px`,
-  };
   return (
     <div className="flex flex-col gap-2">
       <Textarea
@@ -216,7 +211,11 @@ function RegionNoteEditor({
         placeholder="What's wrong in this region?"
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        style={fontStyle}
+        size="prose"
+        style={{
+          '--textarea-font-size': `${PROSE_FONT_SIZE_PX[fontSize]}px`,
+          '--textarea-line-height': `${PROSE_LINE_HEIGHT_PX[fontSize]}px`,
+        }}
         onKeyDown={(e) => {
           if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
             e.preventDefault();

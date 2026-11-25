@@ -36,7 +36,7 @@ export const UnifiedRow = memo(function UnifiedRow({
   selected?: boolean;
   onToggle?: (lineIdx: number) => void;
 }) {
-  const bgStyle = getUnifiedRowBgStyle(line);
+  const rowBg = getUnifiedRowBgStyle(line)?.backgroundColor;
   const isConflictMarker = isConflictMarkerLine(line);
   const textClass = getUnifiedRowTextClass(line);
   // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
@@ -49,13 +49,11 @@ export const UnifiedRow = memo(function UnifiedRow({
       className={cn(
         'flex font-mono text-(length:--diff-font-size)',
         wrap ? 'items-start' : 'items-center',
+        wrap ? 'min-h-[var(--diff-row-height)]' : 'h-[var(--diff-row-height)]',
         selectable && 'pl-1',
+        rowBg && 'bg-[color:var(--unified-row-bg)]',
       )}
-      style={
-        wrap
-          ? { minHeight: 'var(--diff-row-height)', ...bgStyle }
-          : { height: 'var(--diff-row-height)', ...bgStyle }
-      }
+      style={rowBg ? { '--unified-row-bg': rowBg } : undefined}
       {...(selectable && isChangeLine && lineIdx != null ? { 'data-line-idx': lineIdx } : {})}
     >
       {selectable && (

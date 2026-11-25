@@ -94,8 +94,10 @@ export function ContextBreakdownPanel({ breakdown }: { breakdown: ContextBreakdo
         {barSegments.map((c) => (
           <div
             key={c.id ?? c.name}
-            className={swatchClass(c)}
-            style={{ width: maxTokens > 0 ? `${(c.tokens / maxTokens) * 100}%` : 0 }}
+            className={cn(swatchClass(c), 'w-[var(--context-segment-width)]')}
+            style={{
+              '--context-segment-width': maxTokens > 0 ? `${(c.tokens / maxTokens) * 100}%` : '0px',
+            }}
           />
         ))}
       </div>

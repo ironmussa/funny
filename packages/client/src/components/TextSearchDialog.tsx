@@ -28,7 +28,6 @@ interface TextSearchDialogProps {
 }
 
 const DEBOUNCE_MS = 250;
-const LIST_MAX_HEIGHT_PX = 480;
 const FILE_HEADER_ROW = 28;
 const MATCH_ROW = 22;
 
@@ -318,8 +317,7 @@ function TextSearchDialogContent({ open, onOpenChange }: TextSearchDialogProps) 
 
           <div
             ref={scrollRef}
-            className="overflow-y-auto"
-            style={{ maxHeight: LIST_MAX_HEIGHT_PX }}
+            className="max-h-[480px] overflow-y-auto"
             data-testid="text-search-results"
           >
             {!hasSearchScope ? (
@@ -336,11 +334,8 @@ function TextSearchDialogContent({ open, onOpenChange }: TextSearchDialogProps) 
               <EmptyRow text={t('textSearch.noResults', 'No results')} />
             ) : (
               <div
-                style={{
-                  height: virtualizer.getTotalSize(),
-                  width: '100%',
-                  position: 'relative',
-                }}
+                className="relative h-[var(--text-search-list-height)] w-full"
+                style={{ '--text-search-list-height': `${virtualizer.getTotalSize()}px` }}
               >
                 {virtualizer.getVirtualItems().map((vRow) => {
                   const row = flatRows[vRow.index];
@@ -358,10 +353,13 @@ function TextSearchDialogContent({ open, onOpenChange }: TextSearchDialogProps) 
                           : `text-search-match-${row.path}:${row.line}`
                       }
                       className={cn(
-                        'absolute left-0 top-0 flex w-full cursor-pointer items-center px-2',
+                        'absolute left-0 top-0 flex h-[var(--text-search-row-height)] w-full cursor-pointer items-center [transform:translateY(var(--text-search-row-start))] px-2',
                         isActive && 'bg-accent text-accent-foreground',
                       )}
-                      style={{ height: vRow.size, transform: `translateY(${vRow.start}px)` }}
+                      style={{
+                        '--text-search-row-height': `${vRow.size}px`,
+                        '--text-search-row-start': `${vRow.start}px`,
+                      }}
                       onMouseEnter={() => setActiveRow(vRow.index)}
                       onClick={() => activateRow(row)}
                       onKeyDown={(event) => {

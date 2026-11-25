@@ -24,8 +24,8 @@ export function AppShellSkeleton() {
       {/* Sidebar skeleton — desktop only, matching the real layout and persisted width. */}
       <div
         data-testid="app-shell-skeleton-sidebar"
-        style={{ width: sidebarWidth }}
-        className="border-sidebar-border bg-sidebar hidden shrink-0 flex-col border-r md:flex"
+        style={{ '--app-shell-sidebar-width': `${sidebarWidth}px` }}
+        className="border-sidebar-border bg-sidebar hidden w-[var(--app-shell-sidebar-width)] shrink-0 flex-col border-r md:flex"
       >
         {/* Header — logo + action buttons */}
         <div className="flex items-center justify-between px-4 py-3">

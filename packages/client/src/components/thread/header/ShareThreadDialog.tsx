@@ -201,10 +201,7 @@ export function ShareThreadDialog({
       <DialogContent flush className="max-w-md overflow-hidden" data-testid="share-thread-dialog">
         <div className="min-w-0 px-6 pt-6">
           <DialogHeader className="min-w-0">
-            <DialogTitle
-              className="min-w-0 leading-snug break-words"
-              style={{ overflowWrap: 'anywhere' }}
-            >
+            <DialogTitle className="min-w-0 leading-snug wrap-anywhere">
               {threadTitle ? `Share “${threadTitle}”` : 'Share this thread'}
             </DialogTitle>
           </DialogHeader>

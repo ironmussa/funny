@@ -39,6 +39,7 @@ import type { Result } from 'neverthrow';
 
 import { repos } from '../../db/repos.js';
 import { log } from '../../lib/logger.js';
+import { isObject, isString } from '../../lib/value-guards.js';
 import { broadcastActivitiesRemoved, broadcastActivity } from './activity-service.js';
 
 export interface ServerActivitySpec {
@@ -78,8 +79,8 @@ export interface ServerActivityDeps {
 }
 
 function messageOf(cause: unknown): string {
-  if (typeof cause === 'string') return cause;
-  if (cause && typeof cause === 'object' && 'message' in cause) {
+  if (isString(cause)) return cause;
+  if (isObject(cause) && 'message' in cause) {
     return String(cause.message);
   }
   return String(cause);

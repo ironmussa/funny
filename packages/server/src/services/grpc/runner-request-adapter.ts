@@ -2,6 +2,7 @@ import { retryAsync } from '@funny/shared/async';
 import { isTextualContentType } from '@funny/shared/runner-protocol';
 import { FailureCode } from '@funny/shared/runner-v2/common';
 
+import { isString } from '../../lib/value-guards.js';
 import {
   RunnerRequestTimeoutError,
   type RunnerRequest,
@@ -86,7 +87,7 @@ function streamTunnelBody(exchange: TunnelExchange): ReadableStream<Uint8Array> 
       }
     },
     cancel(reason) {
-      exchange.cancel(typeof reason === 'string' ? reason : 'browser closed the response');
+      exchange.cancel(isString(reason) ? reason : 'browser closed the response');
       void chunks.return?.();
     },
   });
@@ -116,7 +117,7 @@ export class GrpcRunnerRequestAdapter implements RunnerRequestPort {
         body:
           request.body == null
             ? undefined
-            : typeof request.body === 'string'
+            : isString(request.body)
               ? Buffer.from(request.body, 'utf8')
               : request.body,
         deadlineAt,

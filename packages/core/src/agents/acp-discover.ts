@@ -107,18 +107,27 @@ export async function discoverAcpModels(
         cwd,
         mcpServers: [],
       });
+      // SAFETY: `models` is an unstable ACP extension the SDK response type does not
+      // declare; it is only read through optional chaining and `Array.isArray` below,
+      // so a provider that omits it yields an empty list.
       const models = (sessionResponse as { models?: { availableModels?: unknown } }).models;
       const raw = Array.isArray(models?.availableModels) ? models!.availableModels : [];
 
       const discovered: DiscoveredAcpModel[] = [];
       for (const m of raw) {
         if (!m || !isObject(m)) continue;
+        // SAFETY: `m` was checked to be a non-null object above; `modelId` is read
+        // optionally and coerced with `String`, so a missing one is skipped.
         const modelId = String((m as { modelId?: unknown }).modelId ?? '').trim();
         if (!modelId) continue;
+        // SAFETY: `m` is a non-null object (checked above); a missing `name` falls back
+        // to the model id.
         const name = String((m as { name?: unknown }).name ?? modelId);
         discovered.push({ modelId, name });
       }
 
+      // SAFETY: `models` is the optional object read above; `currentModelId` is used
+      // only after the `isString` check below.
       const reportedModelId = (models as { currentModelId?: unknown } | undefined)?.currentModelId;
       const currentModelId = isString(reportedModelId) ? reportedModelId : null;
 
@@ -134,6 +143,8 @@ export async function discoverAcpModels(
       return { ok: true, models: discovered, currentModelId };
     } catch (err) {
       cleanup();
+      // SAFETY: the ACP SDK rejects with Error instances or JSON-RPC error objects that
+      // carry `message`; anything else has no `message` and falls back to `String(err)`.
       const message = (err as Error)?.message ?? String(err);
       // Providers surface a JSON-RPC error / auth_required when not logged in.
       if (/auth/i.test(message) || /login/i.test(message)) {

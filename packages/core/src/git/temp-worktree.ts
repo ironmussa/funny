@@ -54,7 +54,11 @@ export function createTempWorktree(
       return worktreePath;
     })(),
     (error) => {
-      if ((error as DomainError).type) return error as DomainError;
+      // SAFETY: the block above throws DomainErrors (internal / badRequest /
+      // a Result's error); anything else comes from fs or the process helpers
+      // as an Error, which has no `type` field and falls through to internal().
+      const candidate = error as DomainError;
+      if (candidate.type) return candidate;
       return internal(String(error));
     },
   );
@@ -96,7 +100,11 @@ export function removeTempWorktree(
       await gitWrite(['worktree', 'prune'], { cwd: projectPath, reject: false });
     })(),
     (error) => {
-      if ((error as DomainError).type) return error as DomainError;
+      // SAFETY: the block above throws DomainErrors (internal / badRequest /
+      // a Result's error); anything else comes from fs or the process helpers
+      // as an Error, which has no `type` field and falls through to internal().
+      const candidate = error as DomainError;
+      if (candidate.type) return candidate;
       return internal(String(error));
     },
   );
@@ -138,7 +146,11 @@ export function copyFilesFromCommit(
       }
     })(),
     (error) => {
-      if ((error as DomainError).type) return error as DomainError;
+      // SAFETY: the block above throws DomainErrors (internal / badRequest /
+      // a Result's error); anything else comes from fs or the process helpers
+      // as an Error, which has no `type` field and falls through to internal().
+      const candidate = error as DomainError;
+      if (candidate.type) return candidate;
       return internal(String(error));
     },
   );

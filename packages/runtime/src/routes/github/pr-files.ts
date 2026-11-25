@@ -3,6 +3,7 @@ import type { PRFile, PRCommit } from '@funny/shared';
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 
+import { isString } from '../../lib/value-guards.js';
 import { recordedGithubWrite } from '../../services/github-write-activity.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 import { parseJsonBody } from '../../validation/request.js';
@@ -294,7 +295,7 @@ async function writeHeadFile(
   action: 'deleted' | 'reverted',
 ): Promise<Response> {
   const sha = await headFileSha(c, f);
-  if (typeof sha !== 'string') return sha;
+  if (!isString(sha)) return sha;
   const res = await githubApiFetch(
     `/repos/${f.owner}/${f.repo}/contents/${encodeURIComponent(f.filePath)}`,
     f.token,

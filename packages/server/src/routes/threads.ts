@@ -24,6 +24,7 @@ import { authorizer } from '../lib/server-authorizer.js';
 import { startSpan } from '../lib/telemetry.js';
 import { toThread } from '../lib/thread-response.js';
 import type { ServerEnv } from '../lib/types.js';
+import { isObject, isString } from '../lib/value-guards.js';
 import { proxyToRunner } from '../middleware/proxy.js';
 import {
   canSteerThread,
@@ -198,7 +199,7 @@ threadRoutes.post('/:id/comments', requireThreadView, async (c) => {
   if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
   const { content } = parsed.value;
 
-  if (!content || typeof content !== 'string' || !content.trim()) {
+  if (!content || !isString(content) || !content.trim()) {
     return c.json({ error: 'content is required' }, 400);
   }
 
@@ -249,7 +250,7 @@ threadRoutes.post('/:id/workflow-event', requireThreadOwner, async (c) => {
   if (parsed.isErr()) return c.json({ error: 'Invalid JSON body' }, 400);
   const body = parsed.value;
 
-  if (typeof body.type !== 'string' || !body.type) {
+  if (!isString(body.type) || !body.type) {
     return c.json({ error: 'Missing required string field "type"' }, 400);
   }
   // Constrain the event type to the workflow:* / pipeline:* namespaces so
@@ -260,9 +261,7 @@ threadRoutes.post('/:id/workflow-event', requireThreadOwner, async (c) => {
   // SAFETY: the request body was parsed as JSON, so `data` is JSON; a
   // non-null object that is not an array is a JSON object.
   const data: JsonObject =
-    body.data && typeof body.data === 'object' && !Array.isArray(body.data)
-      ? (body.data as JsonObject)
-      : {};
+    isObject(body.data) && !Array.isArray(body.data) ? (body.data as JsonObject) : {};
 
   await threadEventRepo.saveThreadEvent(id, body.type, data);
 
@@ -640,7 +639,7 @@ threadRoutes.patch('/:id/queue/:messageId', requireThreadOwner, async (c) => {
   const parsed = await parseJsonBody(c, contentBodySchema);
   if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
   const { content } = parsed.value;
-  if (!content || typeof content !== 'string') {
+  if (!content || !isString(content)) {
     return c.json({ error: 'content is required' }, 400);
   }
   const updated = await messageQueueRepo.update(messageId, id, content);

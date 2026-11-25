@@ -142,6 +142,8 @@ export function createInstallationTokenIssuer(
             githubAppError('github-error', `GitHub answered ${res.status} for the installation`),
           );
         }
+        // SAFETY: unchecked GitHub body typed as optional fields only; `id` is
+        // checked to be a number below before it is used or cached.
         return ResultAsync.fromPromise(res.json() as Promise<{ id?: number }>, () =>
           githubAppError('github-error', 'unreadable installation response'),
         ).andThen((body) => {
@@ -170,6 +172,9 @@ export function createInstallationTokenIssuer(
       if (!res.ok) {
         return errAsync(githubAppError('github-error', `GitHub refused the token (${res.status})`));
       }
+      // SAFETY: unchecked GitHub body typed as optional fields only; the token
+      // and expiry are checked to be present (truthy) below before they are
+      // used, a body without them is refused.
       return ResultAsync.fromPromise(
         res.json() as Promise<{ token?: string; expires_at?: string }>,
         () => githubAppError('github-error', 'unreadable token response'),

@@ -303,6 +303,8 @@ export const ACP_MANIFESTS = {
 export type KnownAcpProvider = keyof typeof ACP_MANIFESTS;
 
 /** Runtime list of bundled ACP provider ids. */
+// SAFETY: ACP_MANIFESTS is a const literal, so Object.keys returns exactly its
+// KnownAcpProvider keys.
 export const KNOWN_ACP_PROVIDER_IDS = Object.keys(ACP_MANIFESTS) as KnownAcpProvider[];
 
 /** Bundled ACP providers that still launch through an ACP CLI and can be toggled off. */

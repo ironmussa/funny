@@ -3,6 +3,7 @@ import { runAsync } from '@funny/shared/async';
 import { FailureCode } from '@funny/shared/runner-v2/common';
 
 import { log } from '../../lib/logger.js';
+import { isNumber, isString } from '../../lib/value-guards.js';
 import { handleDataMessageWithAck } from '../data-handler.js';
 import type { RunnerGrpcConfig } from './config.js';
 import {
@@ -213,7 +214,7 @@ const OPERATION_KINDS = [
 ] as const;
 
 function requestKind(request: WireRequest): string | undefined {
-  if (typeof request.operation === 'string') return request.operation;
+  if (isString(request.operation)) return request.operation;
   return OPERATION_KINDS.find((key) => request[key] !== undefined);
 }
 
@@ -528,13 +529,13 @@ function success(epoch: bigint, correlationId: string, result: any): OperationsR
     payload = { toolCall: result.toolCall ?? {} };
   } else if (result?.type?.startsWith('data:get_thread')) {
     payload = { thread: { value: result.thread ? encodeStruct(result.thread) : undefined } };
-  } else if (typeof result?.messageId === 'string') {
+  } else if (isString(result?.messageId)) {
     payload = { insertedRecord: { id: result.messageId } };
-  } else if (typeof result?.toolCallId === 'string') {
+  } else if (isString(result?.toolCallId)) {
     payload = { insertedRecord: { id: result.toolCallId } };
-  } else if (typeof result?.commentId === 'string') {
+  } else if (isString(result?.commentId)) {
     payload = { insertedRecord: { id: result.commentId } };
-  } else if (typeof result?.deletedCount === 'number') {
+  } else if (isNumber(result?.deletedCount)) {
     payload = { deletedRecords: { count: String(result.deletedCount) } };
   } else {
     payload = { operationResponse: encodeStruct(result ?? { success: true }) };
@@ -544,7 +545,7 @@ function success(epoch: bigint, correlationId: string, result: any): OperationsR
 
 function deadlineMs(request: WireRequest): number | null {
   const deadline = request.metadata?.deadline;
-  if (typeof deadline === 'string') {
+  if (isString(deadline)) {
     const value = Date.parse(deadline);
     return Number.isFinite(value) ? value : null;
   }
@@ -642,7 +643,7 @@ export function createOperationsHandler(
         const persistentMutation = PERSISTENT_MUTATIONS.has(kind);
         if (
           persistentMutation &&
-          (typeof idempotencyKey !== 'string' || !IDEMPOTENCY_KEY_PATTERN.test(idempotencyKey))
+          (!isString(idempotencyKey) || !IDEMPOTENCY_KEY_PATTERN.test(idempotencyKey))
         ) {
           sendFailure(
             FailureCode.INVALID_ARGUMENT,

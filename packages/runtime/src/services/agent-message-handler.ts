@@ -13,6 +13,7 @@ import { parseStoredJson } from '@funny/shared/json-validation';
 import { z } from 'zod';
 
 import { log } from '../lib/logger.js';
+import { isObject } from '../lib/value-guards.js';
 import type { WSEventData } from './agent-event-router.js';
 import {
   emitGitStatus as emitThreadGitStatus,
@@ -520,7 +521,7 @@ export class AgentMessageHandler {
     // pre-compaction value (the "compacted but the meter didn't move" bug).
     // The boundary is authoritative for post-compaction usage, so skip this.
     const isCompactionSummary = msg.message.content.some(
-      (b: any) => b && typeof b === 'object' && 'type' in b && b.type === 'compaction',
+      (b: any) => isObject(b) && 'type' in b && b.type === 'compaction',
     );
     const usage: AssistantMessageUsage | undefined = isCompactionSummary
       ? undefined

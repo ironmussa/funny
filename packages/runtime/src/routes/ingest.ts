@@ -22,6 +22,7 @@ import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 
 import { log } from '../lib/logger.js';
+import { isObject } from '../lib/value-guards.js';
 import { handleIngestEvent, type IngestEvent } from '../services/ingest-mapper.js';
 
 const ingestRoutes = new Hono();
@@ -59,7 +60,7 @@ ingestRoutes.post(
       return c.json({ status: 'ok', skipped: true }, 200);
     }
 
-    if (!body.data || typeof body.data !== 'object') {
+    if (!isObject(body.data)) {
       return c.json({ error: 'Invalid event: data must be an object' }, 400);
     }
 

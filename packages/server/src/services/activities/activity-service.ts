@@ -26,6 +26,7 @@ import { z } from 'zod';
 
 import { repos } from '../../db/repos.js';
 import { log } from '../../lib/logger.js';
+import { isString } from '../../lib/value-guards.js';
 import { relayToUser } from '../browser-events.js';
 
 /**
@@ -74,7 +75,7 @@ const reportedStatus = z.enum(['running', 'succeeded', 'failed']).optional().cat
 export const liveActivityIdsSchema = z
   .array(z.unknown())
   .catch([])
-  .transform((ids) => ids.filter((v): v is string => typeof v === 'string' && ID_PATTERN.test(v)));
+  .transform((ids) => ids.filter((v): v is string => isString(v) && ID_PATTERN.test(v)));
 
 /** Each field a reported result may carry, and how it is checked. */
 const RESULT_REF_FIELDS: Array<[keyof ActivityResultRef, (v: string) => string | null]> = [
@@ -90,7 +91,7 @@ function resultRefOf(raw: ResultRefInput): ActivityResultRef | null | undefined 
   const ref: ActivityResultRef = {};
   for (const [field, check] of RESULT_REF_FIELDS) {
     const given = raw[field];
-    const kept = typeof given === 'string' ? check(given) : null;
+    const kept = isString(given) ? check(given) : null;
     if (kept) ref[field] = kept;
   }
   return Object.keys(ref).length > 0 ? ref : null;
@@ -120,7 +121,7 @@ export async function startActivityFromRunner(args: {
 }): Promise<ActivityWriteResult> {
   const { runnerId, ownerId, payload } = args;
   const id = optionalId.parse(payload.id);
-  const kind = typeof payload.kind === 'string' ? payload.kind : '';
+  const kind = isString(payload.kind) ? payload.kind : '';
   const title = titleText.parse(payload.title);
   if (!id) return { ok: false, error: 'activity id is invalid' };
   if (!title) return { ok: false, error: 'activity title is required' };

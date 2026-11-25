@@ -1,3 +1,4 @@
+import { isString } from './value-guards.js';
 /**
  * Security CR-7 — runtime admin password resolution.
  *
@@ -24,11 +25,11 @@ export function resolveAdminPassword(
   envValue: string | undefined,
   generate: () => string,
 ): ResolvedAdminPassword {
-  if (typeof envValue === 'string' && envValue.length >= 10) {
+  if (isString(envValue) && envValue.length >= 10) {
     return { password: envValue, isGenerated: false, warning: null };
   }
   const warning =
-    typeof envValue === 'string' && envValue.length > 0
+    isString(envValue) && envValue.length > 0
       ? 'ADMIN_PASSWORD env did not meet minimum length (>=10 chars) — falling back to a generated password'
       : null;
   return { password: generate(), isGenerated: true, warning };

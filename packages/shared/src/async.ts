@@ -187,6 +187,8 @@ export function scheduleTask(
 function unrefSleep(duration: Duration.Duration): Effect.Effect<void> {
   return Effect.callback<void>((resume) => {
     const handle = setTimeout(() => resume(Effect.void), Duration.toMillis(duration));
+    // SAFETY: Bun/Node timers expose `unref`, browsers return a number without it;
+    // the optional call makes the missing method a no-op.
     (handle as { unref?: () => void }).unref?.();
     return Effect.sync(() => clearTimeout(handle));
   });
@@ -222,6 +224,8 @@ export function scheduleRepeating(
         Effect.provideService(
           loop,
           Clock.Clock,
+          // SAFETY: Object.create(clock) inherits every Clock method from the live clock
+          // through its prototype; only `sleep` is overridden.
           Object.assign(Object.create(clock) as Clock.Clock, { sleep: unrefSleep }),
         ),
       )

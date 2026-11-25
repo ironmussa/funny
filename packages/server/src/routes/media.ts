@@ -31,6 +31,7 @@ import { Hono } from 'hono';
 import { log } from '../lib/logger.js';
 import { threadContextQuery } from '../lib/thread-context.js';
 import type { ServerEnv } from '../lib/types.js';
+import { isString } from '../lib/value-guards.js';
 import { getRunnerPublicMediaUrl } from '../services/runner-manager.js';
 import { resolveRunner } from '../services/runner-resolver.js';
 
@@ -46,7 +47,7 @@ mediaRoutes.post('/sign', async (c) => {
   } catch {
     return c.json({ error: 'Invalid JSON body' }, 400);
   }
-  const path = typeof body.path === 'string' ? body.path : '';
+  const path = isString(body.path) ? body.path : '';
   if (!path) return c.json({ error: 'path is required' }, 400);
 
   const secret = process.env.RUNNER_AUTH_SECRET;

@@ -24,6 +24,7 @@ import {
 } from '@funny/core/github-app';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
+import { isString } from '../../lib/value-guards.js';
 import type { FactoryIssueText } from './factory-issue-text.js';
 
 /** An issue as the factory admits it (`FactoryIssue`), with what a send checks. */
@@ -55,7 +56,7 @@ export interface FactoryPullRequestFound {
 /** Label names from GitHub's issue payload, which lists labels as objects or strings. */
 export function labelNames(labels: Array<string | { name?: string }> | undefined): string[] {
   return (labels ?? [])
-    .map((l) => (typeof l === 'string' ? l : (l.name ?? '')))
+    .map((l) => (isString(l) ? l : (l.name ?? '')))
     .filter((name) => name.length > 0);
 }
 

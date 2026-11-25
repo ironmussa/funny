@@ -55,6 +55,8 @@ export function toACPMcpServers(mcpServers: McpServerMap | undefined): ACPMcpSer
     if (type === 'sdk') continue;
 
     if (type === 'http' || type === 'sse') {
+      // SAFETY: `type` is exactly 'http' or 'sse' in this branch, and `name`, `url`
+      // and `headers` are always set, which is the ACP http / sse server shape.
       out.push({
         type,
         name,
@@ -62,6 +64,9 @@ export function toACPMcpServers(mcpServers: McpServerMap | undefined): ACPMcpSer
         headers: recordToPairs(cfg.headers),
       } as ACPMcpServer);
     } else {
+      // SAFETY: the object carries every field of the ACP stdio server shape
+      // (`name`, `command`, `args`, `env`); `args` is checked to be an array and each
+      // element is coerced with `String`.
       out.push({
         name,
         command: String(cfg.command ?? ''),

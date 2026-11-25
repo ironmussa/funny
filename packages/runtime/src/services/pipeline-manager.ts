@@ -29,6 +29,7 @@ import type {
 import type { YamlPipelineContext } from '@funny/workflows/compiler';
 
 import { log } from '../lib/logger.js';
+import { isString } from '../lib/value-guards.js';
 import { loadPipelines, type LoadedPipeline } from '../pipelines/yaml-loader.js';
 import { beginActivity, type ActivityHandle } from './activity-tracker.js';
 import { BUILTIN_AGENTS, resolveAgent, resolveBuiltinAgentByName } from './agent-registry.js';
@@ -229,7 +230,7 @@ function recordRunProgress(
     activity.step(stepLabel(nodeToStageType(change.nodeName), change.iteration));
   }
   const fixSha = change.ctx?.outputs?.['commit-fix']?.json?.sha;
-  if (typeof fixSha === 'string' && fixSha && !run.commits.has(fixSha)) {
+  if (isString(fixSha) && fixSha && !run.commits.has(fixSha)) {
     run.commits.add(fixSha);
     activity.effect('commit-created', fixSha.slice(0, 12));
   }
@@ -381,15 +382,15 @@ export async function startPipelineRun(opts: {
   const findingsOf = (ctx: YamlPipelineContext): string | undefined => {
     const raw = ctx.outputs.review?.json?.findings;
     if (raw === undefined || raw === null) return undefined;
-    return typeof raw === 'string' ? raw : JSON.stringify(raw);
+    return isString(raw) ? raw : JSON.stringify(raw);
   };
   // The current commit being reviewed: starts as the input `commit_sha`
   // and updates after each fix-loop iteration to the SHA produced by
   // the `commit-fix` node (captured in `ctx.outputs.commit-fix.json.sha`).
   const commitShaOf = (ctx: YamlPipelineContext): string | undefined => {
     const fixed = ctx.outputs['commit-fix']?.json?.sha;
-    if (typeof fixed === 'string' && fixed.length > 0) return fixed;
-    return typeof ctx.inputs.commit_sha === 'string' ? ctx.inputs.commit_sha : undefined;
+    if (isString(fixed) && fixed.length > 0) return fixed;
+    return isString(ctx.inputs.commit_sha) ? ctx.inputs.commit_sha : undefined;
   };
 
   // State change callback — persist to DB + emit WS

@@ -11,6 +11,7 @@ import type { CLIMessage } from '@funny/core/agents';
 import type { ThreadStatus } from '@funny/shared';
 
 import { log } from '../../lib/logger.js';
+import { isString } from '../../lib/value-guards.js';
 import { recordBashCheck } from '../checks/bash-check-metric.js';
 import { transitionStatus } from '../thread-status-machine.js';
 import type { MessageHandlerContext } from './context.js';
@@ -48,7 +49,7 @@ function recordProviderError(
   const errorInput = (block.input ?? {}) as { error?: unknown };
   ctx.state.providerErrorPending.set(
     threadId,
-    typeof errorInput.error === 'string' ? errorInput.error : 'Provider error',
+    isString(errorInput.error) ? errorInput.error : 'Provider error',
   );
 }
 

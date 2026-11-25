@@ -267,6 +267,9 @@ export function getNativeGit(): PooledNativeGitModule | null {
   if (loadAttempted) return pooledModule;
   loadAttempted = true;
   try {
+    // SAFETY: NativeGitModule is the hand-written subset of the napi exports
+    // declared in @funny/native-git's index.d.ts; optional members (e.g.
+    // removeWorktree) are bound with `?.` for older builds without them.
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     nativeModule = require('@funny/native-git') as NativeGitModule;
     pooledModule = createPooledModule(nativeModule);

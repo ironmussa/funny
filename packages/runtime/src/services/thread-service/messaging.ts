@@ -20,6 +20,7 @@ import { ResultAsync } from 'neverthrow';
 import { z } from 'zod';
 
 import { log } from '../../lib/logger.js';
+import { isString } from '../../lib/value-guards.js';
 import {
   augmentPromptWithFiles,
   hydrateReferencedFiles,
@@ -431,7 +432,7 @@ type StoredDraftImages = ImageAttachment[] | string | null | undefined;
 
 function parseDraftImages(raw: StoredDraftImages): ImageAttachment[] | undefined {
   if (Array.isArray(raw)) return raw;
-  if (typeof raw !== 'string' || !raw) return undefined;
+  if (!isString(raw) || !raw) return undefined;
   const parsed = parseStoredJson(z.array(imageAttachmentSchema), raw, 'draft message images');
   return parsed.ok ? (parsed.value as ImageAttachment[]) : undefined;
 }

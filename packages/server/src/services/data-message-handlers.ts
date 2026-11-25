@@ -21,6 +21,7 @@ import { repos } from '../db/repos.js';
 import * as schema from '../db/schema.js';
 import { audit } from '../lib/audit.js';
 import { log } from '../lib/logger.js';
+import { isBoolean, isNumber, isString } from '../lib/value-guards.js';
 import {
   liveActivityIdsSchema,
   reconcileRunnerActivities,
@@ -233,9 +234,9 @@ function copyIf<K extends string, T>(
   const value = patch.get(key);
   if (patch.has(key) && ok(value)) out[key] = value;
 }
-const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+const isNum = (v: unknown): v is number => isNumber(v) && Number.isFinite(v);
 const isNumOrNull = (v: unknown): v is number | null => v === null || isNum(v);
-const isStr = (v: unknown): v is string => typeof v === 'string';
+const isStr = (v: unknown): v is string => isString(v);
 /** A runner's watcher / job patch: an object of fields; any other value patches nothing. */
 const runnerPatchSchema = z
   .record(z.string(), z.unknown())
@@ -375,12 +376,10 @@ const DATA_MESSAGE_HANDLERS: DataMessageHandlers = {
     const messageRepo = repos.messages();
     const thread = await messageRepo.getThreadWithMessages(
       data.threadId,
-      typeof data.messageLimit === 'number' ? data.messageLimit : undefined,
+      isNumber(data.messageLimit) ? data.messageLimit : undefined,
       {
-        messageProgress:
-          typeof data.messageProgress === 'number' ? data.messageProgress : undefined,
-        messageAnchorId:
-          typeof data.messageAnchorId === 'string' ? data.messageAnchorId : undefined,
+        messageProgress: isNumber(data.messageProgress) ? data.messageProgress : undefined,
+        messageAnchorId: isString(data.messageAnchorId) ? data.messageAnchorId : undefined,
       },
     );
     return {
@@ -392,8 +391,8 @@ const DATA_MESSAGE_HANDLERS: DataMessageHandlers = {
     const messageRepo = repos.messages();
     const result = await messageRepo.getThreadMessages({
       threadId: data.threadId,
-      cursor: typeof data.cursor === 'string' ? data.cursor : undefined,
-      limit: typeof data.limit === 'number' ? data.limit : 50,
+      cursor: isString(data.cursor) ? data.cursor : undefined,
+      limit: isNumber(data.limit) ? data.limit : 50,
       direction: data.direction === 'after' ? 'after' : 'before',
     });
     return {
@@ -423,13 +422,13 @@ const DATA_MESSAGE_HANDLERS: DataMessageHandlers = {
     const { searchThreadMessages } = await import('./search-repository.js');
     const results = await searchThreadMessages({
       userId: runnerUserId,
-      query: typeof data.query === 'string' ? data.query : undefined,
-      author: typeof data.author === 'string' ? data.author : undefined,
-      since: typeof data.since === 'string' ? data.since : undefined,
-      until: typeof data.until === 'string' ? data.until : undefined,
-      projectId: typeof data.projectId === 'string' ? data.projectId : undefined,
-      limit: typeof data.limit === 'number' ? data.limit : undefined,
-      caseSensitive: typeof data.caseSensitive === 'boolean' ? data.caseSensitive : undefined,
+      query: isString(data.query) ? data.query : undefined,
+      author: isString(data.author) ? data.author : undefined,
+      since: isString(data.since) ? data.since : undefined,
+      until: isString(data.until) ? data.until : undefined,
+      projectId: isString(data.projectId) ? data.projectId : undefined,
+      limit: isNumber(data.limit) ? data.limit : undefined,
+      caseSensitive: isBoolean(data.caseSensitive) ? data.caseSensitive : undefined,
     });
     return { type: 'data:search_threads_response', results };
   },
@@ -677,7 +676,7 @@ const DATA_MESSAGE_HANDLERS: DataMessageHandlers = {
     const token =
       (await resolveProjectGithubToken(
         runnerId,
-        typeof data.projectId === 'string' ? data.projectId : null,
+        isString(data.projectId) ? data.projectId : null,
       )) ?? (await getProviderKey(ownerId, 'github'));
     return { type: 'data:get_github_token_response', token: token ?? null };
   },
@@ -804,7 +803,7 @@ const DATA_MESSAGE_HANDLERS: DataMessageHandlers = {
     }
     const { setBuiltinProviderSettings } = await import('./profile-service.js');
     const active = Array.isArray(data.active)
-      ? data.active.filter((x: unknown): x is string => typeof x === 'string')
+      ? data.active.filter((x: unknown): x is string => isString(x))
       : null;
     await setBuiltinProviderSettings(runnerUserId, active);
     return { type: 'data:ack', success: true };

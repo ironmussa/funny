@@ -156,6 +156,8 @@ export const PROVIDER_RESOURCE_DESCRIPTORS: Record<KnownProvider, ProviderResour
 
 /** Resolve the resource descriptor for any provider id (falls back to the permissive default). */
 export function getProviderResourceDescriptor(provider: AgentProvider): ProviderResourceDescriptor {
+  // SAFETY: an id outside KnownProvider indexes to undefined here and falls back to
+  // the permissive default below.
   return (
     PROVIDER_RESOURCE_DESCRIPTORS[provider as KnownProvider] ?? DEFAULT_PROVIDER_RESOURCE_DESCRIPTOR
   );

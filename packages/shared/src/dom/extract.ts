@@ -102,6 +102,8 @@ function isString(value: unknown): value is string {
 export function detectFrameworkComponent(el: Element): string | undefined {
   for (const k of Object.keys(el)) {
     if (k.startsWith('__reactFiber')) {
+      // SAFETY: `k` is one of el's own keys, React's fiber expando; the fiber is walked
+      // with truthiness checks on `type` / `return`, so a missing field ends the walk.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       let node = (el as any)[k];
       while (node && !node.type) node = node.return;
@@ -113,6 +115,8 @@ export function detectFrameworkComponent(el: Element): string | undefined {
       }
     }
   }
+  // SAFETY: Vue's expandos are only tested for truthiness; on a non-Vue element
+  // they read undefined.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const anyEl = el as any;
   if (anyEl.__vue__ || anyEl.__vueParentComponent) return 'VueComponent';
@@ -281,6 +285,8 @@ export function extractElementInfo(el: Element): AnnotationDomInfo {
     accessibility: {
       role: el.getAttribute('role') || undefined,
       ariaLabel: el.getAttribute('aria-label') || undefined,
+      // SAFETY: annotated elements are HTML or SVG elements, which both expose a
+      // numeric `tabIndex`; any other Element would read undefined here.
       tabIndex: (el as HTMLElement).tabIndex,
     },
     componentName: detectFrameworkComponent(el),

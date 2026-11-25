@@ -109,7 +109,8 @@ export function PRCardSummary({
           <DropdownMenuTrigger asChild>
             <Button
               size="xs"
-              className="shrink-0 gap-1"
+              gap="tight"
+              className="shrink-0"
               disabled={merging}
               data-testid={`pinned-pr-merge-${pr.number}`}
             >
@@ -131,11 +132,11 @@ export function PRCardSummary({
               <DropdownMenuItem
                 key={method}
                 onSelect={() => handleMerge(method)}
-                className="flex flex-col items-start gap-0.5"
+                className="flex flex-col items-start"
                 data-testid={`pinned-pr-merge-${method}-${pr.number}`}
               >
                 <span className="text-xs font-medium">{label}</span>
-                <span className="text-muted-foreground text-2xs">{hint}</span>
+                <span className="text-muted-foreground text-2xs mt-0.5">{hint}</span>
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>

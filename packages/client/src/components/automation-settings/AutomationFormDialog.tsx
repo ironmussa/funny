@@ -66,7 +66,7 @@ function ScheduleField({ form, setForm }: Pick<AutomationFormDialogProps, 'form'
         <Input
           mono
           size="xs"
-          className="settings-form-input mt-1.5"
+          className="mt-1.5"
           placeholder="*/30 * * * *"
           value={form.schedule}
           onChange={(e) => setForm((f) => ({ ...f, schedule: e.target.value }))}
@@ -98,7 +98,6 @@ export function AutomationFormDialog({
             </label>
             <Input
               id="automation-name"
-              className="settings-form-input"
               placeholder="e.g. Daily Issue Triage"
               value={form.name}
               onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
@@ -111,7 +110,8 @@ export function AutomationFormDialog({
             </label>
             <Textarea
               id="automation-prompt"
-              className="min-h-[100px] resize-y text-sm"
+              textSize="sm"
+              className="min-h-[100px] resize-y"
               placeholder="What should the agent do?"
               value={form.prompt}
               onChange={(e) => setForm((f) => ({ ...f, prompt: e.target.value }))}
@@ -141,7 +141,7 @@ export function AutomationFormDialog({
             size="sm"
             onClick={() => onSave(true)}
             disabled={!form.name.trim() || !form.prompt.trim()}
-            className="gap-1.5"
+            gap="snug"
           >
             <Play className="icon-xs" />
             {isEditing ? 'Save & Test' : 'Create & Test'}

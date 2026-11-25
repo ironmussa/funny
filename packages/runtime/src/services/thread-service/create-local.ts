@@ -156,14 +156,14 @@ export async function createLocalThread(baseCtx: ProjectThreadContext) {
     ...baseProjectThreadRow(ctx),
     mode: params.mode,
     status: 'pending' as const,
-    runtime: (params.runtime || 'local') as 'local' | 'remote',
+    runtime: params.runtime || ('local' as const),
     branch: threadBranch,
     baseBranch: resolvedBaseBranch || (params.mode === 'local' ? threadBranch : undefined),
     worktreePath,
     fileCheckpointingEnabled: checkpointingFor(defaults.provider),
   };
 
-  await tm.createThread(thread as any);
+  await tm.createThread(thread);
 
   threadEventBus.emit('thread:created', {
     threadId,

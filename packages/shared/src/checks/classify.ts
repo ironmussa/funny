@@ -53,20 +53,22 @@ export interface CheckCommand {
 }
 
 /** Package runners whose next word is the tool. */
-const RUNNERS: Record<string, number> = {
-  npx: 1,
-  bunx: 1,
-  uvx: 1,
-  'pipx run': 2,
-  'pnpm exec': 2,
-  'pnpm dlx': 2,
-  'npm exec': 2,
-  'yarn exec': 2,
-  'uv run': 2,
-  'poetry run': 2,
-  'python -m': 2,
-  'python3 -m': 2,
-};
+const RUNNERS = new Map(
+  Object.entries({
+    npx: 1,
+    bunx: 1,
+    uvx: 1,
+    'pipx run': 2,
+    'pnpm exec': 2,
+    'pnpm dlx': 2,
+    'npm exec': 2,
+    'yarn exec': 2,
+    'uv run': 2,
+    'poetry run': 2,
+    'python -m': 2,
+    'python3 -m': 2,
+  }),
+);
 
 /** Script-running package managers: `<pm> run <script>`; pnpm and yarn also `<pm> <script>`. */
 const PACKAGE_MANAGERS = new Set(['npm', 'pnpm', 'yarn', 'bun']);
@@ -95,8 +97,14 @@ function words(text: string): string[] {
 /** Shell syntax that makes a command more than one check. */
 const COMPOUND = /\||;|&&|\$\(|`|>(?!&1)|<|\n/;
 
+/** A command split into the directory it `cd`s into and the command it runs. */
+interface PrefixFree {
+  cwd?: string;
+  rest: string;
+}
+
 /** The command after a leading `cd <dir> &&`, env assignments and `time` / `timeout N`. */
-function stripPrefix(command: string): { cwd?: string; rest: string } {
+function stripPrefix(command: string): PrefixFree {
   let rest = command.trim();
   let cwd: string | undefined;
   const cd = /^cd\s+("[^"]+"|'[^']+'|\S+)\s*&&\s*/.exec(rest);
@@ -177,7 +185,7 @@ function check(
 
 /** Words to drop before the tool: `npx`, `pnpm exec`, `uv run`, pnpm / yarn's `<pm> <bin>`. */
 function runnerWords(argv: string[]): number {
-  const skip = RUNNERS[`${argv[0]} ${argv[1] ?? ''}`] ?? RUNNERS[argv[0]];
+  const skip = RUNNERS.get(`${argv[0]} ${argv[1] ?? ''}`) ?? RUNNERS.get(argv[0]);
   if (skip) return skip;
   if (argv[0] !== 'pnpm' && argv[0] !== 'yarn') return 0;
   return argv[1] === 'dlx' ? 2 : 1;
@@ -231,39 +239,41 @@ const prettier: ToolRule = (args) =>
     ? check('format', 'prettier', args)
     : null;
 
-const TOOL_RULES: Record<string, ToolRule> = {
-  vitest: (args) =>
-    ['watch', 'dev', 'bench'].includes(args[0] ?? '')
-      ? null
-      : check('test', 'vitest', args, ['run', 'related']),
-  jest: always('test', 'jest'),
-  playwright: ([sub, ...rest]) => (sub === 'test' ? check('test', 'playwright', rest) : null),
-  pytest: always('test', 'pytest'),
-  'py.test': always('test', 'pytest'),
-  tsc: unless(['--watch', '-w'], always('typecheck', 'tsc')),
-  'vue-tsc': unless(['--watch', '-w'], always('typecheck', 'tsc')),
-  mypy: always('typecheck', 'mypy'),
-  pyright: always('typecheck', 'pyright'),
-  oxlint: always('lint', 'oxlint'),
-  eslint: always('lint', 'eslint'),
-  ruff,
-  biome: bySubcommand('biome', { lint: 'lint', check: 'lint', ci: 'lint', format: 'format' }),
-  oxfmt: always('format', 'oxfmt'),
-  prettier,
-  cargo: bySubcommand('cargo', {
-    test: 'test',
-    nextest: 'test',
-    clippy: 'lint',
-    check: 'typecheck',
-    fmt: 'format',
-    build: 'build',
-  }),
-  go: bySubcommand('go', { test: 'test', vet: 'lint', build: 'build' }),
-};
+const TOOL_RULES = new Map<string, ToolRule>(
+  Object.entries({
+    vitest: (args) =>
+      ['watch', 'dev', 'bench'].includes(args[0] ?? '')
+        ? null
+        : check('test', 'vitest', args, ['run', 'related']),
+    jest: always('test', 'jest'),
+    playwright: ([sub, ...rest]) => (sub === 'test' ? check('test', 'playwright', rest) : null),
+    pytest: always('test', 'pytest'),
+    'py.test': always('test', 'pytest'),
+    tsc: unless(['--watch', '-w'], always('typecheck', 'tsc')),
+    'vue-tsc': unless(['--watch', '-w'], always('typecheck', 'tsc')),
+    mypy: always('typecheck', 'mypy'),
+    pyright: always('typecheck', 'pyright'),
+    oxlint: always('lint', 'oxlint'),
+    eslint: always('lint', 'eslint'),
+    ruff,
+    biome: bySubcommand('biome', { lint: 'lint', check: 'lint', ci: 'lint', format: 'format' }),
+    oxfmt: always('format', 'oxfmt'),
+    prettier,
+    cargo: bySubcommand('cargo', {
+      test: 'test',
+      nextest: 'test',
+      clippy: 'lint',
+      check: 'typecheck',
+      fmt: 'format',
+      build: 'build',
+    }),
+    go: bySubcommand('go', { test: 'test', vet: 'lint', build: 'build' }),
+  } satisfies Record<string, ToolRule>),
+);
 
 /** A tool invocation as a check, or null. */
 function toolCheck(name: string, args: string[]): Found | null {
-  return Object.hasOwn(TOOL_RULES, name) ? TOOL_RULES[name](args) : null;
+  return TOOL_RULES.get(name)?.(args) ?? null;
 }
 
 /** Package-manager flags that take a value and come before the script. */

@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from 'bun:test';
+import { describe, expect, test, vi, setDefaultTimeout } from 'bun:test';
 
 /**
  * GraphRefChips — a branch whose PR is merged reads as merged, not as pending
@@ -15,6 +15,10 @@ import { findThreadBranchRowIndex } from '@/components/CommitGraphTab';
 import type { FoldedRef } from '@/lib/graph-refs';
 
 import { renderWithProviders } from '../helpers/render';
+
+// The proof and pre-push run these files together under `bun test --parallel`; on a
+// loaded machine a first render (cold module load) ran well past the 5 s default.
+setDefaultTimeout(60_000);
 
 function renderChips(ref: FoldedRef) {
   renderWithProviders(
@@ -108,15 +112,20 @@ describe('GraphRefChips', () => {
     );
     // The arrow takes the chip's color, and the chip's outline is a darker
     // shade of that same color (not the theme's primary).
-    expect(screen.getByTestId('graph-thread-branch-marker')).toHaveStyle({ color: '#a5b4fc' });
-    expect(screen.getByTestId('graph-ref-chip-local:funny/fix-issues').style.boxShadow).toMatch(
+    const marker = screen.getByTestId('graph-thread-branch-marker');
+    expect(marker.style.getPropertyValue('--graph-thread-marker-color')).toBe('#a5b4fc');
+    expect(marker).toHaveClass('text-[color:var(--graph-thread-marker-color)]');
+    const threadChip = screen.getByTestId('graph-ref-chip-local:funny/fix-issues');
+    expect(threadChip.style.getPropertyValue('--graph-ref-chip-outline')).toMatch(
       /#6b75a4|rgb\(107, 117, 164\)/,
     );
     // Inset: the refs line clips at the chip's height, so an outer ring is cut.
-    expect(screen.getByTestId('graph-ref-chip-local:funny/fix-issues').style.boxShadow).toMatch(
-      /^inset /,
+    expect(threadChip).toHaveClass('[box-shadow:inset_0_0_0_1.5px_var(--graph-ref-chip-outline)]');
+    const masterChip = screen.getByTestId('graph-ref-chip-local:master');
+    expect(masterChip.style.getPropertyValue('--graph-ref-chip-outline')).toBe('');
+    expect(masterChip).not.toHaveClass(
+      '[box-shadow:inset_0_0_0_1.5px_var(--graph-ref-chip-outline)]',
     );
-    expect(screen.getByTestId('graph-ref-chip-local:master').style.boxShadow).toBe('');
   });
 
   test('stacks chips at the px height and gap the graph places its node with', () => {
@@ -139,11 +148,17 @@ describe('GraphRefChips', () => {
       />,
     );
 
-    expect(screen.getByTestId('graph-ref-chips').style.gap).toBe(`${GRAPH_REF_CHIP_GAP_PX}px`);
+    const stack = screen.getByTestId('graph-ref-chips');
+    expect(stack.style.getPropertyValue('--graph-ref-chips-gap')).toBe(
+      `${GRAPH_REF_CHIP_GAP_PX}px`,
+    );
+    expect(stack).toHaveClass('gap-[var(--graph-ref-chips-gap)]');
     for (const name of ['a', 'b', 'c']) {
-      expect(screen.getByTestId(`graph-ref-chip-local:${name}`).style.height).toBe(
+      const chip = screen.getByTestId(`graph-ref-chip-local:${name}`);
+      expect(chip.style.getPropertyValue('--graph-ref-chip-height')).toBe(
         `${GRAPH_REF_CHIP_HEIGHT_PX}px`,
       );
+      expect(chip).toHaveClass('h-[var(--graph-ref-chip-height)]');
     }
   });
 

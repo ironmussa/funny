@@ -1,3 +1,5 @@
+import type { z } from 'zod';
+
 export type HarnessErrorCode =
   | 'runtime_unavailable'
   | 'unsupported_capability'
@@ -12,14 +14,21 @@ export type HarnessErrorCode =
   | 'invalid_agent_definition'
   | 'invalid_runtime_request';
 
+/** What the harness records about a failure: the tool, its input issues, an agent's exit code. */
+export interface HarnessErrorMetadata {
+  toolName?: string;
+  issues?: readonly z.core.$ZodIssue[];
+  exitCode?: number | null;
+}
+
 export interface HarnessErrorOptions {
   cause?: unknown;
-  metadata?: Record<string, unknown>;
+  metadata?: HarnessErrorMetadata;
 }
 
 export class HarnessError extends Error {
   readonly code: HarnessErrorCode;
-  readonly metadata?: Record<string, unknown>;
+  readonly metadata?: HarnessErrorMetadata;
 
   constructor(code: HarnessErrorCode, message: string, options: HarnessErrorOptions = {}) {
     super(message);

@@ -36,7 +36,9 @@ export function NewFolderRow({
           if (e.key === 'Escape') onCancel();
         }}
         placeholder={t('folderPicker.newFolderPlaceholder')}
-        className="font-mono-explorer h-6 flex-1 text-xs"
+        textSize="xs"
+        mono="explorer"
+        className="h-6 flex-1"
         data-testid="folder-picker-new-folder-input"
       />
       <TooltipIconButton

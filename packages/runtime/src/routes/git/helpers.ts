@@ -163,6 +163,8 @@ export function requireProjectCwdFromContext(
   c: Context<HonoEnv>,
 ): Promise<Result<string, DomainError>> {
   return requireProjectCwd(
+    // SAFETY: used only by handlers of routes whose path declares
+    // `:projectId` (git/diff.ts), so Hono always fills the parameter.
     c.req.param('projectId') as string,
     c.get('userId'),
     c.get('organizationId'),
@@ -177,7 +179,10 @@ export function requireProjectCwdFromContext(
 export function requireSteerableThreadCwdFromContext(
   c: Context<HonoEnv>,
 ): Promise<Result<string, DomainError>> {
-  return requireThreadCwd(c.req.param('threadId') as string, c.get('userId'), steerFromContext(c));
+  // SAFETY: used only by handlers of routes whose path declares `:threadId`
+  // (git/diff.ts), so Hono always fills the parameter.
+  const threadId = c.req.param('threadId') as string;
+  return requireThreadCwd(threadId, c.get('userId'), steerFromContext(c));
 }
 
 /**

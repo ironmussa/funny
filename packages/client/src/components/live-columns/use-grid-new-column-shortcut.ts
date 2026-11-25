@@ -15,8 +15,9 @@ export function useGridNewColumnShortcut(gridCols: number, openNewColumnPicker: 
     const handler = (e: KeyboardEvent) => {
       if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
       if (e.key !== 'n' && e.key !== 'N') return;
-      const tag = (e.target as HTMLElement | null)?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.isContentEditable) {
+      const target = e.target instanceof HTMLElement ? e.target : null;
+      const tag = target?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) {
         return;
       }
       if (gridCols >= MAX_GRID_COLS) return;

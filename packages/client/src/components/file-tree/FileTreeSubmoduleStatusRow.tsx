@@ -1,4 +1,3 @@
-import type { CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { TreeRow } from '@/lib/file-tree';
@@ -8,15 +7,10 @@ import { INDENT_PX, type FileTreeRowCommon } from './row-props';
 
 interface FileTreeSubmoduleStatusRowProps {
   row: Extract<TreeRow, { kind: 'submodule-status' }>;
-  style?: CSSProperties;
   common: FileTreeRowCommon;
 }
 
-export function FileTreeSubmoduleStatusRow({
-  row,
-  style,
-  common,
-}: FileTreeSubmoduleStatusRowProps) {
+export function FileTreeSubmoduleStatusRow({ row, common }: FileTreeSubmoduleStatusRowProps) {
   const { t } = useTranslation();
   const { fontSize, testIdPrefix } = common;
   const label =
@@ -29,14 +23,11 @@ export function FileTreeSubmoduleStatusRow({
   return (
     <div
       className={cn(
-        'flex h-[24px] select-none items-center gap-1.5 overflow-hidden pr-1 italic',
+        'flex h-[24px] select-none items-center gap-1.5 overflow-hidden pr-1 pl-[var(--file-tree-indent)] italic',
         fontSize,
         'text-muted-foreground/80',
       )}
-      style={{
-        ...style,
-        paddingLeft: `${8 + row.depth * INDENT_PX}px`,
-      }}
+      style={{ '--file-tree-indent': `${8 + row.depth * INDENT_PX}px` }}
       data-testid={`${testIdPrefix}-submodule-status-${row.submodulePath}`}
     >
       <span className="truncate">{label}</span>

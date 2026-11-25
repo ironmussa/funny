@@ -89,12 +89,9 @@ export function EditorDialogHeader({
   const { t } = useTranslation();
   return (
     <DialogHeader bordered className="overflow-hidden">
-      <DialogTitle size="sm" className="flex min-w-0 items-center gap-2 overflow-hidden font-mono">
+      <DialogTitle size="sm" withIcon mono>
         <FileCode className="icon-base shrink-0" />
-        <span
-          className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
-          style={{ direction: 'rtl', textAlign: 'left' }}
-        >
+        <span className="min-w-0 overflow-hidden text-left text-ellipsis whitespace-nowrap [direction:rtl]">
           {filePath}
         </span>
       </DialogTitle>

@@ -15,6 +15,7 @@
 
 import { createHash, randomBytes } from 'node:crypto';
 
+import { errorMessage } from '@funny/shared/errors';
 import { and, eq, isNull } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
@@ -44,9 +45,9 @@ function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
 
-const storageError = (error: unknown): ProvisionTokenError => ({
+const storageError = (cause: unknown): ProvisionTokenError => ({
   kind: 'storage',
-  message: error instanceof Error ? error.message : String(error),
+  message: errorMessage(cause),
 });
 
 async function ownedThread(threadId: string, userId: string) {

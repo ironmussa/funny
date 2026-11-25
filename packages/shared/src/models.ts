@@ -289,14 +289,21 @@ export const DEFAULT_MODEL: AgentModel = 'opus-4.8';
 
 // ── Per-provider defaults ─────────────────────────────────────
 
+/** A value per provider id: the bespoke providers, plus one per bundled ACP manifest. */
+interface ByProvider<V> {
+  [providerId: string]: V;
+}
+
 // ACP defaults derive from each manifest's `models.defaultModel`; non-ACP
 // providers (Claude SDK, DeepAgent) are listed explicitly.
-const PROVIDER_DEFAULT_MODEL: Record<string, AgentModel> = {
+const PROVIDER_DEFAULT_MODEL: ByProvider<AgentModel> = {
   claude: DEFAULT_MODEL,
   codex: 'gpt-5.6-sol',
   deepagent: 'minimax-m2.7',
   pi: 'default',
   ...Object.fromEntries(
+    // SAFETY: each bundled manifest's defaultModel is a key of its provider's model
+    // table in MODEL_REGISTRY (a static entry, or the dynamic catalog's `default`).
     Object.values(ACP_MANIFESTS).map((m) => [m.id, m.models.defaultModel as AgentModel]),
   ),
 };
@@ -314,7 +321,7 @@ const MB = 1024 * 1024;
 // gemini / cursor / opencode ceilings come from their manifests.
 // Non-ACP providers route through multiple upstream providers — use the
 // smallest common ceiling so we never exceed the weakest backend.
-const PROVIDER_ATTACHMENT_LIMITS: Record<string, AttachmentLimits> = {
+const PROVIDER_ATTACHMENT_LIMITS: ByProvider<AttachmentLimits> = {
   codex: { inlineMaxBytes: 100 * KB, uploadMaxBytes: 20 * MB, hardMaxBytes: 25 * MB },
   claude: { inlineMaxBytes: 100 * KB, uploadMaxBytes: 25 * MB, hardMaxBytes: 30 * MB },
   deepagent: { inlineMaxBytes: 100 * KB, uploadMaxBytes: 10 * MB, hardMaxBytes: 15 * MB },
@@ -332,7 +339,7 @@ export interface ModelInfo {
 }
 
 // gemini / cursor / opencode labels come from their manifests.
-export const PROVIDER_LABELS: Record<string, string> = {
+export const PROVIDER_LABELS: ByProvider<string> = {
   claude: 'Claude',
   codex: 'Codex',
   deepagent: 'Deep Agent',
@@ -499,8 +506,8 @@ function getModelDefinition(
   model: AgentModel,
 ): ModelDefinition | undefined {
   if (!isRegistryProvider(provider)) return undefined;
-  const bucket = MODEL_REGISTRY[provider] as Record<string, ModelDefinition>;
-  return bucket[model as string];
+  const bucket: Record<string, ModelDefinition> = MODEL_REGISTRY[provider];
+  return bucket[model];
 }
 
 // ── Public API ────────────────────────────────────────────────
@@ -509,7 +516,7 @@ function getModelDefinition(
 export function resolveModelId(provider: AgentProvider, model: AgentModel): string {
   if (provider === 'llm-api') {
     // LLM API uses full model IDs directly — pass through
-    return model as string;
+    return model;
   }
   if (!isRegistryProvider(provider)) {
     throw new Error(`Unknown provider: ${provider}`);
@@ -527,7 +534,7 @@ export function resolveModelId(provider: AgentProvider, model: AgentModel): stri
       provider === 'opencode' ||
       provider === 'antigravity'
     ) {
-      return model as string;
+      return model;
     }
     const providerLabel = PROVIDER_LABELS[provider] ?? provider;
     throw new Error(`Unknown ${providerLabel} model: ${model}`);
@@ -546,6 +553,8 @@ export function getDefaultModel(provider: AgentProvider): AgentModel {
 export function getProviderModels(provider: AgentProvider): AgentModel[] {
   if (provider === 'llm-api') return [];
   if (isRegistryProvider(provider)) {
+    // SAFETY: the keys of a MODEL_REGISTRY bucket are exactly that provider's model
+    // names, each a member of the AgentModel union.
     return Object.keys(MODEL_REGISTRY[provider]) as AgentModel[];
   }
   throw new Error(`Unknown provider: ${provider}`);
@@ -554,8 +563,9 @@ export function getProviderModels(provider: AgentProvider): AgentModel[] {
 /** Get all available models for a provider with display labels. */
 export function getProviderModelsWithLabels(provider: AgentProvider): ModelInfo[] {
   if (!isRegistryProvider(provider)) return [];
-  const bucket = MODEL_REGISTRY[provider] as Record<string, ModelDefinition>;
+  const bucket: Record<string, ModelDefinition> = MODEL_REGISTRY[provider];
   return Object.entries(bucket).map(([value, def]) => ({
+    // SAFETY: `value` is a key of a MODEL_REGISTRY bucket, so a member of AgentModel.
     value: value as AgentModel,
     label: def.label,
   }));
@@ -642,14 +652,15 @@ export function providerModelProblem(
   if (provider === 'pi') return null;
   if (getManifest(provider)?.models.kind === 'dynamic') return null;
   if (!(provider in MODEL_REGISTRY)) return null;
-  const bucket = MODEL_REGISTRY[provider as keyof typeof MODEL_REGISTRY] as Record<string, unknown>;
+  // SAFETY: the `in` check above proved `provider` names a MODEL_REGISTRY entry.
+  const bucket: object = MODEL_REGISTRY[provider as keyof typeof MODEL_REGISTRY];
   return model in bucket ? null : `Invalid model "${model}" for provider "${provider}"`;
 }
 
 /** Check if a model belongs to the given provider. */
 export function isModelForProvider(provider: AgentProvider, model: AgentModel): boolean {
   if (!isRegistryProvider(provider)) return false;
-  return (model as string) in MODEL_REGISTRY[provider];
+  return model in MODEL_REGISTRY[provider];
 }
 
 // Suppress unused-type warning on ModelsOf for consumers that only want the value map.

@@ -29,7 +29,7 @@ export function useThreadComments(threadId: string | null | undefined): {
     if (!threadId || (!loaded && (!rows || rows.length === 0))) {
       return { comments: null, loading: query.isFetching };
     }
-    const comments = (rows ?? []).map((row) => data.fromRow(row as ThreadComment));
+    const comments = (rows ?? []).map((row) => data.fromRow(row));
     return { comments: comments.sort(compareComments), loading: query.isFetching };
   }, [threadId, loaded, rows, data, query.isFetching]);
 }

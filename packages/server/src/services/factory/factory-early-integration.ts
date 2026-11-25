@@ -21,6 +21,8 @@
 
 import type { ActionResult } from '@funny/workflows/compiler';
 
+import { isString } from '../../lib/value-guards.js';
+
 /** One run's checkout, held by one step at a time. */
 export interface WorkspaceLock {
   /** Run `fn` holding the lock; `after` runs still holding it, once `fn` ends. */
@@ -86,7 +88,7 @@ export function createEarlyIntegration(deps: EarlyIntegrationDeps) {
     last = now();
     const result = await deps.integrate();
     const feedback = result.metadata?.feedback;
-    if (result.ok && result.metadata?.outcome === 'conflict' && typeof feedback === 'string') {
+    if (result.ok && result.metadata?.outcome === 'conflict' && isString(feedback)) {
       if (!deps.toImplementer) return 'integrated';
       await deps.toImplementer(feedback);
       return 'sent-to-agent';

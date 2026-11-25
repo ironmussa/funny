@@ -110,10 +110,10 @@ export function PickerItemRow({
 }: PickerItemRowProps) {
   return (
     <div
-      className="group/item absolute top-0 left-0 w-full"
+      className="group/item absolute top-0 left-0 h-[var(--searchable-picker-row-height)] w-full [transform:translateY(var(--searchable-picker-row-start))]"
       style={{
-        height: `${size}px`,
-        transform: `translateY(${start}px)`,
+        '--searchable-picker-row-height': `${size}px`,
+        '--searchable-picker-row-start': `${start}px`,
       }}
     >
       <button

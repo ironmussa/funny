@@ -17,9 +17,10 @@ export function useStableNavigate(): NavigateFunction {
   }, [navigate]);
 
   // Stable wrapper — same identity for the lifetime of the component.
+  // SAFETY: the wrapper passes every argument unchanged to the latest navigate, so it
+  // serves both NavigateFunction overloads; Parameters<> only types the last one (delta).
   const stable = useCallback((...args: Parameters<NavigateFunction>) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    return (ref.current as any)(...args);
+    return ref.current(...args);
   }, []) as NavigateFunction;
 
   return stable;

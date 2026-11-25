@@ -46,7 +46,7 @@ function recoverMessages(
   current: ThreadWithMessages,
   thread: FetchedThread,
 ): LocalMessage[] {
-  const freshMessages = (thread.messages ?? []) as LocalMessage[];
+  const freshMessages: LocalMessage[] = thread.messages ?? [];
   const mergedMessages = mergeMessagesById(current.messages, freshMessages);
   const recovered = mergedMessages.length - current.messages.length;
   if (recovered > 0) {
@@ -71,10 +71,12 @@ function refreshedResultInfo(
   if (current.resultInfo) return current.resultInfo;
   if (thread.status !== 'completed' && thread.status !== 'failed') return undefined;
   return {
-    status: thread.status as 'completed' | 'failed',
+    status: thread.status,
     cost: thread.cost,
     duration: 0,
-    error: (thread as any).error,
+    // SAFETY: the thread detail type has no `error` field and the server's toThread sets
+    // none, so this reads undefined for a server row; the field is kept for older servers.
+    error: (thread as FetchedThread & { error?: string }).error,
   };
 }
 
@@ -209,12 +211,12 @@ export function createRefreshActions(
           // Drop any payload entries that belonged to the cleared project. Use a
           // working state so multiple deletions compose without losing earlier
           // map mutations.
-          let working: ThreadState = { ...state, ...patch } as ThreadState;
+          let working: ThreadState = { ...state, ...patch };
           for (const id of ids) {
             dropLiveRef(id);
             const sub = mutations.clearThreadData(working, id);
             Object.assign(patch, sub);
-            working = Object.assign({ ...working }, sub) as ThreadState;
+            working = Object.assign({ ...working }, sub);
           }
         }
         const active = state.activeThread;

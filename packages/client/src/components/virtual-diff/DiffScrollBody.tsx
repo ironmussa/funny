@@ -1,5 +1,5 @@
 import type { VirtualItem, Virtualizer } from '@tanstack/react-virtual';
-import type { CSSProperties, MouseEvent as ReactMouseEvent, ReactNode, Ref } from 'react';
+import type { MouseEvent as ReactMouseEvent, ReactNode, Ref } from 'react';
 
 import type { RenderRow } from '@/lib/diff/types';
 import { cn } from '@/lib/utils';
@@ -38,8 +38,7 @@ type DragHandlers = DiffScrollBodyProps['drag'];
 
 /** Swallow clicks on the gutter so the checkboxes only react to drag-select. */
 function swallowGutterClick(e: ReactMouseEvent) {
-  const target = e.target as HTMLElement;
-  if (target.closest('[data-gutter]')) {
+  if (e.target instanceof Element && e.target.closest('[data-gutter]')) {
     e.stopPropagation();
     e.preventDefault();
   }
@@ -64,13 +63,14 @@ function scrollAreaHandlers(selectable: boolean, drag: DragHandlers) {
 }
 
 /**
- * Width of the rows container. In split/three-pane mode, horizontal scroll is
- * handled via CSS translateX on each pane's text — the container must stay at
- * 100% so flex-1 columns divide the *visible* width equally. Only unified mode
- * needs to expand the container for native h-scroll.
+ * Width class of the rows container. In split/three-pane mode, horizontal
+ * scroll is handled via CSS translateX on each pane's text — the container must
+ * stay at 100% so flex-1 columns divide the *visible* width equally. Only
+ * unified mode needs to expand the container (to `--vdiff-content-width`) for
+ * native h-scroll.
  */
-function rowsContainerWidth(maxContentWidth: number, needsHScroll: boolean): number | string {
-  return maxContentWidth > 0 && !needsHScroll ? maxContentWidth : '100%';
+function rowsContainerWidthClass(maxContentWidth: number, needsHScroll: boolean): string {
+  return maxContentWidth > 0 && !needsHScroll ? 'w-[var(--vdiff-content-width)]' : 'w-full';
 }
 
 /** One absolutely positioned virtual row; measured by the virtualizer when wrapping. */
@@ -90,13 +90,13 @@ function VirtualRowSlot({
   return (
     <div
       {...(wordWrap ? { ref: measureElement, 'data-index': vItem.index } : {})}
+      className={cn(
+        'absolute top-0 left-0 w-full [transform:translateY(var(--vdiff-item-top))]',
+        wordWrap ? 'min-h-[var(--vdiff-item-height)]' : 'h-[var(--vdiff-item-height)]',
+      )}
       style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        width: '100%',
-        ...(wordWrap ? { minHeight: rowH } : { height: rowH }),
-        transform: `translateY(${vItem.start}px)`,
+        '--vdiff-item-top': `${vItem.start}px`,
+        '--vdiff-item-height': `${rowH}px`,
       }}
     >
       {children}
@@ -110,20 +110,26 @@ function DiffVirtualRows({
   renderRows,
   rowHeightMap,
   totalSize,
-  width,
+  maxContentWidth,
+  widthClass,
   matchOffsets,
   rowContent,
 }: Pick<
   DiffScrollBodyProps,
-  'virtualizer' | 'renderRows' | 'rowHeightMap' | 'totalSize' | 'matchOffsets' | 'rowContent'
-> & { width: number | string }) {
+  | 'virtualizer'
+  | 'renderRows'
+  | 'rowHeightMap'
+  | 'totalSize'
+  | 'maxContentWidth'
+  | 'matchOffsets'
+  | 'rowContent'
+> & { widthClass: string }) {
   return (
     <div
+      className={cn('relative h-[var(--vdiff-total-size)] min-w-full', widthClass)}
       style={{
-        height: totalSize,
-        minWidth: '100%',
-        width,
-        position: 'relative',
+        '--vdiff-total-size': `${totalSize}px`,
+        '--vdiff-content-width': `${maxContentWidth}px`,
       }}
     >
       {virtualizer.getVirtualItems().map((vItem) => (
@@ -156,11 +162,13 @@ function DiffHScrollbar({
   return (
     <div
       ref={hScrollBarRef}
-      className="scroll-fade-none scrollbar-visible shrink-0 overflow-x-auto overflow-y-hidden"
-      style={{ height: 10 }}
+      className="scroll-fade-none scrollbar-visible h-2.5 shrink-0 overflow-x-auto overflow-y-hidden"
       data-testid="diff-h-scrollbar"
     >
-      <div style={{ width: hSpacerWidth, height: 1 }} />
+      <div
+        className="h-px w-[var(--vdiff-h-spacer-width)]"
+        style={{ '--vdiff-h-spacer-width': `${hSpacerWidth}px` }}
+      />
     </div>
   );
 }
@@ -192,8 +200,8 @@ function DiffScrollArea({
       className={cn(
         'scroll-fade-none scrollbar-visible h-full min-h-0 relative',
         needsHScroll ? 'overflow-y-auto overflow-x-hidden' : 'overflow-auto',
+        '[scrollbar-gutter:stable]',
       )}
-      style={{ scrollbarGutter: 'stable' }}
       data-testid="diff-scroll-area"
       {...scrollAreaHandlers(rowContent.selectable, drag)}
     >
@@ -201,7 +209,6 @@ function DiffScrollArea({
       {stickyHunk && (
         <StickyHunkHeader
           stickyHunk={stickyHunk}
-          rowHeight={rowContent.rowHeight}
           selectable={rowContent.selectable}
           hunkLineMap={rowContent.hunkLineMap}
           selectedLines={rowContent.selectedLines}
@@ -214,7 +221,8 @@ function DiffScrollArea({
         renderRows={renderRows}
         rowHeightMap={rowHeightMap}
         totalSize={totalSize}
-        width={rowsContainerWidth(maxContentWidth, needsHScroll)}
+        maxContentWidth={maxContentWidth}
+        widthClass={rowsContainerWidthClass(maxContentWidth, needsHScroll)}
         matchOffsets={matchOffsets}
         rowContent={rowContent}
       />
@@ -252,11 +260,10 @@ export function DiffScrollBody({
     >
       <div
         className="relative min-h-0 flex-1 overflow-hidden"
-        style={
-          {
-            '--diff-scrollbar-gutter': '12px',
-          } as CSSProperties
-        }
+        style={{
+          '--diff-scrollbar-gutter': '12px',
+          '--vdiff-row-height': `${rowContent.rowHeight}px`,
+        }}
         data-testid="diff-scroll-frame"
       >
         {/* Vertical scroll area */}

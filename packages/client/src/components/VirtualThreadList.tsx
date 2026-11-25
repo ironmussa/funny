@@ -118,11 +118,8 @@ export function VirtualThreadList({
       className={className}
     >
       <div
-        style={{
-          height: `${virtualizer.getTotalSize()}px`,
-          width: '100%',
-          position: 'relative',
-        }}
+        className="relative h-[var(--virtual-thread-list-height)] w-full"
+        style={{ '--virtual-thread-list-height': `${virtualizer.getTotalSize()}px` }}
       >
         {virtualItems.map((v) => {
           const thread = threads[v.index];
@@ -134,8 +131,8 @@ export function VirtualThreadList({
                 data-index={v.index}
                 data-testid={`virtual-thread-item-${thread.id}`}
                 ref={virtualizer.measureElement}
-                className="border-border/50 absolute top-0 left-0 w-full border-b px-1 py-1"
-                style={{ transform: `translateY(${v.start}px)` }}
+                className="border-border/50 absolute top-0 left-0 w-full [transform:translateY(var(--virtual-thread-row-start))] border-b px-1 py-1"
+                style={{ '--virtual-thread-row-start': `${v.start}px` }}
               >
                 {renderItem(thread)}
               </div>
@@ -147,20 +144,16 @@ export function VirtualThreadList({
               key={v.key}
               data-index={v.index}
               data-testid={`virtual-thread-item-${thread.id}`}
-              ref={virtualizer.measureElement as never}
+              ref={virtualizer.measureElement}
               {...(onThreadClick ? { onClick: () => onThreadClick(thread) } : {})}
               onMouseMove={() => setHighlightIndex(v.index)}
               className={cn(
                 'w-full flex items-center gap-3 px-3 py-2.5 border-b border-border/50 group/row outline-hidden',
                 onThreadClick && 'text-left hover:bg-accent/50 transition-colors',
                 v.index === highlightIndex && 'bg-accent/50',
+                'absolute top-0 left-0 [transform:translateY(var(--virtual-thread-row-start))]',
               )}
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                transform: `translateY(${v.start}px)`,
-              }}
+              style={{ '--virtual-thread-row-start': `${v.start}px` }}
             >
               <ThreadStatusPin
                 thread={thread}

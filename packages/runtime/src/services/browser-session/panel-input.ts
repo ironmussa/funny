@@ -28,7 +28,7 @@ function mouse(type: 'mouseMoved' | 'mousePressed' | 'mouseReleased'): PanelInpu
     if (type === 'mouseMoved') {
       if (held) event.button = held;
     } else {
-      event.button = (input.button ?? 'left') as MouseButton;
+      event.button = input.button ?? 'left';
       event.clickCount = input.clickCount ?? 1;
     }
     return cs.dispatchMouseEvent(event);
@@ -81,10 +81,9 @@ const PANEL_VIEWPORT_LIMITS = { minWidth: 200, maxWidth: 3840, minHeight: 200, m
 export function panelViewportSize(
   input: Pick<WSBrowserSessionInputData, 'width' | 'height'>,
 ): { width: number; height: number } | null {
-  const { width, height } = input;
-  if (!Number.isInteger(width) || !Number.isInteger(height)) return null;
-  const w = width as number;
-  const h = height as number;
+  const { width: w, height: h } = input;
+  if (w === undefined || h === undefined) return null;
+  if (!Number.isInteger(w) || !Number.isInteger(h)) return null;
   const l = PANEL_VIEWPORT_LIMITS;
   if (w < l.minWidth || w > l.maxWidth || h < l.minHeight || h > l.maxHeight) return null;
   return { width: w, height: h };

@@ -62,14 +62,23 @@ The board SHALL NOT let a member move a run between columns. A run's column SHAL
 - **WHEN** a member tries to drag a run card to another column
 - **THEN** the card does not move and the run's state does not change
 
-### Requirement: Done shows recent runs
+### Requirement: Done shows every finished run
 
-The Done column SHALL show only runs that completed in the last 24 hours, and its header SHALL say how many older finished runs are hidden. The Done column SHALL be collapsible. Finished runs older than 24 hours SHALL remain reachable in the list layout.
+The Done column SHALL show every finished run the view lists, most recent first. The Done column SHALL be collapsible.
 
 #### Scenario: An old merged run
 
 - **WHEN** a run merged three days ago
-- **THEN** it is not in the board's Done column, the Done header counts it as hidden, and the list still shows it
+- **THEN** it is in the board's Done column, after the runs that finished since
+
+### Requirement: Columns load cards as they scroll
+
+Each column SHALL show its first 50 cards and add the next 50 when the end of its list scrolls into view, with no button to press.
+
+#### Scenario: A long Done column
+
+- **WHEN** the Done column holds 60 runs and the member scrolls to its end
+- **THEN** the column shows all 60
 
 ### Requirement: Stage limits in column headers
 
@@ -93,6 +102,24 @@ Each board card SHALL show the issue number (linked to the issue when the run's 
 
 - **WHEN** a member activates the card of a run
 - **THEN** that run's detail panel opens, and it links to the run's implementing thread
+
+### Requirement: Run state dot
+
+Left of its title, a card SHALL show a dot in its run state's color (the state chip's tone), with the state's name on hover. While the run is in progress and has a thread, the card SHALL show the thread's status pin instead, so a working agent still spins. A run with no thread, a stopped run and a run waiting on a person SHALL NOT show a clock or a stop icon there.
+
+#### Scenario: A stopped run
+
+- **WHEN** a run is `stopped`
+- **THEN** its card shows a dot in the stopped state's color, not a clock
+
+### Requirement: Selecting runs for a bulk action
+
+Hovering a card SHALL replace its status glyph with a checkbox; once one run is selected, every card SHALL show its checkbox. Checking it SHALL NOT open the run. While runs are selected the board SHALL show a bar with their count, a Retry action applied to the selected runs a retry is offered for, a Stop action (after a confirmation) applied to the selected runs that have not ended, and a way to clear the selection. Each run SHALL be asked on its own, with the same checks as its card's menu. The selection SHALL clear once an action is sent, and SHALL keep only runs the board still shows.
+
+#### Scenario: Retrying several runs
+
+- **WHEN** a member selects a failed run, a working run and a merged run and chooses Retry
+- **THEN** only the failed run is retried, and the selection clears
 
 ### Requirement: Flow progress strip
 

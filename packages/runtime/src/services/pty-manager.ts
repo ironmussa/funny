@@ -38,6 +38,8 @@ function selectBackend(): PtyBackend {
   //    that owns the PTYs and communicates via Unix socket.
   if (process.platform !== 'win32') {
     try {
+      // SAFETY: require() of a sibling module returns that module's exports,
+      // whose type is `typeof import()` of the same path.
       const { DaemonPtyBackend } =
         require('./pty-backend-daemon.js') as typeof import('./pty-backend-daemon.js');
       const backend = new DaemonPtyBackend();
@@ -57,6 +59,8 @@ function selectBackend(): PtyBackend {
   //    (scrollback, colors, cursor) in memory via @xterm/headless + serialize.
   if (process.platform !== 'win32') {
     try {
+      // SAFETY: require() of a sibling module returns that module's exports,
+      // whose type is `typeof import()` of the same path.
       const { HeadlessPtyBackend } =
         require('./pty-backend-headless.js') as typeof import('./pty-backend-headless.js');
       const backend = new HeadlessPtyBackend();
@@ -74,6 +78,8 @@ function selectBackend(): PtyBackend {
 
   // 1. Try Bun native (POSIX only) — fallback without headless state tracking
   if (process.platform !== 'win32') {
+    // SAFETY: require() of a sibling module returns that module's exports,
+    // whose type is `typeof import()` of the same path.
     const { BunPtyBackend } =
       require('./pty-backend-bun.js') as typeof import('./pty-backend-bun.js');
     const backend = new BunPtyBackend();
@@ -85,6 +91,8 @@ function selectBackend(): PtyBackend {
 
   // 2. Try node-pty (Windows or POSIX fallback)
   try {
+    // SAFETY: require() of a sibling module returns that module's exports,
+    // whose type is `typeof import()` of the same path.
     const { NodePtyBackend } =
       require('./pty-backend-node-pty.js') as typeof import('./pty-backend-node-pty.js');
     const backend = new NodePtyBackend();
@@ -98,12 +106,21 @@ function selectBackend(): PtyBackend {
 
   // 3. Null fallback
   log.warn('No PTY backend available — terminal will not work', { namespace: 'pty-manager' });
+  // SAFETY: require() of a sibling module returns that module's exports,
+  // whose type is `typeof import()` of the same path.
   const { NullPtyBackend } =
     require('./pty-backend-null.js') as typeof import('./pty-backend-null.js');
   return new NullPtyBackend();
 }
 
 const backend = selectBackend();
+
+/** A backend (headless-xterm) that can serialize every terminal's state before shutdown. */
+function canSerializeAll<B extends object>(
+  value: B,
+): value is B & { serializeAll: () => Map<string, string> } {
+  return 'serializeAll' in value && typeof value.serializeAll === 'function';
+}
 
 // ── Session tracking (for user-scoped WS events) ───────────────────
 
@@ -520,7 +537,7 @@ export function spawnPty(
     });
   }
 
-  backend.spawn(id, cwd, cols, rows, spawnEnv as Record<string, string>, safeShell);
+  backend.spawn(id, cwd, cols, rows, spawnEnv, safeShell);
 
   // Source the venv activate script so the prompt picks up the (.venv) marker.
   // detectEnv() already set VIRTUAL_ENV/PATH; the activate script just adds the
@@ -632,6 +649,8 @@ function capturePane(id: string): string | null {
  */
 export async function capturePaneAsync(id: string): Promise<string | null> {
   if (backend.name === 'daemon' && 'capturePaneAsync' in backend) {
+    // SAFETY: DaemonPtyBackend is the only backend named 'daemon' (the other
+    // backends are bun-native, headless-xterm, node-pty and null).
     const daemonBackend = backend as import('./pty-backend-daemon.js').DaemonPtyBackend;
     return daemonBackend.capturePaneAsync(id);
   }
@@ -732,6 +751,8 @@ export async function reattachSessions(): Promise<void> {
 
   // Daemon backend: query daemon for live sessions, sync with DB metadata
   if (backend.name === 'daemon' && 'listDaemonSessions' in backend) {
+    // SAFETY: DaemonPtyBackend is the only backend named 'daemon' (the other
+    // backends are bun-native, headless-xterm, node-pty and null).
     const daemonBackend = backend as import('./pty-backend-daemon.js').DaemonPtyBackend;
     const dbRows = loadPtySessions();
     const dbMap = new Map(dbRows.map((r) => [r.id, r]));
@@ -849,8 +870,8 @@ if (backend.name === 'daemon' && backend.detachAll) {
     'pty-manager',
     () => {
       // For headless-xterm: serialize all terminal states to DB before killing
-      if ('serializeAll' in backend && typeof (backend as any).serializeAll === 'function') {
-        const states = (backend as any).serializeAll() as Map<string, string>;
+      if (canSerializeAll(backend)) {
+        const states = backend.serializeAll();
         for (const [id, state] of states) {
           const meta = activeSessions.get(id);
           if (meta) {

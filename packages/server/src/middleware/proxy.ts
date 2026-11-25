@@ -33,6 +33,7 @@ import { renderMcpOAuthCallbackPage } from '../lib/mcp-oauth-callback-page.js';
 import { neutralizeRunnerContent } from '../lib/runner-content-policy.js';
 import { threadContextQuery } from '../lib/thread-context.js';
 import type { ServerEnv } from '../lib/types.js';
+import { isObject } from '../lib/value-guards.js';
 import {
   authorizedRunnerRequests,
   mintOAuthCallbackState,
@@ -167,13 +168,13 @@ async function readRequestBody(c: Context<ServerEnv>): Promise<Uint8Array | null
   }
 }
 
-function isTunnelTimeout(tunnelErr: unknown): boolean {
+/** A runner request that timed out: the gRPC sink's error, or a tunnel's by name. */
+type TunnelTimeout = RunnerRequestTimeoutError | { readonly name: 'TunnelTimeoutError' };
+
+function isTunnelTimeout(tunnelErr: unknown): tunnelErr is TunnelTimeout {
   return (
     tunnelErr instanceof RunnerRequestTimeoutError ||
-    (typeof tunnelErr === 'object' &&
-      tunnelErr !== null &&
-      'name' in tunnelErr &&
-      tunnelErr.name === 'TunnelTimeoutError')
+    (isObject(tunnelErr) && 'name' in tunnelErr && tunnelErr.name === 'TunnelTimeoutError')
   );
 }
 

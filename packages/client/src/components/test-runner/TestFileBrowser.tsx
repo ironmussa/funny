@@ -1,14 +1,14 @@
 import type { TestFile, TestFileStatus, TestSpec, TestSuite } from '@funny/shared';
 import {
   ChevronRight,
-  Folder,
+  FolderIcon,
   FolderOpen,
   Play,
   Square,
   Loader2,
   CheckCircle2,
   XCircle,
-  Circle,
+  CircleIcon,
   MoreHorizontal,
   ExternalLink,
 } from 'lucide-react';
@@ -75,9 +75,9 @@ function StatusDot({ status }: { status: TestFileStatus | undefined }) {
     case 'failed':
       return <XCircle className="icon-xs text-status-error" />;
     case 'stopped':
-      return <Circle className="icon-xs text-status-warning" />;
+      return <CircleIcon className="icon-xs text-status-warning" />;
     default:
-      return <Circle className="icon-xs text-muted-foreground/30" />;
+      return <CircleIcon className="icon-xs text-muted-foreground/30" />;
   }
 }
 
@@ -108,8 +108,8 @@ function SpecItem({
     <>
       <div
         data-testid={`test-spec-${spec.file}-${spec.line}`}
-        className="group text-muted-foreground hover:bg-sidebar-accent/50 flex h-[24px] cursor-pointer items-center gap-1.5 text-xs transition-colors"
-        style={{ paddingLeft: `${8 + depth * INDENT_PX}px` }}
+        className="group text-muted-foreground hover:bg-sidebar-accent/50 flex h-[24px] cursor-pointer items-center gap-1.5 pl-[var(--test-tree-indent)] text-xs transition-colors"
+        style={{ '--test-tree-indent': `${8 + depth * INDENT_PX}px` }}
         role={hasMultipleProjects ? 'button' : undefined}
         tabIndex={hasMultipleProjects ? 0 : undefined}
         aria-expanded={hasMultipleProjects ? expanded : undefined}
@@ -146,7 +146,7 @@ function SpecItem({
               variant="ghost-destructive"
               data-testid={`test-spec-stop-${spec.file}-${spec.line}`}
               size="icon"
-              className="size-5 opacity-100"
+              className="size-5"
               onClick={onStop}
               tooltip={t('common.stop')}
             >
@@ -156,7 +156,8 @@ function SpecItem({
             <TooltipIconButton
               data-testid={`test-spec-play-${spec.file}-${spec.line}`}
               size="icon"
-              className="size-5 opacity-0 group-hover:opacity-100"
+              reveal="hover"
+              className="size-5"
               disabled={isRunning}
               onClick={() => onRunSpec(spec.file, spec.line)}
               tooltip={t('common.run')}
@@ -171,15 +172,16 @@ function SpecItem({
           <div
             key={project}
             data-testid={`test-spec-${spec.file}-${spec.line}-${project}`}
-            className="group text-muted-foreground hover:bg-sidebar-accent/50 flex h-[24px] cursor-pointer items-center gap-1.5 text-xs transition-colors"
-            style={{ paddingLeft: `${8 + (depth + 1) * INDENT_PX}px` }}
+            className="group text-muted-foreground hover:bg-sidebar-accent/50 flex h-[24px] cursor-pointer items-center gap-1.5 pl-[var(--test-tree-indent)] text-xs transition-colors"
+            style={{ '--test-tree-indent': `${8 + (depth + 1) * INDENT_PX}px` }}
           >
             <StatusDot status={fileStatus} />
             <span className="font-mono-explorer flex-1 truncate text-xs">{project}</span>
             <TooltipIconButton
               data-testid={`test-spec-play-${spec.file}-${spec.line}-${project}`}
               size="icon"
-              className="size-5 opacity-0 group-hover:opacity-100"
+              reveal="hover"
+              className="size-5"
               disabled={isRunning}
               onClick={() => onRunSpec(spec.file, spec.line, project)}
               tooltip={`${t('common.run')} (${project})`}
@@ -247,8 +249,9 @@ function SuiteItem({
         className={cn(
           'flex h-[24px] w-full cursor-pointer select-none items-center gap-1.5 text-left text-xs',
           'text-muted-foreground transition-colors hover:bg-sidebar-accent/50',
+          'pl-[var(--test-tree-indent)]',
         )}
-        style={{ paddingLeft: `${8 + depth * INDENT_PX}px` }}
+        style={{ '--test-tree-indent': `${8 + depth * INDENT_PX}px` }}
         onClick={() => toggleSuite(suiteKey)}
       >
         <ChevronRight
@@ -360,8 +363,9 @@ function TreeItem({
           className={cn(
             'flex h-[24px] w-full cursor-pointer select-none items-center gap-1.5 text-left text-xs',
             'text-muted-foreground transition-colors hover:bg-sidebar-accent/50',
+            'pl-[var(--test-tree-indent)]',
           )}
-          style={{ paddingLeft: `${8 + depth * INDENT_PX}px` }}
+          style={{ '--test-tree-indent': `${8 + depth * INDENT_PX}px` }}
         >
           <ChevronRight
             className={cn('icon-sm shrink-0 transition-transform', isExpanded && 'rotate-90')}
@@ -369,7 +373,7 @@ function TreeItem({
           {isExpanded ? (
             <FolderOpen className="icon-base text-muted-foreground/70 shrink-0" />
           ) : (
-            <Folder className="icon-base text-muted-foreground/70 shrink-0" />
+            <FolderIcon className="icon-base text-muted-foreground/70 shrink-0" />
           )}
           <span className="font-mono-explorer flex-1 truncate text-xs">{node.name}</span>
         </button>
@@ -423,8 +427,9 @@ function TreeItem({
           status === 'running'
             ? 'bg-sidebar-accent text-sidebar-accent-foreground'
             : 'hover:bg-sidebar-accent/50 text-muted-foreground',
+          'pl-[var(--test-tree-indent)]',
         )}
-        style={{ paddingLeft: `${8 + depth * INDENT_PX}px` }}
+        style={{ '--test-tree-indent': `${8 + depth * INDENT_PX}px` }}
       >
         <button
           type="button"
@@ -453,7 +458,7 @@ function TreeItem({
             data-testid={`test-stop-${node.path}`}
             variant="ghost-destructive"
             size="icon"
-            className="size-5 opacity-100"
+            className="size-5"
             onClick={(e) => {
               e.stopPropagation();
               onStop();
@@ -467,7 +472,8 @@ function TreeItem({
             data-testid={`test-play-${node.path}`}
             variant="ghost"
             size="icon"
-            className="size-5 opacity-0 group-hover:opacity-100"
+            reveal="hover"
+            className="size-5"
             disabled={isRunning}
             onClick={(e) => {
               e.stopPropagation();
@@ -513,8 +519,8 @@ function TreeItem({
       {isFileExpanded &&
         (isSpecsLoading ? (
           <div
-            className="text-muted-foreground flex h-6 items-center gap-2 text-xs"
-            style={{ paddingLeft: `${8 + (depth + 1) * INDENT_PX}px` }}
+            className="text-muted-foreground flex h-6 items-center gap-2 pl-[var(--test-tree-indent)] text-xs"
+            style={{ '--test-tree-indent': `${8 + (depth + 1) * INDENT_PX}px` }}
           >
             <Loader2 className="icon-xs animate-spin" />
             Discovering tests…
@@ -549,8 +555,8 @@ function TreeItem({
           ))
         ) : specs ? (
           <div
-            className="text-muted-foreground flex h-6 items-center text-xs"
-            style={{ paddingLeft: `${8 + (depth + 1) * INDENT_PX}px` }}
+            className="text-muted-foreground flex h-6 items-center pl-[var(--test-tree-indent)] text-xs"
+            style={{ '--test-tree-indent': `${8 + (depth + 1) * INDENT_PX}px` }}
           >
             No tests found
           </div>
@@ -723,7 +729,8 @@ export function TestFileBrowser({
             data-testid="test-stop"
             variant="destructive"
             size="xs"
-            className="shrink-0 gap-1"
+            gap="tight"
+            className="shrink-0"
             onClick={onStop}
           >
             <Square className="icon-sm" />
@@ -734,7 +741,8 @@ export function TestFileBrowser({
             data-testid="test-run-all"
             variant="ghost"
             size="xs"
-            className="shrink-0 gap-1"
+            gap="tight"
+            className="shrink-0"
             disabled={files.length === 0}
             onClick={onRunAll}
           >
@@ -765,7 +773,7 @@ export function TestFileBrowser({
       )}
 
       {/* File tree */}
-      <ScrollArea className="flex-1 pr-3">
+      <ScrollArea className="flex-1" viewportProps={{ className: 'pr-3' }}>
         {isLoading ? (
           <LoadingState
             padding="md"

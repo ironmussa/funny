@@ -27,8 +27,8 @@ export function ReactionBar({
         <Button
           key={key}
           variant="outline"
-          size="xs"
-          className="text-2xs h-5 gap-1 px-1.5"
+          size="3xs"
+          gap="tight"
           disabled={disabled}
           onClick={() => onReact(key)}
           data-testid={`${testIdBase}-reaction-${key}`}

@@ -34,7 +34,7 @@ export function SubmoduleBadge({
             : t('review.submodule', { defaultValue: 'submodule' })}
         </span>
       </TooltipTrigger>
-      <TooltipContent side="top" className="max-w-xs text-xs">
+      <TooltipContent side="top" className="max-w-xs">
         <div className="font-medium">
           {t('review.submoduleTooltip', {
             defaultValue: 'Nested git repository (gitlink)',

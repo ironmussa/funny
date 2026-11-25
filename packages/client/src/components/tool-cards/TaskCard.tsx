@@ -1,3 +1,4 @@
+import type { JsonObject } from '@funny/shared/json';
 import { ChevronRight, Bot, Loader2 } from 'lucide-react';
 import { Suspense, lazy, useState, useMemo, memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -100,7 +101,7 @@ function TaskResult({ rawOutput }: { rawOutput?: string }) {
 type RenderChildToolCall = (item: ToolItem, idx: number) => ReactNode;
 
 interface TaskCardProps {
-  parsed: Record<string, unknown>;
+  parsed: JsonObject;
   output?: string;
   hideLabel?: boolean;
   childToolCalls?: any[];
@@ -124,6 +125,7 @@ export const TaskCard = memo(function TaskCard({
   const { t } = useTranslation();
   const isRunning = !rawOutput;
   const [expanded, setExpanded] = useState(isRunning);
+  // SAFETY: Task and Agent declare description as a string in their input schema.
   const description = (parsed.description as string) ?? '';
   const hasChildren = childToolCalls && childToolCalls.length > 0;
 

@@ -11,6 +11,7 @@ import type { CLIMessage } from '@funny/core/agents';
 import type { ThreadStatus } from '@funny/shared';
 
 import { log } from '../../lib/logger.js';
+import { isObject, isString } from '../../lib/value-guards.js';
 import { recordBashCheck } from '../checks/bash-check-metric.js';
 import { transitionStatus } from '../thread-status-machine.js';
 import type { MessageHandlerContext } from './context.js';
@@ -45,11 +46,8 @@ function recordProviderError(
   threadId: string,
   block: ToolUseBlock,
 ): void {
-  const errorInput = (block.input ?? {}) as { error?: unknown };
-  ctx.state.providerErrorPending.set(
-    threadId,
-    typeof errorInput.error === 'string' ? errorInput.error : 'Provider error',
-  );
+  const error = isObject(block.input) && 'error' in block.input ? block.input.error : undefined;
+  ctx.state.providerErrorPending.set(threadId, isString(error) ? error : 'Provider error');
 }
 
 /**
@@ -167,9 +165,12 @@ async function transitionToWaiting(
   ctx: MessageHandlerContext,
   threadId: string,
 ): Promise<{ from: ThreadStatus; status: ThreadStatus }> {
-  const currentStatus = (await ctx.threadManager.getThread(threadId))?.status ?? 'running';
-  const { status } = transitionStatus(threadId, { type: 'WAIT' }, currentStatus as ThreadStatus);
-  return { from: currentStatus as ThreadStatus, status };
+  // SAFETY: threads.status is only written from thread state machine results (or the
+  // 'running' default here), so the stored string is a ThreadStatus.
+  const currentStatus = ((await ctx.threadManager.getThread(threadId))?.status ??
+    'running') as ThreadStatus;
+  const { status } = transitionStatus(threadId, { type: 'WAIT' }, currentStatus);
+  return { from: currentStatus, status };
 }
 
 /** AskUserQuestion / ExitPlanMode: the agent waits for the user's answer or plan approval. */

@@ -26,8 +26,7 @@ export function ProjectDefaultModelSetting({
   // manifest registry.
   const acpByProvider = useAcpModels();
 
-  const projectDefaultProvider = (selectedProject.defaultProvider ||
-    DEFAULT_PROVIDER) as AgentProvider;
+  const projectDefaultProvider = selectedProject.defaultProvider || DEFAULT_PROVIDER;
   const projectDefaultModel =
     selectedProject.defaultModel || getDefaultModel(projectDefaultProvider);
   const projectEffortOptions = getEffortLevels(projectDefaultModel, projectDefaultProvider);
@@ -64,6 +63,7 @@ export function ProjectDefaultModelSetting({
           <ModelCombobox
             value={selectedProject.defaultProvider || DEFAULT_PROVIDER}
             onChange={(v) => {
+              // SAFETY: the combobox only offers PROVIDERS, whose values are AgentProviders.
               const p = v as AgentProvider;
               const model = getDefaultModel(p);
               saveProject(selectedProject.id, {

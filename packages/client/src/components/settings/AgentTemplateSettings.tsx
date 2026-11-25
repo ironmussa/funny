@@ -314,8 +314,8 @@ function TemplateCardSummary({
     <>
       {template.color && (
         <span
-          className="size-3 shrink-0 rounded-full"
-          style={{ backgroundColor: template.color }}
+          className="size-3 shrink-0 rounded-full bg-[color:var(--agent-template-color)]"
+          style={{ '--agent-template-color': template.color }}
         />
       )}
       <span className="min-w-0 flex-1">
@@ -517,8 +517,9 @@ function IdentitySection({
               className={cn(
                 'size-5 rounded-full border-2 transition-all',
                 template.color === color ? 'border-foreground scale-110' : 'border-transparent',
+                'bg-[color:var(--agent-template-swatch)]',
               )}
-              style={{ backgroundColor: color }}
+              style={{ '--agent-template-swatch': color }}
               onClick={() => onSave({ color })}
               aria-label={`Set color ${color}`}
               aria-pressed={template.color === color}
@@ -573,7 +574,12 @@ function ModelSection({
       <span id="agent-template-model-label" className="text-muted-foreground mb-1 block text-xs">
         Default Model
       </span>
-      <Select value={template.model ?? ''} onValueChange={(v) => onSave({ model: v as any })}>
+      <Select
+        value={template.model ?? ''}
+        // SAFETY: the items are rendered from PROVIDER_MODELS.deepagent, which lists the keys of
+        // the deepagent model registry, the DeepAgentModel values.
+        onValueChange={(v) => onSave({ model: v as NonNullable<AgentTemplate['model']> })}
+      >
         <SelectTrigger
           aria-labelledby="agent-template-model-label"
           className="w-full"

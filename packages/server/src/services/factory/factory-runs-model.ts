@@ -1,13 +1,3 @@
-/**
- * @domain subdomain: Issue Factory
- * @domain subdomain-type: core
- * @domain type: value-object
- * @domain layer: domain
- *
- * The factory run's model (split out of `factory-runs.ts`): its states and the
- * transitions between them, the run view and how a stored row maps to it, and
- * how an update maps to the row's columns.
- */
 import {
   EMPTY_FACTORY_RUN_METRICS,
   factoryRegressionProofSchema,
@@ -32,6 +22,17 @@ import {
   type FactoryTriage,
   type FactoryWaitReason,
 } from '@funny/shared/contracts/factory';
+/**
+ * @domain subdomain: Issue Factory
+ * @domain subdomain-type: core
+ * @domain type: value-object
+ * @domain layer: domain
+ *
+ * The factory run's model (split out of `factory-runs.ts`): its states and the
+ * transitions between them, the run view and how a stored row maps to it, and
+ * how an update maps to the row's columns.
+ */
+import { errorMessage } from '@funny/shared/errors';
 import { parseStoredJson } from '@funny/shared/json-validation';
 import { and, gte, inArray, isNotNull, or, type SQL } from 'drizzle-orm';
 import { z } from 'zod';
@@ -395,9 +396,9 @@ export type FactoryRunsError =
 
 export type Row = typeof factoryRuns.$inferSelect;
 
-export const storage = (error: unknown): FactoryRunsError => ({
+export const storage = (cause: unknown): FactoryRunsError => ({
   kind: 'storage',
-  message: error instanceof Error ? error.message : String(error),
+  message: errorMessage(cause),
 });
 
 /** The run's own columns, stored as they are. */

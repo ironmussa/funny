@@ -215,23 +215,25 @@ export const DiffMinimap = memo(function DiffMinimap({
       aria-valuemin={0}
       aria-valuemax={Math.max(0, totalSize - (scrollElement?.clientHeight ?? 0))}
       aria-valuenow={Math.round(scrollTop)}
-      className="border-border/50 bg-muted/20 relative shrink-0 cursor-pointer border-l"
-      style={{ width: MINIMAP_WIDTH }}
+      // w-12 = MINIMAP_WIDTH (48px)
+      className="border-border/50 bg-muted/20 relative w-12 shrink-0 cursor-pointer border-l"
       onClick={scrollToClick}
       onKeyDown={handleKeyDown}
       onMouseDown={(e) => {
-        const target = e.target as HTMLElement;
-        if (target.closest('[data-diff-minimap-viewport]')) handleMouseDown(e);
+        const target = e.target;
+        if (target instanceof Element && target.closest('[data-diff-minimap-viewport]')) {
+          handleMouseDown(e);
+        }
       }}
       data-testid="diff-minimap"
     >
       <canvas ref={canvasRef} className="block" />
       {/* Viewport indicator */}
       <div
-        className="border-foreground/20 bg-foreground/10 absolute right-0 left-0 rounded-sm border"
+        className="border-foreground/20 bg-foreground/10 absolute top-[var(--diff-minimap-viewport-top)] right-0 left-0 h-[var(--diff-minimap-viewport-height)] rounded-sm border"
         style={{
-          top: viewportTop,
-          height: viewportHeight,
+          '--diff-minimap-viewport-top': `${viewportTop}px`,
+          '--diff-minimap-viewport-height': `${viewportHeight}px`,
         }}
         data-diff-minimap-viewport
         data-testid="diff-minimap-viewport"

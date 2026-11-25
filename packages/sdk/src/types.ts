@@ -51,13 +51,19 @@ export type PipelineEventType =
 
 // ── Ingest event (webhook payload) ──────────────────────────────
 
+/** A value in an ingest payload's JSON body; JSON.stringify leaves an `undefined` field out. */
+export type WireValue = string | number | boolean | null | undefined | WireValue[] | WireObject;
+
+/** A JSON object in an ingest payload (event data, metadata, a CLI message). */
+export type WireObject = { [key: string]: WireValue };
+
 export interface IngestEvent {
   event_type: PipelineEventType | (string & {});
   request_id: string;
   thread_id?: string;
   timestamp: string;
-  data: Record<string, unknown>;
-  metadata?: Record<string, unknown>;
+  data: WireObject;
+  metadata?: WireObject;
 }
 
 // ── Client configuration ────────────────────────────────────────
@@ -96,7 +102,7 @@ export interface CLIMessage {
   tool_use?: {
     id: string;
     name: string;
-    input: Record<string, unknown>;
+    input: WireObject;
   };
   /** Tool result block */
   tool_result?: {

@@ -10,8 +10,6 @@ import { cn } from '@/lib/utils';
 
 import type { FlatRow } from './flat-row';
 
-const LIST_MAX_HEIGHT_PX = 480;
-
 interface TextSearchResultsProps {
   hasSearchScope: boolean;
   error: string | null;
@@ -95,10 +93,13 @@ function ResultRow({
       tabIndex={isActive ? 0 : -1}
       data-testid={rowTestId(row)}
       className={cn(
-        'absolute left-0 top-0 flex w-full cursor-pointer items-center px-2',
+        'absolute left-0 top-0 flex h-[var(--text-search-row-height)] w-full cursor-pointer items-center [transform:translateY(var(--text-search-row-start))] px-2',
         isActive && 'bg-accent text-accent-foreground',
       )}
-      style={{ height: size, transform: `translateY(${start}px)` }}
+      style={{
+        '--text-search-row-height': `${size}px`,
+        '--text-search-row-start': `${start}px`,
+      }}
       onMouseEnter={() => onActiveRowChange(index)}
       onClick={() => onActivateRow(row)}
       onKeyDown={(event) => {
@@ -130,11 +131,8 @@ function VirtualRows({
 }: VirtualRowsProps) {
   return (
     <div
-      style={{
-        height: virtualizer.getTotalSize(),
-        width: '100%',
-        position: 'relative',
-      }}
+      className="relative h-[var(--text-search-list-height)] w-full"
+      style={{ '--text-search-list-height': `${virtualizer.getTotalSize()}px` }}
     >
       {virtualizer.getVirtualItems().map((vRow) => {
         const row = flatRows[vRow.index];
@@ -178,8 +176,7 @@ export function TextSearchResults({
   return (
     <div
       ref={scrollRef}
-      className="overflow-y-auto"
-      style={{ maxHeight: LIST_MAX_HEIGHT_PX }}
+      className="max-h-[480px] overflow-y-auto"
       data-testid="text-search-results"
     >
       {placeholder ? (

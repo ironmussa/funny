@@ -25,7 +25,7 @@ export function useProjects(): Project[] {
   });
   return useMemo(() => {
     if (!rows || rows.length === 0) return NO_PROJECTS;
-    return rows.map((row) => data.fromRow(row as Project)).sort(compareProjects(data));
+    return rows.map((row) => data.fromRow(row)).sort(compareProjects(data));
   }, [rows, data]);
 }
 
@@ -36,7 +36,7 @@ export function useProjectById(projectId: string | null | undefined): Project | 
     queryKey: liveQueryKey('projects:useProjectById', data.collection, id),
     query: (q) => q.from({ project: data.collection }).where(({ project }) => eq(project.id, id)),
   });
-  const row = rows?.[0] as Project | undefined;
+  const row = rows?.[0];
   return useMemo(() => (row ? data.fromRow(row) : undefined), [row, data]);
 }
 

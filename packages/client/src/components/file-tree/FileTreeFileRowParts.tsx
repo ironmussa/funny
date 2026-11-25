@@ -10,16 +10,16 @@ import { DiffStats } from '../DiffStats';
 import { SubmoduleBadge } from '../SubmoduleBadge';
 import type { FileTreeRowCommon } from './row-props';
 
-function statusColor(status: string): string {
+function statusColorClass(status: string): string {
   switch (status) {
     case 'added':
-      return 'hsl(142 40% 45%)';
+      return 'text-file-status-added';
     case 'modified':
-      return 'hsl(30 90% 55%)';
+      return 'text-file-status-modified';
     case 'deleted':
-      return 'hsl(0 45% 55%)';
+      return 'text-file-status-deleted';
     default:
-      return 'hsl(200 80% 60%)';
+      return 'text-file-status-other';
   }
 }
 
@@ -144,8 +144,8 @@ export function FileRowLabel({
         name={fileName}
         query={searchQuery}
         preserveExtension={!isSubmodule}
+        font="explorer"
         className={cn(
-          'font-mono-explorer',
           // oxlint-disable-next-line shadcn/require-static-classes -- fontSize is a Tailwind class prop
           fontSize,
         )}
@@ -161,10 +161,7 @@ export function FileRowLabel({
         <DiffStats linesAdded={counts.added} linesDeleted={counts.deleted} size={diffStatsSize} />
       )}
       {!hideStatus && (
-        <span
-          className={cn('shrink-0 font-medium', fontSize)}
-          style={{ color: statusColor(f.status) }}
-        >
+        <span className={cn('shrink-0 font-medium', fontSize, statusColorClass(f.status))}>
           {statusLetter(f.status)}
         </span>
       )}

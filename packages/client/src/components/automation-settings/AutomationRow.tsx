@@ -45,8 +45,7 @@ function AutomationRunHistory({ runs, onOpenThread, onClose }: AutomationRunHist
             </div>
             <Button
               variant="ghost"
-              size="xs"
-              className="h-5 px-1.5"
+              size="2xs"
               onClick={() => {
                 onOpenThread(run.threadId);
               }}
@@ -132,12 +131,7 @@ export function AutomationRow({
         <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => onTrigger(a)}
-                className="text-status-success/80 hover:text-status-success"
-              >
+              <Button variant="ghost-success-soft" size="icon-sm" onClick={() => onTrigger(a)}>
                 <Play className="icon-sm" />
               </Button>
             </TooltipTrigger>

@@ -313,7 +313,12 @@ function loadRecommendedOnce(
   loadedRef.current = true;
   (async () => {
     const result = await api.getRecommendedMcpServers();
-    if (result.isOk()) setRecommended(result.value.servers as RecommendedServer[]);
+    if (result.isOk()) {
+      // SAFETY: /mcp/recommended answers the runtime's RECOMMENDED_SERVERS, whose
+      // entries all have a name, description and type; the API typing as McpServer
+      // just omits `description`.
+      setRecommended(result.value.servers as RecommendedServer[]);
+    }
   })();
 }
 

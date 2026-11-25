@@ -1,6 +1,6 @@
 import type { FileDiffSummary } from '@funny/shared';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { type CSSProperties, useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
@@ -50,8 +50,6 @@ export interface FileTreeProps {
   hoverClass?: string;
   /** data-testid prefix (default: "filetree") */
   testIdPrefix?: string;
-  /** Optional inline style applied to each row (used for virtualizer positioning) */
-  rowStyle?: (row: TreeRow, index: number) => CSSProperties | undefined;
   /** Enable virtual scrolling for large file lists. The FileTree must be placed inside a fixed-height scroll container. */
   virtualize?: boolean;
   /** Search query to highlight matching text in file/folder names */
@@ -96,7 +94,6 @@ export function FileTree({
   activeClass = 'bg-sidebar-accent text-sidebar-accent-foreground',
   hoverClass = 'hover:bg-sidebar-accent/50 text-muted-foreground',
   testIdPrefix = 'filetree',
-  rowStyle,
   virtualize = false,
   searchQuery,
   hideStatus = false,
@@ -205,13 +202,12 @@ export function FileTree({
     onOpenDirectory: handleOpenDirectory,
   };
 
-  const renderRow = (row: TreeRow, style?: CSSProperties) => {
+  const renderRow = (row: TreeRow) => {
     if (row.kind === 'submodule-status') {
       return (
         <FileTreeSubmoduleStatusRow
           key={`submodule-status-${row.submodulePath}-${row.state}`}
           row={row}
-          style={style}
           common={common}
         />
       );
@@ -221,7 +217,6 @@ export function FileTree({
         <FileTreeFolderRow
           key={`folder-${row.path}`}
           row={row}
-          style={style}
           common={common}
           isCollapsed={collapsedFolders.has(row.path)}
           onToggleFolder={toggleFolder}
@@ -232,7 +227,6 @@ export function FileTree({
       <FileTreeFileRow
         key={row.file.path}
         row={row}
-        style={style}
         common={common}
         isActive={row.file.path === selectedFile}
         activeClass={activeClass}
@@ -252,26 +246,20 @@ export function FileTree({
 
   if (virtualize) {
     return (
-      <div ref={scrollRef} style={{ overflow: 'auto', height: '100%' }}>
+      <div ref={scrollRef} className="h-full overflow-auto">
         <div
-          style={{
-            height: `${virtualizer.getTotalSize()}px`,
-            width: '100%',
-            position: 'relative',
-          }}
+          className="relative h-[var(--file-tree-total-height)] w-full"
+          style={{ '--file-tree-total-height': `${virtualizer.getTotalSize()}px` }}
         >
           {virtualizer.getVirtualItems().map((virtualRow) => {
             const row = treeRows[virtualRow.index];
             return (
               <div
                 key={virtualRow.key}
+                className="absolute top-0 left-0 h-[var(--file-tree-row-height)] w-full [transform:translateY(var(--file-tree-row-start))]"
                 style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: `${virtualRow.size}px`,
-                  transform: `translateY(${virtualRow.start}px)`,
+                  '--file-tree-row-height': `${virtualRow.size}px`,
+                  '--file-tree-row-start': `${virtualRow.start}px`,
                 }}
               >
                 {renderRow(row)}
@@ -285,12 +273,5 @@ export function FileTree({
 
   /* ── Non-virtualized (original) rendering ── */
 
-  return (
-    <>
-      {treeRows.map((row, index) => {
-        const style = rowStyle?.(row, index);
-        return renderRow(row, style);
-      })}
-    </>
-  );
+  return <>{treeRows.map((row) => renderRow(row))}</>;
 }

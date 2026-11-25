@@ -11,6 +11,7 @@ import type {
   ForkVariant,
   RemoteCreationResponse,
   ThreadRegistration,
+  RunnerJson,
 } from '../../../modules/threads/application/ports.js';
 import { withForkInputs } from '../../../modules/threads/domain/fork-input.js';
 import type { OwnershipForkSource } from '../../../modules/threads/domain/fork-input.js';
@@ -101,7 +102,7 @@ function authorizedFork(ports: ForkThreadPorts) {
 const VARIANTS: ForkVariant[] = ['fork', 'fork-and-rewind'];
 
 /** A runner body carrying the new thread where the variant expects it. */
-function bodyFor(variant: ForkVariant, thread: unknown): unknown {
+function bodyFor(variant: ForkVariant, thread: RunnerJson): RunnerJson {
   return variant === 'fork' ? thread : { thread, rewind: { commit: 'abc' } };
 }
 

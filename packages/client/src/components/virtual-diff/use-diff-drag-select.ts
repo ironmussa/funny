@@ -15,7 +15,8 @@ export function useDiffDragSelect({
   }>({ active: false, mode: true, startLineIdx: -1 });
 
   const getLineIdxFromEvent = useCallback((e: React.MouseEvent | MouseEvent): number | null => {
-    const el = (e.target as HTMLElement).closest('[data-line-idx]');
+    if (!(e.target instanceof Element)) return null;
+    const el = e.target.closest('[data-line-idx]');
     if (!el) return null;
     const v = Number(el.getAttribute('data-line-idx'));
     return Number.isFinite(v) ? v : null;
@@ -25,8 +26,7 @@ export function useDiffDragSelect({
     (e: React.MouseEvent) => {
       if (!selectable || !onDragSelect || e.button !== 0) return;
       // Only start drag when clicking on the gutter area (checkbox / line numbers)
-      const target = e.target as HTMLElement;
-      if (!target.closest('[data-gutter]')) return;
+      if (!(e.target instanceof Element) || !e.target.closest('[data-gutter]')) return;
       const lineIdx = getLineIdxFromEvent(e);
       if (lineIdx == null) return;
       const willSelect = !selectedLines?.has(lineIdx);

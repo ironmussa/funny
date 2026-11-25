@@ -90,8 +90,8 @@ export function usePaneSelectionIsolation(
       // Restore previous isolation
       restore();
 
-      const target = e.target as HTMLElement;
-      const pane = target.closest('[data-pane]') as HTMLElement | null;
+      if (!(e.target instanceof Element)) return;
+      const pane = e.target.closest<HTMLElement>('[data-pane]');
       if (!pane) return;
 
       // Disable all panes that don't match the clicked one
@@ -106,7 +106,7 @@ export function usePaneSelectionIsolation(
 
     // Clicking outside the diff container restores all panes
     const onDocMouseDown = (e: MouseEvent) => {
-      if (!container.contains(e.target as Node)) restore();
+      if (!(e.target instanceof Node && container.contains(e.target))) restore();
     };
 
     container.addEventListener('mousedown', onMouseDown);

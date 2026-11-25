@@ -24,6 +24,7 @@ import { createdThreadId, type RunnerId, type ThreadId } from '../domain/ids.js'
 import type {
   CreateThreadCommand,
   CreateThreadPorts,
+  RunnerJson,
   RunnerUnavailableReason,
   ThreadRegistration,
 } from './ports.js';
@@ -43,7 +44,7 @@ export type CreateThreadFailure =
 
 export interface CreateThreadSuccess {
   /** The runner's response body, forwarded to the client unchanged. */
-  readonly thread: unknown;
+  readonly thread: RunnerJson;
   /** Id the runner returned (top-level or nested), if any. */
   readonly threadId?: ThreadId;
   /** The actor's runner the thread was created on. */
@@ -53,6 +54,11 @@ export interface CreateThreadSuccess {
 export type CreateThread = (
   command: CreateThreadCommand,
 ) => Promise<Result<CreateThreadSuccess, CreateThreadFailure>>;
+
+/** A field of the caller's create payload that holds a string (application code cannot import server lib). */
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
 
 export function makeCreateThread(ports: CreateThreadPorts): CreateThread {
   return async ({ actor, intent, payload: rawPayload }) => {
@@ -89,13 +95,13 @@ export function makeCreateThread(ports: CreateThreadPorts): CreateThread {
           projectId: targetProjectId(target),
           runnerId,
           userId: actor.userId,
-          title: typeof payload.title === 'string' && payload.title ? payload.title : data.title,
-          model: typeof payload.model === 'string' ? payload.model : undefined,
-          mode: typeof payload.mode === 'string' ? payload.mode : undefined,
+          title: isString(payload.title) && payload.title ? payload.title : data.title,
+          model: isString(payload.model) ? payload.model : undefined,
+          mode: isString(payload.mode) ? payload.mode : undefined,
           // The runtime generates the worktree branch, so its value wins.
           branch:
             data.branch ??
-            (typeof payload.branch === 'string' && payload.branch ? payload.branch : undefined),
+            (isString(payload.branch) && payload.branch ? payload.branch : undefined),
           isScratch: target.kind === 'scratch',
         };
         await ports.registry.register(entry);

@@ -44,30 +44,38 @@ function BreadcrumbItem({
 function BreadcrumbLink({
   asChild,
   className,
+  truncate = false,
   ref,
   ...props
 }: React.ComponentPropsWithoutRef<'a'> & { asChild?: boolean } & {
   ref?: React.Ref<HTMLAnchorElement>;
+  /** Clip a long name with an ellipsis. */
+  truncate?: boolean;
 }) {
   const Comp = asChild ? Slot : 'a';
   return (
     <Comp
       ref={ref}
-      className={cn('transition-colors hover:text-foreground', className)}
+      className={cn('transition-colors hover:text-foreground', truncate && 'truncate', className)}
       {...props}
     />
   );
 }
 function BreadcrumbPage({
   className,
+  truncate = false,
   ref,
   ...props
-}: React.ComponentPropsWithoutRef<'span'> & { ref?: React.Ref<HTMLSpanElement> }) {
+}: React.ComponentPropsWithoutRef<'span'> & {
+  ref?: React.Ref<HTMLSpanElement>;
+  /** Clip a long name with an ellipsis. */
+  truncate?: boolean;
+}) {
   return (
     <span
       ref={ref}
       aria-current="page"
-      className={cn('font-medium text-foreground', className)}
+      className={cn('font-medium text-foreground', truncate && 'truncate', className)}
       {...props}
     />
   );

@@ -10,7 +10,7 @@ import { sql } from 'drizzle-orm';
 import {
   createWorkflowJournalRepository,
   databaseJournal,
-  type StoredExecution,
+  type LoadedExecution,
 } from '../../../services/workflow-engine/journal-repository.js';
 import { createTestDb, seedProject } from '../../helpers/test-db.js';
 
@@ -40,7 +40,7 @@ beforeEach(async () => {
   }
 });
 
-const execution = (patch: Partial<StoredExecution> = {}): StoredExecution => ({
+const execution = (patch: Partial<LoadedExecution> = {}): LoadedExecution => ({
   runId: 'run-1',
   nodeId: 'implement',
   visit: '1',

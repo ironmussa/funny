@@ -9,6 +9,8 @@
  * the member told when the run waits for them.
  */
 
+import { errorMessage } from '@funny/shared/errors';
+
 import { log } from '../../lib/logger.js';
 import { sendPush } from '../web-push.js';
 import {
@@ -91,11 +93,11 @@ export function createRunSettlement(deps: FactoryFlowRunsDeps) {
       body: why.length > 200 ? `${why.slice(0, 199)}…` : why,
       url: `/projects/${job.factory.projectId}`,
       tag: `factory-run-${job.run.id}`,
-    }).catch((error: unknown) =>
+    }).catch((cause: unknown) =>
       log.warn('Issue factory notification failed', {
         namespace: 'factory',
         runId: job.run.id,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage(cause),
       }),
     );
   }

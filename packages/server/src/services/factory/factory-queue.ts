@@ -30,6 +30,7 @@ import type {
   FactoryTrigger,
 } from '@funny/shared/contracts/factory';
 import { MAX_FACTORY_TRIGGERS } from '@funny/shared/contracts/factory';
+import { errorMessage } from '@funny/shared/errors';
 import { err, errAsync, ok, okAsync, ResultAsync, type Result } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
@@ -290,11 +291,11 @@ export function createFactoryQueue(deps: FactoryQueueDeps = {}) {
 
   /** Look at the factory now instead of at its next poll; best-effort. */
   function wakeFactory(factoryId: string): void {
-    void wake(factoryId).catch((error: unknown) =>
+    void wake(factoryId).catch((cause: unknown) =>
       log.error('Issue factory poke failed', {
         namespace: 'factory',
         factoryId,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage(cause),
       }),
     );
   }

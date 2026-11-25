@@ -14,7 +14,7 @@ export function ProjectConfigSettings() {
   const { t, selectedProjectId, loading } = state;
 
   if (!selectedProjectId) {
-    return <EmptyState fill={false} className="py-6" title={t('projectConfig.noProject')} />;
+    return <EmptyState fill={false} padding="md" title={t('projectConfig.noProject')} />;
   }
 
   if (loading) {

@@ -3,6 +3,8 @@ import type { Context } from 'hono';
 import { err, ok, type Result } from 'neverthrow';
 import { z, type ZodTypeAny } from 'zod';
 
+import { isString } from '../lib/value-guards.js';
+
 /** Parse and validate a Hono JSON request body at the route boundary. */
 export async function parseJsonBody<TSchema extends ZodTypeAny>(
   c: Context,
@@ -38,7 +40,7 @@ export function parseQuery<TSchema extends ZodTypeAny>(
 
 /** Boolean query coercion that treats "false" as false, unlike z.coerce.boolean(). */
 export const queryBoolean = z.preprocess((value) => {
-  if (typeof value !== 'string') return value;
+  if (!isString(value)) return value;
   const normalized = value.trim().toLowerCase();
   if (normalized === 'true') return true;
   if (normalized === 'false') return false;
@@ -48,7 +50,7 @@ export const queryBoolean = z.preprocess((value) => {
 /** Query list coercion supporting repeated params and comma-separated values. */
 export function queryList<TSchema extends ZodTypeAny>(itemSchema: TSchema) {
   return z.preprocess((value) => {
-    const values = Array.isArray(value) ? value : typeof value === 'string' ? [value] : value;
+    const values = Array.isArray(value) ? value : isString(value) ? [value] : value;
     if (!Array.isArray(values)) return values;
     return values
       .flatMap((item: string) => item.split(',').map((part: string) => part.trim()))

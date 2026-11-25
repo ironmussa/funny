@@ -150,7 +150,7 @@ async function worktreeThreadStatus(
   return Object.assign(
     {
       threadId: thread.id,
-      branchKey: computeBranchKey(thread as any),
+      branchKey: computeBranchKey(thread),
       state: deriveGitSyncState(summary),
     },
     summary,
@@ -603,7 +603,7 @@ statusRoutes.get('/:threadId/status', async (c) => {
       prInfo = getCachedPR(projectPath, branchForPR);
     }
 
-    const branchKey = computeBranchKey(thread as any);
+    const branchKey = computeBranchKey(thread);
     const baseStatus = {
       threadId,
       branchKey,
@@ -646,7 +646,7 @@ statusRoutes.get('/:threadId/status', async (c) => {
   // PR info: synchronous cache hit, otherwise defer and push via WS.
   const prInfo = branchForPR ? getCachedPR(project.path, branchForPR) : undefined;
 
-  const branchKey = computeBranchKey(thread as any);
+  const branchKey = computeBranchKey(thread);
   const baseStatus = {
     threadId,
     branchKey,

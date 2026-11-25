@@ -59,7 +59,7 @@ function McpRemoveDialog({
           <AlertDialogAction
             data-testid="mcp-remove-confirm"
             onClick={onConfirm}
-            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            variant="destructive"
           >
             {t('common.delete')}
           </AlertDialogAction>
@@ -133,6 +133,7 @@ export function McpServerSettings() {
             <Select
               value={selectedProvider}
               onValueChange={(v) => {
+                // SAFETY: the select's items are MCP_PROVIDER_OPTIONS, whose values are AgentProviders.
                 setSelectedProvider(v as AgentProvider);
                 setShowAddForm(false);
               }}
@@ -152,12 +153,7 @@ export function McpServerSettings() {
                 ))}
               </SelectContent>
             </Select>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowAddForm(!showAddForm)}
-              className="px-2"
-            >
+            <Button variant="ghost" size="sm-tight" onClick={() => setShowAddForm(!showAddForm)}>
               {showAddForm ? (
                 <ChevronUp className="icon-xs mr-1" />
               ) : (

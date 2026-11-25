@@ -24,6 +24,7 @@ import type {
   FactoryApprovalRequest,
   FactoryApprovalRequestState,
 } from '@funny/shared/contracts/factory';
+import { errorMessage } from '@funny/shared/errors';
 import { and, desc, eq, ne } from 'drizzle-orm';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
@@ -52,9 +53,9 @@ export interface FactoryApprovalRequestRecord extends FactoryApprovalRequest {
 
 type Row = typeof factoryApprovalRequests.$inferSelect;
 
-const storage = (error: unknown): FactoryApprovalRequestsError => ({
+const storage = (cause: unknown): FactoryApprovalRequestsError => ({
   kind: 'storage',
-  message: error instanceof Error ? error.message : String(error),
+  message: errorMessage(cause),
 });
 
 const STATES: readonly FactoryApprovalRequestState[] = [

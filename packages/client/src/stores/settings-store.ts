@@ -3,7 +3,7 @@ import {
   type FontSizePreference,
   type ThreadViewerPreference,
 } from '@funny/client-core/stores/preferences';
-import type { ToolPermission } from '@funny/shared';
+import type { ToolPermission, UpdateProfileRequest } from '@funny/shared';
 import type { ProfileResponse } from '@funny/shared/contracts/profile';
 import { MODEL_REGISTRY } from '@funny/shared/models';
 import { create } from 'zustand';
@@ -63,7 +63,7 @@ export const TOOL_LABELS = {
 } satisfies Record<(typeof ALL_STANDARD_TOOLS)[number], string>;
 
 const DEFAULT_TOOL_PERMISSIONS: Record<string, ToolPermission> = Object.fromEntries(
-  ALL_STANDARD_TOOLS.map((tool) => [tool, 'allow' as ToolPermission]),
+  ALL_STANDARD_TOOLS.map((tool): [string, ToolPermission] => [tool, 'allow']),
 );
 
 export type FontSize = FontSizePreference;
@@ -176,6 +176,8 @@ const portablePreferences = createClientPreferencesStore({
 const initialPreferences = portablePreferences.getState();
 
 function applyFontSize(size: FontSize) {
+  // SAFETY: FONT_SIZE_VALUES is a Record<FontSize, string>, so its keys are exactly the
+  // FontSize values, and the entries built from them give every FontSize one value.
   applyWebFontSize(
     size,
     Object.fromEntries(
@@ -223,7 +225,7 @@ interface SettingsState {
 }
 
 /** Save a partial settings update to the server (fire-and-forget). */
-function syncToServer(data: Record<string, any>) {
+function syncToServer(data: UpdateProfileRequest) {
   updateProfile(data).match(
     () => {},
     () => {},
@@ -251,7 +253,7 @@ export function deriveToolLists(permissions: Record<string, ToolPermission>): To
 export const useSettingsStore = create<SettingsState>()((set, get) => ({
   defaultEditor: 'cursor',
   useInternalEditor: false,
-  terminalShell: 'default' as TerminalShell,
+  terminalShell: 'default',
   availableShells: [],
   shellsLoaded: false,
   toolPermissions: { ...DEFAULT_TOOL_PERMISSIONS },
@@ -264,9 +266,13 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
 
   initializeFromProfile: (profile) => {
     set({
+      // SAFETY: the profile's defaultEditor is written only by setDefaultEditor, which takes
+      // an Editor; the server stores the string it was sent without checking it.
       defaultEditor: (profile.defaultEditor as Editor) ?? 'cursor',
       useInternalEditor: profile.useInternalEditor ?? false,
-      terminalShell: (profile.terminalShell as TerminalShell) ?? 'default',
+      terminalShell: profile.terminalShell ?? 'default',
+      // SAFETY: the profile's toolPermissions are written only by the toolPermissions setters
+      // below, which send a Record<string, ToolPermission>; the server stores them unchecked.
       toolPermissions: (profile.toolPermissions as Record<string, ToolPermission>) ?? {
         ...DEFAULT_TOOL_PERMISSIONS,
       },

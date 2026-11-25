@@ -12,7 +12,7 @@ How to fix it:
 - **Reproduce the failure first**: run the failing check, or the test or
   command it names, and see it fail before you change anything.
 - Fix the cause in the code. Do not disable, skip or weaken tests or checks.
-  If the branch conflicts with the default branch, merge the default branch
+  If the branch conflicts with {{#base_branch}}`{{base_branch}}`{{/base_branch}}{{^base_branch}}the default branch{{/base_branch}}, merge it
   in (never rebase or force push) and resolve the conflicts.
 - If an earlier fix did not make the checks pass, fix only the failure shown
   here; if it cannot be fixed from this branch (a flaky check, a broken CI

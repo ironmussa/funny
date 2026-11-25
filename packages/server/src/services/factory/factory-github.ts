@@ -41,6 +41,7 @@ import {
   type PullRequestLookup,
   type RepoIssue,
 } from './factory-repo-reads.js';
+import { factoryBaseBranchOf } from './factory-settings.js';
 
 /** One open issue the factory may admit. */
 export interface FactoryIssue {
@@ -265,6 +266,7 @@ export function createFactoryGithub(
         api: GITHUB_API,
         userAgent: USER_AGENT,
       }),
+      () => factoryBaseBranchOf(reader.ownerId, reader.projectId),
     );
 
   return {

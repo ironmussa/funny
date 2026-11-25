@@ -34,7 +34,7 @@ const SIZE_CLASS = {
     icon: 'h-3 w-3',
   },
   compact: {
-    badge: 'h-[15px] px-1 text-2xs',
+    badge: 'h-4 px-1.5 text-2xs',
     icon: 'h-2.5 w-2.5',
   },
   xxs: {
@@ -44,7 +44,7 @@ const SIZE_CLASS = {
 } as const;
 
 /** The git stat chip at a small powerline's text size (`PowerlineBar` size "sm"). */
-const PLAIN_COMPACT_CLASS = 'flex shrink-0 items-center gap-0.5 text-2xs leading-[15px]';
+const PLAIN_COMPACT_CLASS = 'flex shrink-0 items-center gap-0.5 text-2xs leading-4';
 
 const STATE_CLASS = {
   OPEN: 'border-emerald-300/70 bg-emerald-50 text-emerald-700 hover:border-emerald-400 hover:text-emerald-800 dark:border-emerald-400/35 dark:bg-emerald-400/15 dark:text-emerald-200 dark:hover:border-emerald-300/60 dark:hover:text-emerald-100',
@@ -151,9 +151,7 @@ export function PRBadge({
             {content}
           </a>
         </TooltipTrigger>
-        <TooltipContent side="top" className="text-xs">
-          {tooltipLabel}
-        </TooltipContent>
+        <TooltipContent side="top">{tooltipLabel}</TooltipContent>
       </Tooltip>
     );
   }
@@ -165,9 +163,7 @@ export function PRBadge({
           {content}
         </span>
       </TooltipTrigger>
-      <TooltipContent side="top" className="text-xs">
-        {tooltipLabel}
-      </TooltipContent>
+      <TooltipContent side="top">{tooltipLabel}</TooltipContent>
     </Tooltip>
   );
 }

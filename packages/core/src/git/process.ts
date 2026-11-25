@@ -12,6 +12,11 @@ const hasBun = typeof globalThis.Bun !== 'undefined';
 
 const POSIX_SYSTEM_PATHS = ['/usr/local/bin', '/usr/bin', '/bin'];
 
+/** Environment variables a command sets on top of the env it inherits. */
+export interface EnvOverrides {
+  [name: string]: string;
+}
+
 /**
  * Service managers and desktop launchers can provide a reduced PATH that omits
  * the system Git installation. Keep the inherited environment, but make the
@@ -23,7 +28,7 @@ export function buildProcessEnv(
   overrides?: Record<string, string>,
   inherited: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform,
-): Record<string, string | undefined> {
+): NodeJS.ProcessEnv {
   const env = { ...scrubSensitiveEnv(inherited), ...overrides };
   if (platform !== 'win32') {
     const paths = (env.PATH ?? '').split(delimiter).filter(Boolean);
@@ -402,8 +407,8 @@ async function executeRawBun(
         if (signal.aborted) abort();
         try {
           return await Promise.all([
-            readCapped(proc.stdout as ReadableStream<Uint8Array>),
-            readCapped(proc.stderr as ReadableStream<Uint8Array>, options.onStderr),
+            readCapped(proc.stdout),
+            readCapped(proc.stderr, options.onStderr),
             proc.exited,
           ]);
         } finally {

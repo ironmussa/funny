@@ -16,8 +16,11 @@ export function useHookReorderMonitor(
         if (!targets.length) return;
         if (source.data.type !== 'hook-item') return;
 
+        // SAFETY: type 'hook-item' was checked above; HookItem's getInitialData sets hookType from hook.hookType, a HookType.
         const sourceHookType = source.data.hookType as HookType;
+        // SAFETY: the same 'hook-item' data sets index from hook.index, a number.
         const sourceIndex = source.data.index as number;
+        // SAFETY: only HookItem drop targets accept a 'hook-item' source (canDrop), and their getData sets index from hook.index, a number.
         const targetIndex = targets[0].data.index as number;
         if (sourceIndex === targetIndex || sourceHookType !== targets[0].data.hookType) return;
 

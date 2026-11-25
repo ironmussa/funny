@@ -3,6 +3,7 @@ import type { Context } from 'hono';
 import { err, ok, type Result } from 'neverthrow';
 import { z, type ZodTypeAny } from 'zod';
 
+import { isString } from '../lib/value-guards.js';
 import type { HonoEnv } from '../types/hono-env.js';
 import { validate } from './schemas.js';
 
@@ -31,8 +32,10 @@ export async function readBody<Body>(
   c: Context<HonoEnv>,
   schema: z.ZodType<Body> | undefined,
 ): Promise<Result<Body, DomainError>> {
-  // SAFETY: a route without a body schema declares Body = undefined (the default).
-  if (!schema) return ok(undefined as Body);
+  if (!schema) {
+    // SAFETY: a route without a body schema declares Body = undefined (the default).
+    return ok(undefined as Body);
+  }
   return validate(schema, await c.req.json().catch(() => ({})));
 }
 
@@ -57,7 +60,7 @@ export function parseQuery<TSchema extends ZodTypeAny>(
 
 /** Boolean query coercion that treats "false" as false, unlike z.coerce.boolean(). */
 export const queryBoolean = z.preprocess((value) => {
-  if (typeof value !== 'string') return value;
+  if (!isString(value)) return value;
   const normalized = value.trim().toLowerCase();
   if (normalized === 'true') return true;
   if (normalized === 'false') return false;
@@ -67,7 +70,7 @@ export const queryBoolean = z.preprocess((value) => {
 /** Query list coercion supporting repeated params and comma-separated values. */
 export function queryList<TSchema extends ZodTypeAny>(itemSchema: TSchema) {
   return z.preprocess((value) => {
-    const values = Array.isArray(value) ? value : typeof value === 'string' ? [value] : value;
+    const values = Array.isArray(value) ? value : isString(value) ? [value] : value;
     if (!Array.isArray(values)) return values;
     return values
       .flatMap((item: string) => item.split(',').map((part: string) => part.trim()))

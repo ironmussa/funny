@@ -1,7 +1,7 @@
 import type { WSTestActionData } from '@funny/shared';
 import {
   CheckCircle2,
-  Circle,
+  CircleIcon,
   Loader2,
   MousePointerClick,
   Navigation,
@@ -54,7 +54,7 @@ function ActionIcon({ action }: { action: WSTestActionData }) {
 
   // Default: generic step dot
   return action.endTime ? (
-    <Circle className={cn(cls, 'text-muted-foreground')} />
+    <CircleIcon className={cn(cls, 'text-muted-foreground')} />
   ) : (
     <Loader2 className={cn(cls, 'animate-spin text-muted-foreground')} />
   );
@@ -111,7 +111,7 @@ export function ActionList({
     <ScrollArea
       viewportRef={ref}
       viewportProps={{ onScroll: handleScroll }}
-      className="h-full text-xs"
+      className="h-full"
       data-testid="action-list"
     >
       {visibleActions.map((action) => {
@@ -124,7 +124,7 @@ export function ActionList({
             type="button"
             key={action.id}
             className={cn(
-              'flex w-full cursor-pointer items-start gap-2 border-b border-border/20 px-2 py-1.5 text-left transition-colors',
+              'flex w-full cursor-pointer items-start gap-2 border-b border-border/20 px-2 py-1.5 text-left text-xs transition-colors',
               isActive && 'bg-primary/10',
               !isActive && 'hover:bg-muted/40',
               action.error && 'bg-destructive/5',

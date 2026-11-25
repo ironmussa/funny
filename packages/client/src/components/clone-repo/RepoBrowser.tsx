@@ -138,7 +138,7 @@ function RepoList({
       ))}
 
       {loadingRepos && (
-        <LoadingState fill={false} className="py-4" testId="clone-repo-loading-repos" />
+        <LoadingState fill={false} className="my-4" testId="clone-repo-loading-repos" />
       )}
 
       {!loadingRepos && repos.length === 0 && (
@@ -206,7 +206,8 @@ export function RepoBrowser({
           onInputKeyDown={onSearchKeyDown}
           autoFocus={false}
           testIdPrefix="clone-repo-search"
-          className="border-input bg-background h-8 rounded-md border px-3 [&_input]:h-full [&_input]:px-0 [&_input]:text-sm"
+          variant="field"
+          className="h-8 [&_input]:h-full"
         />
       </div>
 

@@ -12,7 +12,20 @@
  * logs forward to the sink only (same behavior as @funny/core).
  */
 
-type LogFn = (message: string, data?: Record<string, unknown>) => void;
+/** A value the logger can serialize with `JSON.stringify`. */
+type LogValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | readonly LogValue[]
+  | { readonly [key: string]: LogValue };
+
+/** The structured fields of one log line. */
+type LogFields = { readonly [key: string]: LogValue };
+
+type LogFn = (message: string, data?: LogFields) => void;
 
 export interface MemoryLogger {
   debug: LogFn;
@@ -25,7 +38,7 @@ type LogSink = (
   level: 'debug' | 'info' | 'warn' | 'error',
   namespace: string,
   message: string,
-  data?: Record<string, unknown>,
+  data?: LogFields,
 ) => void;
 
 let logSink: LogSink | null = null;
@@ -37,7 +50,7 @@ export function setMemoryLogSink(sink: LogSink | null): void {
 function createMemoryLogger(namespace: string): MemoryLogger {
   const prefix = `[memory:${namespace}]`;
 
-  const fmt = (msg: string, data?: Record<string, unknown>): string => {
+  const fmt = (msg: string, data?: LogFields): string => {
     if (!data || Object.keys(data).length === 0) return `${prefix} ${msg}`;
     return `${prefix} ${msg} ${JSON.stringify(data)}`;
   };

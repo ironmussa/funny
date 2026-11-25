@@ -23,7 +23,8 @@ import {
   READ_ONLY_PROVIDERS,
 } from '@funny/shared/models';
 
-import type { IAgentProcess, IAgentProcessFactory } from './interfaces.js';
+import type { AgentProcessOptions, IAgentProcess, IAgentProcessFactory } from './interfaces.js';
+import type { McpServerEntry, McpServerMap } from './mcp-server-map.js';
 import type { CLIMessage } from './types.js';
 
 // ── Read-only agents ──────────────────────────────────────────────
@@ -70,10 +71,11 @@ function holdToReading<O extends { provider: AgentProvider }>(
   opts: O,
   input: Pick<StartAgentOptions, 'readOnlyRoots' | 'readOnlyHiddenPaths'>,
 ) {
+  const originalPermissionMode: PermissionMode = 'plan';
   return {
     ...opts,
     permissionMode: resolvePermissionMode(opts.provider, 'plan'),
-    originalPermissionMode: 'plan' as PermissionMode,
+    originalPermissionMode,
     allowedTools: [...READ_ONLY_AGENT_TOOLS],
     mcpServers: undefined,
     redirectChecks: false,
@@ -99,7 +101,7 @@ export interface StartAgentOptions {
   sessionId?: string;
   maxTurns?: number;
   /** MCP servers to pass to the agent process (e.g., CDP browser tools) */
-  mcpServers?: Record<string, any>;
+  mcpServers?: McpServerMap;
   /** Custom spawn function for sandboxed execution (e.g., Podman container) */
   spawnClaudeCodeProcess?: (options: any) => any;
   /** Custom system prefix for resume — replaces the default "interrupted session" note. */
@@ -217,10 +219,10 @@ function canSendPrompt(
 }
 
 /** Stable JSON of mcpServers (keys sorted) — '' when none. */
-function mcpServersKeyOf(mcpServers: Record<string, any> | undefined): string {
+function mcpServersKeyOf(mcpServers: StartAgentOptions['mcpServers']): string {
   if (!mcpServers) return '';
   try {
-    const sorted: Record<string, any> = {};
+    const sorted: Record<string, McpServerEntry> = {};
     for (const k of Object.keys(mcpServers).sort()) sorted[k] = mcpServers[k];
     return JSON.stringify(sorted);
   } catch {
@@ -236,7 +238,7 @@ function snapshotProcessOptions(opts: {
   effort?: string;
   fastMode?: boolean;
   redirectChecks?: boolean;
-  mcpServers?: Record<string, any>;
+  mcpServers?: StartAgentOptions['mcpServers'];
 }): ProcessOptionsSnapshot {
   return {
     provider: opts.provider ?? '',
@@ -346,6 +348,9 @@ export class AgentOrchestrator extends EventEmitter {
   ): boolean {
     if (!prev) return false;
     // Every field of the snapshot gates reuse.
+    // SAFETY: `next` is built by snapshotProcessOptions as a plain object
+    // literal of exactly the ProcessOptionsSnapshot fields, so its own keys
+    // are keys of that type.
     return (Object.keys(next) as (keyof ProcessOptionsSnapshot)[]).every(
       (key) => prev[key] === next[key],
     );
@@ -782,7 +787,7 @@ export class AgentOrchestrator extends EventEmitter {
       dlog.debug('wireProcessHandlers message', {
         threadId,
         type: msg.type,
-        subtype: (msg as any).subtype,
+        subtype: 'subtype' in msg ? msg.subtype : undefined,
       });
       if (msg.type === 'result') {
         this.resultReceived.add(threadId);
@@ -898,7 +903,7 @@ export class AgentOrchestrator extends EventEmitter {
       dlog.debug('wireResumeHandlers message', {
         threadId,
         type: msg.type,
-        subtype: (msg as any).subtype,
+        subtype: 'subtype' in msg ? msg.subtype : undefined,
         firstMessage: !gotMessage,
       });
       if (msg.type === 'result') {
@@ -906,7 +911,7 @@ export class AgentOrchestrator extends EventEmitter {
         // error result with 0 turns — the session was recognised but the
         // working directory (or some other env) changed so it crashed right
         // away. Treat this the same as a stale session so we can retry fresh.
-        const r = msg as any;
+        const r = msg;
         if (
           r.subtype === 'error_during_execution' &&
           (r.num_turns === 0 || r.num_turns === undefined)
@@ -1017,9 +1022,9 @@ export class AgentOrchestrator extends EventEmitter {
   // ── Start strategies ───────────────────────────────────────────
 
   /** Start a fresh (non-resume) agent process. */
-  private startFresh(threadId: string, processOpts: Record<string, any>, sessionId?: string): void {
+  private startFresh(threadId: string, processOpts: AgentProcessOptions, sessionId?: string): void {
     dlog.info('startFresh', { threadId, hasSessionId: !!sessionId });
-    const proc = this.processFactory.create({ ...processOpts, sessionId } as any);
+    const proc = this.processFactory.create({ ...processOpts, sessionId });
     this.wireProcessHandlers(proc, threadId);
 
     try {
@@ -1039,16 +1044,16 @@ export class AgentOrchestrator extends EventEmitter {
    */
   private startWithResume(
     threadId: string,
-    processOpts: Record<string, any>,
+    processOpts: AgentProcessOptions,
     sessionId: string,
   ): void {
-    const resumeProc = this.processFactory.create({ ...processOpts, sessionId } as any);
+    const resumeProc = this.processFactory.create({ ...processOpts, sessionId });
 
     const retryFresh = () => {
       dlog.warn('Resume failed, retrying without session', { threadId, sessionId });
       this.emit('agent:session-cleared', threadId);
 
-      const freshProc = this.processFactory.create({ ...processOpts, sessionId: undefined } as any);
+      const freshProc = this.processFactory.create({ ...processOpts, sessionId: undefined });
       this.wireProcessHandlers(freshProc, threadId);
 
       try {

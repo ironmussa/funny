@@ -25,6 +25,9 @@ function broadcastThreadEvent(
 ) {
   const id = crypto.randomUUID();
   const createdAt = new Date().toISOString();
+  // SAFETY: the event is a `thread:event` in every field but `event.type`,
+  // which may be a `workflow:*` type that ThreadEventType does not list; the
+  // client's handleThreadEvent appends the event whatever its type.
   wsBroker.emitToUser(userId, {
     type: 'thread:event',
     threadId,

@@ -234,7 +234,7 @@ export async function assertSafeOutboundUrl(
   // `fetch` will fail anyway, so the lookup failure is allowed to bubble.
   const records = await lookup(hostname, { all: true });
   for (const r of records) {
-    const family = (r.family === 6 ? 6 : 4) as 4 | 6;
+    const family: 4 | 6 = r.family === 6 ? 6 : 4;
     const reason = isBlockedForPolicy(family, r.address, policy);
     if (reason) {
       log.warn('SSRF blocked: hostname resolves to forbidden range', {
@@ -258,11 +258,9 @@ export async function assertSafeOutboundUrl(
   // the API is unavailable (different Bun version), silently skip.
   try {
     type BunDnsLike = { prefetch?: (h: string) => void } | undefined;
-    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- Bun.dns is not in the DOM globalThis type; runtime feature-detection
-    const bunDns = (globalThis as unknown as { Bun?: { dns?: BunDnsLike } }).Bun?.dns;
-    if (bunDns && typeof bunDns.prefetch === 'function') {
-      bunDns.prefetch(hostname);
-    }
+    const bunDns: BunDnsLike = globalThis.Bun?.dns;
+    const prefetch = bunDns?.prefetch;
+    if (isPrefetch(prefetch)) prefetch.call(bunDns, hostname);
   } catch {
     // ignore — caching is a defense-in-depth measure, not a hard requirement
   }
@@ -293,4 +291,9 @@ export async function safeFetchUserUrl(url: string, init?: RequestInit): Promise
   await assertSafeOutboundUrl(url, policy);
   const pinned = withPinnedHttpDestination(url, init, policy);
   return fetch(pinned.url, pinned.init);
+}
+
+/** Bun's `dns.prefetch`, when this Bun version has one. */
+function isPrefetch(value: unknown): value is (hostname: string) => void {
+  return typeof value === 'function';
 }

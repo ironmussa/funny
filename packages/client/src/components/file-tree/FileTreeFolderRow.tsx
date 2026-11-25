@@ -1,5 +1,4 @@
-import { ChevronRight, Folder, FolderOpen, FolderOpenDot } from 'lucide-react';
-import type { CSSProperties } from 'react';
+import { ChevronRight, FolderIcon, FolderOpen, FolderOpenDot } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { HostDropdownMenuItem } from '@/components/HostOnly';
@@ -15,7 +14,6 @@ import { CopyPathItems, RowMenu } from './RowMenu';
 
 interface FileTreeFolderRowProps {
   row: Extract<TreeRow, { kind: 'folder' }>;
-  style?: CSSProperties;
   common: FileTreeRowCommon;
   isCollapsed: boolean;
   onToggleFolder: (folderPath: string) => void;
@@ -23,7 +21,6 @@ interface FileTreeFolderRowProps {
 
 export function FileTreeFolderRow({
   row,
-  style,
   common: {
     fontSize,
     hoverClass,
@@ -44,15 +41,12 @@ export function FileTreeFolderRow({
   return (
     <div
       className={cn(
-        'group flex h-[24px] cursor-pointer select-none items-center gap-1.5 overflow-hidden pr-1',
+        'group flex h-[24px] cursor-pointer select-none items-center gap-1.5 overflow-hidden pr-1 pl-[var(--file-tree-indent)]',
         fontSize,
         'text-muted-foreground transition-colors',
         hoverClass,
       )}
-      style={{
-        ...style,
-        paddingLeft: `${8 + row.depth * INDENT_PX}px`,
-      }}
+      style={{ '--file-tree-indent': `${8 + row.depth * INDENT_PX}px` }}
       draggable
       onDragStart={(e) => {
         setFileMentionDragData(e.dataTransfer, {
@@ -72,7 +66,7 @@ export function FileTreeFolderRow({
           className={cn('icon-sm shrink-0 transition-transform', !isCollapsed && 'rotate-90')}
         />
         {isCollapsed ? (
-          <Folder className="icon-base text-muted-foreground/70 shrink-0" />
+          <FolderIcon className="icon-base text-muted-foreground/70 shrink-0" />
         ) : (
           <FolderOpen className="icon-base text-muted-foreground/70 shrink-0" />
         )}

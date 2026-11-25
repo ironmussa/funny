@@ -1,13 +1,21 @@
 /**
  * A run on the factory board (openspec factory-pipeline-board): its issue and
- * project, its thread's status pin, the gate chips and why it waits (the
+ * project, its state dot (a checkbox on hover, to pick runs for a bulk action), the gate chips and why it waits (the
  * column already says which step it is on). Opening it opens
  * the run's detail panel (openspec factory-run-detail). Not draggable: only the
  * server moves a run.
  */
 import type { GitStatusInfo } from '@funny/shared';
 import { approvalGapFor, implementingThreadOf } from '@funny/shared/contracts/factory';
-import { Check, Clock, MoreVertical, RotateCcw, Sparkles, Split, Square } from 'lucide-react';
+import {
+  Check,
+  GitPullRequestClosed,
+  MoreVertical,
+  RotateCcw,
+  Sparkles,
+  Split,
+  Square,
+} from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -17,6 +25,7 @@ import { PRBadge } from '@/components/PRBadge';
 import {
   type FactoryRunAction,
   type FactoryRunActionId,
+  type FactoryRunReplacement,
   pullRequestNumber,
   useFactoryRunActions,
 } from '@/components/thread/FactoryRunControls';
@@ -43,6 +52,7 @@ import { factoryRunActivityAt } from './board-columns';
 import { FactoryBoardChip } from './FactoryBoardChip';
 import { FactoryRunDependencyNote } from './FactoryRunDependencyNote';
 import { FactoryRunGateChips } from './FactoryRunGateChips';
+import { FactoryRunStatus, type FactoryRunSelectionProps } from './FactoryRunStatus';
 import { type FactoryRunDependencyLookup, NO_FACTORY_RUN_DEPENDENCIES } from './run-dependencies';
 import { useFactoryRunPrState } from './run-pr-state';
 import { factoryBoardStateChip } from './run-state-chip';
@@ -56,7 +66,7 @@ export function factoryRunCardThread(
   return implementingThreadOf(run) ?? run.threadIds.at(-1);
 }
 
-interface Props {
+interface Props extends FactoryRunSelectionProps {
   run: FactoryQueueRun;
   projectName: string | undefined;
   now: number;
@@ -64,6 +74,8 @@ interface Props {
   onSelect: (run: FactoryQueueRun) => void;
   /** How the listed runs hold each other back. */
   dependencies?: FactoryRunDependencyLookup;
+  /** The newer run of the same issue that replaced this one, if any. */
+  replacedBy?: FactoryRunReplacement | null;
 }
 
 /**
@@ -148,17 +160,51 @@ function AsksAgainMarker({ run }: { run: FactoryQueueRun }) {
   );
 }
 
+/**
+ * Says that a newer run of the issue replaced this one, and its pull request:
+ * the card sits in Done although its own pull request may still be open.
+ */
+function ReplacedMarker({
+  run,
+  replacedBy,
+}: {
+  run: FactoryQueueRun;
+  replacedBy: FactoryRunReplacement | null | undefined;
+}) {
+  const { t } = useTranslation();
+  if (!replacedBy) return null;
+  const newerPr = replacedBy.prUrl ? pullRequestNumber(replacedBy.prUrl) : null;
+  return (
+    <FactoryBoardChip
+      label={
+        newerPr === null
+          ? t('factoryBoard.replaced', 'Replaced')
+          : t('factoryBoard.replacedBy', 'Replaced by #{{pr}}', { pr: newerPr })
+      }
+      tone="neutral"
+      detail={t(
+        'factoryBoard.replacedDetail',
+        'Issue #{{issue}} was sent to the factory again: a newer run works on it.',
+        { issue: run.issueNumber },
+      )}
+      testId={`factory-board-replaced-${run.id}`}
+    />
+  );
+}
+
 /** What the factory adds under a card's title: gate chips, why it waits, what it blocks. */
 function FactoryRunCardBody({
   run,
   hasThread,
   onSelect,
   dependencies,
+  replacedBy,
 }: {
   run: FactoryQueueRun;
   hasThread: boolean;
   onSelect: (run: FactoryQueueRun) => void;
   dependencies: FactoryRunDependencyLookup;
+  replacedBy: FactoryRunReplacement | null | undefined;
 }) {
   const { t } = useTranslation();
   const state = factoryBoardStateChip(t, run, hasThread);
@@ -175,6 +221,7 @@ function FactoryRunCardBody({
             data={{ 'data-state': run.state }}
           />
         )}
+        <ReplacedMarker run={run} replacedBy={replacedBy} />
         <FactoryRunGateChips run={run} />
         <AgentAskedMarker run={run} />
         <AsksAgainMarker run={run} />
@@ -191,6 +238,7 @@ function FactoryRunCardBody({
 
 const ACTION_ICON: Record<FactoryRunActionId, typeof Check> = {
   'approve-merge': Check,
+  'close-replaced-pr': GitPullRequestClosed,
   'lint-cleanup': Sparkles,
   'lint-cleanup-off': Sparkles,
   'mark-done': Check,
@@ -258,6 +306,7 @@ function QueuedFactoryRunCard({
   testId,
   stepTime,
   menuItems,
+  status,
   children,
   onOpen,
 }: {
@@ -267,6 +316,7 @@ function QueuedFactoryRunCard({
   testId: string;
   stepTime: ReactNode;
   menuItems: ReactNode;
+  status: ReactNode;
   children: ReactNode;
   onOpen: () => void;
 }) {
@@ -279,7 +329,7 @@ function QueuedFactoryRunCard({
       testId={testId}
       draggable={false}
       onOpen={onOpen}
-      status={<Clock className="icon-sm text-muted-foreground" />}
+      status={status}
       title={
         <span className={BOARD_CARD_TITLE_CLASS} data-testid={`factory-board-open-${run.id}`}>
           {factoryRunFallbackTitle(t, run)}
@@ -327,6 +377,10 @@ export const FactoryRunCard = memo(function FactoryRunCard({
   now,
   onSelect,
   dependencies = NO_FACTORY_RUN_DEPENDENCIES,
+  replacedBy,
+  selected,
+  selecting,
+  onToggleSelected,
 }: Props) {
   const { t } = useTranslation();
   const threadId = factoryRunCardThread(run);
@@ -335,13 +389,25 @@ export const FactoryRunCard = memo(function FactoryRunCard({
   const prState = useFactoryRunPrState(run);
   const open = () => onSelect(run);
   const testId = `factory-board-card-${run.id}`;
-  const { actions, dialog } = useFactoryRunActions(run.projectId, run);
+  const { actions, dialog } = useFactoryRunActions(run.projectId, run, {
+    by: replacedBy,
+    prState,
+  });
   const menuItems = factoryRunMenuItems(run, actions);
   // The time in the step takes the footer's time slot, in place of the card's age.
   const stepTime =
     timeInCurrentStep(run) && run.currentStep ? (
       <FactoryRunTimeInStep run={run} now={now} />
     ) : undefined;
+  const status = (
+    <FactoryRunStatus
+      run={run}
+      thread={thread}
+      selected={selected}
+      selecting={selecting}
+      onToggleSelected={onToggleSelected}
+    />
+  );
   const body = (
     <>
       <FactoryRunCardBody
@@ -349,6 +415,7 @@ export const FactoryRunCard = memo(function FactoryRunCard({
         hasThread={Boolean(thread)}
         onSelect={onSelect}
         dependencies={dependencies}
+        replacedBy={replacedBy}
       />
       {dialog}
     </>
@@ -363,6 +430,7 @@ export const FactoryRunCard = memo(function FactoryRunCard({
         testId={testId}
         stepTime={stepTime}
         menuItems={menuItems}
+        status={status}
         onOpen={open}
       >
         {body}
@@ -382,6 +450,7 @@ export const FactoryRunCard = memo(function FactoryRunCard({
       menuItems={menuItems}
       time={stepTime}
       title={factoryRunTitle(t, run, thread.title)}
+      status={status}
     >
       {body}
     </KanbanCard>

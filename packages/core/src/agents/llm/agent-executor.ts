@@ -92,7 +92,7 @@ export async function assertNotImds(rawUrl: string): Promise<void> {
   }
   const records = await lookup(hostname, { all: true });
   for (const r of records) {
-    const family = (r.family === 6 ? 6 : 4) as 4 | 6;
+    const family: 4 | 6 = r.family === 6 ? 6 : 4;
     const bad = family === 4 ? isImdsOrAliasV4(r.address) : isImdsOrAliasV6(r.address);
     if (bad) {
       throw new Error(
@@ -161,6 +161,10 @@ function toStepUsage(usage: ChatResponse['usage']): StepInfo['usage'] {
 
 /** Convert local tool definitions into Chat Completions `tools` entries. */
 function toChatCompletionTools(tools: Record<string, ToolDef>) {
+  // SAFETY: `def.parameters` is a zod v4 schema while zod-to-json-schema 3.x is
+  // typed against zod v3's ZodType. It does not throw on a v4 schema: it
+  // returns a schema with no properties, so the model gets an open parameter
+  // schema for tools without a `jsonSchema`.
   return Object.entries(tools).map(([name, def]) => ({
     type: 'function' as const,
     function: {
@@ -330,8 +334,8 @@ export class AgentExecutor {
     // Security HI-5: block cloud-metadata / link-local destinations
     // before connecting; baseURL is user-config'd via model overrides.
     await assertNotImds(url);
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (this.apiKey) headers.Authorization = `Bearer ${this.apiKey}`;
+    const headers = new Headers({ 'Content-Type': 'application/json' });
+    if (this.apiKey) headers.set('Authorization', `Bearer ${this.apiKey}`);
     const response = await fetch(url, {
       method: 'POST',
       headers,
@@ -352,6 +356,9 @@ export class AgentExecutor {
       throw new Error(`the LLM endpoint returned ${response.status}: ${errBody}`);
     }
 
+    // SAFETY: the body of a 2xx Chat Completions response, not validated.
+    // Every ChatResponse field is optional and read with `?.` below, so a body
+    // of another shape yields no choices instead of a crash here.
     const data = (await response.json()) as ChatResponse;
     if (data.error) {
       throw new Error(data.error?.message ?? 'Completion failed');
@@ -593,6 +600,8 @@ function createTools(cwd: string, role: AgentRole, context: AgentContext): Tools
 
   // Merge browser tools if role requests them
   if (role.tools.includes('browser')) {
+    // SAFETY: `metadata.appUrl` is set by the pipeline caller as the URL of the
+    // app under test; metadata is an untyped bag, so it is not checked here.
     const appUrl = context.metadata?.appUrl as string | undefined;
     if (appUrl) {
       browserHandle = createBrowserTools({ appUrl });

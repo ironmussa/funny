@@ -56,6 +56,18 @@ const DEEPAGENT_BUILTIN_TOOLS = [
   'compact_conversation',
 ];
 
+/** A reply's visible text with its `<think>` blocks taken out, and those blocks. */
+interface ThinkBlocks {
+  cleaned: string;
+  thoughts: string[];
+}
+
+/** How to start the deep agent ACP server. */
+interface BinaryCommand {
+  command: string;
+  args?: string[];
+}
+
 export class DeepAgentProcess extends BaseAgentProcess {
   private childProcess: ChildProcess | null = null;
 
@@ -212,7 +224,7 @@ export class DeepAgentProcess extends BaseAgentProcess {
     let totalCost = 0;
 
     // Current assistant message ID — rotated after each tool call
-    let assistantMsgId = randomUUID() as Uuid;
+    let assistantMsgId = randomUUID();
 
     // Accumulate text chunks so we emit the full content, not just deltas
     let accumulatedText = '';
@@ -393,7 +405,7 @@ export class DeepAgentProcess extends BaseAgentProcess {
         // After tool calls, start a new message so new text doesn't merge
         // with the tool-call parent message from the previous turn.
         if (this.lastEmittedToolCall) {
-          assistantMsgId = randomUUID() as Uuid;
+          assistantMsgId = randomUUID();
           accumulatedText = '';
           this.lastEmittedToolCall = false;
         }
@@ -443,7 +455,7 @@ export class DeepAgentProcess extends BaseAgentProcess {
                 id: assistantMsgId,
                 content: contentBlocks,
               },
-            } as CLIMessage);
+            } satisfies CLIMessage);
           }
 
           // Emit tool result for completed Think blocks
@@ -461,7 +473,7 @@ export class DeepAgentProcess extends BaseAgentProcess {
                   },
                 ],
               },
-            } as CLIMessage);
+            } satisfies CLIMessage);
           }
         }
         return ret(accumulatedText);
@@ -470,7 +482,7 @@ export class DeepAgentProcess extends BaseAgentProcess {
       case 'agent_thought_chunk': {
         // After tool calls, start a new message for new thoughts.
         if (this.lastEmittedToolCall) {
-          assistantMsgId = randomUUID() as Uuid;
+          assistantMsgId = randomUUID();
           accumulatedText = '';
           this.lastEmittedToolCall = false;
         }
@@ -511,7 +523,7 @@ export class DeepAgentProcess extends BaseAgentProcess {
               id: assistantMsgId,
               content: contentBlocks,
             },
-          } as CLIMessage);
+          } satisfies CLIMessage);
 
           // Update the tool result with accumulated thought content
           toolCallsSeen.set(this.thinkToolCallId, 'done');
@@ -526,7 +538,7 @@ export class DeepAgentProcess extends BaseAgentProcess {
                 },
               ],
             },
-          } as CLIMessage);
+          } satisfies CLIMessage);
         }
         return ret(accumulatedText);
       }
@@ -535,11 +547,9 @@ export class DeepAgentProcess extends BaseAgentProcess {
         const toolCallId = update.toolCallId;
         if (toolCallsSeen.has(toolCallId)) return ret(accumulatedText);
 
-        const acpKind = (update as any).kind as string | undefined;
+        const acpKind = update.kind;
         const title = update.title || '';
-        const locations = (update as any).locations as
-          | Array<{ path: string; line?: number | null }>
-          | undefined;
+        const locations = update.locations;
         const toolName = inferACPToolName(acpKind, title, { thinkToolName: 'Think' });
 
         toolCallsSeen.set(toolCallId, toolName);
@@ -571,11 +581,11 @@ export class DeepAgentProcess extends BaseAgentProcess {
         this.lastEmittedToolCall = true;
 
         // If tool_call already carries a completed result, emit it immediately
-        const tcStatus = (update as any).status as string | undefined;
+        const tcStatus = update.status;
         if (tcStatus === 'completed' || tcStatus === 'failed') {
           toolCallsSeen.set(toolCallId, 'done');
           const output = extractACPToolOutput(
-            { rawOutput: update.rawOutput, content: (update as any).content },
+            { rawOutput: update.rawOutput, content: update.content ?? undefined },
             title,
           );
           this.emit('message', {
@@ -589,7 +599,7 @@ export class DeepAgentProcess extends BaseAgentProcess {
                 },
               ],
             },
-          } as CLIMessage);
+          } satisfies CLIMessage);
         }
 
         // Keep the same assistantMsgId — consecutive tool calls will share
@@ -606,7 +616,7 @@ export class DeepAgentProcess extends BaseAgentProcess {
         if (update.status === 'completed' || update.status === 'failed') {
           toolCallsSeen.set(toolCallId, 'done');
           const output = extractACPToolOutput(
-            { rawOutput: update.rawOutput, content: (update as any).content },
+            { rawOutput: update.rawOutput, content: update.content ?? undefined },
             update.title || '',
           );
           const msg: CLIMessage = {
@@ -628,7 +638,7 @@ export class DeepAgentProcess extends BaseAgentProcess {
 
       case 'plan': {
         if (this.lastEmittedToolCall) {
-          assistantMsgId = randomUUID() as Uuid;
+          assistantMsgId = randomUUID();
           accumulatedText = '';
           this.lastEmittedToolCall = false;
         }
@@ -658,7 +668,7 @@ export class DeepAgentProcess extends BaseAgentProcess {
                     },
                   ],
                 },
-              } as CLIMessage);
+              } satisfies CLIMessage);
             }
           }
 
@@ -687,7 +697,7 @@ export class DeepAgentProcess extends BaseAgentProcess {
    * Partial/unclosed <think> tags at the end are also stripped from the
    * visible text (the user shouldn't see raw `<think>` markup while streaming).
    */
-  private static extractThinkBlocks(text: string): { cleaned: string; thoughts: string[] } {
+  private static extractThinkBlocks(text: string): ThinkBlocks {
     const thoughts: string[] = [];
     // Match completed <think>...</think> blocks (non-greedy, handles multiline)
     let cleaned = text.replace(/<think>([\s\S]*?)<\/think>/gi, (_match, thought: string) => {
@@ -708,7 +718,7 @@ export class DeepAgentProcess extends BaseAgentProcess {
 
   // ── Binary resolution ───────────────────────────────────────
 
-  private resolveBinary(): { command: string; args?: string[] } {
+  private resolveBinary(): BinaryCommand {
     // 1. DEEPAGENT_BINARY_PATH env var — explicit full path
     const envPath = process.env.DEEPAGENT_BINARY_PATH;
     if (envPath) return { command: envPath };

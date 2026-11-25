@@ -82,6 +82,8 @@ const positiveInt = z.coerce.number().int().positive();
  */
 export function positiveIntParam(c: Context, name: string): number {
   const parsed = parseQuery(c, z.object({ [name]: positiveInt }));
+  // SAFETY: the schema's only key is `name`, so a successful parse holds a
+  // positive integer there; the computed key only hides that from the type.
   return parsed.isOk() ? (parsed.value[name] as number) : 0;
 }
 

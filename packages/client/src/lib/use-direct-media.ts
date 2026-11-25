@@ -105,7 +105,7 @@ async function signMedia(path: string): Promise<string | null> {
       body: JSON.stringify({ path }),
     });
     if (!res.ok) return null;
-    const data = (await res.json()) as { url?: string | null };
+    const data: { url?: string | null } = await res.json();
     if (!data.url) {
       // Runner has no public media URL → stop asking for the rest of the session.
       directMediaDisabled = true;

@@ -38,9 +38,9 @@ export type GrantRepositoryDeps = Pick<RepoDeps, 'db' | 'schema' | 'dbAll' | 'db
 function normalize(row: any): ResourceGrant {
   return {
     subjectId: row.subjectId ?? row.subject_id,
-    resourceType: (row.resourceType ?? row.resource_type) as ResourceType,
+    resourceType: row.resourceType ?? row.resource_type,
     resourceId: row.resourceId ?? row.resource_id,
-    role: (row.role as Role) ?? 'viewer',
+    role: row.role ?? 'viewer',
     grantedBy: row.grantedBy ?? row.granted_by,
     createdAt: row.createdAt ?? row.created_at,
   };

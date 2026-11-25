@@ -47,12 +47,7 @@ export function StartupCommandRow({
         {isRunning ? (
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => stopStartupCommand(cmd)}
-                className="text-status-error hover:text-status-error/80"
-              >
+              <Button variant="ghost-error" size="icon-sm" onClick={() => stopStartupCommand(cmd)}>
                 <Square className="icon-sm" />
               </Button>
             </TooltipTrigger>
@@ -61,12 +56,7 @@ export function StartupCommandRow({
         ) : (
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => onRun(cmd)}
-                className="text-status-success hover:text-status-success/80"
-              >
+              <Button variant="ghost-success" size="icon-sm" onClick={() => onRun(cmd)}>
                 <Play className="icon-sm" />
               </Button>
             </TooltipTrigger>

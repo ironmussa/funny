@@ -62,6 +62,8 @@ function toError(cause: unknown, signal: AbortSignal | undefined): CompleteOnceE
     return { kind: 'aborted', message: signal?.reason ? messageOf(signal.reason) : 'Aborted' };
   }
   if (isObject(cause) && 'kind' in cause) {
+    // SAFETY: the only non-Error value thrown inside this module with a `kind`
+    // is post()'s `{ kind: 'provider-error', ... }` object, a CompleteOnceError.
     return cause as CompleteOnceError;
   }
   return { kind: 'provider-error', message: messageOf(cause) };
@@ -75,8 +77,8 @@ async function post(options: CompleteOnceOptions, apiKey: string | undefined): P
   });
   const url = `${resolved.baseURL.replace(/\/$/, '')}/chat/completions`;
   await assertNotImds(url);
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (resolved.apiKey) headers.Authorization = `Bearer ${resolved.apiKey}`;
+  const headers = new Headers({ 'Content-Type': 'application/json' });
+  if (resolved.apiKey) headers.set('Authorization', `Bearer ${resolved.apiKey}`);
   const response = await fetch(url, {
     method: 'POST',
     headers,

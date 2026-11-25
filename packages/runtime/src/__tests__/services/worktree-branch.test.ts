@@ -47,12 +47,12 @@ describe('worktreeBranchName', () => {
     });
   });
 
-  test('falls back to the generated name when another worktree has the branch', async () => {
+  test('falls back to the generated name when another worktree has the branch, and says which', async () => {
     execSync(`git worktree add -q -b factory/issue-7-r1 ${join(other, 'wt')}`, { cwd: repo });
-    expect(await worktreeBranchName(repo, 'factory/issue-7-r1', 'proj/generated-abc')).toEqual({
-      name: 'proj/generated-abc',
-      reuse: false,
-    });
+    const branch = await worktreeBranchName(repo, 'factory/issue-7-r1', 'proj/generated-abc');
+    expect(branch).toMatchObject({ name: 'proj/generated-abc', reuse: false });
+    // A caller that requires its branch (the issue factory) refuses with this path.
+    expect(branch.heldBy).toContain('wt');
   });
 
   test('uses the generated name when no branch is requested', async () => {

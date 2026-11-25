@@ -5,10 +5,15 @@
  * Both sides compute it from the input the agent sent.
  */
 
+import type { JsonValue } from '../json.js';
+
 const FIELDS = ['kind', 'scope', 'filter', 'command', 'background'] as const;
 
+/** A `funny_run_checks` input as JSON; only `FIELDS` count toward the key. */
+type CheckKeyInput = { readonly [field: string]: JsonValue | undefined };
+
 /** The input's known fields, in a fixed order, without empty values. */
-function canonical(input: Record<string, unknown>): string {
+function canonical(input: CheckKeyInput): string {
   const picked = FIELDS.flatMap((field) => {
     const value = input[field];
     if (value === undefined || value === null || value === '' || value === false) return [];
@@ -19,7 +24,7 @@ function canonical(input: Record<string, unknown>): string {
 }
 
 /** FNV-1a (32-bit) of the canonical input, as hex. */
-export function checkInputKey(input: Record<string, unknown>): string {
+export function checkInputKey(input: CheckKeyInput): string {
   let hash = 0x811c9dc5;
   for (const char of canonical(input)) {
     hash ^= char.codePointAt(0)!;

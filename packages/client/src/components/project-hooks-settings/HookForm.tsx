@@ -50,17 +50,17 @@ export function HookForm({
         <span id={`${idPrefix}-type-label`} className="settings-label">
           {t('hooks.hookType')}
         </span>
-        <Select value={hookType} onValueChange={(v) => setHookType(v as HookType)}>
-          <SelectTrigger
-            aria-labelledby={`${idPrefix}-type-label`}
-            className="text-sm"
-            data-testid="hooks-type-select"
-          >
+        <Select
+          value={hookType}
+          // SAFETY: the SelectItem values are the entries of HOOK_TYPES, each a HookType.
+          onValueChange={(v) => setHookType(v as HookType)}
+        >
+          <SelectTrigger aria-labelledby={`${idPrefix}-type-label`} data-testid="hooks-type-select">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             {HOOK_TYPES.map((ht) => (
-              <SelectItem key={ht} value={ht} className="text-sm">
+              <SelectItem key={ht} value={ht}>
                 {hookTypeLabelFn(ht)}
               </SelectItem>
             ))}
@@ -73,7 +73,6 @@ export function HookForm({
         </label>
         <Input
           id={`${idPrefix}-label`}
-          className="settings-form-input"
           placeholder={t('hooks.label')}
           value={label}
           onChange={(e) => setLabel(e.target.value)}

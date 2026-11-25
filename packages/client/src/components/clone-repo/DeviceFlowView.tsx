@@ -55,7 +55,6 @@ export function DeviceFlowView({
       <LoadingState
         fill={false}
         layout="inline"
-        className="text-sm"
         testId="clone-repo-waiting-auth"
         label={t('github.deviceFlow.waitingAuth')}
       />

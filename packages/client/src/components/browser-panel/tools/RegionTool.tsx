@@ -45,10 +45,12 @@ export function RegionTool({ overlayRef, isActive }: RegionToolProps) {
 
   const regions = annotations
     .map((a, i) => ({ a, index: i + 1 }))
-    .filter(({ a }) => a.kind === 'region') as Array<{
-    a: Extract<(typeof annotations)[number], { kind: 'region' }>;
-    index: number;
-  }>;
+    .filter(
+      (
+        entry,
+      ): entry is { a: Extract<(typeof annotations)[number], { kind: 'region' }>; index: number } =>
+        entry.a.kind === 'region',
+    );
 
   const getCoords = (e: React.PointerEvent<HTMLDivElement>) => {
     const rect = overlayRef.current?.getBoundingClientRect();
@@ -61,10 +63,10 @@ export function RegionTool({ overlayRef, isActive }: RegionToolProps) {
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!isActive) return;
-    if ((e.target as HTMLElement).dataset.regionMarker === 'true') return;
+    if (e.target instanceof HTMLElement && e.target.dataset.regionMarker === 'true') return;
     const coords = getCoords(e);
     if (!coords) return;
-    (e.currentTarget as HTMLDivElement).setPointerCapture(e.pointerId);
+    e.currentTarget.setPointerCapture(e.pointerId);
     setDrag({ startX: coords.x, startY: coords.y, currentX: coords.x, currentY: coords.y });
   };
 
@@ -77,7 +79,7 @@ export function RegionTool({ overlayRef, isActive }: RegionToolProps) {
 
   const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!drag) return;
-    (e.currentTarget as HTMLDivElement).releasePointerCapture(e.pointerId);
+    e.currentTarget.releasePointerCapture(e.pointerId);
     const x = Math.min(drag.startX, drag.currentX);
     const y = Math.min(drag.startY, drag.currentY);
     const w = Math.abs(drag.startX - drag.currentX);
@@ -104,6 +106,8 @@ export function RegionTool({ overlayRef, isActive }: RegionToolProps) {
         if (Array.isArray(elements)) {
           updateRegionDom(id, {
             rect: { x: vx, y: vy, w: vw, h: vh },
+            // SAFETY: inspect-rect returns an array built from window.__funnyElementInfo results
+            // (AnnotationDomInfo plus intersectionArea), and Array.isArray ruled out any other result.
             elements: elements as AnnotationDomInfo[],
           });
         }
@@ -138,12 +142,12 @@ export function RegionTool({ overlayRef, isActive }: RegionToolProps) {
       {liveRect && (
         <div
           aria-hidden="true"
-          className="border-primary bg-primary/10 pointer-events-none absolute border-2 border-dashed"
+          className="border-primary bg-primary/10 pointer-events-none absolute top-[var(--region-live-top)] left-[var(--region-live-left)] h-[var(--region-live-height)] w-[var(--region-live-width)] border-2 border-dashed"
           style={{
-            left: liveRect.x,
-            top: liveRect.y,
-            width: liveRect.w,
-            height: liveRect.h,
+            '--region-live-left': `${liveRect.x}px`,
+            '--region-live-top': `${liveRect.y}px`,
+            '--region-live-width': `${liveRect.w}px`,
+            '--region-live-height': `${liveRect.h}px`,
           }}
         />
       )}
@@ -159,13 +163,12 @@ export function RegionTool({ overlayRef, isActive }: RegionToolProps) {
               type="button"
               data-region-marker="true"
               data-testid={`browser-panel-region-${index}`}
-              className="border-primary bg-primary/5 hover:bg-primary/15 absolute flex items-start justify-end border-2 border-dashed transition-colors"
+              className="border-primary bg-primary/5 hover:bg-primary/15 pointer-events-auto absolute top-[var(--region-marker-top)] left-[var(--region-marker-left)] flex h-[var(--region-marker-height)] w-[var(--region-marker-width)] items-start justify-end border-2 border-dashed transition-colors"
               style={{
-                left: a.x,
-                top: a.y,
-                width: a.w,
-                height: a.h,
-                pointerEvents: 'auto',
+                '--region-marker-left': `${a.x}px`,
+                '--region-marker-top': `${a.y}px`,
+                '--region-marker-width': `${a.w}px`,
+                '--region-marker-height': `${a.h}px`,
               }}
               onClick={(e) => {
                 e.stopPropagation();
@@ -204,10 +207,6 @@ function RegionNoteEditor({
 }) {
   const [value, setValue] = useState(initial);
   const fontSize = useSettingsStore((s) => s.fontSize);
-  const fontStyle: React.CSSProperties = {
-    fontSize: PROSE_FONT_SIZE_PX[fontSize],
-    lineHeight: `${PROSE_LINE_HEIGHT_PX[fontSize]}px`,
-  };
   return (
     <div className="flex flex-col gap-2">
       <Textarea
@@ -216,7 +215,11 @@ function RegionNoteEditor({
         placeholder="What's wrong in this region?"
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        style={fontStyle}
+        size="prose"
+        style={{
+          '--textarea-font-size': `${PROSE_FONT_SIZE_PX[fontSize]}px`,
+          '--textarea-line-height': `${PROSE_LINE_HEIGHT_PX[fontSize]}px`,
+        }}
         onKeyDown={(e) => {
           if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
             e.preventDefault();

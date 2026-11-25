@@ -101,8 +101,8 @@ export function ReviewThreadCard({
         {th.node_id && (
           <Button
             variant="ghost"
-            size="xs"
-            className="text-2xs h-5 gap-1 px-1.5"
+            size="3xs"
+            gap="tight"
             disabled={resolving}
             onClick={() => handleResolve(th)}
             data-testid={`pinned-pr-thread-resolve-${th.id}`}
@@ -137,8 +137,8 @@ export function ReviewThreadCard({
         <div className="pl-3">
           <Button
             variant="ghost"
-            size="xs"
-            className="text-2xs h-5 gap-1 px-1.5"
+            size="3xs"
+            gap="tight"
             onClick={() => {
               setReplyForThread(th.id);
               setReplyBody('');

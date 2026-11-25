@@ -7,6 +7,7 @@ import { z } from 'zod';
 
 import { db, dbAll, dbGet, dbRun, withDatabaseTransaction } from '../db/index.js';
 import { runnerOperationIdempotency } from '../db/schema.js';
+import { isString } from '../lib/value-guards.js';
 
 export type IdempotencyExecution<T> =
   | { kind: 'executed'; outcome: T }
@@ -14,13 +15,28 @@ export type IdempotencyExecution<T> =
   | { kind: 'conflict' }
   | { kind: 'in_progress' };
 
+/** A field of a decoded protobuf message: a scalar, bytes, a list or a nested message. */
+type DecodedField =
+  | string
+  | number
+  | boolean
+  | bigint
+  | Uint8Array
+  | null
+  | undefined
+  | readonly DecodedField[]
+  | { readonly [field: string]: DecodedField };
+
+/** An operation's request message as decoded from the wire; its fingerprint pins the key. */
+export type IdempotentRequest = { readonly [field: string]: DecodedField };
+
 export interface OperationIdempotencyStore {
   execute<T>(
     input: {
       runnerId: string;
       operationKind: string;
       idempotencyKey: string;
-      request: unknown;
+      request: IdempotentRequest | undefined;
     },
     execute: () => Promise<T>,
   ): Promise<IdempotencyExecution<T>>;
@@ -41,7 +57,7 @@ export interface SqlOperationIdempotencyOptions {
   transaction?: <T>(work: () => Promise<T>) => Promise<T>;
 }
 
-function fingerprint(request: unknown): string {
+function fingerprint(request: IdempotentRequest | undefined): string {
   return createHash('sha256').update(canonicalJson(request)).digest('hex');
 }
 
@@ -70,7 +86,7 @@ export class SqlOperationIdempotencyStore implements OperationIdempotencyStore {
       runnerId: string;
       operationKind: string;
       idempotencyKey: string;
-      request: unknown;
+      request: IdempotentRequest | undefined;
     },
     execute: () => Promise<T>,
   ): Promise<IdempotencyExecution<T>> {
@@ -103,7 +119,7 @@ export class SqlOperationIdempotencyStore implements OperationIdempotencyStore {
       runnerId: string;
       operationKind: string;
       idempotencyKey: string;
-      request: unknown;
+      request: IdempotentRequest | undefined;
     },
     execute: () => Promise<T>,
   ): Promise<IdempotencyExecution<T>> {
@@ -180,7 +196,7 @@ export class SqlOperationIdempotencyStore implements OperationIdempotencyStore {
     // retaining `in_progress` is safer than allowing a committed mutation to
     // execute twice. PostgreSQL rolls the surrounding transaction back.
     const outcomeJson = canonicalJson(outcome);
-    if (typeof outcomeJson !== 'string') {
+    if (!isString(outcomeJson)) {
       throw new Error('runner operation idempotency outcome is not JSON serializable');
     }
     await dbRun(

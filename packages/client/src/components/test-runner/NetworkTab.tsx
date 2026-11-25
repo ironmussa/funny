@@ -108,7 +108,8 @@ export function NetworkTab({ entries }: { entries: TestNetworkEntry[] }) {
       <div className="flex min-h-0 flex-1">
         {/* Request list */}
         <ScrollArea
-          className={cn('min-h-0 border-r', selectedEntry ? 'w-[280px] shrink-0' : 'flex-1')}
+          variant="divided-end"
+          className={cn('min-h-0', selectedEntry ? 'w-[280px] shrink-0' : 'flex-1')}
         >
           {filtered.length === 0 ? (
             <EmptyState
@@ -308,8 +309,8 @@ function NetworkDetailPanel({ entry, onClose }: { entry: TestNetworkEntry; onClo
       </div>
 
       {/* Detail content */}
-      <ScrollArea className="min-h-0 flex-1 font-mono">
-        <div className="px-4 py-2">
+      <ScrollArea className="min-h-0 flex-1">
+        <div className="px-4 py-2 font-mono">
           {tab === 'headers' && <HeadersDetail entry={entry} />}
           {tab === 'payload' && <PayloadDetail entry={entry} />}
           {tab === 'response' && <ResponseDetail entry={entry} />}
@@ -472,7 +473,8 @@ function ResponseDetail({ entry }: { entry: TestNetworkEntry }) {
   // All hooks must be called unconditionally (React rules of hooks)
   const { isJson, lines } = useMemo(() => {
     if (!entry.responseBody || entry.responseBodyBase64) {
-      return { formatted: '', isJson: false, lines: [] as Array<{ key: string; value: string }> };
+      const noLines: Array<{ key: string; value: string }> = [];
+      return { formatted: '', isJson: false, lines: noLines };
     }
     try {
       const f = JSON.stringify(JSON.parse(entry.responseBody), null, 2);

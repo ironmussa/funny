@@ -10,7 +10,7 @@
  * returns false and the UI should hide the entry point.
  */
 
-const isTauri = !!(window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
+const isTauri = !!('__TAURI_INTERNALS__' in window && window.__TAURI_INTERNALS__);
 
 export function isTauriAnnotatorAvailable(): boolean {
   return isTauri;

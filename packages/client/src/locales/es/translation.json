@@ -732,6 +732,8 @@
     "projectFactoryAutoMergeAllDesc": "Todo cambio que pasó su revisión, también los de riesgo alto",
     "projectFactorySensitivePaths": "Rutas sensibles",
     "projectFactorySensitivePathsDesc": "Globs separados por comas. Un cambio que toca una es de riesgo alto, además de .github/, migraciones y auth/",
+    "projectFactorySizeGate": "Límite de tamaño",
+    "projectFactorySizeGateDesc": "Un cambio con más líneas cambiadas que el límite que pongas es de riesgo alto. Apagado: el tamaño de un cambio no lo hace de riesgo alto",
     "projectFactoryMaxLowRiskLines": "Tamaño de un cambio de riesgo bajo",
     "projectFactoryMaxLowRiskLinesDesc": "Un cambio con más líneas cambiadas que esto es de riesgo alto. No cuentan pruebas, Markdown, traducciones, stories, snapshots ni lockfiles",
     "projectFactoryApprovalAdjust": "Ajuste que sigue una aprobación",
@@ -802,7 +804,10 @@
       "openai": "OpenAI",
       "ollama": "Ollama",
       "openai-compatible": "Compatible con OpenAI"
-    }
+    },
+    "projectFactoryBaseBranch": "Fusionar en",
+    "projectFactoryBaseBranchDesc": "La rama de la que parten las ejecuciones y a la que se fusionan sus pull requests. Los flujos se siguen leyendo de la rama por defecto",
+    "projectFactoryBaseBranchDefault": "Por defecto del repositorio"
   },
   "skills": {
     "showingFor": "Mostrando skills para:",
@@ -1966,7 +1971,11 @@
     "split_one": "Dividir en {{count}} issue",
     "split_other": "Dividir en {{count}} issues",
     "splitTitle": "¿Dividir el issue #{{issue}}?",
-    "splitBody": "La factory abre un issue por cada parte, con la descripción de #{{issue}} como contexto, y los pone en la cola. #{{issue}} recibe la lista y sale de la factory. No corre ningún agente para esto."
+    "splitBody": "La factory abre un issue por cada parte, con la descripción de #{{issue}} como contexto, y los pone en la cola. #{{issue}} recibe la lista y sale de la factory. No corre ningún agente para esto.",
+    "closeReplacedPr": "Cerrar pull request",
+    "closeReplacedPrTitle": "¿Cerrar el pull request #{{pr}}?",
+    "closeReplacedPrBody": "Una run más nueva del issue #{{issue}} reemplazó esta run con #{{newer}}. La factory comenta en #{{pr}} con un enlace a #{{newer}}, lo cierra y borra su rama.",
+    "closeReplacedPrBodyNoPr": "Una run más nueva del issue #{{issue}} reemplazó esta run. La factory comenta en #{{pr}}, lo cierra y borra su rama."
   },
   "projectSecrets": {
     "title": "Secretos",
@@ -2100,9 +2109,7 @@
       "needsPerson": "Necesita una persona",
       "done": "Hecho"
     },
-    "doneHidden": "+{{count}} anteriores en la lista",
     "emptyColumn": "Ningún run aquí",
-    "showMore": "Mostrar {{count}} más",
     "limit": {
       "merge": "1 a la vez por repositorio",
       "stage": "Límite de la etapa \"{{node}}\"",
@@ -2164,7 +2171,21 @@
       "needsPerson": "necesita a una persona",
       "blocks": "Bloquea a",
       "then": "luego"
-    }
+    },
+    "selection": {
+      "select": "Seleccionar ejecución",
+      "count_one": "{{count}} seleccionada",
+      "count_other": "{{count}} seleccionadas",
+      "retry": "Reintentar ({{count}})",
+      "stop": "Detener ({{count}})",
+      "clear": "Limpiar selección",
+      "stopTitle_one": "¿Detener {{count}} ejecución?",
+      "stopTitle_other": "¿Detener {{count}} ejecuciones?",
+      "stopDesc": "Esto detiene las ejecuciones seleccionadas que no han terminado y sus hilos de agente."
+    },
+    "replaced": "Reemplazada",
+    "replacedBy": "Reemplazada por #{{pr}}",
+    "replacedDetail": "El issue #{{issue}} se volvió a mandar a la factory: una run más nueva trabaja en él."
   },
   "factoryRunDetail": {
     "lintCleanupTriage": "Triage la clasificó como limpieza de lint de reglas que no pueden cambiar el comportamiento: su tamaño y los riesgos de su contrato no la retienen. Puedes indicar que no lo es.",

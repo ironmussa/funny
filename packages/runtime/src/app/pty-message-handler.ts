@@ -5,6 +5,7 @@ import { getWorktreeBasePaths } from '@funny/core/git';
 import { errorMessage } from '@funny/shared/errors';
 
 import { log } from '../lib/logger.js';
+import { isString } from '../lib/value-guards.js';
 import * as ptyManager from '../services/pty-manager.js';
 import { getServices } from '../services/service-registry.js';
 import { isScratchThread, scratchPathFor } from '../services/thread-context.js';
@@ -33,7 +34,7 @@ export function handlePtyMessage(
   // accepted any `data.id`, which let an authenticated user inject input
   // into another tenant's running shell or read their scrollback.
   const requireOwnership = (op: string): boolean => {
-    const ptyId = typeof data?.id === 'string' ? data.id : '';
+    const ptyId = isString(data?.id) ? data.id : '';
     if (!ptyId) {
       log.warn('PTY op missing id — dropping', { namespace: 'ws', op, userId });
       return false;

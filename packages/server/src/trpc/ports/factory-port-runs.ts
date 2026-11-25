@@ -8,6 +8,7 @@ import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
 import { audit } from '../../lib/audit.js';
 import { log } from '../../lib/logger.js';
+import { isNumber } from '../../lib/value-guards.js';
 import {
   recordServerActivity,
   type ServerActivityOutcome,
@@ -105,7 +106,7 @@ function recordRunControl(
       ...(askedByThread && { threadId: askedByThread }),
       title: `${title(issueNumber, sha, outcome.ok)}${askedByThread ? ' (asked by an agent)' : ''}`,
       input: {
-        ...(typeof issueNumber === 'number' && { issueNumber }),
+        ...(isNumber(issueNumber) && { issueNumber }),
         ...(action === 'approve-merge' && sha && { sha }),
       },
       origin: askedByThread ? 'implicit' : 'user',

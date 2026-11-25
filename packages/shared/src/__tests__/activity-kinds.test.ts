@@ -10,6 +10,7 @@ import {
   recordsOnlyFailures,
   stripUrlCredentials,
 } from '../activities/kinds.js';
+import type { JsonObject } from '../json.js';
 
 // Built from parts so secret scanners do not read the fixture as a real credential.
 const URL_WITH_CREDENTIALS = ['https://', 'user', ':', 'token', '@github.com/org/repo.git'].join(
@@ -95,7 +96,7 @@ describe('kind metadata', () => {
 });
 
 describe('parseActivityInput for the new kinds', () => {
-  const samples: Record<string, Record<string, unknown>> = {
+  const samples: Record<string, JsonObject> = {
     'workspace.cleanup': { reason: 'thread-archived', branch: 'b', deleteBranch: true },
     'workspace.prune': {},
     'checkout.switch': { fromBranch: 'a', toBranch: 'b', stashed: false, reason: 'merged' },

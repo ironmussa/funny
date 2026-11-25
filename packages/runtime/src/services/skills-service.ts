@@ -21,6 +21,7 @@ import { ResultAsync } from 'neverthrow';
 import { z } from 'zod';
 
 import { log } from '../lib/logger.js';
+import { isString } from '../lib/value-guards.js';
 import { defaultClaudeConfigDir, normalizeClaudeConfigDir } from '../utils/claude-profile-paths.js';
 
 const AGENTS_DIR = join(homedir(), '.agents');
@@ -290,7 +291,7 @@ const manifestPathsSchema = z
   .union([z.string(), z.array(z.string())])
   .optional()
   .catch(undefined)
-  .transform((v) => (v === undefined ? [] : typeof v === 'string' ? [v] : v));
+  .transform((v) => (v === undefined ? [] : isString(v) ? [v] : v));
 
 /** The parts of `.claude-plugin/plugin.json` we read; a bad field is ignored. */
 const pluginManifestSchema = z.object({
@@ -685,7 +686,10 @@ export function addSkill(identifier: string): ResultAsync<void, DomainError> {
       timeout: 60_000,
     }).then(() => {}),
     (cause: unknown) => {
-      const e = cause as any;
+      // SAFETY: execute() rejects with a ProcessExecutionError (string stdout,
+      // stderr and message); every field is read with `?.` and `||`, so any
+      // other rejection value falls through to String(e).
+      const e = cause as { stderr?: string; stdout?: string; message?: string } | null | undefined;
       const raw = stripAnsi(e?.stderr || e?.stdout || e?.message || String(e)).trim();
       const lines = raw.split('\n').filter((l: string) => l.trim());
       const errorLine = lines.find((l: string) =>

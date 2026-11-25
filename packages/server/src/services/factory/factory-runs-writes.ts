@@ -94,13 +94,18 @@ const holdsSlot = (factoryId: string): SQL =>
 /** Per factory: the tail of the in-process chain that serializes slot-taking writes. */
 const slotLocks = new Map<string, Promise<unknown>>();
 
+/** What node-postgres answers a raw query with; the lock's rows are not read. */
+interface RawQueryResult {
+  rows: object[];
+}
+
 /**
  * Hold a Postgres advisory lock on the factory's slots until the transaction
  * ends, so slot-taking writes of every server instance run one at a time.
  */
 async function lockSlotsAcrossServers(factoryId: string): Promise<void> {
   // SAFETY: only called on the Postgres dialect, whose Drizzle database has `execute`.
-  const pg = db as { execute?: (query: SQL) => Promise<unknown> };
+  const pg = db as { execute?: (query: SQL) => Promise<RawQueryResult> };
   await pg.execute?.(sql`SELECT pg_advisory_xact_lock(hashtext(${`factory-slots:${factoryId}`}))`);
 }
 

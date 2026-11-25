@@ -155,7 +155,7 @@ export function ProjectHooksSettings() {
         <Button
           variant="outline"
           size="sm"
-          className="gap-1.5"
+          gap="snug"
           data-testid="hooks-add"
           onClick={() => {
             cancelEdit();
@@ -174,7 +174,7 @@ export function ProjectHooksSettings() {
           fill={false}
           title={t('hooks.noHooks')}
           action={
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setAdding(true)}>
+            <Button variant="outline" size="sm" gap="snug" onClick={() => setAdding(true)}>
               <Plus className="icon-sm" />
               {t('hooks.addFirst')}
             </Button>

@@ -36,7 +36,7 @@ export function useActivities(): Activity[] {
   });
   return useMemo(() => {
     if (!rows || rows.length === 0) return EMPTY;
-    return sortActivities((rows as Activity[]).map((row) => data.fromRow(row)));
+    return sortActivities(rows.map((row) => data.fromRow(row)));
   }, [rows, data]);
 }
 

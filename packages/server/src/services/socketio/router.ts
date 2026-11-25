@@ -7,16 +7,26 @@ import {
 import type { Socket } from 'socket.io';
 import type { z, ZodTypeAny } from 'zod';
 
+import { isPlainObject, isString } from '../../lib/value-guards.js';
+
+/** Whether the client passed an acknowledgement callback (Socket.IO passes data arguments too). */
+function isAckCallback<T>(
+  value: ((response: T) => void) | undefined,
+): value is (response: T) => void {
+  return typeof value === 'function';
+}
+
 export interface SocketHandlerContext {
   socket: Socket;
   eventName: string;
 }
 
-/** Return false to drop the event (after optional side effects in the middleware). */
-export type SocketEventMiddleware = (
-  ctx: SocketHandlerContext,
-  data: unknown,
-) => boolean | Promise<boolean>;
+/**
+ * Return false to drop the event (after optional side effects in the middleware).
+ * A middleware sees only the event's context: the payload is parsed after it, by
+ * the event's schema.
+ */
+export type SocketEventMiddleware = (ctx: SocketHandlerContext) => boolean | Promise<boolean>;
 
 export function registerSocketHandlers(
   socket: Socket,
@@ -46,7 +56,7 @@ export function registerSocketHandlersWithSchema<TSchema extends ZodTypeAny>(
     socket.on(eventName, async (data: SocketIoArgument) => {
       const ctx: SocketHandlerContext = { socket, eventName };
       for (const mw of middleware) {
-        if (!(await mw(ctx, data))) return;
+        if (!(await mw(ctx))) return;
       }
       const payload = parseSocketPayload(spec.payloadSchema, data);
       if (payload === null) return;
@@ -78,25 +88,20 @@ export function registerSocketRpc<
     const schema = (spec.payloadSchema ?? socketObjectPayloadSchema) as TSchema;
     const payload = parseSocketPayload(schema, data);
     const requestId =
-      data != null &&
-      typeof data === 'object' &&
-      !Array.isArray(data) &&
-      '_requestId' in data &&
-      typeof data._requestId === 'string'
+      isPlainObject(data) && '_requestId' in data && isString(data._requestId)
         ? data._requestId
         : null;
-    const respond =
-      typeof ack === 'function'
-        ? ack
-        : requestId
-          ? (response: TResponse) => {
-              socket.emit('data:response', { requestId, response });
-            }
-          : null;
+    const respond = isAckCallback(ack)
+      ? ack
+      : requestId
+        ? (response: TResponse) => {
+            socket.emit('data:response', { requestId, response });
+          }
+        : null;
     if (!respond) return;
     const ctx: SocketHandlerContext = { socket, eventName };
     for (const mw of spec.middleware ?? []) {
-      if (!(await mw(ctx, data))) return;
+      if (!(await mw(ctx))) return;
     }
     if (payload === null) {
       if (spec.invalidPayloadResponse !== undefined) respond(spec.invalidPayloadResponse);

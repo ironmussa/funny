@@ -190,6 +190,10 @@ interface BrowserPreviewProps {
   onStop?: () => void;
 }
 
+/** The screencast canvas, zoomed around its center by `--browser-preview-zoom`. */
+const PREVIEW_CANVAS_CLASSES =
+  'max-h-full max-w-full origin-center [transform:scale(var(--browser-preview-zoom))] object-contain';
+
 export function BrowserPreview({
   isRunning,
   isStreaming,
@@ -219,14 +223,14 @@ export function BrowserPreview({
 
   const zoomIn = useCallback(() => {
     setZoom((z) => {
-      const idx = ZOOM_LEVELS.indexOf(z as any);
+      const idx = ZOOM_LEVELS.findIndex((level) => level === z);
       return idx < ZOOM_LEVELS.length - 1 ? ZOOM_LEVELS[idx + 1] : z;
     });
   }, []);
 
   const zoomOut = useCallback(() => {
     setZoom((z) => {
-      const idx = ZOOM_LEVELS.indexOf(z as any);
+      const idx = ZOOM_LEVELS.findIndex((level) => level === z);
       return idx > 0 ? ZOOM_LEVELS[idx - 1] : z;
     });
   }, []);
@@ -421,8 +425,8 @@ export function BrowserPreview({
           ) : null}
           <canvas
             ref={canvasRef}
-            className={cn('max-h-full max-w-full object-contain', !isStreaming && 'hidden')}
-            style={{ transform: `scale(${zoom})`, transformOrigin: 'center center' }}
+            className={cn(PREVIEW_CANVAS_CLASSES, !isStreaming && 'hidden')}
+            style={{ '--browser-preview-zoom': `${zoom}` }}
           />
         </div>
       </div>

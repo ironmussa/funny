@@ -41,7 +41,8 @@ export function InboxProjectFilter({
             aria-expanded={filterOpen}
             aria-controls={filterListId}
             data-testid="inbox-project-filter"
-            className="w-[200px] justify-between font-normal"
+            weight="normal"
+            className="w-[200px] justify-between"
           >
             {filterProjectId
               ? projectsWithItems.find((p) => p.id === filterProjectId)?.name
@@ -49,11 +50,11 @@ export function InboxProjectFilter({
             <ChevronsUpDown className="icon-xs ml-2 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-[200px] p-0" align="start">
+        <PopoverContent padding="none" className="w-[200px]" align="start">
           <Command>
-            <CommandInput placeholder="Search project..." className="h-8 text-xs" />
+            <CommandInput placeholder="Search project..." textSize="xs" className="h-8" />
             <CommandList id={filterListId}>
-              <CommandEmpty className="py-3 text-xs">No project found.</CommandEmpty>
+              <CommandEmpty textSize="xs">No project found.</CommandEmpty>
               <CommandGroup>
                 <CommandItem
                   value="all"
@@ -61,7 +62,7 @@ export function InboxProjectFilter({
                     setFilterProjectId(null);
                     setFilterOpen(false);
                   }}
-                  className="text-xs"
+                  textSize="xs"
                 >
                   <Check
                     className={cn('mr-2 icon-xs', !filterProjectId ? 'opacity-100' : 'opacity-0')}
@@ -76,7 +77,7 @@ export function InboxProjectFilter({
                       setFilterProjectId(p.id);
                       setFilterOpen(false);
                     }}
-                    className="text-xs"
+                    textSize="xs"
                   >
                     <Check
                       className={cn(

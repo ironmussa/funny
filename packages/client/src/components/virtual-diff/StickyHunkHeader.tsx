@@ -5,7 +5,6 @@ import { HunkCheckbox } from './HunkCheckbox';
 
 interface StickyHunkHeaderProps extends Pick<VirtualDiffProps, 'selectedLines' | 'onHunkToggle'> {
   stickyHunk: { text: string; hunkStartIdx?: number };
-  rowHeight: number;
   selectable: boolean;
   hunkLineMap: Map<number, number[]>;
   gutterWidth: string;
@@ -14,7 +13,6 @@ interface StickyHunkHeaderProps extends Pick<VirtualDiffProps, 'selectedLines' |
 /** Overlay that keeps the hunk header of the scrolled-past hunk pinned to the top. */
 export function StickyHunkHeader({
   stickyHunk,
-  rowHeight,
   selectable,
   hunkLineMap,
   selectedLines,
@@ -25,8 +23,8 @@ export function StickyHunkHeader({
     <div
       className={cn(
         'sticky top-0 z-10 flex select-none items-center bg-accent/95 font-mono text-(length:--diff-font-size) text-muted-foreground backdrop-blur-xs border-b border-border/50 px-1',
+        'h-[var(--vdiff-row-height)] -mb-[var(--vdiff-row-height)]',
       )}
-      style={{ height: rowHeight, marginBottom: -rowHeight }}
       data-testid="diff-sticky-hunk"
     >
       {selectable && stickyHunk.hunkStartIdx != null ? (

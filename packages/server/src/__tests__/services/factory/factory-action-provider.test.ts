@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import type { GithubCallError } from '@funny/core/github-app';
 import { EMPTY_FACTORY_RUN_METRICS } from '@funny/shared/contracts/factory';
 import type { RegressionProofOpts } from '@funny/workflows/compiler';
-import { err, errAsync, ok, okAsync, type ResultAsync } from 'neverthrow';
+import { err, errAsync, ok, okAsync, type Result, type ResultAsync } from 'neverthrow';
 
 import * as telemetry from '../../../lib/telemetry.js';
 import {
@@ -44,6 +44,30 @@ const reviewed = (sha: string) => ({
   reviewedAt: '2026-11-22T00:00:00.000Z',
 });
 
+/** The GitHub side the provider tests start from. */
+const defaultGithub = () => ({
+  branchAhead: () => okAsync(true),
+  commentOnIssue: () => okAsync(undefined),
+  findPullRequest: () => okAsync(null),
+  pullRequests: {
+    prState: () => okAsync('open' as const),
+    changedFiles: () => okAsync({ files: [], truncated: false }),
+    publishReview: () => okAsync({ status: true }),
+    baseDistance: () => okAsync({ behindBy: 0, aheadBy: 1 }),
+    updateBranch: () => okAsync({ kind: 'updating' as const }),
+    commitParents: () => okAsync([]),
+    baseChanges: () => okAsync({ commits: [], files: [] }),
+    mergeQueueRequired: () => okAsync(false),
+    enqueue: () => okAsync({ kind: 'queued' as const }),
+    queueState: () => okAsync('merged' as const),
+    pullHead: () => okAsync({ sha: 'sha-head', baseRef: 'main', autoMerge: false }),
+    publishProofCheck: () => okAsync(undefined),
+    ciState: () => okAsync({ kind: 'green' as const }),
+    merge: () =>
+      okAsync({ kind: 'merged' as const, method: 'squash' as const, branchDeleted: false }),
+  },
+});
+
 function providerWith(over: Partial<Parameters<typeof createFactoryActionProvider>[0]> = {}) {
   const waited: string[] = [];
   const deps = {
@@ -59,28 +83,7 @@ function providerWith(over: Partial<Parameters<typeof createFactoryActionProvide
       waited.push(threadId);
       return { status: 'completed' as const, output: 'done' };
     },
-    github: {
-      branchAhead: () => okAsync(true),
-      commentOnIssue: () => okAsync(undefined),
-      findPullRequest: () => okAsync(null),
-      pullRequests: {
-        prState: () => okAsync('open' as const),
-        changedFiles: () => okAsync({ files: [], truncated: false }),
-        publishReview: () => okAsync({ status: true }),
-        baseDistance: () => okAsync({ behindBy: 0, aheadBy: 1 }),
-        updateBranch: () => okAsync({ kind: 'updating' as const }),
-        commitParents: () => okAsync([]),
-        baseChanges: () => okAsync({ commits: [], files: [] }),
-        mergeQueueRequired: () => okAsync(false),
-        enqueue: () => okAsync({ kind: 'queued' as const }),
-        queueState: () => okAsync('merged' as const),
-        pullHead: () => okAsync({ sha: 'sha-head', baseRef: 'main', autoMerge: false }),
-        publishProofCheck: () => okAsync(undefined),
-        ciState: () => okAsync({ kind: 'green' as const }),
-        merge: () =>
-          okAsync({ kind: 'merged' as const, method: 'squash' as const, branchDeleted: false }),
-      },
-    },
+    github: defaultGithub(),
     record: async () => undefined,
     signal: new AbortController().signal,
     ...over,
@@ -89,6 +92,48 @@ function providerWith(over: Partial<Parameters<typeof createFactoryActionProvide
 }
 
 describe('factory action provider', () => {
+  describe('a pull request opened against another branch than the base', () => {
+    function withPr(baseRef: string, retarget?: (base: string) => Promise<Result<void, string>>) {
+      const github = {
+        ...defaultGithub(),
+        findPullRequest: () =>
+          okAsync({ number: 9, url: 'https://github.com/o/r/pull/9', baseRef }),
+      };
+      return providerWith({
+        github,
+        defaultBranch: () => okAsync('develop'),
+        ...(retarget && { retarget }),
+      }).provider;
+    }
+
+    test('is pointed at the base the factory merges into', async () => {
+      const targets: string[] = [];
+      const provider = withPr('main', async (base) => {
+        targets.push(base);
+        return ok(undefined);
+      });
+      expect(await provider.createPr({ cwd: '', title: 'Fix it' })).toMatchObject({ ok: true });
+      expect(targets).toEqual(['develop']);
+    });
+
+    test('already on the base, it is left alone', async () => {
+      const targets: string[] = [];
+      const provider = withPr('develop', async (base) => {
+        targets.push(base);
+        return ok(undefined);
+      });
+      expect(await provider.createPr({ cwd: '', title: 'Fix it' })).toMatchObject({ ok: true });
+      expect(targets).toEqual([]);
+    });
+
+    test('that cannot be retargeted stops the run before anything merges elsewhere', async () => {
+      const provider = withPr('main', async () => err('GitHub answered 422'));
+      const result = await provider.createPr({ cwd: '', title: 'Fix it' });
+      expect(result.ok).toBe(false);
+      expect(result.error).toContain('merges into main');
+    });
+  });
+
   test('a replayed step that a later step continued on the same thread does not wait on it', async () => {
     const { provider, waited } = providerWith({ threadIds: ['A', 'A'] });
     // The implement step: the fix (step 2) already ran on A after it.
@@ -109,7 +154,12 @@ describe('factory action provider', () => {
     });
     await provider.spawnAgent({ prompt: 'implement', cwd: '' });
     expect(bodies).toHaveLength(1);
-    expect(bodies[0]).toMatchObject({ branch: 'factory/issue-7-r1', source: 'factory' });
+    // Required (#457, #483, #488): a thread put on another branch is refused on every later step.
+    expect(bodies[0]).toMatchObject({
+      branch: 'factory/issue-7-r1',
+      requireBranch: true,
+      source: 'factory',
+    });
   });
 
   // Runs #227-#230 started from the branch the enabler's checkout was on:
@@ -293,6 +343,54 @@ describe('factory action provider integration metrics', () => {
     await provider.spawnAgent({ prompt: 'implement', cwd: '' });
     await provider.spawnAgent({ prompt: 'fix the checks', cwd: '' });
     expect(recorded.at(-1)).toMatchObject({ agentFixes: 1, ciRounds: 0 });
+  });
+
+  // #455, #481: the follow-up asking to settle merge conflicts reached a
+  // day-old session that could not resume; the thread failed in a second and
+  // both runs parked for a person, though the error asks to send it again.
+  describe('a follow-up whose agent lost its session', () => {
+    function lostSession(error: string) {
+      const sent: string[] = [];
+      let waits = 0;
+      const { provider } = providerWith({
+        threadIds: ['A'],
+        continuation: {
+          followUp: async (_threadId: string, prompt: string) => {
+            sent.push(prompt);
+            return ok(undefined);
+          },
+          completedAt: async () => null,
+          followedUpSince: async () => false,
+        },
+        // The implement step (replayed), then the follow-up: it fails once.
+        waitThread: async () => {
+          waits += 1;
+          return waits === 2
+            ? { status: 'failed' as const }
+            : { status: 'completed' as const, output: 'done' };
+        },
+        lastAgentError: async () => error,
+      });
+      return { provider, sent };
+    }
+
+    test('is sent once more, and the step takes that turn', async () => {
+      const { provider, sent } = lostSession(
+        'Session resume failed (0 turns). Re-send your message to continue with full conversation context.',
+      );
+      await provider.spawnAgent({ prompt: 'implement', cwd: '' });
+      const result = await provider.spawnAgent({ prompt: 'settle the conflicts', cwd: '' });
+      expect(sent).toEqual(['settle the conflicts', 'settle the conflicts']);
+      expect(result).toMatchObject({ ok: true, output: 'done' });
+    });
+
+    test('another failure is not sent again', async () => {
+      const { provider, sent } = lostSession('The model is overloaded.');
+      await provider.spawnAgent({ prompt: 'implement', cwd: '' });
+      const result = await provider.spawnAgent({ prompt: 'settle the conflicts', cwd: '' });
+      expect(sent).toEqual(['settle the conflicts']);
+      expect(result.ok).toBe(false);
+    });
   });
 
   test('a stop or an access error is not a CI round', () => {

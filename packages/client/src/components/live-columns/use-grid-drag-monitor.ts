@@ -40,9 +40,12 @@ export function useGridDragMonitor({
         if (!targets.length) return;
 
         const targetData = targets[0].data;
+        // SAFETY: every 'grid-thread' draggable (ThreadColumn, useGridThreadDrag)
+        // puts the thread id string in `threadId`.
         const threadId = source.data.threadId as string;
 
         if (targetData.type === 'grid-cell') {
+          // SAFETY: GridCellDropTarget's 'grid-cell' data carries its `cellIndex: number` prop.
           const cellIndex = targetData.cellIndex as number;
           setGridCells((prev) => {
             const updated = { ...prev };
@@ -70,6 +73,8 @@ export function useGridDragMonitor({
         }
 
         if (targetData.type === 'grid-col-insert') {
+          // SAFETY: GridColumnInsertDropTarget's 'grid-col-insert' data carries its
+          // `insertIndex: number` prop.
           const insertIndex = targetData.insertIndex as number;
           if (gridCols >= MAX_GRID_COLS) {
             toast.info(t('live.gridFull', 'Grid is full'));

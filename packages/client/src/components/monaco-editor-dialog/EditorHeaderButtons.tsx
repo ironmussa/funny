@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
 
 /** Copies the whole buffer. */
 export function CopyContentButton({
@@ -53,10 +52,10 @@ export function BlameToggle({
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
-          variant="ghost"
+          variant={showBlame ? 'active' : 'muted'}
           size="icon-sm"
           onClick={onToggleBlame}
-          className={cn('shrink-0', showBlame ? 'text-foreground' : 'text-muted-foreground')}
+          className="shrink-0"
           data-testid="editor-toggle-blame"
         >
           <GitBranch className="icon-base" />
@@ -82,10 +81,10 @@ export function HistoryToggle({
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
-          variant="ghost"
+          variant={showHistory ? 'active' : 'muted'}
           size="icon-sm"
           onClick={onToggleHistory}
-          className={cn('shrink-0', showHistory ? 'text-foreground' : 'text-muted-foreground')}
+          className="shrink-0"
           data-testid="editor-toggle-history"
           aria-label={t('editor.toggleHistory', 'Toggle history')}
         >

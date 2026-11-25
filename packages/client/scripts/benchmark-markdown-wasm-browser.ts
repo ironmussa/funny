@@ -106,6 +106,8 @@ try {
   if (errors.length > 0) throw new Error(`Browser benchmark errors: ${errors.join('; ')}`);
 
   const result = await page.evaluate(
+    // SAFETY: waitForFunction above returned only once the benchmark page set this
+    // global, and src/benchmarks/markdown-wasm.tsx writes a MarkdownWasmBenchmarkResult there.
     () => window.__FUNNY_MARKDOWN_WASM_BENCHMARK__ as MarkdownWasmBenchmarkResult,
   );
   console.log(

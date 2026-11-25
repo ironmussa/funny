@@ -46,8 +46,8 @@ function InstalledSkillCard({
   const { t } = useTranslation();
   return (
     <div
-      className="border-border/50 bg-card flex items-center justify-between gap-3 rounded-md border px-3 py-2.5"
-      style={{ borderLeftWidth: 3, borderLeftColor: colorFromName(skill.name) }}
+      className="border-border/50 bg-card flex items-center justify-between gap-3 rounded-md border border-l-[3px] border-l-[color:var(--skill-accent-color)] px-3 py-2.5"
+      style={{ '--skill-accent-color': colorFromName(skill.name) }}
     >
       <div className="flex min-w-0 items-center gap-3">
         <Sparkles className="icon-base text-status-warning shrink-0" />
@@ -109,8 +109,8 @@ function RecommendedSkillCard({
 
   return (
     <div
-      className="border-border/50 bg-card flex items-center justify-between gap-3 rounded-md border px-3 py-2.5"
-      style={{ borderLeftWidth: 3, borderLeftColor: colorFromName(skill.name) }}
+      className="border-border/50 bg-card flex items-center justify-between gap-3 rounded-md border border-l-[3px] border-l-[color:var(--skill-accent-color)] px-3 py-2.5"
+      style={{ '--skill-accent-color': colorFromName(skill.name) }}
     >
       <div className="min-w-0">
         <div className="flex items-center gap-2">
@@ -160,8 +160,8 @@ function PluginCard({ plugin }: { plugin: Plugin }) {
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
       <div
-        className="border-border/50 bg-card rounded-md border"
-        style={{ borderLeftWidth: 3, borderLeftColor: colorFromName(plugin.name) }}
+        className="border-border/50 bg-card rounded-md border border-l-[3px] border-l-[color:var(--skill-accent-color)]"
+        style={{ '--skill-accent-color': colorFromName(plugin.name) }}
       >
         <CollapsibleTrigger asChild>
           <button
@@ -262,6 +262,7 @@ export function SkillsSettings() {
   const loadRecommended = useCallback(async () => {
     const result = await api.getRecommendedSkills();
     if (result.isOk()) {
+      // SAFETY: GET /skills/recommended answers RECOMMENDED_SKILLS (runtime skills-service), whose entries are { name, description, identifier }; the api helper mistypes them as Skill.
       // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
       setRecommended(result.value.skills as unknown as RecommendedSkill[]);
     }
@@ -351,12 +352,7 @@ export function SkillsSettings() {
           <h3 className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
             {t('skills.globalSkills')}
           </h3>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowCustom(!showCustom)}
-            className="px-2"
-          >
+          <Button variant="ghost" size="sm-tight" onClick={() => setShowCustom(!showCustom)}>
             {showCustom ? (
               <ChevronUp className="icon-xs mr-1" />
             ) : (

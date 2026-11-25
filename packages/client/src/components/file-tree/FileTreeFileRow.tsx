@@ -1,5 +1,3 @@
-import type { CSSProperties } from 'react';
-
 import { setFileMentionDragData } from '@/lib/file-mention-dnd';
 import type { TreeRow } from '@/lib/file-tree';
 import { cn } from '@/lib/utils';
@@ -10,7 +8,6 @@ import { INDENT_PX, type FileTreeRowCommon } from './row-props';
 
 interface FileTreeFileRowProps {
   row: Extract<TreeRow, { kind: 'file' }>;
-  style?: CSSProperties;
   common: FileTreeRowCommon;
   isActive: boolean;
   activeClass: string;
@@ -26,7 +23,6 @@ interface FileTreeFileRowProps {
 
 export function FileTreeFileRow({
   row,
-  style,
   common: {
     fontSize,
     hoverClass,
@@ -59,14 +55,11 @@ export function FileTreeFileRow({
   return (
     <div
       className={cn(
-        'group flex h-[24px] items-center gap-1.5 cursor-pointer transition-colors overflow-hidden pr-1',
+        'group flex h-[24px] items-center gap-1.5 cursor-pointer transition-colors overflow-hidden pr-1 pl-[var(--file-tree-indent)]',
         fontSize,
         isActive ? activeClass : hoverClass,
       )}
-      style={{
-        ...style,
-        paddingLeft: `${8 + row.depth * INDENT_PX}px`,
-      }}
+      style={{ '--file-tree-indent': `${8 + row.depth * INDENT_PX}px` }}
       draggable
       onDragStart={(e) => {
         setFileMentionDragData(e.dataTransfer, {

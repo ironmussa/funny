@@ -74,6 +74,8 @@ export function useLayoutBottomPaneSync({
   // plumbing.
   useEffect(() => {
     const handler = (e: Event) => {
+      // SAFETY: the only dispatcher, TerminalDockview, sends a CustomEvent whose
+      // detail is `{ tabId }`; the optional chain below still tolerates a missing detail.
       const detail = (e as CustomEvent<{ tabId: string }>).detail;
       const tabId = detail?.tabId;
       if (!tabId) return;

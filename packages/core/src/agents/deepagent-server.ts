@@ -42,31 +42,38 @@ const BUILTIN_SKILLS_DIR = pathJoin(__dirname, 'deepagent-skills');
 
 // ── CLI arg parsing ──────────────────────────────────────────────────────────
 
-function parseArgs(argv: string[]): Record<string, string | boolean> {
-  const args: Record<string, string | boolean> = {};
+interface CliArgs {
+  /** `--debug` was passed. */
+  debug: boolean;
+  /** Every other `--key value` pair. */
+  values: Record<string, string | undefined>;
+}
+
+function parseArgs(argv: string[]): CliArgs {
+  const values: Record<string, string | undefined> = {};
+  let debug = false;
   for (let i = 2; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === '--debug') {
-      args.debug = true;
+      debug = true;
     } else if (arg.startsWith('--') && i + 1 < argv.length) {
       const key = arg.slice(2);
-      args[key] = argv[++i];
+      values[key] = argv[++i];
     }
   }
-  return args;
+  return { debug, values };
 }
 
-const args = parseArgs(process.argv);
+const { debug: debugFlag, values: args } = parseArgs(process.argv);
 
-const workspaceRoot = (args.workspace as string) || process.env.WORKSPACE_ROOT || process.cwd();
+const workspaceRoot = args.workspace || process.env.WORKSPACE_ROOT || process.cwd();
 
-const agentName = (args.name as string) || 'funny-coding-assistant';
-const debug = args.debug === true || process.env.DEBUG === 'true';
-const model = args.model as string | undefined;
+const agentName = args.name || 'funny-coding-assistant';
+const debug = debugFlag || process.env.DEBUG === 'true';
+const model = args.model;
 
 // System prompt: CLI arg → env var → default coding prompt
-const systemPrompt =
-  (args['system-prompt'] as string) || process.env.DEEPAGENT_SYSTEM_PROMPT || undefined;
+const systemPrompt = args['system-prompt'] || process.env.DEEPAGENT_SYSTEM_PROMPT || undefined;
 
 // Skills: CLI arg → env var → workspace defaults
 function resolvePaths(
@@ -80,11 +87,10 @@ function resolvePaths(
   return defaults.filter((p) => existsSync(p));
 }
 
-const userSkillPaths = resolvePaths(
-  args.skills as string | undefined,
-  process.env.DEEPAGENT_SKILLS,
-  [pathJoin(workspaceRoot, '.deepagents', 'skills'), pathJoin(workspaceRoot, 'skills')],
-);
+const userSkillPaths = resolvePaths(args.skills, process.env.DEEPAGENT_SKILLS, [
+  pathJoin(workspaceRoot, '.deepagents', 'skills'),
+  pathJoin(workspaceRoot, 'skills'),
+]);
 
 // Built-in skills ship with funny — filter out any disabled via DEEPAGENT_DISABLED_SKILLS env var
 const disabledSkills = (process.env.DEEPAGENT_DISABLED_SKILLS || '')
@@ -112,7 +118,7 @@ if (existsSync(BUILTIN_SKILLS_DIR)) {
 }
 const skillPaths = [...builtinSkillPaths, ...userSkillPaths];
 
-const memoryPaths = resolvePaths(args.memory as string | undefined, process.env.DEEPAGENT_MEMORY, [
+const memoryPaths = resolvePaths(args.memory, process.env.DEEPAGENT_MEMORY, [
   pathJoin(workspaceRoot, '.deepagents', 'AGENTS.md'),
   pathJoin(workspaceRoot, 'AGENTS.md'),
 ]);

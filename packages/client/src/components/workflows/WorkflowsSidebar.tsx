@@ -28,7 +28,7 @@ export function WorkflowsSidebar({
             value={filter}
             onChange={(event) => onFilterChange(event.target.value)}
             placeholder="Filter workflows"
-            className="pl-8"
+            inset="icon"
           />
         </div>
       </div>

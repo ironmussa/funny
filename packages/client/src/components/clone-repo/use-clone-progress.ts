@@ -59,6 +59,9 @@ export function useCloneProgress({
 
   useEffect(() => {
     const handler = (e: Event) => {
+      // SAFETY: `clone:progress` window events are CustomEvents dispatched by
+      // platform/web/browser-effects.ts with the WS event's data, which the
+      // WSEvent union types as WSCloneProgressData.
       const data = (e as CustomEvent<WSCloneProgressData>).detail;
       if (!activeCloneIdRef.current || data.cloneId !== activeCloneIdRef.current) return;
       if (data.status === 'done' || data.status === 'failed') {

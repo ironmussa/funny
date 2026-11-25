@@ -96,7 +96,7 @@ export function AutomationInboxView() {
           <Inbox className="icon-base text-muted-foreground" />
           <h2 className="text-sm font-medium">Automation Inbox</h2>
           {inboxCount > 0 && (
-            <Badge variant="secondary" className="h-5 min-w-5 px-1 leading-none">
+            <Badge variant="secondary" size="count" className="h-5 min-w-5">
               {inboxCount}
             </Badge>
           )}
@@ -104,7 +104,7 @@ export function AutomationInboxView() {
         <Button
           variant="muted"
           size="xs"
-          className="gap-1.5"
+          gap="snug"
           data-testid="inbox-manage-automations"
           onClick={handleGoToSettings}
         >

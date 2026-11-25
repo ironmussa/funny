@@ -32,7 +32,6 @@ export function StartupCommandEditForm({
           </label>
           <Input
             id={`startup-label-${cmdId}`}
-            className="settings-form-input"
             placeholder={t('startup.label')}
             value={label}
             onChange={(e) => setLabel(e.target.value)}
@@ -46,7 +45,6 @@ export function StartupCommandEditForm({
           <Input
             mono
             id={`startup-command-${cmdId}`}
-            className="settings-form-input"
             placeholder={t('startup.command')}
             value={command}
             onChange={(e) => setCommand(e.target.value)}

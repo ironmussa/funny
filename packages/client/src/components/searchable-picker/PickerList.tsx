@@ -3,6 +3,7 @@ import type { RefObject } from 'react';
 
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
+import { cn } from '@/lib/utils';
 
 import { PickerItemRow, type PickerRowHandlers, type SearchablePickerItem } from './PickerItemRow';
 
@@ -92,9 +93,11 @@ export function PickerList({
 }: PickerListProps) {
   return (
     <div
-      className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-1"
+      className={cn(
+        'min-h-0 flex-1 overflow-y-auto overscroll-contain p-1',
+        mobile ? 'max-h-[60dvh]' : 'max-h-[min(60vh,440px)]',
+      )}
       ref={listRef}
-      style={{ maxHeight: mobile ? '60dvh' : 'min(60vh, 440px)' }}
     >
       <PickerListStatus
         items={items}
@@ -106,11 +109,8 @@ export function PickerList({
       />
       {filtered.length > 0 && (
         <div
-          style={{
-            height: `${rowVirtualizer.getTotalSize()}px`,
-            width: '100%',
-            position: 'relative',
-          }}
+          className="relative h-[var(--searchable-picker-list-height)] w-full"
+          style={{ '--searchable-picker-list-height': `${rowVirtualizer.getTotalSize()}px` }}
         >
           {rowVirtualizer.getVirtualItems().map((virtualRow) => {
             const item = filtered[virtualRow.index];

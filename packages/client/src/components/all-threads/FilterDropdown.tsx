@@ -34,8 +34,7 @@ export function FilterDropdown({ label, options, selected, onToggle, counts, tes
     if (!container) return;
 
     const items = Array.from(container.querySelectorAll<HTMLElement>('[role="menuitemcheckbox"]'));
-    const current = document.activeElement as HTMLElement;
-    const idx = items.indexOf(current);
+    const idx = items.findIndex((item) => item === document.activeElement);
 
     if (e.key === 'ArrowDown') {
       e.preventDefault();
@@ -70,7 +69,8 @@ export function FilterDropdown({ label, options, selected, onToggle, counts, tes
       </PopoverTrigger>
       <PopoverContent
         align="start"
-        className="w-auto min-w-[160px] p-1"
+        padding="xs"
+        className="w-auto min-w-[160px]"
         onKeyDown={handleKeyDown}
         onOpenAutoFocus={(e) => {
           e.preventDefault();

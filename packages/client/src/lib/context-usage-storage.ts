@@ -17,6 +17,8 @@ export function loadContextUsage(threadId: string): ContextUsage | undefined {
   try {
     const raw = localStorage.getItem(KEY_PREFIX + threadId);
     if (!raw) return undefined;
+    // SAFETY: the value was written by saveContextUsage as a Persisted; the check
+    // below drops anything whose cumulativeInputTokens is not a number.
     const parsed = JSON.parse(raw) as Persisted;
     if (!parsed || !isNumber(parsed.cumulativeInputTokens)) return undefined;
     if (Date.now() - parsed.savedAt > MAX_AGE_MS) {

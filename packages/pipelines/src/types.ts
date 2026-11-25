@@ -11,6 +11,9 @@
 
 // ── Progress reporting ────────────────────────────────────────
 
+/** Plain JSON data: what a step's progress metadata carries to the UI. */
+type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
+
 /** Status of a pipeline step. */
 export type StepStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
 
@@ -28,7 +31,14 @@ export interface StepProgressData {
   /** Sub-items for composite steps (e.g. multiple hooks). */
   subItems?: StepSubItem[];
   /** Extra metadata (e.g. PR url, iteration count). */
-  metadata?: Record<string, unknown>;
+  metadata?: { [key: string]: JsonValue };
+}
+
+/** Data payload for pipeline-level events. */
+export interface PipelineEventData {
+  workflowName?: string;
+  nodeName?: string;
+  error?: string;
 }
 
 /**
@@ -44,7 +54,7 @@ export interface ProgressReporter {
   /** Report that a step's status changed. */
   onStepProgress(stepId: string, data: StepProgressData): void;
   /** Report a pipeline-level event (started, completed, failed, etc.). */
-  onPipelineEvent(event: string, data: Record<string, unknown>): void;
+  onPipelineEvent(event: string, data: PipelineEventData): void;
 }
 
 /**

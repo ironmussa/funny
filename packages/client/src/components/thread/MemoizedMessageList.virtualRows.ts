@@ -117,7 +117,7 @@ export function buildVirtualRows(
     if (item.type === 'message' && item.msg.role === 'user') {
       appendSessionSummary();
       appendTurnEnd();
-      currentUser = item as MessageItem;
+      currentUser = item;
       currentSessionItems = [];
       sectionStart = rows.length;
     } else if (currentUser) {
@@ -128,7 +128,7 @@ export function buildVirtualRows(
       key: getItemKey(item),
       item,
       itemIndex,
-      sectionId: (currentUser as MessageItem | null)?.msg.id,
+      sectionId: currentUser?.msg.id,
     });
   });
   appendSessionSummary();

@@ -184,6 +184,8 @@ export function MonacoEditorDialog({
       // stable but absent from the public d.ts, hence the narrow cast. Capped so
       // huge files don't block on whole-document tokenization; the rest streams in
       // lazily as the user scrolls.
+      // SAFETY: Monaco 0.55 text models carry the internal `tokenization.forceTokenization`;
+      // both members are typed optional and called with `?.`, so a missing one is a no-op.
       const model = editor.getModel() as
         | (monacoEditor.ITextModel & {
             tokenization?: { forceTokenization?: (lineNumber: number) => void };
@@ -242,10 +244,11 @@ export function MonacoEditorDialog({
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent
+        flush
         className={cn(
           isFullscreen
-            ? 'max-w-[100vw] max-h-screen w-screen h-screen flex flex-col gap-0 p-0'
-            : 'flex h-[85vh] w-[90vw] max-w-[1120px] flex-col gap-0 p-0',
+            ? 'max-w-[100vw] max-h-screen w-screen h-screen flex flex-col'
+            : 'flex h-[85vh] w-[90vw] max-w-[1120px] flex-col',
           'overflow-hidden',
         )}
         onOpenAutoFocus={(e) => e.preventDefault()}
@@ -297,7 +300,8 @@ export function MonacoEditorDialog({
                 regex={showAdvancedToggles ? regex : undefined}
                 onRegexChange={showAdvancedToggles ? setRegex : undefined}
                 testIdPrefix="editor-search"
-                className="border-border bg-popover absolute top-3 right-4 z-10 rounded-md border px-2 py-1 shadow-md"
+                variant="overlay"
+                className="absolute top-3 right-4 z-10"
               />
             )}
             {showPreview && isHtml ? (

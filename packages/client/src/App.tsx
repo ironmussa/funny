@@ -78,7 +78,10 @@ function SidebarPlaceholder() {
     if (s) w = Number(s);
   } catch {}
   return (
-    <div style={{ width: w }} className="border-sidebar-border bg-sidebar shrink-0 border-r" />
+    <div
+      style={{ '--sidebar-placeholder-width': `${w}px` }}
+      className="border-sidebar-border bg-sidebar w-[var(--sidebar-placeholder-width)] shrink-0 border-r"
+    />
   );
 }
 
@@ -476,7 +479,10 @@ export function App() {
           right={singleRightPanel}
           rightTabs={rightTabs}
           activeRightTab={reviewSubTab}
-          onActiveRightTabChange={(id) => setReviewSubTabStore(id as typeof reviewSubTab)}
+          onActiveRightTabChange={(id) =>
+            // SAFETY: the ids come from rightTabs, built from REVIEW_TABS, whose ids are all ReviewSubTab names.
+            setReviewSubTabStore(id as typeof reviewSubTab)
+          }
           rightPaneOpen={rightPaneVisible}
           initialRightWidth={Math.round(window.innerWidth * (reviewPaneWidth / 100))}
         />

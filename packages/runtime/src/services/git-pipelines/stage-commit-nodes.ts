@@ -25,7 +25,7 @@ import {
 import { emitWorkflowEvent } from '../workflow-event-helpers.js';
 import type { GitPipelineContext } from './context.js';
 import { unwrapGit } from './node-helpers.js';
-import { attemptPrecommitAutoFix, HookFailedError } from './precommit-autofix.js';
+import { attemptPrecommitAutoFix, HookFailedError, type HookSubItem } from './precommit-autofix.js';
 
 /** A hook of a `workflow:hooks` failure event. */
 type FailedHookEventItem = {
@@ -35,9 +35,7 @@ type FailedHookEventItem = {
 };
 
 /** An absent error is left out of the event, as the JSON payload always did. */
-function failedHookEventItem(
-  hook: Omit<FailedHookEventItem, 'error'> & { error: string | undefined },
-): FailedHookEventItem {
+function failedHookEventItem(hook: FailedHookEventItem): FailedHookEventItem {
   const item: FailedHookEventItem = {
     label: hook.label,
     status: hook.status,
@@ -103,13 +101,9 @@ async function hooksNode(ctx: GitPipelineContext): Promise<GitPipelineContext> {
   if (ctx.hooks.length > 0) {
     for (let i = 0; i < ctx.hooks.length; i++) {
       // Mark current hook running, previous completed
-      const subItems = ctx.hooks.map((h, idx) => ({
+      const subItems = ctx.hooks.map((h, idx): HookSubItem => ({
         label: h.label,
-        status: (idx < i ? 'completed' : idx === i ? 'running' : 'pending') as
-          | 'pending'
-          | 'running'
-          | 'completed'
-          | 'failed',
+        status: idx < i ? 'completed' : idx === i ? 'running' : 'pending',
       }));
       ctx.setStep('hooks', { status: 'running', subItems });
 
@@ -144,13 +138,9 @@ async function hooksNode(ctx: GitPipelineContext): Promise<GitPipelineContext> {
         }
 
         // Not auto-fixable or auto-fix failed
-        const failedSubItems = ctx.hooks.map((h, idx) => ({
+        const failedSubItems = ctx.hooks.map((h, idx): HookSubItem => ({
           label: h.label,
-          status: (idx < i ? 'completed' : idx === i ? 'failed' : 'pending') as
-            | 'pending'
-            | 'running'
-            | 'completed'
-            | 'failed',
+          status: idx < i ? 'completed' : idx === i ? 'failed' : 'pending',
           error: idx === i ? hookResult.output : undefined,
         }));
         ctx.setStep('hooks', {

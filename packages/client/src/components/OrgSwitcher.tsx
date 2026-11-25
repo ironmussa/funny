@@ -84,7 +84,7 @@ export function OrgSwitcher() {
     async (value: string) => {
       if (value === PERSONAL_VALUE) {
         try {
-          await authClient.organization.setActive({ organizationId: null as any });
+          await authClient.organization.setActive({ organizationId: null });
           setActiveOrg(null, null, null);
           await clearAndReload();
           navigate('/');
@@ -116,7 +116,8 @@ export function OrgSwitcher() {
       <SelectTrigger
         data-testid="org-switcher-trigger"
         size="sm"
-        className="w-full border-none bg-transparent shadow-none"
+        variant="ghost"
+        className="w-full"
       >
         <SelectValue />
       </SelectTrigger>

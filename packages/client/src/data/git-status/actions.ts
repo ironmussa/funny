@@ -37,6 +37,7 @@ type Thread = {
   worktreePath?: string | null;
   baseBranch?: string | null;
   runtime?: string | null;
+  isScratch?: boolean;
 };
 
 const projectKey = (projectId: string) => ['git-status', 'project', projectId] as const;
@@ -172,7 +173,7 @@ export function ensureStatusForThreads(
   const { statuses } = getGitStatusData(layer);
   const projects = new Set<string>();
   for (const thread of threads) {
-    if (isScratch(thread as { isScratch?: boolean }) || !thread.projectId) continue;
+    if (isScratch(thread) || !thread.projectId) continue;
     // A project's bulk status never covers a sandbox thread (its checkout is
     // on its own runner); asking per thread would wake a stopped sandbox.
     if (runsInSandbox(thread)) continue;

@@ -1,4 +1,4 @@
-import type { SafeUser } from '@funny/shared';
+import type { SafeUser, UserRole } from '@funny/shared';
 import { retryAsync } from '@funny/shared/async';
 import { create } from 'zustand';
 
@@ -60,7 +60,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       const session = await authClient.getSession();
       if (superseded()) return;
       if (session.data?.user) {
-        const u = session.data.user as any;
+        const u = session.data.user;
 
         // Restore active org BEFORE setting isLoading=false so that
         // loadProjects() (which fires when App mounts) uses the correct
@@ -93,7 +93,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             id: u.id,
             username: u.username || u.name || 'user',
             displayName: u.name || u.username || 'User',
-            role: u.role || 'user',
+            // SAFETY: Better Auth's admin plugin (server lib/auth.ts, default options) only
+            // assigns 'user' (defaultRole) or 'admin', which is exactly UserRole.
+            role: (u.role || 'user') as UserRole,
           },
         });
         setActiveOrgSlug(activeOrgSlug);
@@ -136,7 +138,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       throw error;
     });
 
-    const u = session?.data?.user as any;
+    const u = session?.data?.user;
     if (!u) {
       throw new Error(
         'Session was not stored in the browser. Use BETTER_AUTH_BASE_URL with the same origin you open in the address bar (e.g. http://localhost:5173 with Vite), add that origin to CORS_ORIGIN, and avoid https:// in BASE_URL when using http:// locally.',
@@ -149,7 +151,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         id: u.id,
         username: u.username || u.name || 'user',
         displayName: u.name || u.username || 'User',
-        role: u.role || 'user',
+        // SAFETY: Better Auth's admin plugin (server lib/auth.ts, default options) only
+        // assigns 'user' (defaultRole) or 'admin', which is exactly UserRole.
+        role: (u.role || 'user') as UserRole,
       },
     });
   },

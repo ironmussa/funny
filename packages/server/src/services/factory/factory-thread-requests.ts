@@ -16,8 +16,9 @@
  * A follow-up to a sandbox stopped while idle wakes it first, as the proxy does.
  */
 
+import type { WorkspaceCleanupReason } from '@funny/shared/activities';
 import { parseStoredJson } from '@funny/shared/json-validation';
-import { and, eq, inArray, isNotNull, ne, notInArray } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, ne, notInArray, or } from 'drizzle-orm';
 import { err, type Result } from 'neverthrow';
 import { z } from 'zod';
 
@@ -53,7 +54,7 @@ async function postToThread(
   ports: RunnerPorts,
   userId: string,
   path: string,
-  body: unknown,
+  body: FollowUpMessageBody | null,
 ): Promise<Result<void, ThreadRunnerError>> {
   return (await sendToThreadRunner(ports, userId, { method: 'POST', path, body })).map(
     () => undefined,
@@ -327,6 +328,119 @@ export async function cleanupFactoryWorktrees(
 }
 
 /**
+ * Before a retry relaunches a run: remove the worktrees that still hold the
+ * run's branch, or that the threads the retry replaces work in, so the new
+ * agent thread checks the run's branch out itself. Git checks a branch out in
+ * one worktree at a time; left in place, the old worktree made the runner put
+ * the new thread on a branch named from its title, and every later step was
+ * refused (409, "the thread's worktree is on branch …") until a person removed
+ * it by hand.
+ *
+ * `keep`: the thread the retry continues (its worktree stays). The run's
+ * branch is never deleted, since the new thread goes on from its commits;
+ * another branch a replaced thread was put on is. A worktree is removed only
+ * when nothing would be lost (`remove-unchanged`); the ones kept with unsaved
+ * work, or on a runner that did not answer, are returned so the retry can say
+ * so instead of starting a run that would stall the same way.
+ */
+export async function freeRunBranchForRetry(
+  ports: RunnerPorts,
+  run: { runBranch: string; threadIds: string[] },
+  keep: string[],
+  browserEvents?: BrowserEventsPort,
+): Promise<KeptWorktree[]> {
+  const kept: KeptWorktree[] = [];
+  for (const thread of await worktreesHoldingRun(run, keep)) {
+    const left = await freeRunWorktree(ports, thread, run.runBranch, browserEvents);
+    if (left) kept.push(left);
+  }
+  return kept;
+}
+
+type RunWorktreeRow = {
+  id: string;
+  userId: string;
+  projectId: string | null;
+  worktreePath: string | null;
+  branch: string | null;
+};
+
+/** The idle local worktrees on the run's branch or of its threads, except `keep`. */
+const worktreesHoldingRun = (
+  run: { runBranch: string; threadIds: string[] },
+  keep: string[],
+): Promise<RunWorktreeRow[]> =>
+  db
+    .select({
+      id: threads.id,
+      userId: threads.userId,
+      projectId: threads.projectId,
+      worktreePath: threads.worktreePath,
+      branch: threads.branch,
+    })
+    .from(threads)
+    .where(
+      and(
+        or(
+          eq(threads.branch, run.runBranch),
+          inArray(threads.id, run.threadIds.length > 0 ? run.threadIds : ['']),
+        ),
+        notInArray(threads.id, keep.length > 0 ? keep : ['']),
+        eq(threads.mode, 'worktree'),
+        ne(threads.runtime, 'sandbox'),
+        isNotNull(threads.worktreePath),
+        notInArray(threads.status, ACTIVE_STATUSES),
+      ),
+    );
+
+/**
+ * Remove one worktree for a retry, keeping the run's branch; the worktree it
+ * left in place (unsaved work, runner did not answer), or null.
+ */
+async function freeRunWorktree(
+  ports: RunnerPorts,
+  thread: RunWorktreeRow,
+  runBranch: string,
+  browserEvents?: BrowserEventsPort,
+): Promise<KeptWorktree | null> {
+  if (!thread.projectId || !thread.worktreePath) return null;
+  const { id, projectId, worktreePath, branch } = thread;
+  const removed = await removeUnchangedWorktree(
+    ports,
+    thread.userId,
+    { id, projectId, worktreePath, branch },
+    { deleteBranch: branch !== runBranch, reason: 'factory-retried' },
+  );
+  if (removed.isErr() || removed.value) {
+    const unsaved = removed.isOk() ? removed.value : null;
+    log.warn('A retry could not free a factory run worktree', {
+      namespace: 'factory',
+      threadId: id,
+      worktreePath,
+      error: removed.isErr() ? removed.error : 'unsaved work',
+    });
+    return {
+      threadId: id,
+      worktreePath,
+      dirtyFileCount: unsaved?.dirtyFileCount ?? 0,
+      unpushedCommitCount: unsaved?.unpushedCommitCount ?? 0,
+    };
+  }
+  await clearThreadWorkspace(id);
+  browserEvents?.toUser(thread.userId, {
+    type: 'thread:updated',
+    threadId: id,
+    data: { worktreePath: null, branch: null },
+  });
+  log.info('Freed a factory run worktree for a retry', {
+    namespace: 'factory',
+    threadId: id,
+    branch,
+  });
+  return null;
+}
+
+/**
  * Archive the threads a retry replaced: the run no longer records them, and a
  * new agent thread with the same title takes their place. Left in the list,
  * the old failed thread looks like the run's (and deleting it looks like it
@@ -393,6 +507,10 @@ async function removeUnchangedWorktree(
   ports: RunnerPorts,
   userId: string,
   thread: { id: string; projectId: string; worktreePath: string; branch: string | null },
+  options: { deleteBranch: boolean; reason: WorkspaceCleanupReason } = {
+    deleteBranch: !!thread.branch,
+    reason: 'factory-no-change',
+  },
 ): Promise<Result<UnsavedWork | null, string>> {
   const sent = await sendToThreadRunner(ports, userId, {
     method: 'POST',
@@ -402,8 +520,8 @@ async function removeUnchangedWorktree(
       projectId: thread.projectId,
       worktreePath: thread.worktreePath,
       branchName: thread.branch ?? undefined,
-      deleteBranch: !!thread.branch,
-      reason: 'factory-no-change',
+      deleteBranch: options.deleteBranch && !!thread.branch,
+      reason: options.reason,
       threadId: thread.id,
     },
   });

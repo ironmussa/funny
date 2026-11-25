@@ -1,4 +1,3 @@
-import type { McpServerType } from '@funny/shared';
 import { Loader2, Plus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -32,14 +31,19 @@ export function AddMcpServerForm({ form, onAdd }: { form: McpAddForm; onAdd: () 
             value={addName}
             onChange={(e) => setAddName(e.target.value)}
             placeholder="my-server"
-            className="h-8 px-2"
+            size="sm-tight"
           />
         </div>
         <div>
           <label className="settings-label" htmlFor="mcp-custom-type">
             {t('mcp.type')}
           </label>
-          <Select value={addType} onValueChange={(v) => setAddType(v as McpServerType)}>
+          <Select
+            value={addType}
+            onValueChange={(v) => {
+              if (v === 'stdio' || v === 'http' || v === 'sse') setAddType(v);
+            }}
+          >
             <SelectTrigger id="mcp-custom-type" className="h-8">
               <SelectValue />
             </SelectTrigger>
@@ -63,7 +67,7 @@ export function AddMcpServerForm({ form, onAdd }: { form: McpAddForm; onAdd: () 
             value={addUrl}
             onChange={(e) => setAddUrl(e.target.value)}
             placeholder="https://api.example.com/mcp"
-            className="h-8 px-2"
+            size="sm-tight"
           />
         </div>
       ) : (
@@ -78,7 +82,7 @@ export function AddMcpServerForm({ form, onAdd }: { form: McpAddForm; onAdd: () 
               value={addCommand}
               onChange={(e) => setAddCommand(e.target.value)}
               placeholder="npx"
-              className="h-8 px-2"
+              size="sm-tight"
             />
           </div>
           <div>
@@ -91,7 +95,7 @@ export function AddMcpServerForm({ form, onAdd }: { form: McpAddForm; onAdd: () 
               value={addArgs}
               onChange={(e) => setAddArgs(e.target.value)}
               placeholder="-y @package/name"
-              className="h-8 px-2"
+              size="sm-tight"
             />
           </div>
         </div>

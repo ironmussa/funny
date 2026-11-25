@@ -82,6 +82,8 @@ function toUtilityError(cause: unknown): UtilityModelError {
 /** A Claude alias such as `haiku` as its full model id; a full id passes through. */
 function claudeModelId(model: string): string {
   try {
+    // SAFETY: resolveModelId only looks the name up in the Claude registry and
+    // throws for one it does not know; the catch answers with the name itself.
     return resolveModelId('claude', model as AgentModel);
   } catch {
     return model;

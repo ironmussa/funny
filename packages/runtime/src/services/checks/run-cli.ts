@@ -13,6 +13,7 @@ import { readFileSync } from 'node:fs';
 import { parseStoredJson } from '@funny/shared/json-validation';
 import { z } from 'zod';
 
+import { isObject } from '../../lib/value-guards.js';
 import { runCheck } from './runner.js';
 import { summarizeCheckRun } from './summary.js';
 import type { CheckPlan } from './toolchain.js';
@@ -20,7 +21,7 @@ import type { CheckPlan } from './toolchain.js';
 // Written by check-tool.ts for this run from a plan it built, so the plan is
 // taken as is; only its envelope is checked.
 const specSchema = z.object({
-  plan: z.custom<CheckPlan>((value) => typeof value === 'object' && value !== null),
+  plan: z.custom<CheckPlan>((value) => isObject(value)),
   progressPath: z.string().min(1),
 });
 

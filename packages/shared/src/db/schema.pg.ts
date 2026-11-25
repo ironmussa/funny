@@ -314,6 +314,8 @@ export const factorySettings = pgTable(
     /** JSON array of globs that make a change high risk, besides the default list. */
     sensitivePaths: text('sensitive_paths'),
     /** More counted lines than this make a change high risk (null: 400). */
+    /** 1: a change over `maxLowRiskLines` is high risk (null / 0: its size does not count). */
+    sizeGateEnabled: integer('size_gate_enabled'),
     maxLowRiskLines: integer('max_low_risk_lines'),
     approvalAdjustMaxLines: integer('approval_adjust_max_lines'),
     /** JSON array of globs whose lines do not count toward a change's size, besides the default list. */
@@ -329,6 +331,8 @@ export const factorySettings = pgTable(
     tooBig: text('too_big'),
     /** 1: a run parked for a member's approval keeps its likely paths (null / 0: it holds none). */
     holdPathsAwaitingApproval: integer('hold_paths_awaiting_approval'),
+    /** The branch the factory merges into; null: the repository's default branch. */
+    baseBranch: text('base_branch'),
     /** JSON object of the factory's per-step overrides (`FactoryStepOverrides`), or null. */
     stepOverrides: text('step_overrides'),
     createdAt: text('created_at').notNull(),

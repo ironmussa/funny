@@ -37,6 +37,7 @@ import type { Result } from 'neverthrow';
 import type { z } from 'zod';
 
 import { log } from '../lib/logger.js';
+import { isObject, isString } from '../lib/value-guards.js';
 import { sendRemoteData } from './remote-data-channel.js';
 import { wsBroker } from './ws-broker.js';
 
@@ -129,19 +130,14 @@ export interface ActivityTrackerDeps {
 const PROGRESS_INTERVAL_MS = 500;
 
 /** A server answer that refuses the write (scope, ownership, unknown type). */
-function isRefusal(response: ActivityReportAnswer): boolean {
-  return (
-    !!response &&
-    typeof response === 'object' &&
-    !Array.isArray(response) &&
-    response.success === false
-  );
+function isRefusal(response: ActivityReportAnswer): response is { [key: string]: JsonValue } {
+  return isObject(response) && !Array.isArray(response) && response.success === false;
 }
 
 function messageOf(cause: unknown): string {
-  if (typeof cause === 'string') return cause;
-  if (cause && typeof cause === 'object' && 'message' in cause) {
-    return String((cause as { message: unknown }).message);
+  if (isString(cause)) return cause;
+  if (isObject(cause) && 'message' in cause) {
+    return String(cause.message);
   }
   return String(cause);
 }
@@ -169,7 +165,7 @@ export function createActivityTracker(deps: ActivityTrackerDeps = {}) {
         log.warn('Activity report refused by the server', {
           namespace: 'activities',
           eventType,
-          error: (response as { error?: unknown }).error,
+          error: response.error,
         });
       }
     } catch (error) {
@@ -200,7 +196,7 @@ export function createActivityTracker(deps: ActivityTrackerDeps = {}) {
             log.warn('Activity outcome refused by the server', {
               namespace: 'activities',
               id: payload.id,
-              error: (response as { error?: unknown }).error,
+              error: response.error,
             });
           }
         }),

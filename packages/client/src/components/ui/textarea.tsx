@@ -11,10 +11,35 @@ const textareaVariants = cva(
         default: 'min-h-[80px] px-3 py-2 text-base',
         xs: 'min-h-[60px] px-2 py-1 text-xs',
         sm: 'min-h-[70px] px-3 py-1.5 text-sm',
+        // Text that follows the prose font size setting: the caller sets
+        // --textarea-font-size and --textarea-line-height (PROSE_*_PX scales).
+        prose:
+          'min-h-[80px] px-3 py-2 text-[length:var(--textarea-font-size)] leading-[var(--textarea-line-height)]',
+      },
+      // Code, prompts and config: values read character by character.
+      mono: {
+        true: 'font-mono',
+        false: '',
+      },
+      // A field filling an editor pane, with no frame of its own.
+      variant: {
+        default: '',
+        bare: 'rounded-none border-0 focus-visible:ring-0',
+      },
+      // Text size only, keeping the size's height and padding.
+      textSize: {
+        default: '',
+        '2xs': 'text-2xs',
+        compact: 'text-compact',
+        xs: 'text-xs',
+        sm: 'text-sm',
       },
     },
     defaultVariants: {
       size: 'default',
+      mono: false,
+      variant: 'default',
+      textSize: 'default',
     },
   },
 );
@@ -25,9 +50,18 @@ export interface TextareaProps
 function Textarea({
   className,
   size,
+  mono,
+  variant,
+  textSize,
   ref,
   ...props
 }: TextareaProps & { ref?: React.Ref<HTMLTextAreaElement> }) {
-  return <textarea className={cn(textareaVariants({ size }), className)} ref={ref} {...props} />;
+  return (
+    <textarea
+      className={cn(textareaVariants({ size, mono, variant, textSize }), className)}
+      ref={ref}
+      {...props}
+    />
+  );
 }
 export { Textarea };

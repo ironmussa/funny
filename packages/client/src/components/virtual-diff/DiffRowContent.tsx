@@ -60,8 +60,8 @@ function HunkRow({ row, ...props }: DiffRowContentProps & { row: RowOf<'hunk'> }
     <div
       className={cn(
         'flex select-none items-center bg-accent font-mono text-(length:--diff-font-size) text-muted-foreground px-1',
+        'h-[var(--vdiff-row-height)]',
       )}
-      style={{ height: props.rowHeight }}
     >
       <HunkGutter
         selectable={props.selectable}
@@ -82,8 +82,8 @@ function FoldRow({ row, ...props }: DiffRowContentProps & { row: RowOf<'fold'> }
       type="button"
       className={cn(
         'flex w-full select-none items-center bg-muted/50 font-mono text-(length:--diff-font-size) text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground px-1',
+        'h-[var(--vdiff-row-height)]',
       )}
-      style={{ height: props.rowHeight }}
       onClick={() => props.toggleFold(row.sectionIdx)}
       data-testid="diff-fold-toggle"
     >

@@ -1,4 +1,4 @@
-import type { Automation, AutomationSchedule } from '@funny/shared';
+import type { Automation } from '@funny/shared';
 import { Plus } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -40,7 +40,9 @@ export function AutomationSettings() {
   // "Create automation" entry. Clear the history state so a refresh/back won't
   // re-trigger it.
   useEffect(() => {
-    if ((location.state as { openCreateAutomation?: boolean } | null)?.openCreateAutomation) {
+    // react-router types `location.state` as `any`; ProjectActionsMenu sets this shape.
+    const navState: { openCreateAutomation?: boolean } | null = location.state;
+    if (navState?.openCreateAutomation) {
       setEditingId(null);
       setForm(defaultForm);
       setDialogOpen(true);
@@ -59,7 +61,7 @@ export function AutomationSettings() {
     setForm({
       name: a.name,
       prompt: a.prompt,
-      schedule: a.schedule as AutomationSchedule,
+      schedule: a.schedule,
       model: a.model,
       permissionMode: a.permissionMode,
     });
@@ -128,7 +130,7 @@ export function AutomationSettings() {
       {/* Header — hidden when empty state is shown */}
       {automations.length > 0 && (
         <div className="flex items-center justify-end">
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={openCreateDialog}>
+          <Button variant="outline" size="sm" gap="snug" onClick={openCreateDialog}>
             <Plus className="icon-sm" />
             Create
           </Button>
@@ -142,7 +144,7 @@ export function AutomationSettings() {
           fill={false}
           title="No automations yet."
           action={
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={openCreateDialog}>
+            <Button variant="outline" size="sm" gap="snug" onClick={openCreateDialog}>
               <Plus className="icon-sm" />
               Create your first automation
             </Button>

@@ -27,14 +27,14 @@ export function EnvFilesSection({ state }: { state: ProjectConfigState }) {
               onBlur={(e) => updateEnvFile(i, e.target.value)}
               onKeyDown={(e) => {
                 if (e.nativeEvent.isComposing) return;
-                if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                if (e.key === 'Enter') e.currentTarget.blur();
               }}
               data-testid={`env-file-edit-${i}`}
             />
             <TooltipIconButton
               variant="muted-destructive"
               onClick={() => removeEnvFile(i)}
-              className="opacity-0 group-hover:opacity-100"
+              reveal="hover"
               data-testid={`env-file-remove-${i}`}
               tooltip={t('common.delete')}
             >
@@ -107,12 +107,14 @@ export function PortGroupsSection({ state }: { state: ProjectConfigState }) {
               <div className="flex items-center gap-2">
                 <Input
                   size="xs"
-                  className="w-32 text-sm font-medium"
+                  textSize="sm"
+                  weight="medium"
+                  className="w-32"
                   defaultValue={group.name}
                   onBlur={(e) => updatePortGroup(gi, 'name', e.target.value)}
                   onKeyDown={(e) => {
                     if (e.nativeEvent.isComposing) return;
-                    if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                    if (e.key === 'Enter') e.currentTarget.blur();
                   }}
                   data-testid={`port-group-${gi}-name`}
                 />
@@ -124,7 +126,7 @@ export function PortGroupsSection({ state }: { state: ProjectConfigState }) {
                   defaultValue={group.basePort}
                   onBlur={(e) => updatePortGroup(gi, 'basePort', e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                    if (e.key === 'Enter') e.currentTarget.blur();
                   }}
                   data-testid={`port-group-${gi}-port`}
                 />
@@ -132,7 +134,7 @@ export function PortGroupsSection({ state }: { state: ProjectConfigState }) {
               <TooltipIconButton
                 variant="muted-destructive"
                 onClick={() => removePortGroup(gi)}
-                className="opacity-0 group-hover:opacity-100"
+                reveal="hover"
                 data-testid={`port-group-remove-${gi}`}
                 tooltip={t('common.delete')}
               >
@@ -146,7 +148,8 @@ export function PortGroupsSection({ state }: { state: ProjectConfigState }) {
                   size="xs"
                   key={vi}
                   variant="outline"
-                  className="hover:bg-destructive/10 hover:text-status-error cursor-pointer font-mono"
+                  mono
+                  removable
                   onClick={() => removeEnvVarFromGroup(gi, vi)}
                   data-testid={`port-group-${gi}-var-${vi}`}
                 >
@@ -184,7 +187,7 @@ export function PortGroupsSection({ state }: { state: ProjectConfigState }) {
       {addingGroup ? (
         <div className="mt-3 flex items-center gap-2">
           <Input
-            className="h-8 flex-1 text-sm"
+            className="flex-1"
             placeholder={t('projectConfig.groupNamePlaceholder')}
             value={groupName}
             onChange={(e) => setGroupName(e.target.value)}
@@ -228,7 +231,8 @@ export function PortGroupsSection({ state }: { state: ProjectConfigState }) {
         <Button
           variant="outline"
           size="sm"
-          className="mt-3 gap-1.5"
+          gap="snug"
+          className="mt-3"
           onClick={() => setAddingGroup(true)}
           data-testid="port-group-add"
         >
@@ -270,7 +274,7 @@ export function PostCreateSection({ state }: { state: ProjectConfigState }) {
               onBlur={(e) => updatePostCreate(i, e.target.value)}
               onKeyDown={(e) => {
                 if (e.nativeEvent.isComposing) return;
-                if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                if (e.key === 'Enter') e.currentTarget.blur();
               }}
               data-testid={`post-create-edit-${i}`}
             />
@@ -278,7 +282,7 @@ export function PostCreateSection({ state }: { state: ProjectConfigState }) {
               variant="muted-destructive"
               size="icon-xs"
               onClick={() => removePostCreate(i)}
-              className="opacity-0 group-hover:opacity-100"
+              reveal="hover"
               data-testid={`post-create-remove-${i}`}
             >
               <Trash2 className="icon-xs" />

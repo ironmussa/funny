@@ -104,17 +104,13 @@ function withInlineFiles(files: readonly AttachedTextFile[], text: string): stri
  */
 function collectUploadedRefs(files: readonly AttachedTextFile[]): FileRef[] {
   return files.flatMap((f) =>
-    f.mode === 'upload'
-      ? [{ path: (f as Extract<AttachedTextFile, { mode: 'upload' }>).path, type: 'file' as const }]
-      : [],
+    f.mode === 'upload' ? [{ path: f.path, type: 'file' as const }] : [],
   );
 }
 
 /** Staged files (attached before the thread existed): adopted on creation. */
 function collectStagedIds(files: readonly AttachedTextFile[]): string[] {
-  return files.flatMap((f) =>
-    f.mode === 'staged' ? [(f as Extract<AttachedTextFile, { mode: 'staged' }>).stagedId] : [],
-  );
+  return files.flatMap((f) => (f.mode === 'staged' ? [f.stagedId] : []));
 }
 
 function nonEmpty<T>(items: T[]): T[] | undefined {

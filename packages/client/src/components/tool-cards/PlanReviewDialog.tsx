@@ -208,21 +208,21 @@ export function PlanReviewDialog({
   // Scroll spy
   useEffect(() => {
     if (!open || !hasSections) return;
-    const container = dialogRef.current?.querySelector(
+    const container = dialogRef.current?.querySelector<HTMLElement>(
       '[data-testid="annotatable-content"]',
-    ) as HTMLElement | null;
+    );
     if (!container) return;
     const handleScroll = () => {
       const sectionEls = container.querySelectorAll('[data-section-id]');
       let closest: { id: number; dist: number } | null = null;
-      sectionEls.forEach((el) => {
+      for (const el of sectionEls) {
         const rect = el.getBoundingClientRect();
         const containerRect = container.getBoundingClientRect();
         const dist = Math.abs(rect.top - containerRect.top);
         const id = Number(el.getAttribute('data-section-id'));
         if (!closest || dist < closest.dist) closest = { id, dist };
-      });
-      if (closest) setTrackedActiveSectionId((closest as { id: number; dist: number }).id);
+      }
+      if (closest) setTrackedActiveSectionId(closest.id);
     };
     container.addEventListener('scroll', handleScroll, { passive: true });
     return () => container.removeEventListener('scroll', handleScroll);
@@ -242,15 +242,8 @@ export function PlanReviewDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         ref={dialogRef}
-        className="max-w-none overflow-hidden"
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          width: '60vw',
-          height: '80vh',
-          padding: 0,
-          gap: 0,
-        }}
+        flush
+        className="flex h-[80vh] w-[60vw] max-w-none flex-col overflow-hidden"
         data-testid="plan-review-dialog"
         onOpenAutoFocus={(e) => e.preventDefault()}
       >

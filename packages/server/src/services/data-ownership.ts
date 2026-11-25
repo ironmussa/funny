@@ -16,9 +16,11 @@
  */
 
 import { and, eq } from 'drizzle-orm';
+import { z } from 'zod';
 
 import { db, dbGet } from '../db/index.js';
 import * as schema from '../db/schema.js';
+import { isString } from '../lib/value-guards.js';
 import * as projectRepo from './project-repository.js';
 
 type Denial = { ok: false; reason: string };
@@ -39,10 +41,8 @@ type ThreadRefRow = { threadId: string };
 const OK: OwnershipResult = { ok: true };
 const deny = (reason: string): Denial => ({ ok: false, reason });
 
-/** `value` when it is a non-empty string, otherwise undefined. */
-function nonEmptyString(value: unknown): string | undefined {
-  return typeof value === 'string' && value ? value : undefined;
-}
+/** A non-empty string from a runner's message; any other value reads as absent. */
+const nonEmptyString = z.string().min(1).optional().catch(undefined);
 
 // ── Row lookups ─────────────────────────────────────────────────
 //
@@ -137,10 +137,8 @@ const isOwnedBy = (row: UserRow | undefined, userId: string): boolean =>
 /** Explicit userId on the request (or on create_thread's payload). */
 function checkExplicitUserId({ userId, data, payload }: OwnershipContext): Denial | null {
   const candidate =
-    nonEmptyString(data?.userId) ??
-    (data?.type === 'data:create_thread' && typeof payload?.userId === 'string'
-      ? payload.userId
-      : undefined);
+    nonEmptyString.parse(data?.userId) ??
+    (data?.type === 'data:create_thread' && isString(payload?.userId) ? payload.userId : undefined);
   return candidate && candidate !== userId
     ? deny(`userId ${candidate} !== runner ${userId}`)
     : null;
@@ -167,7 +165,7 @@ const THREAD_REQUIRED_TYPES = new Set<string>([
 function checkRowRefs({ data, payload }: OwnershipContext): Denial | null {
   const type = data?.type;
   if (!THREAD_REQUIRED_TYPES.has(type)) return null;
-  if (typeof payload?.threadId !== 'string' || !payload.threadId) {
+  if (!isString(payload?.threadId) || !payload.threadId) {
     return deny(`${type} requires payload.threadId`);
   }
   if (ROW_INSERT_TYPES.has(type) && payload.row?.threadId !== payload.threadId) {
@@ -184,7 +182,7 @@ function checkRowRefs({ data, payload }: OwnershipContext): Denial | null {
 async function checkThread({ userId, data, payload }: OwnershipContext): Promise<Denial | null> {
   const threadIds = new Set(
     [data?.threadId, payload?.threadId, payload?.row?.threadId].flatMap((v) => {
-      const s = nonEmptyString(v);
+      const s = nonEmptyString.parse(v);
       return s !== undefined ? [s] : [];
     }),
   );
@@ -212,7 +210,8 @@ async function isProjectMember(projectId: string, userId: string): Promise<boole
 }
 
 async function checkProject({ userId, data, payload }: OwnershipContext): Promise<Denial | null> {
-  const projectId = nonEmptyString(data?.projectId) ?? nonEmptyString(payload?.projectId);
+  const projectId =
+    nonEmptyString.parse(data?.projectId) ?? nonEmptyString.parse(payload?.projectId);
   if (!projectId) return null;
   const p = await projectRepo.getProject(projectId);
   if (!p) return deny(`project ${projectId} not found`);
@@ -229,7 +228,7 @@ async function checkThreadByExternalRequestId({
   userId,
   data,
 }: OwnershipContext): Promise<Denial | null> {
-  if (typeof data?.externalRequestId !== 'string') return null;
+  if (!isString(data?.externalRequestId)) return null;
   const row = await dbGet<UserRow>(
     db
       .select({ userId: schema.threads.userId })
@@ -242,7 +241,7 @@ async function checkThreadByExternalRequestId({
 }
 
 async function checkThreadBySessionId({ userId, data }: OwnershipContext): Promise<Denial | null> {
-  if (typeof data?.sessionId !== 'string') return null;
+  if (!isString(data?.sessionId)) return null;
   const row = await dbGet<UserRow>(
     db
       .select({ userId: schema.threads.userId })
@@ -259,7 +258,7 @@ async function checkToolCallParentMessage({
   userId,
   payload,
 }: OwnershipContext): Promise<Denial | null> {
-  const messageId = nonEmptyString(payload?.messageId);
+  const messageId = nonEmptyString.parse(payload?.messageId);
   if (!messageId) return null;
   const m = await findMessage(messageId);
   if (!m) return null;
@@ -270,7 +269,7 @@ async function checkToolCallParentMessage({
 
 /** update_message (message → thread → user); a missing message is refused. */
 async function checkUpdateMessage({ userId, payload }: OwnershipContext): Promise<Denial | null> {
-  if (typeof payload?.messageId !== 'string') return null;
+  if (!isString(payload?.messageId)) return null;
   const messageId: string = payload.messageId;
   const m = await findMessage(messageId);
   if (!m) return deny(`message ${messageId} not found`);
@@ -294,12 +293,12 @@ async function checkToolCallId(
     : deny(`tool call ${toolCallId} cross-tenant`);
 }
 
-const stringOrUndefined = (value: unknown): string | undefined =>
-  typeof value === 'string' ? value : undefined;
+/** A string from a runner's message (empty included); any other value reads as absent. */
+const stringOrUndefined = z.string().optional().catch(undefined);
 
 /** Queued message ownership (queue row → thread → user). */
 async function checkQueuedMessage({ userId, data }: OwnershipContext): Promise<Denial | null> {
-  if (typeof data?.messageId !== 'string') return null;
+  if (!isString(data?.messageId)) return null;
   const messageId: string = data.messageId;
   const q = await dbGet<ThreadRefRow>(
     db
@@ -326,7 +325,7 @@ function checkUserOwnedRow(
 ): OwnershipStep {
   return async ({ userId, payload }) => {
     // By-id ops MUST name the row they act on.
-    if (typeof payload?.id !== 'string' || !payload.id) return deny(`${kind} id required`);
+    if (!isString(payload?.id) || !payload.id) return deny(`${kind} id required`);
     const id: string = payload.id;
     const row = await dbGet<UserRow>(
       db.select({ userId: table.userId }).from(table).where(eq(table.id, id)),
@@ -359,7 +358,7 @@ async function checkPendingPermission({
   userId,
   payload,
 }: OwnershipContext): Promise<Denial | null> {
-  if (typeof payload?.requestId !== 'string') return null;
+  if (!isString(payload?.requestId)) return null;
   const result = await assertPendingPermissionOwnership(userId, payload.requestId);
   return result.ok ? null : result;
 }
@@ -383,11 +382,11 @@ const POST_PROJECT_TYPE_CHECKS = new Map<string, OwnershipStep>([
   ['data:update_message', checkUpdateMessage],
   [
     'data:get_tool_call',
-    (ctx) => checkToolCallId(stringOrUndefined(ctx.data?.toolCallId), ctx.userId),
+    (ctx) => checkToolCallId(stringOrUndefined.parse(ctx.data?.toolCallId), ctx.userId),
   ],
   [
     'data:update_tool_call_output',
-    (ctx) => checkToolCallId(stringOrUndefined(ctx.payload?.toolCallId), ctx.userId),
+    (ctx) => checkToolCallId(stringOrUndefined.parse(ctx.payload?.toolCallId), ctx.userId),
   ],
   ['data:cancel_queued_message', checkQueuedMessage],
   ['data:update_queued_message', checkQueuedMessage],

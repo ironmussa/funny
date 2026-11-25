@@ -51,6 +51,11 @@ type ReapableOrchestrator = Pick<AgentOrchestrator, 'getIdleCandidates' | 'reapI
 
 type SweepSchedule = ReturnType<typeof scheduleRepeating>;
 
+// The running sweep schedule, kept across `bun --watch` module reloads.
+declare global {
+  var __funnyIdleReaperSchedule: SweepSchedule | undefined;
+}
+
 export class IdleReaper {
   private schedule: SweepSchedule | null = null;
 
@@ -70,8 +75,7 @@ export class IdleReaper {
     }
     // Dedupe across bun --watch reloads: a fresh module instance stops the
     // previous one's schedule so we never run two sweeps in parallel.
-    const g = globalThis as { __funnyIdleReaperSchedule?: SweepSchedule };
-    g.__funnyIdleReaperSchedule?.stop();
+    globalThis.__funnyIdleReaperSchedule?.stop();
 
     // Sequential schedule: a sweep slowed by a hanging kill never overlaps the next.
     this.schedule = scheduleRepeating(() => this.sweep(), this.config.sweepMs, {
@@ -82,7 +86,7 @@ export class IdleReaper {
           error: errorMessage(err),
         }),
     });
-    g.__funnyIdleReaperSchedule = this.schedule;
+    globalThis.__funnyIdleReaperSchedule = this.schedule;
 
     log.info('Idle reaper started', {
       namespace: 'agent',
@@ -95,8 +99,9 @@ export class IdleReaper {
   stop(): void {
     if (!this.schedule) return;
     this.schedule.stop();
-    const g = globalThis as { __funnyIdleReaperSchedule?: SweepSchedule };
-    if (g.__funnyIdleReaperSchedule === this.schedule) g.__funnyIdleReaperSchedule = undefined;
+    if (globalThis.__funnyIdleReaperSchedule === this.schedule) {
+      globalThis.__funnyIdleReaperSchedule = undefined;
+    }
     this.schedule = null;
   }
 

@@ -67,8 +67,7 @@ export function handlePromptPaste(
   for (const item of Array.from(items)) {
     if (item.type.startsWith('image/')) {
       event.preventDefault();
-      // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
-      onPaste?.(event as unknown as ClipboardEvent);
+      onPaste?.(event);
       return true;
     }
   }
@@ -81,7 +80,7 @@ export function handlePromptDrop(
   view: EditorView,
   event: DragEvent,
 ) {
-  const dt = (event as DragEvent).dataTransfer;
+  const dt = event.dataTransfer;
   if (!dt) return false;
   const mention = readFileMentionDragData(dt);
   if (!mention) return false;
@@ -99,8 +98,8 @@ export function handlePromptDrop(
   });
   const space = schema.text(' ');
   const dropPos = view.posAtCoords({
-    left: (event as DragEvent).clientX,
-    top: (event as DragEvent).clientY,
+    left: event.clientX,
+    top: event.clientY,
   });
   const insertAt = dropPos ? dropPos.pos : view.state.selection.from;
   const tr = view.state.tr.insert(insertAt, [node, space]);
@@ -123,7 +122,7 @@ export function scheduleCaretScroll(ed: Editor, caretScrollFrameRef: RefOf<numbe
   caretScrollFrameRef.current = requestAnimationFrame(() => {
     caretScrollFrameRef.current = null;
     try {
-      const dom = ed.view.dom as HTMLElement;
+      const dom = ed.view.dom;
       if (dom.scrollHeight <= dom.clientHeight) return;
       const coords = ed.view.coordsAtPos(ed.state.selection.from);
       const rect = dom.getBoundingClientRect();

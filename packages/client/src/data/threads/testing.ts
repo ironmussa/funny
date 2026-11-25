@@ -33,6 +33,10 @@ const INDEX_KEYS = [
 
 type IndexKey = (typeof INDEX_KEYS)[number];
 
+function isIndexKey(key: string): key is IndexKey {
+  return INDEX_KEYS.some((indexKey) => indexKey === key);
+}
+
 function replaceRows(data: ThreadsData, threadsById: Record<string, Thread>): void {
   const rows = Object.values(threadsById);
   const keep = new Set(rows.map((row) => row.id));
@@ -49,6 +53,8 @@ function replaceProjectLists(
   threadIdsByProject: Record<string, string[]>,
   totals: Record<string, number> = {},
 ): void {
+  // SAFETY: members is keyed by ThreadSourceKey, and list-meta.ts writes it
+  // only with ThreadSourceKey keys.
   for (const source of Object.keys(meta.getState().members) as ThreadSourceKey[]) {
     if (source.startsWith('project:')) clearSource(meta, source);
   }
@@ -90,9 +96,10 @@ export function seedThreadIndex(
  */
 export function withThreadIndex<T extends object>(patch: T): Omit<T, IndexKey> {
   const entries = Object.entries(patch);
-  const isIndexKey = (key: string) => (INDEX_KEYS as readonly string[]).includes(key);
   seedThreadIndex(Object.fromEntries(entries.filter(([key]) => isIndexKey(key))));
   const rest = Object.fromEntries(entries.filter(([key]) => !isIndexKey(key)));
+  // SAFETY: rest holds every own field of patch (a T) except the INDEX_KEYS,
+  // which is Omit<T, IndexKey>.
   return rest as Omit<T, IndexKey>;
 }
 
@@ -113,6 +120,8 @@ export function attachThreadIndex<T extends object>(
       configurable: true,
     });
   }
+  // SAFETY: the loop above defined a getter on target for every
+  // ThreadIndexSnapshot key, each returning that key's snapshot value.
   return target as T & ThreadIndexSnapshot;
 }
 

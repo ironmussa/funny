@@ -18,6 +18,7 @@
 
 import type { GitHubIssue } from '@funny/shared';
 
+import { isNumber } from '../../lib/value-guards.js';
 import { githubGraphQL } from './helpers.js';
 import type { LinkablePR } from './issue-links.js';
 
@@ -123,7 +124,7 @@ export function mapIssuesWithLinks(data: IssuesWithLinksData): IssuesWithLinks {
   const issues: GitHubIssue[] = [];
   // Search can return an empty object for a node it cannot show (no number).
   for (const node of data.search.nodes) {
-    if (typeof node.number !== 'number') continue;
+    if (!isNumber(node.number)) continue;
     issues.push({
       number: node.number,
       title: node.title,

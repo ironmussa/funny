@@ -1,16 +1,29 @@
 import type { Pipeline } from '@funny/shared';
+import type { UpdatePipelineRequest } from '@funny/shared/contracts/pipelines';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
 
 import { api } from '@/lib/api';
 import { whilePending } from '@/lib/while-pending';
 
+export type PipelinePromptField =
+  | 'reviewerPrompt'
+  | 'correctorPrompt'
+  | 'precommitFixerPrompt'
+  | 'commitMessagePrompt'
+  | 'testFixerPrompt';
+
+type ModelField = 'reviewModel' | 'fixModel' | 'precommitFixModel' | 'testFixModel';
+
+/** The pipeline as edited here: the model pickers hold any model id the picker lists. */
+export type EditedPipeline = Omit<Pipeline, ModelField> & Record<ModelField, string>;
+
 /** Loads the project's pipeline and auto-saves field changes (debounced). */
 export function usePipelineSettings(selectedProjectId: string | null) {
-  const [pipeline, setPipeline] = useState<Pipeline | null>(null);
+  const [pipeline, setPipeline] = useState<EditedPipeline | null>(null);
   const [loading, setLoading] = useState(true);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const pendingUpdatesRef = useRef<Record<string, unknown>>({});
+  const pendingUpdatesRef = useRef<UpdatePipelineRequest>({});
   const pipelineIdRef = useRef<string | null>(null);
 
   // Keep the pipeline ID ref in sync
@@ -68,7 +81,7 @@ export function usePipelineSettings(selectedProjectId: string | null) {
 
   // Auto-save helper: accumulates updates and debounces the API call
   const saveField = useCallback(
-    (updates: Record<string, unknown>) => {
+    (updates: UpdatePipelineRequest) => {
       if (!pipelineIdRef.current) return;
       // Optimistic update
       setPipeline((prev) => (prev ? { ...prev, ...updates } : prev));
@@ -96,10 +109,9 @@ export function usePipelineSettings(selectedProjectId: string | null) {
   );
 
   // Save prompt on blur
-  const handlePromptBlur = (field: string, value: string) => {
+  const handlePromptBlur = (field: PipelinePromptField, value: string) => {
     if (!pipeline) return;
-    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
-    const currentValue = (pipeline as unknown as Record<string, unknown>)[field] ?? '';
+    const currentValue = pipeline[field] ?? '';
     if (value !== currentValue) {
       saveField({ [field]: value || null });
     }

@@ -10,16 +10,10 @@
  * memory injection, and process adoption across hot-reloads.
  */
 
-import type { AgentOrchestrator } from '@funny/core/agents';
+import type { ActiveAgentSnapshot, AgentOrchestrator } from '@funny/core/agents';
 import { reapOrphanedAgents, resolvePermissionApprovalCapability } from '@funny/core/agents';
 import { getDiffSummary } from '@funny/core/git';
-import type {
-  AgentProvider,
-  AgentModel,
-  PermissionMode,
-  Thread,
-  ThreadStatus,
-} from '@funny/shared';
+import type { AgentProvider, AgentModel, PermissionMode, ThreadStatus } from '@funny/shared';
 import { internal, type DomainError, errorMessage as caughtMessage } from '@funny/shared/errors';
 import { createSecretRedactor, type SecretValue } from '@funny/shared/project-secrets';
 import { getResumeSystemPrefix } from '@funny/shared/thread-machine';
@@ -28,6 +22,7 @@ import { ResultAsync } from 'neverthrow';
 
 import { log } from '../lib/logger.js';
 import { clearThreadTrace, metric, setThreadTrace, startSpan } from '../lib/telemetry.js';
+import { isString } from '../lib/value-guards.js';
 import { stripInlineReferencedContent } from '../utils/file-mentions.js';
 import type { AgentEventRouter } from './agent-event-router.js';
 import { buildAgentEnv } from './agent-startup/agent-env.js';
@@ -137,6 +132,14 @@ function logResumeContext(info: {
     dbSessionId: ctx.thread?.sessionId ?? 'none',
     systemPrefixPreview: systemPrefix ? systemPrefix.slice(0, 80) : 'none',
   });
+}
+
+// What a `bun --watch` restart hands to the next instance (agent-runner's hot-reload
+// shutdown hook writes the snapshot; adoptSurvivingProcesses reads and clears it).
+declare global {
+  var __funnyActiveAgentSnapshot: ActiveAgentSnapshot | undefined;
+  /** The bare process map that older instances handed over. */
+  var __funnyActiveAgents: ActiveAgentSnapshot['agents'] | undefined;
 }
 
 export class AgentLifecycleManager {
@@ -491,6 +494,8 @@ export class AgentLifecycleManager {
     if (currentThread?.userId) {
       this.state.threadUserIds.set(threadId, currentThread.userId);
     }
+    // SAFETY: threads.status is only written from thread state machine results (or is
+    // absent for a thread not yet started), so the stored string is a ThreadStatus.
     const currentStatus = (currentThread?.status ?? 'pending') as ThreadStatus;
     const startEvent = this.pickStartEvent(currentStatus);
 
@@ -582,11 +587,7 @@ export class AgentLifecycleManager {
     thread: RuntimeThreadRecord,
     project: StartProject,
   ): string {
-    const cwdResult = resolveThreadCwd(
-      // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
-      thread as unknown as Thread,
-      project ? { path: project.path } : null,
-    );
+    const cwdResult = resolveThreadCwd(thread, project ? { path: project.path } : null);
     if (cwdResult.isOk()) return cwdResult.value;
 
     const errInfo = cwdResult.error;
@@ -606,26 +607,24 @@ export class AgentLifecycleManager {
     project: StartProject,
     cwd: string,
   ): Promise<void> {
-    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
-    const variant = thread as unknown as Thread;
     if (thread.mode === 'worktree' && project?.path && cwd !== project.path) {
       syncWorktreeProjectAssets(threadId, project.path, cwd);
     }
 
     // Ensure the scratch directory exists on disk before the agent starts.
-    if (hasLazyCwd(variant)) {
+    if (hasLazyCwd(thread)) {
       ensureLazyCwd(threadId, thread.userId, cwd);
     }
 
     // Rewind is funny-native for every provider: capture a Git snapshot for
     // the latest user message immediately before it can modify the worktree.
-    if (canDoGitOps(variant)) {
+    if (canDoGitOps(thread)) {
       await this.captureRewindCheckpoint(threadId, cwd);
     }
 
     // Baseline for the changed-files summary. Not awaited: the scan runs while
     // the agent spawns, long before its first tool call can edit anything.
-    if (canDoGitOps(variant)) {
+    if (canDoGitOps(thread)) {
       this.state.runDiffBaselines.set(
         threadId,
         getDiffSummary(cwd).match(
@@ -814,10 +813,8 @@ export class AgentLifecycleManager {
 
   /** Adopt surviving agent processes from a previous --watch restart */
   private adoptSurvivingProcesses(): void {
-    const snapshot = (globalThis as any).__funnyActiveAgentSnapshot as
-      | ReturnType<typeof this.orchestrator.extractActiveAgentSnapshot>
-      | undefined;
-    const legacySurviving = (globalThis as any).__funnyActiveAgents as Map<string, any> | undefined;
+    const snapshot = globalThis.__funnyActiveAgentSnapshot;
+    const legacySurviving = globalThis.__funnyActiveAgents;
     const surviving = snapshot?.agents ?? legacySurviving;
     if (!surviving?.size) return;
 
@@ -858,13 +855,13 @@ export class AgentLifecycleManager {
         count: adopted,
       });
     }
-    delete (globalThis as any).__funnyActiveAgentSnapshot;
-    delete (globalThis as any).__funnyActiveAgents;
+    delete globalThis.__funnyActiveAgentSnapshot;
+    delete globalThis.__funnyActiveAgents;
   }
 }
 
 function errorMessage(cause: unknown, fallback: string): string {
   if (cause instanceof Error && cause.message) return cause.message;
-  if (typeof cause === 'string' && cause) return cause;
+  if (isString(cause) && cause) return cause;
   return fallback;
 }

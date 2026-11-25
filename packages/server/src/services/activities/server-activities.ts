@@ -39,6 +39,7 @@ import type { Result } from 'neverthrow';
 
 import { repos } from '../../db/repos.js';
 import { log } from '../../lib/logger.js';
+import { isObject, isString } from '../../lib/value-guards.js';
 import { broadcastActivitiesRemoved, broadcastActivity } from './activity-service.js';
 
 export interface ServerActivitySpec {
@@ -77,12 +78,12 @@ export interface ServerActivityDeps {
   newId?: () => string;
 }
 
-function messageOf(error: unknown): string {
-  if (typeof error === 'string') return error;
-  if (error && typeof error === 'object' && 'message' in error) {
-    return String(error.message);
+function messageOf(cause: unknown): string {
+  if (isString(cause)) return cause;
+  if (isObject(cause) && 'message' in cause) {
+    return String(cause.message);
   }
-  return String(error);
+  return String(cause);
 }
 
 function clip(value: string, max: number): string {

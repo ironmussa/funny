@@ -16,7 +16,9 @@ import { metric } from '../lib/telemetry.js';
  * This handler only catches truly unexpected errors that bypass Result handling.
  */
 export const handleError: ErrorHandler = (err, c) => {
-  const e = err as any;
+  // SAFETY: Hono types the handler's argument as an Error, but it receives
+  // whatever a handler threw; every field below is read optionally.
+  const e = err as { name?: unknown; command?: unknown; stderr?: unknown } | null | undefined;
 
   // ProcessExecutionError — git / CLI command failures that escaped Result handling
   if (e?.name === 'ProcessExecutionError') {

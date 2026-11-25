@@ -144,7 +144,7 @@ export function StartupCommandsSettings() {
           <Button
             variant="outline"
             size="sm"
-            className="gap-1.5"
+            gap="snug"
             onClick={() => {
               cancelEdit();
               setAdding(true);
@@ -163,7 +163,7 @@ export function StartupCommandsSettings() {
           fill={false}
           title={t('startup.noCommands')}
           action={
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setAdding(true)}>
+            <Button variant="outline" size="sm" gap="snug" onClick={() => setAdding(true)}>
               <Plus className="icon-sm" />
               {t('startup.addFirst')}
             </Button>
@@ -211,7 +211,7 @@ export function StartupCommandsSettings() {
               </label>
               <Input
                 id="startup-new-label"
-                className="h-auto py-1.5"
+                size="form"
                 placeholder={t('startup.label')}
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
@@ -225,7 +225,7 @@ export function StartupCommandsSettings() {
               <Input
                 mono
                 id="startup-new-command"
-                className="h-auto py-1.5"
+                size="form"
                 placeholder={t('startup.commandPlaceholder')}
                 value={command}
                 onChange={(e) => setCommand(e.target.value)}

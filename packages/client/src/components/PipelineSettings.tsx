@@ -50,7 +50,9 @@ const ModelSelect = memo(function ModelSelect({
       <PopoverContent
         side="bottom"
         align="end"
-        className="w-auto min-w-40 p-1 data-[state=closed]:animate-none data-[state=open]:animate-none"
+        padding="xs"
+        animated={false}
+        className="w-auto min-w-40"
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         {PROVIDERS.map((provider) => {
@@ -141,7 +143,7 @@ export function PipelineSettings() {
               description="Model for auto-fixing lint errors"
             >
               <ModelSelect
-                value={(pipeline.precommitFixModel as string) || 'sonnet'}
+                value={pipeline.precommitFixModel || 'sonnet'}
                 onChange={handlePrecommitFixModelChange}
                 testId="pipeline-precommit-model"
               />
@@ -191,7 +193,7 @@ export function PipelineSettings() {
               description="Model for analyzing code (read-only)"
             >
               <ModelSelect
-                value={(pipeline.reviewModel as string) || 'sonnet'}
+                value={pipeline.reviewModel || 'sonnet'}
                 onChange={handleReviewModelChange}
                 testId="pipeline-review-model"
               />
@@ -202,7 +204,7 @@ export function PipelineSettings() {
               description="Model for fixing issues (worktree)"
             >
               <ModelSelect
-                value={(pipeline.fixModel as string) || 'sonnet'}
+                value={pipeline.fixModel || 'sonnet'}
                 onChange={handleFixModelChange}
                 testId="pipeline-fix-model"
               />
@@ -278,7 +280,7 @@ export function PipelineSettings() {
                   description="Model for fixing test failures"
                 >
                   <ModelSelect
-                    value={(pipeline.testFixModel as string) || 'sonnet'}
+                    value={pipeline.testFixModel || 'sonnet'}
                     onChange={handleTestFixModelChange}
                     testId="pipeline-test-fix-model"
                   />

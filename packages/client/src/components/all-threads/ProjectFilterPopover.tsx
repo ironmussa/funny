@@ -55,11 +55,12 @@ export function ProjectFilterPopover({
           <ChevronDown className="icon-xs opacity-50" />
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-[240px] p-0">
+      <PopoverContent align="start" padding="none" className="w-[240px]">
         <Command>
           <CommandInput
             placeholder={t('kanban.searchProject')}
-            className="h-9 text-xs"
+            textSize="xs"
+            className="h-9"
             data-testid="all-threads-project-filter-search"
           />
           <CommandList>
@@ -71,7 +72,7 @@ export function ProjectFilterPopover({
                   onChange(null);
                   onOpenChange(false);
                 }}
-                className="text-xs"
+                textSize="xs"
               >
                 <span
                   className={cn(
@@ -95,7 +96,7 @@ export function ProjectFilterPopover({
                       onChange(p.id);
                       onOpenChange(false);
                     }}
-                    className="text-xs"
+                    textSize="xs"
                   >
                     <span
                       className={cn(

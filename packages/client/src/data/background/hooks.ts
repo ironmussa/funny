@@ -26,7 +26,7 @@ function useById<T extends { id: string }>(data: EntityStore<T>): Record<string,
     queryKey: liveQueryKey('background:useById', data.collection),
     query: (q) => q.from({ row: data.collection }),
   });
-  return useMemo(() => toById(rows as T[] | undefined, data), [rows, data]);
+  return useMemo(() => toById(rows, data), [rows, data]);
 }
 
 function useByIdForThread<T extends { id: string; threadId: string }>(
@@ -37,7 +37,7 @@ function useByIdForThread<T extends { id: string; threadId: string }>(
     queryKey: liveQueryKey('background:useByIdForThread', data.collection, threadId),
     query: (q) => q.from({ row: data.collection }).where(({ row }) => eq(row.threadId, threadId)),
   });
-  return useMemo(() => toById(rows as T[] | undefined, data), [rows, data]);
+  return useMemo(() => toById(rows, data), [rows, data]);
 }
 
 export function useJobsById(): Record<string, Job> {

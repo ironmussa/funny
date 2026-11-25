@@ -1,7 +1,7 @@
 /**
  * Issue #488: the components directly under `packages/client/src/components/`
- * stay under the length limits of oxlint.config.ts: `max-lines-per-function`
- * (250) and `max-lines` (800), both with blank and comment-only lines skipped.
+ * stay under the length limits of oxlint.config.ts (`max-lines-per-function`
+ * and `max-lines`, read from the config), with blank and comment-only lines skipped.
  * The rules only warn, so `bun run lint` would not catch a component growing
  * back over them; this test does.
  *
@@ -16,8 +16,40 @@ import { fileURLToPath } from 'node:url';
 
 import { parseSync, type Program, Visitor } from 'oxc-parser';
 
-const MAX_LINES_PER_FUNCTION = 250;
-const MAX_LINES = 800;
+// Loaded by path, not by a static import, so the client typecheck does not take
+// in the root config (it lies outside the client's rootDir).
+const oxlintConfigPath = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  '../../../../../oxlint.config.ts',
+);
+const { default: oxlintConfig } = await import(oxlintConfigPath);
+
+interface LengthRuleOptions {
+  max: number;
+  skipBlankLines?: boolean;
+  skipComments?: boolean;
+}
+
+/**
+ * The limit of a length rule, read from oxlint.config.ts so the test follows
+ * the config. The counting below skips blank and comment-only lines, so it
+ * refuses a config that stops skipping them instead of drifting from it.
+ */
+function lengthLimit(rule: 'max-lines' | 'max-lines-per-function'): number {
+  const entry: unknown = oxlintConfig?.rules?.[rule];
+  if (!Array.isArray(entry) || entry.length < 2) {
+    throw new Error(`oxlint.config.ts: ${rule} has no options`);
+  }
+  // SAFETY: both length rules are configured as [severity, { max, … }] in oxlint.config.ts.
+  const options = entry[1] as LengthRuleOptions;
+  if (!options.skipBlankLines || !options.skipComments) {
+    throw new Error(`oxlint.config.ts: ${rule} must skip blank and comment lines`);
+  }
+  return options.max;
+}
+
+const MAX_LINES_PER_FUNCTION = lengthLimit('max-lines-per-function');
+const MAX_LINES = lengthLimit('max-lines');
 
 const componentsDir = resolve(dirname(fileURLToPath(import.meta.url)), '../../components');
 

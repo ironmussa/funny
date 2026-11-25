@@ -292,7 +292,8 @@ export function createFactoryAgentTools(deps: FactoryAgentToolsDeps) {
     ): ResultAsync<{ factory: boolean; runs: AgentRunSummary[] }, FactoryToolError> {
       return admitted(request, 'list').andThen(({ userId, projectId }) =>
         ownFactory(userId, projectId).andThen((factoryId) => {
-          if (!factoryId) return okAsync({ factory: false, runs: [] as AgentRunSummary[] });
+          const noRuns: AgentRunSummary[] = [];
+          if (!factoryId) return okAsync({ factory: false, runs: noRuns });
           return deps.runs
             .list(factoryId)
             .mapErr(storage)

@@ -90,6 +90,7 @@ export async function startThreadOnRunner(
     case 'remote-error':
       return err({ kind: 'runner-error', status: failure.status, message: failure.message });
     case 'creation-failed': {
+      // SAFETY: cause is only read with `?.` below, and String(cause) covers a non-Error.
       const cause = failure.cause as Error;
       log.error('Failed to create thread on runner', {
         namespace: 'threads',

@@ -60,14 +60,16 @@ export function workflowRunsOnQueueBranches(text: string): boolean {
   }
   if (!workflow || typeof workflow !== 'object') return false;
   // YAML 1.1 readers turn the key `on` into `true`.
+  // SAFETY: the check above made workflow a non-null object; its keys are only read as unknown.
   const record = workflow as Record<string, unknown>;
   const on = record.on ?? record.true;
   if (on === 'push') return true;
   if (Array.isArray(on)) return on.includes('push');
   if (!on || typeof on !== 'object') return false;
   if (!('push' in on)) return false;
-  const push = (on as Record<string, unknown>).push;
+  const push = on.push;
   if (!push || typeof push !== 'object') return true;
+  // SAFETY: the check above made push a non-null object; its keys are only read as unknown.
   const filters = push as Record<string, unknown>;
   const ignored = asList(filters['branches-ignore']);
   if (ignored.some((pattern) => matchesFilter(QUEUE_BRANCH, pattern))) return false;

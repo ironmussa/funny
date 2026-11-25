@@ -8,6 +8,8 @@ export const browserV1ResourceRoutes = new Hono<ServerEnv>();
 browserV1ResourceRoutes.get('/:id', (c) => {
   const resource = browserV1ResourceStore.get(c.req.param('id'), c.get('userId'));
   if (!resource) return c.json({ error: 'Resource not found' }, 404);
+  // SAFETY: the store's only writer (services/browser-events.ts) puts a Buffer.from(base64),
+  // which is backed by a plain ArrayBuffer, never a SharedArrayBuffer.
   const body = resource.bytes.buffer.slice(
     resource.bytes.byteOffset,
     resource.bytes.byteOffset + resource.bytes.byteLength,

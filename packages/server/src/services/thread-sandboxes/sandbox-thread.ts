@@ -230,6 +230,7 @@ function firstMessageBody(input: SandboxThreadInput, payload: unknown): SandboxM
   for (const key of ['provider', 'model', 'permissionMode', 'effort'] as const) {
     if (input[key]) body[key] = input[key];
   }
+  // SAFETY: create() calls this only after createSandboxThreadSchema (a z.object) accepted payload, so it is an object.
   const extras = payload as Record<string, unknown>;
   for (const key of FORWARDED_MESSAGE_FIELDS) {
     if (extras[key] !== undefined) body[key] = extras[key];

@@ -70,6 +70,8 @@ export function validateAuthRequestPassword(path: string, body: unknown): Passwo
   const field = PASSWORD_FIELD_BY_AUTH_PATH[path];
   if (!field) return { ok: true };
   const value =
+    // SAFETY: the guard admits only non-null objects, and the field is read as unknown;
+    // validatePasswordStrength checks its type, so a missing or non-string value is refused.
     body && typeof body === 'object' ? (body as Record<string, unknown>)[field] : undefined;
   if (path === '/admin/create-user' && value === undefined) return { ok: true };
   return validatePasswordStrength(value);

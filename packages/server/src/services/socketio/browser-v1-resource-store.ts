@@ -27,7 +27,7 @@ export class BrowserV1ResourceStore {
     this.prune();
     if (bytes.byteLength > this.options.maxResourceBytes) return null;
     while (this.totalBytes + bytes.byteLength > this.options.maxTotalBytes) {
-      const oldestId = this.resources.keys().next().value as string | undefined;
+      const oldestId: string | undefined = this.resources.keys().next().value;
       if (!oldestId) return null;
       this.remove(oldestId);
     }

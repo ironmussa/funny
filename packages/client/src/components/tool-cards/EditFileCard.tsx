@@ -41,6 +41,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
 }
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 function normalizeUnifiedDiff(filePath: string, diff: string): string {
   if (diff.startsWith('diff --git') || diff.startsWith('--- ')) return diff;
   return `--- a/${filePath}\n+++ b/${filePath}\n${diff}`;
@@ -72,7 +76,7 @@ function getEditChangeEntries(parsed: Record<string, unknown>): EditChangeEntry[
 
       const status = statusForChangeType(rawChange, 'type');
       const unifiedDiff = rawChange.unified_diff;
-      if (typeof unifiedDiff === 'string' && unifiedDiff.trim()) {
+      if (isString(unifiedDiff) && unifiedDiff.trim()) {
         const rawDiff = normalizeUnifiedDiff(filePath, unifiedDiff);
         entries.push({
           filePath,
@@ -85,7 +89,7 @@ function getEditChangeEntries(parsed: Record<string, unknown>): EditChangeEntry[
       }
 
       const content = rawChange.content;
-      if (typeof content === 'string') {
+      if (isString(content)) {
         entries.push({
           filePath,
           oldValue: status === 'deleted' ? content : '',
@@ -106,7 +110,7 @@ function getEditChangeEntries(parsed: Record<string, unknown>): EditChangeEntry[
   // patch text, so retain the paths here and load the actual diff on demand.
   if (Array.isArray(changes)) {
     return changes.flatMap((change) => {
-      if (!isRecord(change) || typeof change.path !== 'string' || !change.path) return [];
+      if (!isRecord(change) || !isString(change.path) || !change.path) return [];
       return [{ filePath: change.path, status: statusForChangeType(change, 'kind') }];
     });
   }
@@ -114,15 +118,15 @@ function getEditChangeEntries(parsed: Record<string, unknown>): EditChangeEntry[
   const filePath = parsed.file_path;
   const oldString = parsed.old_string;
   const newString = parsed.new_string;
-  if (typeof filePath !== 'string' || typeof newString !== 'string') return [];
-  const oldValue = typeof oldString === 'string' ? oldString : '';
+  if (!isString(filePath) || !isString(newString)) return [];
+  const oldValue = isString(oldString) ? oldString : '';
   if (oldValue === newString) return [];
   return [
     {
       filePath,
       oldValue,
       newValue: newString,
-      status: typeof oldString === 'string' ? 'modified' : 'added',
+      status: isString(oldString) ? 'modified' : 'added',
     },
   ];
 }

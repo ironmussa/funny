@@ -42,6 +42,10 @@ function countOccurrences(haystack: string, needle: string, caseSensitive: boole
   return findTextSearchMatches(haystack, needle, caseSensitive).length;
 }
 
+function isPromise(value: void | Promise<void>): value is Promise<void> {
+  return !!value && typeof value.then === 'function';
+}
+
 export function ThreadSearchBar({
   threadId,
   open,
@@ -91,7 +95,7 @@ export function ThreadSearchBar({
   const runNavigate = useCallback(
     (messageId: string, q: string, withinIdx: number) => {
       const maybePromise = onNavigateToMessage(messageId, q, withinIdx, reportMarkCount);
-      if (maybePromise && typeof maybePromise.then === 'function') {
+      if (isPromise(maybePromise)) {
         const seq = ++navSeqRef.current;
         setLoading(true);
         maybePromise.finally(() => {

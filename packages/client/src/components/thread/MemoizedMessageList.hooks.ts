@@ -157,6 +157,11 @@ export function useContainerWidth(itemContainerRef: RefObject<HTMLElement | null
   return containerWidth;
 }
 
+/** True when a browser API (e.g. `requestIdleCallback`) exists as a function in this engine. */
+function isCallable(value: unknown): value is (...args: never[]) => void {
+  return typeof value === 'function';
+}
+
 /**
  * Prepares the list's texts for pretext in idle time. `onPrepared` runs after
  * a batch that prepared at least one text, which is when a text estimate can
@@ -207,15 +212,14 @@ export function usePretextWarmup(
 
     // Defer off the thread-switch commit so pretext layout work does not
     // extend INP on the click that mounted this list.
-    const idleId =
-      typeof requestIdleCallback === 'function'
-        ? requestIdleCallback(runPrepare, { timeout: 2000 })
-        : // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
-          (setTimeout(runPrepare, 0) as unknown as number);
+    const idleId = isCallable(globalThis.requestIdleCallback)
+      ? requestIdleCallback(runPrepare, { timeout: 2000 })
+      : // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
+        (setTimeout(runPrepare, 0) as unknown as number);
 
     return () => {
       cancelled = true;
-      if (typeof cancelIdleCallback === 'function') {
+      if (isCallable(globalThis.cancelIdleCallback)) {
         cancelIdleCallback(idleId);
       } else {
         clearTimeout(idleId);

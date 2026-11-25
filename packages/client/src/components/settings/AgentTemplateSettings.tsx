@@ -71,6 +71,11 @@ function isBuiltinTemplate(template: AgentTemplate): boolean {
 
 // ── Main Component ──────────────────────────────────────────
 
+/** `importTemplateFile` answers an error message when the file cannot be imported. */
+function isImportError(result: unknown): result is string {
+  return typeof result === 'string';
+}
+
 export function AgentTemplateSettings() {
   const templates = useAgentTemplates();
   const usageStats = useTemplateUsageStats();
@@ -90,7 +95,7 @@ export function AgentTemplateSettings() {
 
   const handleImport = useCallback(async () => {
     const result = await importTemplateFile();
-    if (typeof result === 'string') {
+    if (isImportError(result)) {
       toast.error(result);
       return;
     }

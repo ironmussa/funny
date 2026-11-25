@@ -37,6 +37,7 @@ interface ActiveTerminalStream {
 
 function unsigned(value: unknown): bigint | null {
   try {
+    // SAFETY: BigInt throws on any value it cannot convert, and the catch below maps that to null.
     const parsed = BigInt(value as string | number | bigint);
     return parsed >= 0n ? parsed : null;
   } catch {
@@ -232,7 +233,7 @@ export class RunnerGrpcTerminalDispatcher {
     output: WireFrame,
   ): void {
     const sequence = unsigned(output.sequence);
-    const data = output.data as Uint8Array | undefined;
+    const data = output.data;
     if (
       sequence === null ||
       !(data instanceof Uint8Array) ||

@@ -172,7 +172,8 @@ function isTunnelTimeout(tunnelErr: unknown): boolean {
     tunnelErr instanceof RunnerRequestTimeoutError ||
     (typeof tunnelErr === 'object' &&
       tunnelErr !== null &&
-      (tunnelErr as Error).name === 'TunnelTimeoutError')
+      'name' in tunnelErr &&
+      tunnelErr.name === 'TunnelTimeoutError')
   );
 }
 
@@ -216,6 +217,8 @@ async function relay(
         runnerId,
         path,
         method: c.req.method,
+        // SAFETY: isTunnelTimeout proved tunnelErr is a non-null object; a missing
+        // timeoutMs (a foreign TunnelTimeoutError) falls back to 30 s.
         timeoutMs: (tunnelErr as any).timeoutMs || 30_000,
       });
       return c.json(
@@ -244,7 +247,7 @@ async function relay(
 // NOT guarded by a thread-access middleware never set `thread`, so they can
 // never trigger this path. See CLAUDE.md "Runner Isolation (CRITICAL)".
 function resolveDelegation(c: Context<ServerEnv>, userId: string, path: string): Delegation | null {
-  const thread = c.get('thread') as ServerEnv['Variables']['thread'] | undefined;
+  const thread: ServerEnv['Variables']['thread'] | undefined = c.get('thread');
   const delegation =
     thread && thread.userId && thread.userId !== userId
       ? { ownerId: thread.userId, threadId: thread.id }
@@ -371,9 +374,9 @@ async function proxyToRunnerImpl(c: Context<ServerEnv>, deps: ProxyTransport): P
 
   const requester = runnerActor({
     userId: userId!,
-    role: c.get('userRole') as string | undefined,
-    orgId: c.get('organizationId') as string | undefined,
-    orgName: c.get('organizationName') as string | undefined,
+    role: c.get('userRole'),
+    orgId: c.get('organizationId'),
+    orgName: c.get('organizationName'),
   });
 
   const ctx: ProxySendContext = {

@@ -22,10 +22,15 @@ function diffUrl(prUrl: string): string {
   return `${prUrl.replace(/\/$/, '')}/files`;
 }
 
+/** True for a number value. */
+function isNumber(value: unknown): value is number {
+  return typeof value === 'number';
+}
+
 export function PRMergeLine({ pr, showDiffLink = true, className, ...props }: PRMergeLineProps) {
   const { t } = useTranslation();
   const hasMergeInfo = !!pr.base.ref && !!pr.head.ref;
-  const hasCommitCount = typeof pr.commits === 'number';
+  const hasCommitCount = isNumber(pr.commits);
 
   if (!hasMergeInfo && (!showDiffLink || !pr.html_url)) return null;
 

@@ -41,6 +41,11 @@ const eventConfig: Record<GitTimelineEventType, { icon: typeof GitCommit; label:
   'git:reset_soft': { icon: RotateCcw, label: 'Undo Commit' },
 };
 
+/** True for a string value. */
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 export const GitEventCard = memo(function GitEventCard({ event }: { event: ThreadEvent }) {
   const { t } = useTranslation();
   const now = useMinuteTick();
@@ -50,7 +55,7 @@ export const GitEventCard = memo(function GitEventCard({ event }: { event: Threa
   const config = eventConfig[event.type];
 
   const KindIcon = config.icon;
-  const output = typeof metadata.output === 'string' ? metadata.output.trim() : '';
+  const output = isString(metadata.output) ? metadata.output.trim() : '';
 
   return (
     <div className="border-border max-w-full overflow-hidden rounded-lg border text-sm">

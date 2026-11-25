@@ -125,6 +125,8 @@ export function setupBrowserV1Events(
         const request = eventEnvelope.value;
         if (!request.scope) return;
         const scope = request.scope;
+        // SAFETY: socket.data.browserV1 is written only by browser-v1-negotiation.ts with a
+        // BrowserV1ConnectionState, which carries principalUserId and assignments.
         const state = socket.data.browserV1 as
           | { principalUserId?: string; assignments?: { events?: Representation } }
           | undefined;

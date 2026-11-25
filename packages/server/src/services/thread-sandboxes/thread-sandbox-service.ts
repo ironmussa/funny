@@ -291,6 +291,7 @@ export function createThreadSandboxService(deps: ThreadSandboxDeps) {
   const nextGeneration = (threadId: string) =>
     Effect.gen(function* () {
       const existing = yield* ops.get(threadId);
+      // SAFETY: thread_sandboxes.state is written only by the store's put ('provisioning') and transition (a machine rule's target).
       if (existing && ACTIVE_SANDBOX_STATES.has(existing.state as ThreadSandboxState)) {
         return yield* Effect.fail<ProvisionError>({
           kind: 'already-provisioned',

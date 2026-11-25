@@ -22,7 +22,7 @@ interface RecapThread {
 
 /**
  * A short recap of what the agent did while the owner was away (openspec
- * `thread-recap`), above the chat. The recap is generated text, shown as plain
+ * `thread-recap`), in the bottom dock right above the follow-up input. The recap is generated text, shown as plain
  * text: no markdown, no links. Any failure shows nothing, except a missing
  * utility model credential, which shows a hint once per session.
  */
@@ -68,28 +68,30 @@ function RecapShell({
 }) {
   const { t } = useTranslation();
   return (
-    <div className="mx-auto w-full max-w-3xl shrink-0 px-4 pt-3">
-      <Card className="shadow-none" data-testid={testId}>
-        <div className="flex items-start gap-3 px-3 py-2.5">
-          <Sparkles className="icon-sm text-muted-foreground mt-0.5 shrink-0" aria-hidden />
-          <div className="min-w-0 flex-1">
-            <p className="text-muted-foreground mb-1 text-xs font-medium">
-              {t('thread.recap.title')}
-            </p>
-            {children}
+    <div className="px-3 pt-2 pb-2 sm:px-4">
+      <div className="mx-auto w-full max-w-3xl min-w-0">
+        <Card className="shadow-none" data-testid={testId}>
+          <div className="flex items-start gap-3 px-3 py-2.5">
+            <Sparkles className="icon-sm text-muted-foreground mt-0.5 shrink-0" aria-hidden />
+            <div className="min-w-0 flex-1">
+              <p className="text-muted-foreground mb-1 text-xs font-medium">
+                {t('thread.recap.title')}
+              </p>
+              {children}
+            </div>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="shrink-0"
+              aria-label={t('thread.recap.dismiss')}
+              onClick={onDismiss}
+              data-testid="thread-recap-dismiss"
+            >
+              <X className="icon-xs" />
+            </Button>
           </div>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            className="shrink-0"
-            aria-label={t('thread.recap.dismiss')}
-            onClick={onDismiss}
-            data-testid="thread-recap-dismiss"
-          >
-            <X className="icon-xs" />
-          </Button>
-        </div>
-      </Card>
+        </Card>
+      </div>
     </div>
   );
 }

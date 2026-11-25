@@ -111,6 +111,10 @@ function answerAs<Answer>(request: Promise<BrowserSessionResult>): Promise<Answe
 
 type RealtimeFrame = Parameters<typeof sendBrowserSessionRealtime>[1];
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 const FIRE_AND_FORGET_FRAMES: Record<string, (extra: Record<string, unknown>) => RealtimeFrame> = {
   'browser-session:open': (extra) => ({ case: 'open', targetUrl: String(extra.url ?? '') }),
   'browser-session:navigate': (extra) => ({
@@ -122,7 +126,7 @@ const FIRE_AND_FORGET_FRAMES: Record<string, (extra: Record<string, unknown>) =>
   'browser-session:close': (extra) => ({
     case: 'close',
     reason: String(extra.reason ?? 'user'),
-    closeId: typeof extra.closeId === 'string' ? extra.closeId : undefined,
+    closeId: isString(extra.closeId) ? extra.closeId : undefined,
   }),
 };
 

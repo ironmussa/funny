@@ -2,6 +2,11 @@ import type { Message, ToolCall } from '@funny/shared';
 
 type MessageWithToolCalls = Message & { toolCalls?: ToolCall[] };
 
+/** True for a string value. */
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 /**
  * Serialize the active thread's messages (and optionally tool calls) into
  * markdown for clipboard export. Used by the "Copy text" / "Copy with tool
@@ -22,7 +27,7 @@ export function threadToMarkdown(
       for (const tc of msg.toolCalls) {
         let inputStr = '';
         try {
-          const parsed = typeof tc.input === 'string' ? JSON.parse(tc.input) : tc.input;
+          const parsed = isString(tc.input) ? JSON.parse(tc.input) : tc.input;
           inputStr = JSON.stringify(parsed, null, 2);
         } catch {
           inputStr = String(tc.input);

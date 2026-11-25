@@ -51,20 +51,20 @@ export async function onAutomationThreadTerminal(threadId: string, status: strin
 }
 
 async function lastAssistantReply(threadId: string): Promise<string | null> {
-  const row = (await dbGet(
+  const row = await dbGet<{ content: string }>(
     db
       .select({ content: schema.messages.content })
       .from(schema.messages)
       .where(and(eq(schema.messages.threadId, threadId), eq(schema.messages.role, 'assistant')))
       .orderBy(desc(schema.messages.timestamp))
       .limit(1),
-  )) as { content: string } | undefined;
+  );
   return row?.content ? row.content.slice(0, SUMMARY_MAX_CHARS) : null;
 }
 
 /** Archive the threads of finished runs older than the newest `maxRunHistory`. */
 async function archiveRunsBeyondHistory(automationId: string, maxRunHistory: number) {
-  const finished = (await dbAll(
+  const finished = await dbAll<{ threadId: string }>(
     db
       .select({ threadId: schema.automationRuns.threadId })
       .from(schema.automationRuns)
@@ -75,7 +75,7 @@ async function archiveRunsBeyondHistory(automationId: string, maxRunHistory: num
         ),
       )
       .orderBy(desc(schema.automationRuns.startedAt)),
-  )) as { threadId: string }[];
+  );
   const old = finished.slice(Math.max(0, maxRunHistory)).map((r) => r.threadId);
   if (old.length === 0) return;
   await dbRun(

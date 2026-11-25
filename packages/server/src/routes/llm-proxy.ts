@@ -93,6 +93,8 @@ async function forwardUpstream(call: UpstreamCall): Promise<Response> {
   const hasBody = method !== 'GET' && method !== 'HEAD';
   let response: Response;
   try {
+    // SAFETY: Bun's fetch accepts `duplex: 'half'` for a streamed request body; the
+    // DOM RequestInit type does not declare that field.
     response = await doFetch(target, {
       method,
       headers: anthropicUpstreamHeaders(raw.headers, credential),

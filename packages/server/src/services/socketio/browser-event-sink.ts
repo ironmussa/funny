@@ -191,6 +191,8 @@ export class SocketIoBrowserEventSink implements BrowserEventSink {
     const userSocketIds = namespace.adapter.rooms.get(`user:${userId}`) ?? new Set<string>();
     for (const socketId of userSocketIds) {
       const socket = namespace.sockets.get(socketId);
+      // SAFETY: socket.data.browserV1 is written only by browser-v1-negotiation.ts with a
+      // BrowserV1ConnectionState, whose assignments map traffic classes to Representation.
       const assignments = socket?.data.browserV1?.assignments as
         | { events?: Representation }
         | undefined;
@@ -222,6 +224,8 @@ export class SocketIoBrowserEventSink implements BrowserEventSink {
   }
 
   private eventType(event: Record<string, unknown>): string {
+    // SAFETY: publishers (browser-events.ts and the services calling toUser) pass WS events whose
+    // `type` is the string event name; a missing one falls back to 'event'.
     return (event.type as string) || 'event';
   }
 
@@ -232,6 +236,8 @@ export class SocketIoBrowserEventSink implements BrowserEventSink {
     if (this.options.selectRepresentation) {
       return this.options.selectRepresentation(socket, publication);
     }
+    // SAFETY: socket.data.browserV1 is written only by browser-v1-negotiation.ts with a
+    // BrowserV1ConnectionState, whose assignments are keyed by traffic class.
     const state = socket.data.browserV1 as
       | { assignments?: Partial<Record<BrowserPublication['trafficClass'], Representation>> }
       | undefined;
@@ -372,9 +378,7 @@ export class SocketIoBrowserEventSink implements BrowserEventSink {
             : BROWSER_V1_CARRIER_EVENTS.interactive,
           payload,
         );
-        const transport = socket.conn?.transport as
-          | { writable?: boolean; once?: (event: string, listener: () => void) => void }
-          | undefined;
+        const transport = socket.conn?.transport;
         if (transport?.writable !== false || !transport.once) return;
         return new Promise<void>((resolve) => {
           transport.once?.('drain', resolve);

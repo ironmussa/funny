@@ -614,6 +614,11 @@ const SymbolMention = Mention.extend({
   },
 });
 
+/** True for a string value. */
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(function PromptEditor(
   {
     placeholder,
@@ -827,7 +832,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
             let items: SuggestionItem[] = [];
             if (result.isOk()) {
               items = result.value.files.map((f) => {
-                const file = typeof f === 'string' ? { path: f, type: 'file' as const } : f;
+                const file = isString(f) ? { path: f, type: 'file' as const } : f;
                 return {
                   id: file.path,
                   label: file.path,
@@ -1374,7 +1379,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
         // emitUpdate=false: prevents onUpdate from firing for programmatic
         // restores, which would otherwise call the parent's onChange with
         // potentially stale closure state and clobber persisted text.
-        if (typeof content === 'string') {
+        if (isString(content)) {
           editor.commands.setContent(content ? `<p>${content}</p>` : '', { emitUpdate: false });
         } else {
           editor.commands.setContent(content, { emitUpdate: false });

@@ -436,6 +436,8 @@ const COLUMNS_OF: Record<keyof FactoryConfig, readonly (keyof Row)[]> = {
 
 /** What a save writes over a stored row: the toggle, the bookkeeping and the fields it carries. */
 function changedColumns(row: Row, input: SaveFactorySettingsInput): Partial<Row> {
+  // SAFETY: COLUMNS_OF is typed Record<keyof FactoryConfig, …>, so its own keys are exactly
+  // the FactoryConfig fields; Object.keys only widens them to string.
   const fields = (Object.keys(COLUMNS_OF) as (keyof FactoryConfig)[]).filter(
     (field) => input[field] !== undefined,
   );
@@ -446,6 +448,8 @@ function changedColumns(row: Row, input: SaveFactorySettingsInput): Partial<Row>
     enabled: row.enabled,
     blockedReason: row.blockedReason,
     updatedAt: row.updatedAt,
+    // SAFETY: every entry of `carried` pairs a column (keyof Row) with row[column], the value
+    // the same row holds under that key.
     ...(Object.fromEntries(carried) as Partial<Row>),
   };
 }

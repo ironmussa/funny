@@ -191,6 +191,8 @@ async function authorizeLoopbackRegistration(
   c: Context<ServerEnv>,
   path: string,
 ): Promise<Response | null> {
+  // SAFETY: hosts/bun/main.ts passes { IP: server.requestIP(req) } as the Hono env;
+  // a host that does not leaves it undefined, which the optional chain covers.
   const addr = (c.env as any)?.IP?.address ?? '';
   if (!isLoopbackAddress(addr)) {
     log.warn('Runner registration via shared secret rejected (non-loopback)', {
@@ -266,7 +268,10 @@ async function bindLoopbackRunnerUser(
     const { db, dbDialect } = await import('../db/index.js');
     const { getSchema } = await import('@funny/shared/db/schema');
     const { eq } = await import('drizzle-orm');
+    // SAFETY: both dialect schemas define `user` with `id` and `username`; the
+    // dialect union of `db` and the schema cannot be called directly, hence `any`.
     const s = getSchema(dbDialect) as { user: any };
+    // SAFETY: the select below projects exactly { id } from the text `user.id` column.
     const rows = (await (db as any)
       .select({ id: s.user.id })
       .from(s.user)
@@ -331,6 +336,8 @@ async function sessionStep(c: Context<ServerEnv>, path: string): Promise<AuthSte
   c.set('userRole', resolveSessionRole(session.user));
   c.set('isRunner', false);
 
+  // SAFETY: the organization plugin (lib/auth.ts) adds `activeOrganizationId` to
+  // every session; the inferred session type of `auth` does not include it.
   const activeOrgId = (session.session as any).activeOrganizationId ?? null;
   c.set('organizationId', activeOrgId);
 
@@ -347,6 +354,7 @@ async function sessionStep(c: Context<ServerEnv>, path: string): Promise<AuthSte
  */
 function resolveSessionRole(user: any) {
   const rawRole: unknown =
+    // SAFETY: the typeof check on the left guarantees `user` is a non-null object.
     user && typeof user === 'object' ? (user as Record<string, unknown>).role : undefined;
   const role = normalizeUserRole(rawRole);
   if (rawRole !== undefined && typeof rawRole === 'string' && rawRole !== role) {

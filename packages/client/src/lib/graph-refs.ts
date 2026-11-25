@@ -87,6 +87,15 @@ export interface GraphBranchSummary {
  */
 export type RawGraphRef = string | GraphRefDTO;
 
+/** A legacy bare-string ref (older runners), not a classified {@link GraphRefDTO}. */
+function isLegacyRef(ref: RawGraphRef): ref is string {
+  return typeof ref === 'string';
+}
+
+function refName(ref: RawGraphRef): string {
+  return isLegacyRef(ref) ? ref : ref.name;
+}
+
 /**
  * Coerce a wire ref to a classified {@link GraphRefDTO}. Objects (current
  * runners) pass through with the authoritative server-side `kind`. A legacy
@@ -97,7 +106,7 @@ export type RawGraphRef = string | GraphRefDTO;
  * commit, needed for that remote heuristic.
  */
 function normalizeRef(r: RawGraphRef, allNames: Set<string>): GraphRefDTO {
-  if (typeof r !== 'string') return r;
+  if (!isLegacyRef(r)) return r;
   if (!r.includes('/')) return { name: r, kind: /^v?\d/.test(r) ? 'tag' : 'local' };
   // Slashed name: remote-tracking iff its branch portion is a sibling ref here.
   // A genuinely slashed *local* branch (`feat/x`, no sibling `x`) stays local.
@@ -117,8 +126,8 @@ export function foldGraphRefs(
   headBranch: string | null,
 ): FoldedRef[] {
   // Drop empty/whitespace ref names defensively — they'd render as a blank chip.
-  const named = rawRefs.filter((r) => (typeof r === 'string' ? r : r.name).trim() !== '');
-  const allNames = new Set(named.map((r) => (typeof r === 'string' ? r : r.name)));
+  const named = rawRefs.filter((r) => refName(r).trim() !== '');
+  const allNames = new Set(named.map((r) => refName(r)));
   const refs = named.map((r) => normalizeRef(r, allNames));
   const localNames = new Set(refs.flatMap((ref) => (ref.kind === 'local' ? [ref.name] : [])));
   // local branch name → its remote-tracking ref sitting on this same commit.
@@ -675,9 +684,7 @@ export function graphHeadHash(
   entries: readonly Pick<GraphNodeParentRefEntry, 'hash' | 'refs' | 'headBranch'>[],
 ): string | null {
   const head = entries.find(
-    (entry) =>
-      !!entry.headBranch ||
-      entry.refs.some((ref) => (typeof ref === 'string' ? ref : ref.name) === 'HEAD'),
+    (entry) => !!entry.headBranch || entry.refs.some((ref) => refName(ref) === 'HEAD'),
   );
   return head?.hash ?? null;
 }

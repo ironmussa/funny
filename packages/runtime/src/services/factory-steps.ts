@@ -354,6 +354,52 @@ async function checkAndPush(
   return failure;
 }
 
+/**
+ * Bring the checkout up to the run's branch on origin; the error, or null.
+ * The branch can move without this checkout: GitHub's update-branch (the merge
+ * lane) or a push from elsewhere. Merging the base on the stale head would make
+ * a commit that does not contain the branch's tip, and its push is refused as
+ * non-fast-forward (found on issue #458). A branch not on origin yet is left
+ * alone; one that diverged from it is refused, never overwritten.
+ */
+async function followRemoteBranch(
+  cwd: string,
+  request: IntegrateRequest,
+  env: Record<string, string>,
+): Promise<string | null> {
+  const remote = `refs/remotes/origin/${request.branch}`;
+  const fetched = await gitNetwork(['fetch', 'origin', `+refs/heads/${request.branch}:${remote}`], {
+    cwd,
+    env,
+    reject: false,
+  });
+  if (fetched.exitCode !== 0) {
+    if (/couldn't find remote ref/i.test(fetched.stderr)) return null;
+    return `Could not fetch ${request.branch}: ${fetched.stderr.trim()}`;
+  }
+  const behind = await gitRead(['merge-base', '--is-ancestor', remote, 'HEAD'], {
+    cwd,
+    reject: false,
+  });
+  if (behind.exitCode === 0) return null;
+  const forward = await gitRead(['merge-base', '--is-ancestor', 'HEAD', remote], {
+    cwd,
+    reject: false,
+  });
+  if (forward.exitCode !== 0) {
+    return `The checkout and origin/${request.branch} have diverged: the branch moved on GitHub while this checkout has commits it does not.`;
+  }
+  const moved = await gitWrite(['merge', '--ff-only', '--no-verify', remote], {
+    cwd,
+    env,
+    reject: false,
+  });
+  if (moved.exitCode !== 0) {
+    return `Could not fast-forward to origin/${request.branch}: ${moved.stderr.trim()}`;
+  }
+  return null;
+}
+
 /** What the base changed in `paths` since the branch left it (three dots: the base's side only). */
 async function baseDiffOf(cwd: string, base: string, paths: string[]): Promise<string> {
   const diff = await gitRead(['diff', `HEAD...${base}`, '--', ...paths], { cwd, reject: false });
@@ -368,6 +414,8 @@ async function integrateStep(
 ): Promise<IntegrateResult> {
   const env = gitEnv.env;
   const base = `origin/${request.baseBranch}`;
+  const followed = await followRemoteBranch(cwd, request, env);
+  // After following origin: the head the review judged is the branch's tip there.
   const headBefore = await headOf(cwd);
   const result = (over: Partial<IntegrateResult> & Pick<IntegrateResult, 'outcome' | 'message'>) =>
     ({
@@ -381,6 +429,7 @@ async function integrateStep(
       weave: gitEnv.weave,
       ...over,
     }) satisfies IntegrateResult;
+  if (followed) return result({ outcome: 'failed', message: followed });
 
   const fetched = await gitNetwork(['fetch', 'origin', request.baseBranch], {
     cwd,

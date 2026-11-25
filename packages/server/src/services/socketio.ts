@@ -42,7 +42,7 @@ export function createSocketIOServer(auth: any, corsOrigins: string[]): SocketIO
   });
 
   const io = new SocketIOServer();
-  io.bind(engine as any);
+  io.bind(engine);
 
   bindSocketIOServer(io, engine, auth, corsOrigins);
   const browserEvents = new SocketIoBrowserEventSink(io);

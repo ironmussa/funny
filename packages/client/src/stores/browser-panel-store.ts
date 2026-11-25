@@ -243,13 +243,18 @@ function readInitialWidth(): number {
   return DEFAULT_WIDTH;
 }
 
+/** True for a string value. */
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 function readDefaults(): { defaultModel: string } {
   try {
     const raw = localStorage.getItem(DEFAULTS_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<{ defaultModel: string }>;
       return {
-        defaultModel: typeof parsed.defaultModel === 'string' ? parsed.defaultModel : 'sonnet',
+        defaultModel: isString(parsed.defaultModel) ? parsed.defaultModel : 'sonnet',
       };
     }
   } catch {

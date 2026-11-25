@@ -137,7 +137,7 @@ function useCommitDetailData({
   // A new selection resets what the previous one loaded during render (React's
   // "adjusting state when a prop changes"); the effect below only fetches.
   useAdjustOnChange(
-    [selectedHash, selectedCommit?.body, hasGitContext, effectiveThreadId, projectModeId],
+    [selectedHash, selectedCommit?.body, hasGitContext, effectiveThreadId, projectModeId, t],
     () => {
       setFilesLoading(willLoad);
       if (!willLoad) setCommitFiles([]);

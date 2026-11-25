@@ -28,6 +28,7 @@ import { loadActivities } from '@/data/activities/loaders';
 import { cancelJob, cancelWatcher } from '@/data/background/actions';
 import { useJobsById, useWatchersById } from '@/data/background/hooks';
 import { loadJobs, loadWatchers } from '@/data/background/loaders';
+import { useAdjustOnChange } from '@/hooks/use-resettable-state';
 import { useTerminalScope } from '@/hooks/use-terminal-scope';
 import { canRestoreActivity, canRetryActivity, retryActivity } from '@/lib/activity-retry';
 import { openJobLogTerminal } from '@/lib/open-terminal-tab';
@@ -513,18 +514,17 @@ function loadBackgroundLists(): void {
  */
 function useBackgroundLists(open: boolean): number {
   const [now, setNow] = useState(() => Date.now());
+  // Opening catches the clock up during render, so the first frame of the
+  // panel already shows current times.
+  useAdjustOnChange([open], () => {
+    if (open) setNow(Date.now());
+  });
   useEffect(loadBackgroundLists, []);
   useEffect(() => {
     if (!open) return;
     loadBackgroundLists();
-    const tick = () => setNow(Date.now());
-    // The first tick, right after the open renders, catches the clock up.
-    const catchUp = setTimeout(tick, 0);
-    const timer = setInterval(tick, 1000);
-    return () => {
-      clearTimeout(catchUp);
-      clearInterval(timer);
-    };
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
   }, [open]);
   return now;
 }

@@ -1904,6 +1904,7 @@
       "compare": "Commits desde a aprovação",
       "board_one": "Pede de novo: {{count}} linha mudou",
       "board_other": "Pede de novo: {{count}} linhas mudaram",
+      "boardChip": "Pede de novo",
       "boardUnknown": "Pede de novo: a mudança difere do que você aprovou"
     },
     "approvalRequest": {
@@ -1922,6 +1923,7 @@
       "stale": "O pull request mudou depois que o agente pediu, então este pedido não se aplica mais.",
       "declinedNote": "Nada foi aprovado. A execução continua retida.",
       "runNow": "A execução agora:",
+      "boardChip": "Aprovação pedida",
       "boardMarker": "Um agente pediu sua aprovação"
     },
     "split_one": "Dividir em {{count}} issue",
@@ -2086,6 +2088,23 @@
     "ci": {
       "running": "CI em andamento",
       "roundsDetail": "Rodada {{round}} · {{red}} vermelhos · {{conflicts}} conflitos"
+    },
+    "wait": {
+      "blockedBy": "Bloqueado por {{issues}}",
+      "after": "Depois de {{issues}}",
+      "sameFiles": "Mesmos arquivos que {{issues}}",
+      "circular": "Dependência circular",
+      "unreadable": "Bloqueios ilegíveis",
+      "noProofRules": "Sem regras de proof",
+      "noFreeSlot": "Sem vaga livre"
+    },
+    "problem": {
+      "noReview": "Sem review",
+      "rewritten": "Branch reescrita",
+      "noVerdict": "Sem veredito",
+      "noCommit": "Sem commit",
+      "stepFailed": "{{step}} falhou",
+      "other": "Problema"
     },
     "waiting": {
       "questions": "A triagem fez {{count}} perguntas na issue",

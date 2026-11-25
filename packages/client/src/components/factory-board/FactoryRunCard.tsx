@@ -27,7 +27,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { LabelBadge } from '@/components/ui/label-badge';
 import { usePendingApprovalRequestOfRun } from '@/data/factory/hooks';
 import { useGitStatusForThread } from '@/data/git-status/hooks';
 import type { FactoryQueueRun } from '@/lib/api/factory';
@@ -37,19 +36,13 @@ import {
 } from '@/lib/factory-run-labels';
 import { useThreadById } from '@/lib/thread-selectors';
 import { timeAgo } from '@/lib/thread-utils';
-import { cn } from '@/lib/utils';
 
 import { factoryRunActivityAt } from './board-columns';
+import { FactoryBoardChip } from './FactoryBoardChip';
 import { FactoryRunDependencyNote } from './FactoryRunDependencyNote';
 import { FactoryRunGateChips } from './FactoryRunGateChips';
-import {
-  type FactoryRunDependencyLookup,
-  isFactoryRunStuck,
-  NO_FACTORY_RUN_DEPENDENCIES,
-  shortFactoryReason,
-} from './run-dependencies';
-import { factoryRunStateChip } from './run-state-chip';
-import { factoryRunWaitingText } from './run-waiting';
+import { type FactoryRunDependencyLookup, NO_FACTORY_RUN_DEPENDENCIES } from './run-dependencies';
+import { factoryBoardStateChip } from './run-state-chip';
 import { timeInCurrentStep } from './step-timings';
 import { FactoryRunTimeInStep } from './StepTimeBadges';
 
@@ -111,9 +104,12 @@ function AgentAskedMarker({ run }: { run: FactoryQueueRun }) {
   const request = usePendingApprovalRequestOfRun(run.projectId, run.id, held);
   if (!held || !request || request.sha !== run.risk?.headSha) return null;
   return (
-    <LabelBadge tone="warning" data-testid={`factory-board-agent-asked-${run.id}`}>
-      {t('factory.approvalRequest.boardMarker', 'An agent asked for your approval')}
-    </LabelBadge>
+    <FactoryBoardChip
+      label={t('factory.approvalRequest.boardChip', 'Approval asked')}
+      tone="warning"
+      detail={t('factory.approvalRequest.boardMarker', 'An agent asked for your approval')}
+      testId={`factory-board-agent-asked-${run.id}`}
+    />
   );
 }
 
@@ -127,60 +123,55 @@ function AsksAgainMarker({ run }: { run: FactoryQueueRun }) {
   const gap = approvalGapFor(run.mergeApproval, run.risk?.headSha);
   if (!gap) return null;
   return (
-    <LabelBadge tone="warning" data-testid={`factory-board-asks-again-${run.id}`}>
-      {gap.lines === null
-        ? t(
-            'factory.approvalGap.boardUnknown',
-            'Asks again: the change differs from what you approved',
-          )
-        : t('factory.approvalGap.board', 'Asks again after {{count}} lines changed', {
-            count: gap.lines,
-          })}
-    </LabelBadge>
+    <FactoryBoardChip
+      label={t('factory.approvalGap.boardChip', 'Asks again')}
+      tone="warning"
+      detail={
+        gap.lines === null
+          ? t(
+              'factory.approvalGap.boardUnknown',
+              'Asks again: the change differs from what you approved',
+            )
+          : t('factory.approvalGap.board', 'Asks again after {{count}} lines changed', {
+              count: gap.lines,
+            })
+      }
+      testId={`factory-board-asks-again-${run.id}`}
+    />
   );
 }
 
 /** What the factory adds under a card's title: gate chips, why it waits, what it blocks. */
 function FactoryRunCardBody({
   run,
+  hasThread,
   onSelect,
   dependencies,
 }: {
   run: FactoryQueueRun;
+  hasThread: boolean;
   onSelect: (run: FactoryQueueRun) => void;
   dependencies: FactoryRunDependencyLookup;
 }) {
   const { t } = useTranslation();
-  const waitingText = factoryRunWaitingText(t, run);
-  const waiting = waitingText ? shortFactoryReason(waitingText, 240) : null;
-  const state = factoryRunStateChip(t, run);
+  const state = factoryBoardStateChip(t, run, hasThread);
   return (
     <div className="flex flex-col gap-1.5 empty:hidden">
-      {/* The run's state (a column holds several), then what the gates found on the pull request. */}
-      <div className="flex flex-wrap items-center gap-1">
-        <LabelBadge
-          tone={state.tone}
-          data-testid={`factory-board-state-${run.id}`}
-          data-state={run.state}
-        >
-          {state.label}
-        </LabelBadge>
+      {/* The run's state when the icon and column do not say it, why it waits, what the gates found. Each explains itself on hover. */}
+      <div className="flex flex-wrap items-center gap-1 empty:hidden">
+        {state && (
+          <FactoryBoardChip
+            label={state.label}
+            tone={state.tone}
+            detail={state.detail}
+            testId={`factory-board-state-${run.id}`}
+            data={{ 'data-state': run.state }}
+          />
+        )}
         <FactoryRunGateChips run={run} />
         <AgentAskedMarker run={run} />
         <AsksAgainMarker run={run} />
       </div>
-      {waiting && (
-        <p
-          className={cn(
-            'line-clamp-2 text-xs',
-            isFactoryRunStuck(run) ? 'text-status-warning' : 'text-muted-foreground',
-          )}
-          title={waiting}
-          data-testid={`factory-board-waiting-${run.id}`}
-        >
-          {waiting}
-        </p>
-      )}
       <FactoryRunDependencyNote
         run={run}
         dependencies={dependencies}
@@ -343,7 +334,12 @@ export const FactoryRunCard = memo(function FactoryRunCard({
     ) : undefined;
   const body = (
     <>
-      <FactoryRunCardBody run={run} onSelect={onSelect} dependencies={dependencies} />
+      <FactoryRunCardBody
+        run={run}
+        hasThread={Boolean(thread)}
+        onSelect={onSelect}
+        dependencies={dependencies}
+      />
       {dialog}
     </>
   );

@@ -1945,6 +1945,7 @@
       "compare": "Commits since the approval",
       "board_one": "Asks again after {{count}} line changed",
       "board_other": "Asks again after {{count}} lines changed",
+      "boardChip": "Asks again",
       "boardUnknown": "Asks again: the change differs from what you approved"
     },
     "approvalRequest": {
@@ -1963,6 +1964,7 @@
       "stale": "The pull request changed after the agent asked, so this request no longer applies.",
       "declinedNote": "Nothing was approved. The run stays held.",
       "runNow": "The run now:",
+      "boardChip": "Approval asked",
       "boardMarker": "An agent asked for your approval"
     },
     "split_one": "Split into {{count}} issue",
@@ -2127,6 +2129,23 @@
     "ci": {
       "running": "CI running",
       "roundsDetail": "Round {{round}} · {{red}} red · {{conflicts}} conflicts"
+    },
+    "wait": {
+      "blockedBy": "Blocked by {{issues}}",
+      "after": "After {{issues}}",
+      "sameFiles": "Same files as {{issues}}",
+      "circular": "Circular dependency",
+      "unreadable": "Blockers unreadable",
+      "noProofRules": "No proof rules",
+      "noFreeSlot": "No free slot"
+    },
+    "problem": {
+      "noReview": "No review",
+      "rewritten": "Branch rewritten",
+      "noVerdict": "No verdict",
+      "noCommit": "No commit",
+      "stepFailed": "{{step}} failed",
+      "other": "Problem"
     },
     "waiting": {
       "questions": "Triage asked {{count}} questions on the issue",

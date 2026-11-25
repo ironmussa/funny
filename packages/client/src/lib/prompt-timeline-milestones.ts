@@ -55,13 +55,16 @@ const END_LABELS: Partial<Record<ThreadStatus, string>> = {
   stopped: 'Stopped',
 };
 
-const TOOL_CALL_TYPES: Record<string, MilestoneType> = {
-  TodoWrite: 'todo',
-  AskUserQuestion: 'question',
-  ExitPlanMode: 'plan',
-};
+/** Milestone types, keyed by tool name. */
+const TOOL_CALL_TYPES = new Map<string, MilestoneType>(
+  Object.entries({
+    TodoWrite: 'todo',
+    AskUserQuestion: 'question',
+    ExitPlanMode: 'plan',
+  } satisfies Record<string, MilestoneType>),
+);
 
-function isString(value: unknown): value is string {
+function isString(value: string): value is string {
   return typeof value === 'string';
 }
 
@@ -225,7 +228,7 @@ function createTodoEmitter(index: TodoIndex, finished: boolean) {
 }
 
 function toolCallMilestone(tc: ToolCall, timestamp: string): MilestoneDraft | null {
-  const type = TOOL_CALL_TYPES[tc.name];
+  const type = TOOL_CALL_TYPES.get(tc.name);
   if (!type) return null;
   const parsed = parseToolInput(tc.input);
   if (!parsed) return null;

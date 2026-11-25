@@ -803,7 +803,7 @@ export const useUIStore = create<UIState>((set) => ({
 // Reset transient UI panes whenever a thread is selected.
 // Registered via the listener API to avoid a thread-store ↔ ui-store import cycle.
 setThreadSelectListener((threadId) => {
-  const uiPatch: Record<string, unknown> = {
+  const uiPatch: Partial<UIState> = {
     newThreadProjectId: null,
     newThreadBaseBranch: null,
     allThreadsProjectId: null,

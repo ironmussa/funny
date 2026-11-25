@@ -82,6 +82,12 @@ function messageTimeRange(messages: any[]): { min: string; max: string } | null 
   return min ? { min, max } : null;
 }
 
+/** The thread and compaction events that fall inside the loaded message window. */
+interface WindowEvents {
+  threadEvents?: ThreadEvent[];
+  compactionEvents?: CompactionEvent[];
+}
+
 /**
  * Keep only the events whose timestamp falls inside the loaded message window.
  * With the full history loaded every event is kept.
@@ -91,7 +97,7 @@ export function clipEventsToMessageWindow(
   threadEvents: ThreadEvent[] | undefined,
   compactionEvents: CompactionEvent[] | undefined,
   bounds: MessageWindowBounds | undefined,
-): { threadEvents?: ThreadEvent[]; compactionEvents?: CompactionEvent[] } {
+): WindowEvents {
   if (!bounds?.hasOlder && !bounds?.hasNewer) return { threadEvents, compactionEvents };
   const range = messageTimeRange(messages);
   // Nothing to anchor the events to yet — show none until messages load.
@@ -544,9 +550,14 @@ export function buildGroupedRenderItems(
   return merged;
 }
 
+/** Event data arrives either as JSON text or already parsed. */
+function isEventDataText(data: string | Record<string, unknown>): data is string {
+  return typeof data === 'string';
+}
+
 /** Parse event data string or object */
 function parseEventDataCompat(data: string | Record<string, unknown>): Record<string, any> {
-  if (isString(data)) {
+  if (isEventDataText(data)) {
     try {
       return JSON.parse(data);
     } catch {

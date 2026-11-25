@@ -1,4 +1,5 @@
 import type {
+  TestConsoleLevel,
   TestNetworkEntry,
   WSTestActionData,
   WSTestConsoleData,
@@ -47,8 +48,14 @@ interface TestDetailTabsProps {
 }
 
 /** Resolve a CSS variable (HSL) to a string for ansi-to-html. */
+/** The foreground and background colors of ANSI output. */
+interface AnsiColors {
+  fg: string;
+  bg: string;
+}
+
 /** The theme colors ANSI output is drawn with, read again after a theme switch. */
-function readAnsiColors(): { fg: string; bg: string } {
+function readAnsiColors(): AnsiColors {
   return { fg: getCssVar('--foreground'), bg: getCssVar('--background') };
 }
 
@@ -57,7 +64,7 @@ function getCssVar(name: string): string {
   return raw ? `hsl(${raw})` : '#1b1b1b';
 }
 
-const CONSOLE_LEVEL_STYLES: Record<string, string> = {
+const CONSOLE_LEVEL_STYLES: Record<TestConsoleLevel, string> = {
   error: 'text-status-error',
   warn: 'text-status-warning',
   info: 'text-status-info',
@@ -66,7 +73,7 @@ const CONSOLE_LEVEL_STYLES: Record<string, string> = {
   log: '',
 };
 
-const CONSOLE_LEVEL_ICONS: Record<string, string> = {
+const CONSOLE_LEVEL_ICONS: Record<TestConsoleLevel, string> = {
   error: 'x',
   warn: '!',
   info: 'i',

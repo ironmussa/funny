@@ -49,12 +49,18 @@ export function parseDiffOld(unifiedDiff: string): string {
   return oldLines.join('\n');
 }
 
+/** Added and removed line counts of a diff. */
+interface DiffStats {
+  additions: number;
+  deletions: number;
+}
+
 /**
  * Count added/removed lines in a unified diff. Handles input made of several
  * concatenated per-file diffs (the session tool-call fallback joins one diff
  * per edit), using the same header-skipping logic as {@link parseDiffOld}.
  */
-export function countDiffStats(unifiedDiff: string): { additions: number; deletions: number } {
+export function countDiffStats(unifiedDiff: string): DiffStats {
   let additions = 0;
   let deletions = 0;
   let inHunk = false;

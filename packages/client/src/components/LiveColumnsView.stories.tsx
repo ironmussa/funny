@@ -471,10 +471,10 @@ export const WithContent: Story = {
         }),
       ];
 
-      const threadsById: Record<string, ThreadWithMessages> = {
+      const threadsById = {
         'content-1': makeThreadWithMessages(threadA, threadAMessages),
         'content-2': makeThreadWithMessages(threadB, threadBMessages),
-      };
+      } satisfies Record<string, ThreadWithMessages>;
 
       const cleanup = mockGetThread(threadsById);
 

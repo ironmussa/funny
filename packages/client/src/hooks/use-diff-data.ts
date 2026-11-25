@@ -97,6 +97,12 @@ interface DiffLoad {
   staged: boolean;
 }
 
+/** The file a refresh selects, and the diffs it reloads. */
+interface DiffReloadPlan {
+  fileToLoad: string | null;
+  loads: DiffLoad[];
+}
+
 /**
  * What a refresh reloads: the selected file (or the first one when the
  * selection is gone) and the expanded file when it is a different one.
@@ -105,7 +111,7 @@ function planDiffReload(
   files: FileDiffSummary[],
   selectedFile: string | null,
   expandedFile: string | null,
-): { fileToLoad: string | null; loads: DiffLoad[] } {
+): DiffReloadPlan {
   const paths = new Set(files.map((f) => f.path));
   const fileToLoad = pickFileToLoad(files, paths, selectedFile);
   const expanded = pickExpandedFile(paths, expandedFile, fileToLoad);

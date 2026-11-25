@@ -165,7 +165,7 @@ function FooterLeading(props: FooterLeadingProps) {
 }
 
 /** True for a number value. */
-function isNumber(value: unknown): value is number {
+function isNumber(value: number | undefined): value is number {
   return typeof value === 'number';
 }
 

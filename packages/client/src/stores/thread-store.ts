@@ -145,7 +145,7 @@ useThreadStore.subscribe((state) => {
   // selectProject/fetchBranch. Mirror the payload into the map regardless (the
   // safety net), but leave selection to the in-flight selectThread.
   const selecting = getSelectingThreadId() !== null;
-  const threadPatch: Record<string, unknown> = {
+  const threadPatch: Partial<ThreadState> = {
     threadDataById: { ...state.threadDataById, [at.id]: at },
   };
   if (!(state.selectedThreadId === at.id || selecting)) {

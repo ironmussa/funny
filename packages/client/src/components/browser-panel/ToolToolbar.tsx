@@ -39,7 +39,7 @@ const TOOLS: ToolEntry[] = [
   { id: 'draw', label: 'Draw', Icon: Pencil },
 ];
 
-function isNonEmptyString(value: unknown): value is string {
+function isNonEmptyString(value: string | undefined): value is string {
   return typeof value === 'string' && value.length > 0;
 }
 

@@ -8,12 +8,15 @@ import { readActiveThreadView } from '@/stores/thread-view';
 
 // Desktop notification for a finished or failed agent run.
 
-function findThread(threadId: string): {
+/** What a notification needs to know about a thread. */
+interface NotifiedThread {
   title?: string;
   branch?: string;
   projectId?: string;
   isScratch?: boolean;
-} {
+}
+
+function findThread(threadId: string): NotifiedThread {
   const active = readActiveThreadView(useThreadStore.getState());
   if (active?.id === threadId) {
     return {

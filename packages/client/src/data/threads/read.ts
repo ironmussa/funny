@@ -45,7 +45,7 @@ function cacheFor(data: ThreadsData): SnapshotCache {
   return cache;
 }
 
-function snapshotRows(data: ThreadsData): Record<string, Thread> {
+function snapshotRows(data: ThreadsData) {
   const threadsById: Record<string, Thread> = {};
   for (const key of data.collection.keys()) {
     const row = data.readThread(String(key));

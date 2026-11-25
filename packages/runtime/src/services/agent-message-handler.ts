@@ -122,6 +122,8 @@ export class AgentMessageHandler {
     type: T,
     data: WSEventData<T>,
   ): Promise<void> {
+    // SAFETY: `data` is WSEventData<T>, the data of the WSEvent member whose `type` is T,
+    // so the object is that member; TypeScript cannot correlate the generic pair itself.
     const event = { type, threadId, data } as WSEvent;
 
     // Fast path: use cached userId to avoid a DB read on every emission
@@ -155,7 +157,7 @@ export class AgentMessageHandler {
       namespace: 'agent',
       threadId,
       type: msg.type,
-      subtype: (msg as any).subtype,
+      subtype: 'subtype' in msg ? msg.subtype : undefined,
     });
 
     // System init — capture session ID and broadcast init info
@@ -207,6 +209,8 @@ export class AgentMessageHandler {
       });
       const thread = await this.threadManager.getThread(threadId);
       await this.emitWS(threadId, 'agent:init', {
+        // SAFETY: initTools is only written as JSON.stringify of an init message's
+        // `tools` (a string[]): above, and in ingest-mapper for external sessions.
         tools: thread?.initTools ? (JSON.parse(thread.initTools) as string[]) : [],
         cwd: thread?.initCwd ?? '',
         model: thread?.model ?? '',
@@ -339,21 +343,21 @@ export class AgentMessageHandler {
   ): Promise<{ profileId: string | null; profileName: string | null }> {
     const cached = this.state.runAgentProfiles.get(threadId);
     if (cached) return cached;
-    let ref = { profileId: null as string | null, profileName: null as string | null };
+    let thread;
     try {
-      const thread = await this.threadManager.getThread(threadId);
-      ref = {
-        profileId: thread?.agentProfileId ?? null,
-        profileName: thread?.agentProfileName ?? null,
-      };
+      thread = await this.threadManager.getThread(threadId);
     } catch (err) {
       log.warn('Failed to read the thread agent profile', {
         namespace: 'agent',
         threadId,
         error: err,
       });
-      return ref;
+      return { profileId: null, profileName: null };
     }
+    const ref = {
+      profileId: thread?.agentProfileId ?? null,
+      profileName: thread?.agentProfileName ?? null,
+    };
     this.state.runAgentProfiles.set(threadId, ref);
     return ref;
   }
@@ -383,6 +387,8 @@ export class AgentMessageHandler {
 
     await this.threadManager.createPendingPermissionRequest?.(pendingPermissionRequest);
     this.state.structuredPermissionRequests.set(threadId, pendingPermissionRequest);
+    // SAFETY: threads.status is only written from thread state machine results (or the
+    // 'running' default here), so the stored string is a ThreadStatus.
     const currentStatus = (thread?.status ?? 'running') as ThreadStatus;
     const { status } = transitionStatus(threadId, { type: 'WAIT' }, currentStatus);
     await this.threadManager.updateThread(threadId, { status });
@@ -806,6 +812,8 @@ export class AgentMessageHandler {
     const { status: finalStatus } = transitionStatus(
       threadId,
       resultEvent,
+      // SAFETY: threads.status is only written from thread state machine results (or the
+      // 'running' default above), so the stored string is a ThreadStatus.
       currentStatus as ThreadStatus,
       msg.total_cost_usd ?? 0,
     );
@@ -861,6 +869,9 @@ export class AgentMessageHandler {
           userId: t.userId,
           worktreePath: t.worktreePath ?? null,
           cwd: t.worktreePath ?? proj?.path ?? '',
+          // SAFETY: inside `finalStatus !== 'waiting'`, finalStatus is the COMPLETE / FAIL
+          // transition's result: 'completed' or 'failed', or 'stopped' when a stopped
+          // thread absorbs a late result.
           status: finalStatus as 'completed' | 'failed' | 'stopped',
           cost: msg.total_cost_usd ?? 0,
         });
@@ -897,6 +908,8 @@ export class AgentMessageHandler {
         log.warn('Failed to persist changed-files summary', {
           namespace: 'agent',
           threadId,
+          // SAFETY: only `.message` is read, optional-chained; for a rejection that is not
+          // Error-like it is undefined and `String(err)` is logged instead.
           error: (err as Error)?.message ?? String(err),
         });
       });

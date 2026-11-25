@@ -43,12 +43,14 @@ export interface AgentToolContext {
   scheduledWakes?: boolean;
 }
 
-export interface AgentToolResult {
+// A type alias, not an interface, so it is assignable to the MCP SDK's
+// CallToolResult (an object type with an index signature).
+export type AgentToolResult = {
   content: Array<
     { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }
   >;
   isError?: boolean;
-}
+};
 
 /** One tool, independent of the MCP server hosting it. */
 /**
@@ -105,7 +107,7 @@ async function handle(req: Request): Promise<Response> {
     server.registerTool(
       def.name,
       { description: def.description, inputSchema: def.schema },
-      (args, extra) => def.run(args ?? {}, extra) as any,
+      (args, extra) => def.run(args ?? {}, extra),
     );
   }
   const transport = new WebStandardStreamableHTTPServerTransport({

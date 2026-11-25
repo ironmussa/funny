@@ -31,12 +31,17 @@ type StoredTemplateVariables = string | Readonly<Record<string, string>> | null 
 
 /** Parse JSON text columns that may already be parsed. */
 function parseJsonCol<T>(val: StoredListColumn): T[] {
+  // SAFETY: not validated here: the template's list columns are written by the agent
+  // template service as JSON arrays of the caller's element type (tool names, MCP server
+  // entries, skill paths); a malformed row reaches the agent start as it did before.
   return val ? ((isString(val) ? JSON.parse(val) : val) as T[]) : [];
 }
 
-function parseTemplateVariables(rawVars: StoredTemplateVariables): Record<string, string> {
+function parseTemplateVariables(
+  rawVars: StoredTemplateVariables,
+): Readonly<Record<string, string>> {
   if (isString(rawVars)) return JSON.parse(rawVars);
-  return isObject(rawVars) ? (rawVars as Record<string, string>) : {};
+  return isObject(rawVars) ? rawVars : {};
 }
 
 /** Replace `{{VAR_NAME}}` placeholders with the thread's template variables. */

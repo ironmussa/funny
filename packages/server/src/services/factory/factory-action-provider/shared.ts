@@ -257,6 +257,8 @@ export interface FactoryActionProviderDeps {
   flowIntegrates?: boolean;
   /** The implementing thread's last assistant message (the "no change" explanation). */
   lastThreadMessage?: (threadId: string) => Promise<string | null>;
+  /** The last error the thread's agent reported since `since` (a failed turn's cause). */
+  lastAgentError?: (threadId: string, since: string) => Promise<string | null>;
   /**
    * Remove the run's worktrees on the enabler's runner (a "no change" run keeps
    * no checkout), except the ones holding work that exists nowhere else

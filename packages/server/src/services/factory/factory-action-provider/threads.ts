@@ -11,11 +11,12 @@
 
 import type { ActionResult, RunCommandOpts, SpawnAgentOpts } from '@funny/workflows/compiler';
 
+import { log } from '../../../lib/logger.js';
 import { factoryRunLabel } from '../factory-runs.js';
 import type { createStacking } from '../factory-stacking.js';
 import { resolveStepOptions, type ResolvedStepOptions } from '../factory-step-options.js';
 import { runStepOnRunner } from '../factory-step-runner.js';
-import type { WaitAfter } from '../factory-thread-waits.js';
+import type { ThreadOutcome, WaitAfter } from '../factory-thread-waits.js';
 import type { ActionCore } from './core.js';
 import {
   CLOCK_SLACK_MS,
@@ -40,6 +41,9 @@ export type WorktreeBase = { baseBranch?: string; baseFromRemote?: boolean } | {
 interface StepThreadLinks {
   stacking: Pick<ReturnType<typeof createStacking>, 'base'>;
 }
+
+/** What the runner's agent says when it could not resume a thread's session (`orchestrator.ts`). */
+const SESSION_LOST = /Session resume failed/i;
 
 /** The agent steps of a run, and where a worktree run's branch starts. */
 export function createStepThreads(core: ActionCore, links: StepThreadLinks) {
@@ -301,10 +305,41 @@ export function createStepThreads(core: ActionCore, links: StepThreadLinks) {
     if (step.replayed && threadIds.slice(index + 1).includes(step.threadId)) {
       return { ok: true, output: '', metadata: { threadId: step.threadId, replayed: true } };
     }
-    return outcomeResult(
-      step.threadId,
-      await deps.waitThread(step.threadId, deps.signal, step.after),
-    );
+    const outcome = await deps.waitThread(step.threadId, deps.signal, step.after);
+    const resent = await resendAfterLostSession(step, outcome, opts, options);
+    return outcomeResult(step.threadId, resent ?? outcome);
+  }
+
+  /**
+   * A follow-up whose agent could not resume its session fails at once (0
+   * turns) and asks for the message again: the runner clears the session, and
+   * the next message starts a new one with the thread's history in its prompt.
+   * Send it once more and wait for that turn, as a person would (#455, #481:
+   * a day-old session, and both runs parked for a person). Null when the
+   * failure was anything else, or the step was not a follow-up.
+   */
+  async function resendAfterLostSession(
+    step: StepThread,
+    outcome: ThreadOutcome,
+    opts: SpawnAgentOpts,
+    options: ResolvedStepOptions,
+  ): Promise<ThreadOutcome | null> {
+    const continuation = deps.continuation;
+    if (outcome.status !== 'failed' || !step.after || !continuation || !deps.lastAgentError) {
+      return null;
+    }
+    const error = await deps.lastAgentError(step.threadId, step.after.sentAt);
+    if (!error || !SESSION_LOST.test(error)) return null;
+    const before = await continuation.completedAt(step.threadId);
+    const sentAt = new Date().toISOString();
+    const sent = await continuation.followUp(step.threadId, prompted(opts), stepAgentBody(options));
+    if (sent.isErr()) return null;
+    log.info('Issue factory sent a follow-up again after its agent lost its session', {
+      namespace: 'factory',
+      runId: scope.runId,
+      threadId: step.threadId,
+    });
+    return deps.waitThread(step.threadId, deps.signal, { completedAt: before, sentAt });
   }
   return { agentStep, worktreeBase };
 }

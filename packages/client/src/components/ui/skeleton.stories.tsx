@@ -17,13 +17,13 @@ export const Line: Story = {
 };
 
 export const Circle: Story = {
-  render: () => <Skeleton className="size-12 rounded-full" />,
+  render: () => <Skeleton corners="circle" className="size-12" />,
 };
 
 export const CardLayout: Story = {
   render: () => (
     <div className="flex items-center gap-4">
-      <Skeleton className="size-12 rounded-full" />
+      <Skeleton corners="circle" className="size-12" />
       <div className="space-y-2">
         <Skeleton className="h-4 w-48" />
         <Skeleton className="h-4 w-32" />

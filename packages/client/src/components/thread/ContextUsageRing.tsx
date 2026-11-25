@@ -109,13 +109,15 @@ export function ContextUsageRing({
       <HoverCardContent
         side="top"
         align="end"
-        className={cn('text-sm', breakdown || account ? 'w-80' : 'w-64')}
+        className={cn(breakdown || account ? 'w-80' : 'w-64')}
       >
-        {threadId && <AgentAccountSummary account={account} profileName={agentProfileName} />}
-        <p className="font-medium">{remaining}% of context remaining until auto-compact.</p>
-        <TokenLine usedTokens={usedTokens} maxTokens={maxTokens} />
-        <p className="text-muted-foreground mt-1 text-xs">Click to compact now.</p>
-        {breakdown && <ContextBreakdownPanel breakdown={breakdown} />}
+        <div className="text-sm">
+          {threadId && <AgentAccountSummary account={account} profileName={agentProfileName} />}
+          <p className="font-medium">{remaining}% of context remaining until auto-compact.</p>
+          <TokenLine usedTokens={usedTokens} maxTokens={maxTokens} />
+          <p className="text-muted-foreground mt-1 text-xs">Click to compact now.</p>
+          {breakdown && <ContextBreakdownPanel breakdown={breakdown} />}
+        </div>
       </HoverCardContent>
     </HoverCard>
   );

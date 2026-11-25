@@ -69,24 +69,26 @@ function RecapShell({
   const { t } = useTranslation();
   return (
     <div className="mx-auto w-full max-w-3xl shrink-0 px-4 pt-3">
-      <Card className="flex items-start gap-3 px-3 py-2.5 shadow-none" data-testid={testId}>
-        <Sparkles className="icon-sm text-muted-foreground mt-0.5 shrink-0" aria-hidden />
-        <div className="min-w-0 flex-1">
-          <p className="text-muted-foreground mb-1 text-xs font-medium">
-            {t('thread.recap.title')}
-          </p>
-          {children}
+      <Card className="shadow-none" data-testid={testId}>
+        <div className="flex items-start gap-3 px-3 py-2.5">
+          <Sparkles className="icon-sm text-muted-foreground mt-0.5 shrink-0" aria-hidden />
+          <div className="min-w-0 flex-1">
+            <p className="text-muted-foreground mb-1 text-xs font-medium">
+              {t('thread.recap.title')}
+            </p>
+            {children}
+          </div>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="shrink-0"
+            aria-label={t('thread.recap.dismiss')}
+            onClick={onDismiss}
+            data-testid="thread-recap-dismiss"
+          >
+            <X className="icon-xs" />
+          </Button>
         </div>
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className="shrink-0"
-          aria-label={t('thread.recap.dismiss')}
-          onClick={onDismiss}
-          data-testid="thread-recap-dismiss"
-        >
-          <X className="icon-xs" />
-        </Button>
       </Card>
     </div>
   );

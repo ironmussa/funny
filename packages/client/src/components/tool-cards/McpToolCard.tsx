@@ -152,10 +152,7 @@ function McpToolCardBody({
   const { t } = useTranslation();
   const [raw, setRaw] = useState(false);
   return (
-    <ToolContentArea
-      className="border-border/40 border-t"
-      viewportProps={{ className: 'max-h-[50vh] scroll-fade-none' }}
-    >
+    <ToolContentArea viewportProps={{ className: 'max-h-[50vh] scroll-fade-none' }}>
       <div className="space-y-2 px-3 pt-1.5 pb-2">
         {isBrowserTool(mcp) && <ShowInBrowserPanelButton />}
         <BrowserRecordingPreview mcp={mcp} resultText={resultText} isError={isError} />

@@ -22,17 +22,33 @@ const badgeVariants = cva(
         error: 'border-transparent bg-status-error/15 text-status-error',
         info: 'border-transparent bg-status-info/15 text-status-info',
         violet: 'border-transparent bg-status-violet/15 text-status-violet',
+        // A quiet role or state pill, one step below secondary.
+        muted: 'border-transparent bg-muted text-muted-foreground hover:bg-secondary/80',
       },
       size: {
         default: 'px-2.5 py-0.5 text-base',
         sm: 'px-2 py-0.5 text-sm',
         xs: 'px-1.5 py-0 text-xs [&>svg]:size-2.5',
         xxs: 'px-1 py-0 text-2xs [&>svg]:size-2',
+        // Status chips in dense panels (the background-activity list).
+        '3xs': 'rounded px-1 py-0 text-3xs leading-none',
+      },
+      // A pill that labels metadata (a path, a filter) rather than a state.
+      weight: {
+        default: '',
+        normal: 'font-normal',
+      },
+      // Paths, commands, build numbers: values read character by character.
+      mono: {
+        true: 'font-mono',
+        false: '',
       },
     },
     defaultVariants: {
       variant: 'default',
       size: 'default',
+      weight: 'default',
+      mono: false,
     },
   },
 );
@@ -40,9 +56,13 @@ const badgeVariants = cva(
 export interface BadgeProps
   extends React.HTMLAttributes<HTMLDivElement>, VariantProps<typeof badgeVariants> {}
 
-function Badge({ className, variant, size, ...props }: BadgeProps) {
+function Badge({ className, variant, size, weight, mono, ...props }: BadgeProps) {
   return (
-    <div data-slot="badge" className={cn(badgeVariants({ variant, size }), className)} {...props} />
+    <div
+      data-slot="badge"
+      className={cn(badgeVariants({ variant, size, weight, mono }), className)}
+      {...props}
+    />
   );
 }
 

@@ -16,10 +16,10 @@ const TONE_COLORS: Record<LabelBadgeTone, string> = {
 
 /**
  * The size of every chip in the review pane: the same as the branch chips in
- * the History tab (`text-2xs`, 15px tall, fully rounded).
+ * the History tab (`text-2xs`, 16px tall, fully rounded).
  */
 const chipSizeClassName =
-  'text-2xs inline-flex h-[0.9375rem] shrink-0 items-center gap-0.5 rounded-full px-1.5 leading-none font-medium whitespace-nowrap';
+  'text-2xs inline-flex h-4 shrink-0 items-center gap-0.5 rounded-full px-2 leading-none font-medium whitespace-nowrap';
 
 export type LabelBadgeProps = HTMLAttributes<HTMLSpanElement> &
   (

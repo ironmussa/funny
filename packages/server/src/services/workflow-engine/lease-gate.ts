@@ -100,13 +100,18 @@ function pause(ms: number, signal: AbortSignal, wake: Set<() => void>): Promise<
   });
 }
 
+/** What node-postgres answers a raw query with; the lock's rows are not read. */
+interface RawQueryResult {
+  rows: object[];
+}
+
 /**
  * Hold a Postgres advisory lock on `group` until the transaction ends, so
  * grant attempts of every server instance for one group run one at a time.
  */
 async function lockGroupAcrossServers(group: string): Promise<void> {
   // SAFETY: only called on the Postgres dialect, whose Drizzle database has `execute`.
-  const pg = db as { execute?: (query: SQL) => Promise<unknown> };
+  const pg = db as { execute?: (query: SQL) => Promise<RawQueryResult> };
   await pg.execute?.(sql`SELECT pg_advisory_xact_lock(hashtext(${group}))`);
 }
 

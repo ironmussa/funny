@@ -11,6 +11,9 @@ const alertVariants = cva(
         default: 'bg-background text-foreground',
         destructive:
           'border-destructive/50 text-destructive dark:border-destructive [&>svg]:text-destructive',
+        // Something to check before going on (unpushed commits, a risky action).
+        warning:
+          'border-status-warning/30 bg-status-warning/10 text-status-warning [&>svg]:text-status-warning',
       },
     },
     defaultVariants: {
@@ -32,9 +35,20 @@ function Alert({
 }
 function AlertDescription({
   className,
+  size = 'default',
   ref,
   ...props
-}: React.HTMLAttributes<HTMLParagraphElement> & { ref?: React.Ref<HTMLParagraphElement> }) {
-  return <div ref={ref} className={cn('text-sm [&_p]:leading-relaxed', className)} {...props} />;
+}: React.HTMLAttributes<HTMLParagraphElement> & {
+  ref?: React.Ref<HTMLParagraphElement>;
+  /** `xs` for compact alerts inside dialogs. */
+  size?: 'default' | 'xs';
+}) {
+  return (
+    <div
+      ref={ref}
+      className={cn(size === 'xs' ? 'text-xs' : 'text-sm', '[&_p]:leading-relaxed', className)}
+      {...props}
+    />
+  );
 }
 export { Alert, AlertDescription };

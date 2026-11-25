@@ -65,59 +65,84 @@ export async function loadLongMemEvalDataset(
   return parseLongMemEvalData(data, size);
 }
 
+/** A turn as a LongMemEval file writes it; the loader never validates it. */
+interface RawLongMemTurn {
+  speaker?: string;
+  role?: string;
+  text?: string;
+  content?: string;
+}
+
+/** A session as a LongMemEval file writes it (its turns under turns / messages / dialog). */
+interface RawLongMemSession {
+  session_id?: string;
+  id?: string;
+  turns?: RawLongMemTurn[];
+  messages?: RawLongMemTurn[];
+  dialog?: RawLongMemTurn[];
+  timestamp?: string;
+}
+
+/** A question as a LongMemEval file writes it. */
+interface RawLongMemQuestion {
+  question_id?: string;
+  id?: string;
+  question?: string;
+  query?: string;
+  answer?: string;
+  ground_truth?: string;
+  level?: number;
+  complexity?: number;
+  requires_abstention?: boolean;
+  relevant_sessions?: string[];
+}
+
+/** A LongMemEval file: its sessions and questions, each under one of several keys. */
+interface RawLongMemEvalFile {
+  sessions?: RawLongMemSession[];
+  conversations?: RawLongMemSession[];
+  dialogs?: RawLongMemSession[];
+  questions?: RawLongMemQuestion[];
+  queries?: RawLongMemQuestion[];
+  qa_pairs?: RawLongMemQuestion[];
+}
+
 function parseLongMemEvalData(data: unknown, size: 'S' | 'M' | 'L'): LongMemEvalDataset {
-  // SAFETY: a LongMemEval file is a JSON object of sessions and questions; a malformed file fails
-  // below while reading it, as it always has.
-  const root = data as Record<string, unknown>;
+  // SAFETY: a LongMemEval file is a JSON object of sessions and questions, whose fields the loader
+  // passes through unvalidated; a malformed file fails below while reading it, as it always has.
+  const root = data as RawLongMemEvalFile;
 
-  // Parse sessions
-  // SAFETY: LongMemEval keeps its sessions in an array (sessions / conversations / dialogs); a
-  // non-array fails at map(), as it always has.
-  const rawSessions = (root.sessions ?? root.conversations ?? root.dialogs ?? []) as unknown[];
-  const sessions: LongMemSession[] = rawSessions.map((s, i) => {
-    // SAFETY: a LongMemEval session is an object (id, turns, timestamp); the loader passes dataset fields through unvalidated, as it always has.
-    const raw = s as Record<string, unknown>;
-    // SAFETY: a session's turns are an array (turns / messages / dialog); a non-array fails at map().
-    const rawTurns = (raw.turns ?? raw.messages ?? raw.dialog ?? []) as unknown[];
-    const turns: LongMemTurn[] = rawTurns.map((t) => {
-      // SAFETY: a LongMemEval turn is an object with string speaker/role and text/content fields;
-      // the loader passes dataset fields through unvalidated, as it always has.
-      const turn = t as Record<string, unknown>;
-      // SAFETY: as above, speaker/role and text/content are LongMemEval's string turn fields.
-      return {
-        speaker: (turn.speaker ?? turn.role ?? 'user') as string,
-        text: (turn.text ?? turn.content ?? '') as string,
-      };
-    });
+  // Parse sessions (sessions / conversations / dialogs); a non-array fails at map(), as it always has.
+  const rawSessions = root.sessions ?? root.conversations ?? root.dialogs ?? [];
+  const sessions: LongMemSession[] = rawSessions.map((raw, i) => {
+    // A session's turns (turns / messages / dialog); a non-array fails at map().
+    const rawTurns = raw.turns ?? raw.messages ?? raw.dialog ?? [];
+    const turns: LongMemTurn[] = rawTurns.map((turn) => ({
+      speaker: turn.speaker ?? turn.role ?? 'user',
+      text: turn.text ?? turn.content ?? '',
+    }));
 
-    // SAFETY: a session's id and timestamp are strings; the loader passes dataset fields through unvalidated, as it always has.
     return {
-      session_id: (raw.session_id ?? raw.id ?? `session-${i}`) as string,
+      session_id: raw.session_id ?? raw.id ?? `session-${i}`,
       turns,
-      timestamp: raw.timestamp as string | undefined,
+      timestamp: raw.timestamp,
     };
   });
 
-  // Parse questions
-  // SAFETY: LongMemEval keeps its questions in an array (questions / queries / qa_pairs); a
-  // non-array fails at map(), as it always has.
-  const rawQs = (root.questions ?? root.queries ?? root.qa_pairs ?? []) as unknown[];
-  const questions: LongMemQuestion[] = rawQs.map((q, i) => {
-    // SAFETY: a LongMemEval question is an object; the loader passes dataset fields through unvalidated, as it always has.
-    const raw = q as Record<string, unknown>;
-    // SAFETY: a question's level / complexity is a number from 1 to 5, clamped below.
-    const level = (raw.level ?? raw.complexity ?? 1) as number;
+  // Parse questions (questions / queries / qa_pairs); a non-array fails at map(), as it always has.
+  const rawQs = root.questions ?? root.queries ?? root.qa_pairs ?? [];
+  const questions: LongMemQuestion[] = rawQs.map((raw, i) => {
+    // A question's level / complexity is a number from 1 to 5, clamped below.
+    const level = raw.level ?? raw.complexity ?? 1;
 
-    // SAFETY: a question's id, question and answer are strings, requires_abstention a boolean and
-    // relevant_sessions an array of session ids; the level is clamped to 1..5 (a ComplexityLevel
-    // for the integer levels the dataset uses). The loader passes dataset fields through unvalidated, as it always has.
+    // SAFETY: the level is clamped to 1..5, a ComplexityLevel for the integer levels the dataset uses.
     return {
-      question_id: (raw.question_id ?? raw.id ?? `lme-q${i}`) as string,
-      question: (raw.question ?? raw.query ?? '') as string,
-      answer: (raw.answer ?? raw.ground_truth ?? '') as string,
+      question_id: raw.question_id ?? raw.id ?? `lme-q${i}`,
+      question: raw.question ?? raw.query ?? '',
+      answer: raw.answer ?? raw.ground_truth ?? '',
       level: Math.max(1, Math.min(5, level)) as ComplexityLevel,
-      requires_abstention: level === 5 || (raw.requires_abstention as boolean | undefined),
-      relevant_sessions: raw.relevant_sessions as string[] | undefined,
+      requires_abstention: level === 5 || raw.requires_abstention,
+      relevant_sessions: raw.relevant_sessions,
     };
   });
 

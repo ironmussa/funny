@@ -336,18 +336,11 @@ export abstract class BaseAgentProcess extends EventEmitter {
   /** Map ACP `PromptResponse.usage` (camelCase) to a context-usage CLIMessage. */
   protected emitAcpPromptResponseUsage(usage: AcpPromptUsage | null | undefined): void {
     if (!usage || !isObject(usage)) return;
-    const u = usage as Record<string, unknown>;
     this.emitContextUsageMessage({
-      inputTokens: (u.inputTokens as number | undefined) ?? 0,
-      outputTokens: (u.outputTokens as number | undefined) ?? 0,
-      cacheReadTokens:
-        (u.cachedReadTokens as number | undefined) ??
-        (u.cacheReadTokens as number | undefined) ??
-        0,
-      cacheWriteTokens:
-        (u.cachedWriteTokens as number | undefined) ??
-        (u.cacheWriteTokens as number | undefined) ??
-        0,
+      inputTokens: usage.inputTokens ?? 0,
+      outputTokens: usage.outputTokens ?? 0,
+      cacheReadTokens: usage.cachedReadTokens ?? usage.cacheReadTokens ?? 0,
+      cacheWriteTokens: usage.cachedWriteTokens ?? usage.cacheWriteTokens ?? 0,
     });
   }
 
@@ -462,12 +455,11 @@ export abstract class BaseAgentProcess extends EventEmitter {
     if (isString(cause)) return this.cleanErrorDetails(cause);
     if (!isObject(cause)) return String(cause);
 
-    const e = cause as Record<string, unknown>;
-    const base = isString(e.message) ? e.message : String(cause);
+    const base = 'message' in cause && isString(cause.message) ? cause.message : String(cause);
 
     // ACP RequestError: { code, message, data: { details } }
-    if (e.data && isObject(e.data)) {
-      const details = (e.data as Record<string, unknown>).details;
+    if ('data' in cause && cause.data && isObject(cause.data)) {
+      const details = 'details' in cause.data ? cause.data.details : undefined;
       if (isString(details)) {
         return this.cleanErrorDetails(details);
       }

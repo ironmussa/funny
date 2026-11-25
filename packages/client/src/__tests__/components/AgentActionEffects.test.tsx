@@ -1,10 +1,14 @@
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, test, setDefaultTimeout } from 'bun:test';
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { AgentActionEffects } from '@/components/browser-panel/AgentActionEffects';
 import { dispatchBrowserSessionEvent } from '@/hooks/dispatch-browser-session-events';
 import { useBrowserPointerStore } from '@/stores/browser-pointer-store';
+
+// The proof and pre-push run these files together under `bun test --parallel`; on a
+// loaded machine a first render (cold module load) ran well past the 5 s default.
+setDefaultTimeout(60_000);
 
 const viewport = { width: 1000, height: 500 };
 
@@ -34,8 +38,9 @@ describe('AgentActionEffects', () => {
     );
     expect(await screen.findByTestId('browser-agent-action-key')).toHaveTextContent('Enter');
     const label = screen.getByTestId('browser-agent-action-label');
-    expect(label.style.left).toBe('25%');
-    expect(label.style.top).toBe('80%');
+    expect(label.style.getPropertyValue('--agent-action-left')).toBe('25%');
+    expect(label.style.getPropertyValue('--agent-action-top')).toBe('80%');
+    expect(label).toHaveClass('left-[var(--agent-action-left)]', 'top-[var(--agent-action-top)]');
   });
 
   test('a screenshot flashes the page once', async () => {

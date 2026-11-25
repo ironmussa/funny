@@ -15,6 +15,7 @@ import { PRBadge } from '@/components/PRBadge';
 import { Button } from '@/components/ui/button';
 import {
   approveFactoryMerge,
+  closeFactoryReplacedPr,
   controlFactoryRun,
   markFactoryRunDone,
   setFactoryRunLintCleanup,
@@ -26,6 +27,7 @@ import {
   isFactoryRunAwaitingMergeApproval,
   isFactoryRunNoChange,
 } from '@/lib/factory-run-labels';
+import type { PRState } from '@/lib/git-icons';
 import { toastError } from '@/lib/toast-error';
 
 /** The number of a GitHub pull request URL, or null. */
@@ -42,8 +44,38 @@ const RETRYABLE = new Set<FactoryRun['state']>([
   'needs_info',
 ]);
 
+/** Whether a retry is offered: a high-risk change waits for the member's approval, which a retry would not give. */
+export function canRetryFactoryRun(run: FactoryRun): boolean {
+  return RETRYABLE.has(run.state) && !isFactoryRunAwaitingMergeApproval(run);
+}
+
+/** Whether a stop is offered: the run has not ended. */
+export function canStopFactoryRun(run: Pick<FactoryRun, 'state'>): boolean {
+  return !ENDED_FACTORY_STATES.has(run.state);
+}
+
+/** The run that replaced a run: the newest run of the same issue. */
+export type FactoryRunReplacement = Pick<FactoryRun, 'issueNumber' | 'prUrl'>;
+
+/**
+ * Whether the member may close the pull request of a replaced run: it ended
+ * without merging, its pull request is still open and is not the newer run's.
+ * The server decides it again before it closes anything.
+ */
+export function canCloseReplacedPr(
+  run: Pick<FactoryRun, 'state' | 'prUrl'>,
+  replacedBy: FactoryRunReplacement | null | undefined,
+  prState: PRState,
+): boolean {
+  if (!replacedBy || (run.state !== 'failed' && run.state !== 'stopped')) return false;
+  const number = run.prUrl ? pullRequestNumber(run.prUrl) : null;
+  if (number === null || prState !== 'OPEN') return false;
+  return number !== (replacedBy.prUrl ? pullRequestNumber(replacedBy.prUrl) : null);
+}
+
 export type FactoryRunActionId =
   | 'approve-merge'
+  | 'close-replaced-pr'
   | 'lint-cleanup'
   | 'lint-cleanup-off'
   | 'mark-done'
@@ -194,6 +226,64 @@ function useMarkDoneAction(projectId: string, run: FactoryRun): FactoryRunAction
 }
 
 /**
+ * Close the pull request a replaced run left open, behind a confirmation that
+ * names the newer run's pull request. The branch is deleted with it.
+ */
+function useCloseReplacedPrAction(
+  projectId: string,
+  run: FactoryRun,
+  replacedBy: FactoryRunReplacement | null | undefined,
+  prState: PRState,
+): OfferedAction {
+  const { t } = useTranslation();
+  const [confirming, setConfirming] = useState(false);
+  const prNumber = run.prUrl ? pullRequestNumber(run.prUrl) : null;
+  if (prNumber === null || !canCloseReplacedPr(run, replacedBy, prState)) {
+    return { action: null, dialog: null };
+  }
+  const newerPr = replacedBy?.prUrl ? pullRequestNumber(replacedBy.prUrl) : null;
+  const close = () =>
+    void closeFactoryReplacedPr(projectId, run.id, prNumber).orTee((error) =>
+      toastError(error, 'factory'),
+    );
+  const dialog = (
+    <ConfirmDialog
+      open={confirming}
+      onOpenChange={setConfirming}
+      title={t('factory.closeReplacedPrTitle', 'Close pull request #{{pr}}?', { pr: prNumber })}
+      description={
+        newerPr === null
+          ? t(
+              'factory.closeReplacedPrBodyNoPr',
+              'A newer run of issue #{{issue}} replaced this run. The factory comments on #{{pr}}, closes it and deletes its branch.',
+              { issue: run.issueNumber, pr: prNumber },
+            )
+          : t(
+              'factory.closeReplacedPrBody',
+              'A newer run of issue #{{issue}} replaced this run with #{{newer}}. The factory comments on #{{pr}} with a link to #{{newer}}, closes it and deletes its branch.',
+              { issue: run.issueNumber, pr: prNumber, newer: newerPr },
+            )
+      }
+      confirmLabel={t('factory.closeReplacedPr', 'Close pull request')}
+      cancelLabel={t('common.cancel', 'Cancel')}
+      onCancel={() => setConfirming(false)}
+      onConfirm={() => {
+        setConfirming(false);
+        close();
+      }}
+    />
+  );
+  return {
+    action: {
+      id: 'close-replaced-pr',
+      label: t('factory.closeReplacedPr', 'Close pull request'),
+      run: () => setConfirming(true),
+    },
+    dialog,
+  };
+}
+
+/**
  * The member's approval of a high-risk change the factory holds, behind a
  * confirmation that names the commit and why it is held.
  */
@@ -253,7 +343,14 @@ function useApproveMergeAction(projectId: string, run: FactoryRun): OfferedActio
  * confirmation dialogs they open. The dialogs are returned apart so a menu can
  * close without taking them along: render them outside the menu.
  */
-export function useFactoryRunActions(projectId: string, run: FactoryRun): FactoryRunActions {
+export function useFactoryRunActions(
+  projectId: string,
+  run: FactoryRun,
+  replaced: { by: FactoryRunReplacement | null | undefined; prState: PRState } = {
+    by: null,
+    prState: 'OPEN',
+  },
+): FactoryRunActions {
   const { t } = useTranslation();
   const canSteer = useCanSteerProject(projectId);
   const control = (action: 'retry' | 'stop') =>
@@ -264,18 +361,19 @@ export function useFactoryRunActions(projectId: string, run: FactoryRun): Factor
   const split = useSplitAction(projectId, run);
   const lint = useLintCleanupAction(projectId, run);
   const done = useMarkDoneAction(projectId, run);
+  const closePr = useCloseReplacedPrAction(projectId, run, replaced.by, replaced.prState);
   if (!canSteer) return { actions: [], dialog: null };
   const offered: Array<FactoryRunAction | null> = [
     approval.action,
     split.action,
     lint.action,
     done,
+    closePr.action,
   ];
-  // A high-risk change waits for the member's approval, which a retry would not give.
-  if (RETRYABLE.has(run.state) && !approval.action) {
+  if (canRetryFactoryRun(run)) {
     offered.push({ id: 'retry', label: t('factory.retry', 'Retry'), run: () => control('retry') });
   }
-  if (!ENDED_FACTORY_STATES.has(run.state)) {
+  if (canStopFactoryRun(run)) {
     offered.push({ id: 'stop', label: t('factory.stop', 'Stop'), run: () => control('stop') });
   }
   return {
@@ -285,6 +383,7 @@ export function useFactoryRunActions(projectId: string, run: FactoryRun): Factor
         {approval.dialog}
         {split.dialog}
         {lint.dialog}
+        {closePr.dialog}
       </>
     ),
   };
@@ -292,6 +391,7 @@ export function useFactoryRunActions(projectId: string, run: FactoryRun): Factor
 
 const BUTTON_VARIANT: Record<FactoryRunActionId, 'default' | 'outline' | 'ghost'> = {
   'approve-merge': 'default',
+  'close-replaced-pr': 'outline',
   'lint-cleanup': 'outline',
   'lint-cleanup-off': 'ghost',
   'mark-done': 'outline',

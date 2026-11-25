@@ -27,12 +27,12 @@ import type { EmbeddingProvider, LLMConfig, MemoryFact } from './types.js';
 
 // ─── Result ────────────────────────────────────────────
 
-export interface ConsolidationResult {
+export type ConsolidationResult = {
   clustersConsolidated: number;
   factsInvalidated: number;
   factsCreated: number;
   lockAcquired: boolean;
-}
+};
 
 // ─── System prompts ────────────────────────────────────
 

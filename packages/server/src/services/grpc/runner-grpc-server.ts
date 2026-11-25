@@ -68,7 +68,7 @@ export interface RunnerGrpcDependencies {
   markRunnerOnline?(runnerId: string): Promise<void>;
   markRunnerOffline?(runnerId: string): Promise<void>;
   /** Expire durable permission requests whose in-memory continuation died with the runner. */
-  expirePendingPermissions?(runnerId: string): Promise<unknown>;
+  expirePendingPermissions?(runnerId: string): Promise<void>;
 }
 
 export type RunnerGrpcHandlers = Record<
@@ -385,7 +385,7 @@ export async function startRunnerGrpcEndpoint(
     markRunnerOffline: runnerManager!.markRunnerOffline,
     expirePendingPermissions: async (runnerId) => {
       const { expirePendingPermissionRequestsForRunner } = await import('../data-handler.js');
-      return expirePendingPermissionRequestsForRunner(runnerId);
+      await expirePendingPermissionRequestsForRunner(runnerId);
     },
   };
   const sessions =

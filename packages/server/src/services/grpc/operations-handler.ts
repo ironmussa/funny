@@ -88,8 +88,17 @@ export interface OperationExecution {
   signal: AbortSignal;
 }
 
+/**
+ * What a data operation answers: a `data:*` response record (`{ success: false,
+ * error }` on failure), or nothing for a plain ack.
+ */
+export type OperationOutcome = object | null | undefined;
+
 export interface OperationsHandlerOptions {
-  execute?: (context: RunnerGrpcCallContext, operation: OperationExecution) => Promise<unknown>;
+  execute?: (
+    context: RunnerGrpcCallContext,
+    operation: OperationExecution,
+  ) => Promise<OperationOutcome>;
   idempotency?: OperationIdempotencyStore;
   now?: () => number;
 }
@@ -657,7 +666,7 @@ export function createOperationsHandler(
         );
         timer.unref();
         try {
-          let operationResult: unknown;
+          let operationResult: OperationOutcome;
           if (persistentMutation) {
             const execution = idempotency.execute(
               {

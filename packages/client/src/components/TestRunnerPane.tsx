@@ -152,7 +152,10 @@ export function TestRunnerPane() {
       {/* Two-column layout: browser preview (left) and file explorer (right) */}
       <div ref={containerRef} className="relative flex min-h-0 flex-1 overflow-hidden">
         {/* Left column — browser preview + test output */}
-        <div className="min-w-0 overflow-hidden" style={{ width: `${splitPct}%` }}>
+        <div
+          className="w-[var(--test-runner-split)] min-w-0 overflow-hidden"
+          style={{ '--test-runner-split': `${splitPct}%` }}
+        >
           <BrowserPreview
             isRunning={isRunning}
             isStreaming={isStreaming}

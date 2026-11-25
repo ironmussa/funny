@@ -1,3 +1,5 @@
+import type { JsonObject } from '@funny/shared/json';
+
 import { createAgent, type HarnessAgentDefinition, type HarnessAgentOptions } from './agent.js';
 import { HarnessError, toHarnessError } from './errors.js';
 import type { HarnessEvent, HarnessEventSink } from './events.js';
@@ -15,7 +17,7 @@ export interface CreateSessionOptions {
   tools?: readonly HarnessTool[];
   toolRegistry?: ToolRegistry;
   sandbox?: SandboxIntent;
-  metadata?: Record<string, unknown>;
+  metadata?: JsonObject;
 }
 
 export interface PromptOptions {
@@ -24,7 +26,7 @@ export interface PromptOptions {
   signal?: AbortSignal;
   tools?: readonly HarnessTool[];
   sandbox?: SandboxIntent;
-  metadata?: Record<string, unknown>;
+  metadata?: JsonObject;
 }
 
 export class HarnessSession {
@@ -36,7 +38,7 @@ export class HarnessSession {
   private readonly baseTools: readonly HarnessTool[];
   private readonly toolRegistry?: ToolRegistry;
   private readonly defaultSandbox?: SandboxIntent;
-  private readonly metadata?: Record<string, unknown>;
+  private readonly metadata?: JsonObject;
 
   constructor(options: CreateSessionOptions) {
     if (!options.runtime?.spawnAgent) {

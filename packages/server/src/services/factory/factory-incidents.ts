@@ -31,6 +31,7 @@ import {
   type FactoryIncidentResult,
   type FactoryIncidentState,
 } from '@funny/shared/contracts/factory';
+import { errorMessage } from '@funny/shared/errors';
 import { parseStoredJson } from '@funny/shared/json-validation';
 import { and, desc, eq, inArray, like, ne } from 'drizzle-orm';
 import { ResultAsync } from 'neverthrow';
@@ -62,9 +63,9 @@ export interface FactoryIncidentRecord extends FactoryIncident {
 
 type Row = typeof factoryIncidents.$inferSelect;
 
-const storage = (error: unknown): FactoryIncidentsError => ({
+const storage = (cause: unknown): FactoryIncidentsError => ({
   kind: 'storage',
-  message: error instanceof Error ? error.message : String(error),
+  message: errorMessage(cause),
 });
 
 const CANDIDATES = z.array(factoryIncidentCandidateSchema);

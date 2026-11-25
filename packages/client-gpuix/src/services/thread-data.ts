@@ -11,6 +11,7 @@ import type {
   Project,
   ThreadWithMessages,
 } from '@funny/shared';
+import type { JsonObject } from '@funny/shared/json';
 
 import type { NativeGitStatusState } from '../git-status-state';
 import type { NativeClientComposition } from '../platform/composition';
@@ -171,7 +172,7 @@ export class NativeThreadDataService {
    * A query of the server's tRPC API (`/api/trpc/<procedure>`): thread lists,
    * detail and messages have no REST route. Unbatched, plain JSON.
    */
-  private async query<T>(procedure: string, input: Record<string, unknown>): Promise<T> {
+  private async query<T>(procedure: string, input: JsonObject): Promise<T> {
     const response = await this.request<{ result: { data: T } }>(
       `/trpc/${procedure}?input=${encodeURIComponent(JSON.stringify(input))}`,
     );

@@ -20,6 +20,7 @@
  * can never crowd out authenticated runners.
  */
 
+import { errorMessage } from '@funny/shared/errors';
 import { ByteWriteQueue } from '@funny/shared/lib/byte-write-queue';
 import {
   RUNNER_GRPC_WS_MAX_BUFFERED_BYTES,
@@ -50,7 +51,12 @@ export type CarrierTcpConnect = (target: {
   hostname: string;
   port: number;
   handlers: CarrierTcpHandlers;
-}) => Promise<unknown>;
+}) => Promise<CarrierTcpSocket>;
+
+/** Minimal HTTP server surface (Bun `Server`) that upgrades a request to the carrier's WebSocket. */
+export interface CarrierUpgradeServer {
+  upgrade(req: Request, opts: { data: CarrierWebSocketData }): boolean;
+}
 
 /** Minimal server WebSocket surface (Bun `ServerWebSocket`) used by the carrier. */
 export interface CarrierWebSocket {
@@ -178,7 +184,7 @@ export function createRunnerGrpcWebSocketCarrier(options: RunnerGrpcWebSocketCar
     /** Upgrades the request. Resolves to a Response only when the upgrade is refused. */
     async upgrade(
       req: Request,
-      server: { upgrade(req: Request, opts: { data: CarrierWebSocketData }): boolean },
+      server: CarrierUpgradeServer,
       address: string,
     ): Promise<Response | undefined> {
       if (req.headers.get('upgrade')?.toLowerCase() !== 'websocket') {
@@ -285,10 +291,10 @@ export function createRunnerGrpcWebSocketCarrier(options: RunnerGrpcWebSocketCar
               if (!state.closed) shut(ws, 1011, 'listener error');
             },
           },
-        }).catch((error: unknown) => {
+        }).catch((cause: unknown) => {
           log.error('Runner gRPC carrier could not reach the gRPC listener', {
             namespace: 'runner-grpc',
-            error: error instanceof Error ? error.message : String(error),
+            error: errorMessage(cause),
           });
           shut(ws, 1011, 'listener unavailable');
         });
@@ -354,13 +360,11 @@ export function withRunnerCarrier<H extends EngineWebSocketHandlers>(
  */
 export function routeRunnerCarrier(
   req: Request,
-  server: unknown,
+  server: CarrierUpgradeServer,
   carrier: Carrier | null,
   address: string,
 ): Promise<Response | undefined> | Response | null {
   if (new URL(req.url).pathname !== RUNNER_GRPC_WS_PATH) return null;
   if (!carrier) return new Response('Runner transport disabled', { status: 404 });
-  // SAFETY: hosts/bun/main.ts passes its Bun.Server, whose upgrade(req, { data }) is what
-  // carrier.upgrade calls; the tests pass {} only on paths that return before this line.
-  return carrier.upgrade(req, server as Parameters<Carrier['upgrade']>[1], address);
+  return carrier.upgrade(req, server, address);
 }

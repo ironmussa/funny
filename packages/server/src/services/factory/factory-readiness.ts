@@ -16,8 +16,8 @@
 import type { BranchRules } from '@funny/core/github-app';
 import type { FactoryReadiness, FactoryRunMetrics } from '@funny/shared/contracts/factory';
 import { parse as parseYaml } from 'yaml';
+import { z } from 'zod';
 
-import { isObject, isString } from '../../lib/value-guards.js';
 import type { FactoryGithubPort, FactoryRepoReader } from './factory-github.js';
 
 /** A branch a queue batch is tested on, to match a workflow's filters with. */
@@ -37,8 +37,11 @@ function matchesFilter(branch: string, pattern: string): boolean {
   return new RegExp(`^${regex}$`).test(branch);
 }
 
-const asList = (value: unknown): string[] =>
-  Array.isArray(value) ? value.filter((v): v is string => isString(v)) : [];
+/** A workflow's `branches` / `branches-ignore` list: its strings, or none when it is not a list. */
+const branchFilterList = z
+  .array(z.unknown())
+  .catch([])
+  .transform((items) => items.filter((item): item is string => typeof item === 'string'));
 
 /** Whether a branch filter list lets `branch` through (`!pattern` excludes, the last match wins). */
 function passesBranches(branch: string, patterns: string[]): boolean {
@@ -60,9 +63,11 @@ interface PushFilters {
 
 /** Whether a `push` trigger's branch filters let a push to a queue branch run it. */
 function pushFiltersRunOnQueueBranch(filters: PushFilters): boolean {
-  const ignored = asList('branches-ignore' in filters ? filters['branches-ignore'] : undefined);
+  const ignored = branchFilterList.parse(
+    'branches-ignore' in filters ? filters['branches-ignore'] : undefined,
+  );
   if (ignored.some((pattern) => matchesFilter(QUEUE_BRANCH, pattern))) return false;
-  const branches = asList('branches' in filters ? filters.branches : undefined);
+  const branches = branchFilterList.parse('branches' in filters ? filters.branches : undefined);
   // Only tags: no branch push runs it.
   if (branches.length === 0) return !('tags' in filters) || 'branches-ignore' in filters;
   return passesBranches(QUEUE_BRANCH, branches);
@@ -76,17 +81,17 @@ export function workflowRunsOnQueueBranches(text: string): boolean {
   } catch {
     return false;
   }
-  if (!isObject(workflow)) return false;
+  if (!workflow || typeof workflow !== 'object') return false;
   // YAML 1.1 readers turn the key `on` into `true`.
   const on =
     ('on' in workflow ? workflow.on : undefined) ??
     ('true' in workflow ? workflow.true : undefined);
   if (on === 'push') return true;
   if (Array.isArray(on)) return on.includes('push');
-  if (!isObject(on)) return false;
+  if (!on || typeof on !== 'object') return false;
   if (!('push' in on)) return false;
   const filters = on.push;
-  if (!isObject(filters)) return true;
+  if (!filters || typeof filters !== 'object') return true;
   return pushFiltersRunOnQueueBranch(filters);
 }
 

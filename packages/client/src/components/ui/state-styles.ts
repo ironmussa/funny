@@ -6,6 +6,7 @@ export const STATE_TEXT_CLASS = 'text-sm font-normal';
 export const STATE_PADDING = {
   sm: 'py-3',
   md: 'py-6',
+  roomy: 'py-8',
   lg: 'py-12',
 } as const;
 
@@ -20,6 +21,8 @@ export const STATE_SURFACE = {
   card: 'settings-card',
   dashed: 'rounded-md border border-dashed p-6',
   'dashed-muted': 'rounded-lg border border-dashed border-border/50',
+  // Over the content it is loading, dimming it.
+  scrim: 'bg-background/80',
 } as const;
 
 export type StateSurface = keyof typeof STATE_SURFACE;

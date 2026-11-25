@@ -270,7 +270,6 @@ function ProviderKeyRow({
         onChange={(e) => setKeyInputs((prev) => ({ ...prev, [id]: e.target.value }))}
         data-testid={`preferences-${id}-key`}
         placeholder={keyPresence[id] ? t('profile.tokenSaved') : `Enter your ${label}`}
-        className="text-sm"
       />
       <KeySaveButtons
         {...{ id, keyInputs, keyPresence, keySaving, handleSave, handleClear, t }}
@@ -358,7 +357,6 @@ function ProviderKeyPanel({
               placeholder={
                 keyPresence[id] ? t('profile.tokenSaved') : t('profile.tokenPlaceholder')
               }
-              className="text-sm"
             />
             <KeySaveButtons
               {...{ id, keyInputs, keyPresence, keySaving, handleSave, handleClear, t }}
@@ -435,7 +433,6 @@ function SmtpField({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="text-sm"
         data-testid={testId}
       />
     </div>

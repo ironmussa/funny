@@ -30,7 +30,11 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { createAnsiConverter } from '@/lib/ansi-to-html';
-import { parseThreadEventData } from '@/lib/thread-event-data';
+import {
+  parseThreadEventData,
+  type ThreadEventHookResult,
+  type ThreadEventMetadata,
+} from '@/lib/thread-event-data';
 import { timeAgo } from '@/lib/thread-utils';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
@@ -85,13 +89,13 @@ const HooksEventCard = memo(function HooksEventCard({
   metadata,
 }: {
   event: ThreadEvent;
-  metadata: Record<string, any>;
+  metadata: ThreadEventMetadata;
 }) {
   const { t } = useTranslation();
   const now = useMinuteTick();
   const [expanded, setExpanded] = useState(false);
   const hasFailed = metadata.status === 'failed';
-  const hooks: Array<{ label: string; status: string; error?: string }> = metadata.hooks ?? [];
+  const hooks: ThreadEventHookResult[] = metadata.hooks ?? [];
 
   // Collect error output from failed hooks
   const errorOutput = useMemo(() => {
@@ -218,6 +222,7 @@ export const WorkflowEventCard = memo(function WorkflowEventCard({
 
     case 'workflow:review': {
       const isPassing = metadata.verdict === 'pass';
+      const reviewerThreadId = metadata.reviewerThreadId;
       statusIcon = isPassing ? (
         <CheckCircle2 className="icon-xs text-muted-foreground" />
       ) : (
@@ -232,7 +237,7 @@ export const WorkflowEventCard = memo(function WorkflowEventCard({
           >
             {isPassing ? 'PASS' : 'FAIL'}
           </Badge>
-          {!isPassing && metadata.findingsCount > 0 && (
+          {!isPassing && (metadata.findingsCount ?? 0) > 0 && (
             <span className="text-muted-foreground/70 font-normal">
               ({metadata.findingsCount} finding{metadata.findingsCount !== 1 ? 's' : ''})
             </span>
@@ -241,12 +246,12 @@ export const WorkflowEventCard = memo(function WorkflowEventCard({
             <Repeat className="icon-2xs" />
             {metadata.iteration}
           </span>
-          {metadata.reviewerThreadId && (
+          {reviewerThreadId && (
             <button
               type="button"
-              data-testid={`workflow-link-reviewer-${metadata.reviewerThreadId}`}
+              data-testid={`workflow-link-reviewer-${reviewerThreadId}`}
               className="text-muted-foreground hover:text-foreground ml-1 inline-flex items-center gap-0.5 hover:underline"
-              onClick={() => navigateToThread(metadata.reviewerThreadId)}
+              onClick={() => navigateToThread(reviewerThreadId)}
             >
               <ExternalLink className="icon-2xs" />
               <span>view</span>
@@ -258,6 +263,7 @@ export const WorkflowEventCard = memo(function WorkflowEventCard({
     }
 
     case 'workflow:fix': {
+      const correctorThreadId = metadata.correctorThreadId;
       detail = (
         <>
           <span className="text-muted-foreground inline-flex items-center gap-0.5">
@@ -267,12 +273,12 @@ export const WorkflowEventCard = memo(function WorkflowEventCard({
               <span className="text-muted-foreground/70 ml-1">(no changes)</span>
             )}
           </span>
-          {metadata.correctorThreadId && (
+          {correctorThreadId && (
             <button
               type="button"
-              data-testid={`workflow-link-corrector-${metadata.correctorThreadId}`}
+              data-testid={`workflow-link-corrector-${correctorThreadId}`}
               className="text-muted-foreground hover:text-foreground ml-1 inline-flex items-center gap-0.5 hover:underline"
-              onClick={() => navigateToThread(metadata.correctorThreadId)}
+              onClick={() => navigateToThread(correctorThreadId)}
             >
               <ExternalLink className="icon-2xs" />
               <span>view</span>
@@ -285,6 +291,7 @@ export const WorkflowEventCard = memo(function WorkflowEventCard({
 
     case 'workflow:precommit_fix': {
       const isRunning = metadata.status === 'running';
+      const fixerThreadId = metadata.fixerThreadId;
       statusIcon = isRunning ? (
         <Loader2 className="icon-xs text-muted-foreground animate-spin" />
       ) : (
@@ -296,12 +303,12 @@ export const WorkflowEventCard = memo(function WorkflowEventCard({
             {metadata.hookLabel}
             <span className="text-muted-foreground/70 ml-1">(attempt {metadata.attempt})</span>
           </span>
-          {metadata.fixerThreadId && (
+          {fixerThreadId && (
             <button
               type="button"
-              data-testid={`workflow-link-fixer-${metadata.fixerThreadId}`}
+              data-testid={`workflow-link-fixer-${fixerThreadId}`}
               className="text-muted-foreground hover:text-foreground ml-1 inline-flex items-center gap-0.5 hover:underline"
-              onClick={() => navigateToThread(metadata.fixerThreadId)}
+              onClick={() => navigateToThread(fixerThreadId)}
             >
               <ExternalLink className="icon-2xs" />
               <span>view</span>

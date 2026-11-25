@@ -87,12 +87,14 @@ function CreateBranchDialogContent({
     <DialogContent className="sm:max-w-md" data-testid="create-branch-dialog">
       <DialogHeader>
         <DialogTitle>{t('dialog.createBranchTitle')}</DialogTitle>
-        <DialogDescription className="flex flex-wrap items-center gap-1">
-          <span>{t('dialog.createBranchBasedOn', 'Your new branch will be based on')}</span>
-          <span className="bg-muted text-foreground inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-xs">
-            <GitBranch className="icon-xs" />
-            {sourceBranch || t('dialog.createBranchBasedOnUnknown', 'current branch')}
-          </span>
+        <DialogDescription asChild>
+          <p className="flex flex-wrap items-center gap-1">
+            <span>{t('dialog.createBranchBasedOn', 'Your new branch will be based on')}</span>
+            <span className="bg-muted text-foreground inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-mono text-xs">
+              <GitBranch className="icon-xs" />
+              {sourceBranch || t('dialog.createBranchBasedOnUnknown', 'current branch')}
+            </span>
+          </p>
         </DialogDescription>
       </DialogHeader>
       <div className="flex items-center gap-2">

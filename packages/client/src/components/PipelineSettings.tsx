@@ -1,4 +1,5 @@
 import type { Pipeline } from '@funny/shared';
+import type { UpdatePipelineRequest } from '@funny/shared/contracts/pipelines';
 import { ChevronDown } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { toast } from 'sonner';
@@ -54,7 +55,9 @@ const ModelSelect = memo(function ModelSelect({
       <PopoverContent
         side="bottom"
         align="end"
-        className="w-auto min-w-40 p-1 data-[state=closed]:animate-none data-[state=open]:animate-none"
+        padding="xs"
+        animated={false}
+        className="w-auto min-w-40"
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         {PROVIDERS.map((provider) => {
@@ -88,12 +91,24 @@ const ModelSelect = memo(function ModelSelect({
   );
 });
 
+type ModelField = 'reviewModel' | 'fixModel' | 'precommitFixModel' | 'testFixModel';
+
+/** The pipeline as edited here: the model pickers hold any model id the picker lists. */
+type EditedPipeline = Omit<Pipeline, ModelField> & Record<ModelField, string>;
+
+type PromptField =
+  | 'reviewerPrompt'
+  | 'correctorPrompt'
+  | 'precommitFixerPrompt'
+  | 'commitMessagePrompt'
+  | 'testFixerPrompt';
+
 export function PipelineSettings() {
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
-  const [pipeline, setPipeline] = useState<Pipeline | null>(null);
+  const [pipeline, setPipeline] = useState<EditedPipeline | null>(null);
   const [loading, setLoading] = useState(true);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const pendingUpdatesRef = useRef<Record<string, unknown>>({});
+  const pendingUpdatesRef = useRef<UpdatePipelineRequest>({});
   const pipelineIdRef = useRef<string | null>(null);
 
   // Keep the pipeline ID ref in sync
@@ -151,7 +166,7 @@ export function PipelineSettings() {
 
   // Auto-save helper: accumulates updates and debounces the API call
   const saveField = useCallback(
-    (updates: Record<string, unknown>) => {
+    (updates: UpdatePipelineRequest) => {
       if (!pipelineIdRef.current) return;
       // Optimistic update
       setPipeline((prev) => (prev ? { ...prev, ...updates } : prev));
@@ -179,10 +194,9 @@ export function PipelineSettings() {
   );
 
   // Save prompt on blur
-  const handlePromptBlur = (field: string, value: string) => {
+  const handlePromptBlur = (field: PromptField, value: string) => {
     if (!pipeline) return;
-    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
-    const currentValue = (pipeline as unknown as Record<string, unknown>)[field] ?? '';
+    const currentValue = pipeline[field] ?? '';
     if (value !== currentValue) {
       saveField({ [field]: value || null });
     }
@@ -401,11 +415,16 @@ export function PipelineSettings() {
       {/* Custom Prompts section */}
       <Collapsible>
         <div className="settings-card mb-0">
-          <CollapsibleTrigger className="bg-muted/30 hover:bg-muted/50 flex w-full items-center justify-between px-3 py-2 transition-colors">
-            <p className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
-              Custom Prompts
-            </p>
-            <ChevronDown className="icon-sm text-muted-foreground transition-transform in-data-[state=open]:rotate-180" />
+          <CollapsibleTrigger asChild>
+            <button
+              type="button"
+              className="bg-muted/30 hover:bg-muted/50 flex w-full items-center justify-between px-3 py-2 transition-colors"
+            >
+              <p className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+                Custom Prompts
+              </p>
+              <ChevronDown className="icon-sm text-muted-foreground transition-transform in-data-[state=open]:rotate-180" />
+            </button>
           </CollapsibleTrigger>
           <CollapsibleContent>
             <div className="space-y-3 p-3">
@@ -494,7 +513,8 @@ function PromptField({
         onBlur={() => onBlur(localValue)}
         placeholder={placeholder}
         rows={3}
-        className="resize-y text-xs"
+        textSize="xs"
+        className="resize-y"
         data-testid={testId}
       />
     </div>

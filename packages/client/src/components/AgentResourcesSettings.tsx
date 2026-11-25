@@ -59,8 +59,9 @@ function ResourceRow({ resource, dimmed }: { resource: AgentResource; dimmed?: b
       className={cn(
         'border-border/50 bg-card flex items-center justify-between gap-3 rounded-md border px-3 py-2',
         dimmed && 'opacity-60',
+        'border-l-[3px] border-l-[color:var(--agent-resource-color)]',
       )}
-      style={{ borderLeftWidth: 3, borderLeftColor: colorFromName(resource.name) }}
+      style={{ '--agent-resource-color': colorFromName(resource.name) }}
       data-testid={`agent-resource-${resource.kind}-${resource.name}`}
     >
       <div className="min-w-0">

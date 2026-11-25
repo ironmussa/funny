@@ -2,11 +2,19 @@ import { stringify } from 'yaml';
 
 import { ACTION_KEYS, type ParsedNode, type ParsedWorkflow } from './schema.js';
 
-type JsonObject = Record<string, unknown>;
+/** A workflow as written to YAML: its set fields only, with each node normalized. */
+type WorkflowYaml = Pick<ParsedWorkflow, 'name'> &
+  Partial<Pick<ParsedWorkflow, 'description' | 'defaults' | 'inputs'>> & {
+    nodes?: NodeYaml[];
+  };
 
-export function normalizeWorkflowForYaml(workflow: ParsedWorkflow) {
-  const out: JsonObject = {};
-  out.name = workflow.name;
+/** A node as written to YAML: its id, the fields that differ from the defaults, and its action. */
+type NodeYaml = Pick<ParsedNode, 'id'> & Partial<Omit<ParsedNode, 'id'>>;
+
+export function normalizeWorkflowForYaml(workflow: ParsedWorkflow): WorkflowYaml {
+  const out: WorkflowYaml = {
+    name: workflow.name,
+  };
   if (workflow.description) out.description = workflow.description;
   if (workflow.defaults) out.defaults = workflow.defaults;
   if (workflow.inputs) out.inputs = workflow.inputs;
@@ -21,9 +29,8 @@ export function serializeWorkflow(workflow: ParsedWorkflow): string {
   });
 }
 
-function normalizeNodeForYaml(node: ParsedNode) {
-  const out: JsonObject = {};
-  out.id = node.id;
+function normalizeNodeForYaml(node: ParsedNode): NodeYaml {
+  const out: NodeYaml = { id: node.id };
   if (node.depends_on.length > 0) out.depends_on = node.depends_on;
   if (node.trigger_rule) out.trigger_rule = node.trigger_rule;
   if (node.concurrency) out.concurrency = node.concurrency;
@@ -35,7 +42,7 @@ function normalizeNodeForYaml(node: ParsedNode) {
   for (const key of ACTION_KEYS) {
     const value = node[key];
     if (value !== undefined) {
-      out[key] = value;
+      Object.assign(out, { [key]: value });
       break;
     }
   }

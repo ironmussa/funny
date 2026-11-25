@@ -12,7 +12,7 @@ packages/core/src/agents/llm/llm-api-process.ts	#1	const parsed = JSON.parse(thi
 packages/core/src/agents/llm/llm-api-process.ts	#1	input: JSON.parse(tc.function.arguments),	direct JSON.parse without boundary parser helper
 packages/core/src/agents/provider-extensions.ts	#1	json = JSON.parse(readFileSync(manifestAbs, 'utf8'));	direct JSON.parse without boundary parser helper
 packages/core/src/containers/container-service.ts	#1	const containers = JSON.parse(result.stdout);	direct JSON.parse without boundary parser helper
-packages/core/src/extensions/index.ts	#1	return JSON.parse(readFileSync(pkgPath, 'utf8')) as Record<string, any>;	direct JSON.parse without boundary parser helper
+packages/core/src/extensions/index.ts	#1	return JSON.parse(readFileSync(pkgPath, 'utf8'));	direct JSON.parse without boundary parser helper
 packages/core/src/git/github.ts	#1	const data = JSON.parse(result.stdout);	direct JSON.parse without boundary parser helper
 packages/core/src/git/github.ts	#2	const data = JSON.parse(result.stdout);	direct JSON.parse without boundary parser helper
 packages/core/src/git/github.ts	#3	const data = JSON.parse(result.stdout);	direct JSON.parse without boundary parser helper

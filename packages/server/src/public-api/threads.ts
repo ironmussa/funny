@@ -31,6 +31,7 @@ import { repos } from '../db/repos.js';
 import { audit } from '../lib/audit.js';
 import { projectRole } from '../lib/server-authorizer.js';
 import { decideProjectAccess } from '../middleware/project-access.js';
+import type { RunnerJson } from '../modules/threads/index.js';
 import { startThreadOnRunner } from '../services/runner-thread-launcher.js';
 import type { PublicApiContext } from './trpc.js';
 
@@ -91,7 +92,7 @@ const runnerThreadReply = z
  */
 async function publishedThread(
   threadId: string | undefined,
-  runnerThread: unknown,
+  runnerThread: RunnerJson,
   projectId: string,
 ): Promise<PublicThread> {
   const row = threadId ? await threadRepo.getThread(threadId) : undefined;

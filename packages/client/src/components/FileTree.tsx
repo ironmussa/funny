@@ -8,7 +8,7 @@ import {
   ExternalLink,
   EyeOff,
   FileCode,
-  Folder,
+  FolderIcon,
   FolderOpen,
   FolderOpenDot,
   FolderX,
@@ -16,7 +16,7 @@ import {
   MoreHorizontal,
   Undo2,
 } from 'lucide-react';
-import { type CSSProperties, useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
@@ -57,16 +57,16 @@ const ROW_HEIGHT = 24; // h-6 = 1.5rem = 24px
 
 /* ── Helpers ── */
 
-function statusColor(status: string): string {
+function statusColorClass(status: string): string {
   switch (status) {
     case 'added':
-      return 'hsl(142 40% 45%)';
+      return 'text-file-status-added';
     case 'modified':
-      return 'hsl(30 90% 55%)';
+      return 'text-file-status-modified';
     case 'deleted':
-      return 'hsl(0 45% 55%)';
+      return 'text-file-status-deleted';
     default:
-      return 'hsl(200 80% 60%)';
+      return 'text-file-status-other';
   }
 }
 
@@ -114,8 +114,6 @@ export interface FileTreeProps {
   hoverClass?: string;
   /** data-testid prefix (default: "filetree") */
   testIdPrefix?: string;
-  /** Optional inline style applied to each row (used for virtualizer positioning) */
-  rowStyle?: (row: TreeRow, index: number) => CSSProperties | undefined;
   /** Enable virtual scrolling for large file lists. The FileTree must be placed inside a fixed-height scroll container. */
   virtualize?: boolean;
   /** Search query to highlight matching text in file/folder names */
@@ -160,7 +158,6 @@ export function FileTree({
   activeClass = 'bg-sidebar-accent text-sidebar-accent-foreground',
   hoverClass = 'hover:bg-sidebar-accent/50 text-muted-foreground',
   testIdPrefix = 'filetree',
-  rowStyle,
   virtualize = false,
   searchQuery,
   hideStatus = false,
@@ -255,7 +252,7 @@ export function FileTree({
     [basePath, t],
   );
 
-  const renderRow = (row: TreeRow, index: number, style?: CSSProperties) => {
+  const renderRow = (row: TreeRow) => {
     if (row.kind === 'submodule-status') {
       const label =
         // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
@@ -269,14 +266,11 @@ export function FileTree({
         <div
           key={`submodule-status-${row.submodulePath}-${row.state}`}
           className={cn(
-            'flex h-[24px] select-none items-center gap-1.5 overflow-hidden pr-1 italic',
+            'flex h-[24px] select-none items-center gap-1.5 overflow-hidden pr-1 pl-[var(--file-tree-indent)] italic',
             fontSize,
             'text-muted-foreground/80',
           )}
-          style={{
-            ...style,
-            paddingLeft: `${8 + row.depth * INDENT_PX}px`,
-          }}
+          style={{ '--file-tree-indent': `${8 + row.depth * INDENT_PX}px` }}
           data-testid={`${testIdPrefix}-submodule-status-${row.submodulePath}`}
         >
           <span className="truncate">{label}</span>
@@ -290,15 +284,12 @@ export function FileTree({
         <div
           key={`folder-${row.path}`}
           className={cn(
-            'group flex h-[24px] cursor-pointer select-none items-center gap-1.5 overflow-hidden pr-1',
+            'group flex h-[24px] cursor-pointer select-none items-center gap-1.5 overflow-hidden pr-1 pl-[var(--file-tree-indent)]',
             fontSize,
             'text-muted-foreground transition-colors',
             hoverClass,
           )}
-          style={{
-            ...style,
-            paddingLeft: `${8 + row.depth * INDENT_PX}px`,
-          }}
+          style={{ '--file-tree-indent': `${8 + row.depth * INDENT_PX}px` }}
           draggable
           onDragStart={(e) => {
             setFileMentionDragData(e.dataTransfer, {
@@ -318,7 +309,7 @@ export function FileTree({
               className={cn('icon-sm shrink-0 transition-transform', !isCollapsed && 'rotate-90')}
             />
             {isCollapsed ? (
-              <Folder className="icon-base text-muted-foreground/70 shrink-0" />
+              <FolderIcon className="icon-base text-muted-foreground/70 shrink-0" />
             ) : (
               <FolderOpen className="icon-base text-muted-foreground/70 shrink-0" />
             )}
@@ -421,14 +412,11 @@ export function FileTree({
       <div
         key={f.path}
         className={cn(
-          'group flex h-[24px] items-center gap-1.5 cursor-pointer transition-colors overflow-hidden pr-1',
+          'group flex h-[24px] items-center gap-1.5 cursor-pointer transition-colors overflow-hidden pr-1 pl-[var(--file-tree-indent)]',
           fontSize,
           isActive ? activeClass : hoverClass,
         )}
-        style={{
-          ...style,
-          paddingLeft: `${8 + row.depth * INDENT_PX}px`,
-        }}
+        style={{ '--file-tree-indent': `${8 + row.depth * INDENT_PX}px` }}
         draggable
         onDragStart={(e) => {
           setFileMentionDragData(e.dataTransfer, {
@@ -503,8 +491,8 @@ export function FileTree({
             name={fileName}
             query={searchQuery}
             preserveExtension={!isSubmodule}
+            font="explorer"
             className={cn(
-              'font-mono-explorer',
               // oxlint-disable-next-line shadcn/require-static-classes -- fontSize is a Tailwind class prop
               fontSize,
             )}
@@ -525,10 +513,7 @@ export function FileTree({
               );
             })()}
           {!hideStatus && (
-            <span
-              className={cn('shrink-0 font-medium', fontSize)}
-              style={{ color: statusColor(f.status) }}
-            >
+            <span className={cn('shrink-0 font-medium', fontSize, statusColorClass(f.status))}>
               {statusLetter(f.status)}
             </span>
           )}
@@ -704,29 +689,23 @@ export function FileTree({
 
   if (virtualize) {
     return (
-      <div ref={scrollRef} style={{ overflow: 'auto', height: '100%' }}>
+      <div ref={scrollRef} className="h-full overflow-auto">
         <div
-          style={{
-            height: `${virtualizer.getTotalSize()}px`,
-            width: '100%',
-            position: 'relative',
-          }}
+          className="relative h-[var(--file-tree-total-height)] w-full"
+          style={{ '--file-tree-total-height': `${virtualizer.getTotalSize()}px` }}
         >
           {virtualizer.getVirtualItems().map((virtualRow) => {
             const row = treeRows[virtualRow.index];
             return (
               <div
                 key={virtualRow.key}
+                className="absolute top-0 left-0 h-[var(--file-tree-row-height)] w-full [transform:translateY(var(--file-tree-row-start))]"
                 style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: `${virtualRow.size}px`,
-                  transform: `translateY(${virtualRow.start}px)`,
+                  '--file-tree-row-height': `${virtualRow.size}px`,
+                  '--file-tree-row-start': `${virtualRow.start}px`,
                 }}
               >
-                {renderRow(row, virtualRow.index)}
+                {renderRow(row)}
               </div>
             );
           })}
@@ -737,12 +716,5 @@ export function FileTree({
 
   /* ── Non-virtualized (original) rendering ── */
 
-  return (
-    <>
-      {treeRows.map((row, index) => {
-        const style = rowStyle?.(row, index);
-        return renderRow(row, index, style);
-      })}
-    </>
-  );
+  return <>{treeRows.map((row) => renderRow(row))}</>;
 }

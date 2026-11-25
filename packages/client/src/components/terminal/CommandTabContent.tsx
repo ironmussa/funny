@@ -94,10 +94,10 @@ export function CommandTabContent({
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                variant="ghost"
+                variant="ghost-error"
                 size="icon-xs"
                 onClick={handleStop}
-                className="text-status-error hover:text-status-error/80 ml-auto"
+                className="ml-auto"
                 data-testid="command-stop"
               >
                 <Square className="icon-xs" />

@@ -16,6 +16,7 @@ import {
   THREAD_CLOSE_EVENT,
   THREAD_OPEN_EVENT,
   threadOpenSchema,
+  type SocketIoArgument,
 } from '@funny/shared/socket-events';
 import type { Socket } from 'socket.io';
 
@@ -107,7 +108,7 @@ export async function openThreadForSocket(
 export function setupThreadPresenceHandlers(socket: Socket, userId: string): void {
   const openThreads: Set<string> = (socket.data.openThreads ??= new Set<string>());
 
-  socket.on(THREAD_OPEN_EVENT, async (raw: unknown) => {
+  socket.on(THREAD_OPEN_EVENT, async (raw: SocketIoArgument) => {
     if (isRateLimited(socket.id, 60, 10_000, THREAD_OPEN_EVENT)) return;
     const parsed = threadOpenSchema.safeParse(raw);
     if (!parsed.success) return;
@@ -116,7 +117,7 @@ export function setupThreadPresenceHandlers(socket: Socket, userId: string): voi
     await openThreadForSocket(socket, userId, threadId);
   });
 
-  socket.on(THREAD_CLOSE_EVENT, (raw: unknown) => {
+  socket.on(THREAD_CLOSE_EVENT, (raw: SocketIoArgument) => {
     const parsed = threadOpenSchema.safeParse(raw);
     if (!parsed.success) return;
     closeThreadForSocket(socket, parsed.data.threadId);

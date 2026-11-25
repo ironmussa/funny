@@ -175,14 +175,14 @@ export function MergeBranchDialog({
             >
               <SelectTrigger
                 id="review-merge-target-select"
-                className="h-8 text-xs"
+                textSize="xs"
                 data-testid="review-merge-target-select"
               >
                 <SelectValue placeholder={t('review.selectBranch', 'Select branch')} />
               </SelectTrigger>
               <SelectContent>
                 {mergeDialog?.branches.map((b) => (
-                  <SelectItem key={b} value={b} className="text-xs">
+                  <SelectItem key={b} value={b} textSize="xs">
                     {b}
                   </SelectItem>
                 ))}

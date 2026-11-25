@@ -91,10 +91,14 @@ function defaultPublishEvent(context: RunnerGrpcCallContext, event: AcceptedAgen
   relayToThreadStream(event.scope.threadId, browserEvent);
 }
 
-function parseUnsigned(value: unknown): bigint | null {
+/** A wire uint64: the protobuf codec gives a bigint or string, the JSON codec a string or number. */
+type WireUnsigned = string | number | bigint;
+
+function parseUnsigned(value: WireUnsigned | undefined): bigint | null {
+  if (value === undefined) return null;
   try {
-    // SAFETY: BigInt throws on any value it cannot convert, and the catch below maps that to null.
-    const parsed = BigInt(value as string | number | bigint);
+    // BigInt throws on a string it cannot convert; the catch below maps that to null.
+    const parsed = BigInt(value);
     return parsed >= 0n && parsed <= BigInt(Number.MAX_SAFE_INTEGER) ? parsed : null;
   } catch {
     return null;

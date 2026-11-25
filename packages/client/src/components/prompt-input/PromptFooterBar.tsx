@@ -80,14 +80,15 @@ function RuntimeSwitch({
     toggle.setEnabled(false);
     onRuntimeChange(next);
   };
-  const itemClass = 'h-6 gap-1 px-2 text-xs [&_svg]:size-3.5';
+  const itemClass = '[&_svg]:size-3.5';
   return (
     <ToggleGroup
       type="single"
-      size="sm"
+      size="xs"
+      segmented
       value={value}
       onValueChange={onValueChange}
-      className="border-border shrink-0 gap-0 rounded-md border"
+      className="shrink-0"
       data-testid="prompt-runtime-switch"
     >
       {modes.map((m) => (

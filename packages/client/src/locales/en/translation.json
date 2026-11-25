@@ -734,6 +734,8 @@
     "projectFactoryAutoMergeAllDesc": "Every change that passed its review, also high-risk ones",
     "projectFactorySensitivePaths": "Sensitive paths",
     "projectFactorySensitivePathsDesc": "Globs, separated by commas. A change that touches one is high risk, besides .github/, migrations and auth/",
+    "projectFactorySizeGate": "Size gate",
+    "projectFactorySizeGateDesc": "A change with more changed lines than a limit you set is high risk. Off: the size of a change does not make it high risk",
     "projectFactoryMaxLowRiskLines": "Size of a low-risk change",
     "projectFactoryMaxLowRiskLinesDesc": "A change with more changed lines than this is high risk. Tests, Markdown, translations, stories, snapshots and lockfiles do not count",
     "projectFactoryApprovalAdjust": "Adjustment an approval follows",
@@ -804,7 +806,10 @@
       "openai": "OpenAI",
       "ollama": "Ollama",
       "openai-compatible": "OpenAI-compatible"
-    }
+    },
+    "projectFactoryBaseBranch": "Merge into",
+    "projectFactoryBaseBranchDesc": "The branch runs start from and their pull requests merge into. Flows are still read from the default branch",
+    "projectFactoryBaseBranchDefault": "Repository default"
   },
   "skills": {
     "showingFor": "Showing skills for:",
@@ -1973,7 +1978,11 @@
     "split_one": "Split into {{count}} issue",
     "split_other": "Split into {{count}} issues",
     "splitTitle": "Split issue #{{issue}}?",
-    "splitBody": "The factory opens one issue per part, with the description of #{{issue}} for context, and queues them. #{{issue}} gets the list and leaves the factory. No agent runs for this."
+    "splitBody": "The factory opens one issue per part, with the description of #{{issue}} for context, and queues them. #{{issue}} gets the list and leaves the factory. No agent runs for this.",
+    "closeReplacedPr": "Close pull request",
+    "closeReplacedPrTitle": "Close pull request #{{pr}}?",
+    "closeReplacedPrBody": "A newer run of issue #{{issue}} replaced this run with #{{newer}}. The factory comments on #{{pr}} with a link to #{{newer}}, closes it and deletes its branch.",
+    "closeReplacedPrBodyNoPr": "A newer run of issue #{{issue}} replaced this run. The factory comments on #{{pr}}, closes it and deletes its branch."
   },
   "projectSecrets": {
     "title": "Secrets",
@@ -2107,9 +2116,7 @@
       "needsPerson": "Needs a person",
       "done": "Done"
     },
-    "doneHidden": "+{{count}} older in the list",
     "emptyColumn": "No runs here",
-    "showMore": "Show {{count}} more",
     "limit": {
       "merge": "1 at a time per repository",
       "stage": "Stage limit of \"{{node}}\"",
@@ -2171,7 +2178,21 @@
       "needsPerson": "it needs a person",
       "blocks": "Blocks",
       "then": "then"
-    }
+    },
+    "selection": {
+      "select": "Select run",
+      "count_one": "{{count}} selected",
+      "count_other": "{{count}} selected",
+      "retry": "Retry ({{count}})",
+      "stop": "Stop ({{count}})",
+      "clear": "Clear selection",
+      "stopTitle_one": "Stop {{count}} run?",
+      "stopTitle_other": "Stop {{count}} runs?",
+      "stopDesc": "This stops the selected runs that have not ended and their agent threads."
+    },
+    "replaced": "Replaced",
+    "replacedBy": "Replaced by #{{pr}}",
+    "replacedDetail": "Issue #{{issue}} was sent to the factory again: a newer run works on it."
   },
   "factoryRunDetail": {
     "lintCleanupTriage": "Triage classed it as a lint cleanup of rules that cannot change behavior: its size and its contract risks do not hold it. You can say it is not one.",

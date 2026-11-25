@@ -14,6 +14,7 @@ import type { ConcurrencyGate, MemoryGateOptions } from '@funny/pipelines';
 import type { NodeOutput, YamlPipelineContext } from '@funny/workflows/compiler';
 import { and, asc, desc, eq, gte, like } from 'drizzle-orm';
 import type { Result } from 'neverthrow';
+import { z } from 'zod';
 
 import { db } from '../../db/index.js';
 import { messages, threads } from '../../db/schema.js';
@@ -139,7 +140,7 @@ export interface FactoryFlowRunsDeps {
   /** Factory steps (a flow's command, integrate) through the enabler's runner. */
   steps?: (userId: string) => FactoryStepDeps;
   /** Tell the enabler a run waits for them; defaults to Web Push. */
-  notify?: (userId: string, message: WaitingNotice) => Promise<unknown>;
+  notify?: (userId: string, message: WaitingNotice) => Promise<NotifyOutcome>;
   /**
    * Grants the flows' concurrency-group slots. Default: database leases shared
    * by every server instance (`createLeaseGate`), stopped by `stopAll`, so
@@ -148,6 +149,9 @@ export interface FactoryFlowRunsDeps {
    */
   gate?: ConcurrencyGate;
 }
+
+/** What a notifier answers: how many devices Web Push reached, or nothing. Never read. */
+export type NotifyOutcome = number | void;
 
 export interface WaitingNotice {
   title: string;
@@ -317,14 +321,31 @@ export const failureReason = (error: string | undefined): string =>
 export const flowOf = (job: FactoryRunJob): string => job.run.flowName ?? job.factory.flowName;
 
 /**
+ * The step outputs a journal stored: an object per step. JSON drops an
+ * undefined `output`, so a missing one reads back as undefined.
+ */
+const STORED_OUTPUTS = z.record(
+  z.string(),
+  z
+    .looseObject({ output: z.unknown().optional() })
+    .transform((stored): NodeOutput => ({ ...stored, output: stored.output })),
+);
+
+/** The flow's step outputs by node id, as a journal stores them. */
+interface StoredOutputs {
+  [nodeId: string]: NodeOutput;
+}
+
+/**
  * The journal keeps the flow's step outputs; the rest of the context (the
  * provider, the progress reporter, the inputs) is this attempt's, rebuilt by
  * the server that resumes the run.
  */
-export const journalCodec = (live: YamlPipelineContext): JournalCodec<YamlPipelineContext> => ({
+export const journalCodec = (
+  live: YamlPipelineContext,
+): JournalCodec<YamlPipelineContext, StoredOutputs> => ({
   encode: (ctx) => ctx.outputs,
-  // SAFETY: the journal stores only what encode() wrote, the context's outputs (NodeOutput by node id).
-  decode: (stored) => ({ ...live, outputs: stored as Record<string, NodeOutput> }),
+  decode: (stored) => ({ ...live, outputs: STORED_OUTPUTS.parse(stored) }),
 });
 
 /** The gate a flow run waits on, and how to stop renewing its leases. */

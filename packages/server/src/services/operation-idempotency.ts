@@ -15,13 +15,28 @@ export type IdempotencyExecution<T> =
   | { kind: 'conflict' }
   | { kind: 'in_progress' };
 
+/** A field of a decoded protobuf message: a scalar, bytes, a list or a nested message. */
+type DecodedField =
+  | string
+  | number
+  | boolean
+  | bigint
+  | Uint8Array
+  | null
+  | undefined
+  | readonly DecodedField[]
+  | { readonly [field: string]: DecodedField };
+
+/** An operation's request message as decoded from the wire; its fingerprint pins the key. */
+export type IdempotentRequest = { readonly [field: string]: DecodedField };
+
 export interface OperationIdempotencyStore {
   execute<T>(
     input: {
       runnerId: string;
       operationKind: string;
       idempotencyKey: string;
-      request: unknown;
+      request: IdempotentRequest | undefined;
     },
     execute: () => Promise<T>,
   ): Promise<IdempotencyExecution<T>>;
@@ -42,7 +57,7 @@ export interface SqlOperationIdempotencyOptions {
   transaction?: <T>(work: () => Promise<T>) => Promise<T>;
 }
 
-function fingerprint(request: unknown): string {
+function fingerprint(request: IdempotentRequest | undefined): string {
   return createHash('sha256').update(canonicalJson(request)).digest('hex');
 }
 
@@ -71,7 +86,7 @@ export class SqlOperationIdempotencyStore implements OperationIdempotencyStore {
       runnerId: string;
       operationKind: string;
       idempotencyKey: string;
-      request: unknown;
+      request: IdempotentRequest | undefined;
     },
     execute: () => Promise<T>,
   ): Promise<IdempotencyExecution<T>> {
@@ -104,7 +119,7 @@ export class SqlOperationIdempotencyStore implements OperationIdempotencyStore {
       runnerId: string;
       operationKind: string;
       idempotencyKey: string;
-      request: unknown;
+      request: IdempotentRequest | undefined;
     },
     execute: () => Promise<T>,
   ): Promise<IdempotencyExecution<T>> {

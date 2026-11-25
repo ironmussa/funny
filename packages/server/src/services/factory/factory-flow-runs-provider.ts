@@ -53,7 +53,12 @@ import {
 } from './factory-runs.js';
 import { getWatchedFactory, type projectAgentDefaults } from './factory-settings.js';
 import type { BlockerState } from './factory-stacking.js';
-import { lastThreadMessage, type ThreadOutcome, type WaitAfter } from './factory-thread-waits.js';
+import {
+  lastAgentError,
+  lastThreadMessage,
+  type ThreadOutcome,
+  type WaitAfter,
+} from './factory-thread-waits.js';
 import { busyPathsOf, type FactorySplitDeps } from './factory-triage.js';
 
 /** What orders a run in the merge group: whether it blocks other runs, and its size. */
@@ -489,7 +494,7 @@ export function createRunProvider(ctx: FlowRunsContext, attempt: RunAttempt) {
     ...issueDepsOf(deps, job, scope),
     split: splitDepsOf(deps, job, scope),
     sensitivePaths: job.factory.sensitivePaths,
-    maxLowRiskLines: job.factory.maxLowRiskLines,
+    maxLowRiskLines: job.factory.sizeGateEnabled ? job.factory.maxLowRiskLines : null,
     lintCleanup: async () => {
       const run = await deps.runs.get(job.run.id);
       return run.isOk() && run.value !== null && lintCleanupSource(run.value) !== null;
@@ -507,6 +512,7 @@ export function createRunProvider(ctx: FlowRunsContext, attempt: RunAttempt) {
       if (entered.isOk() && !entered.value) controller.abort();
     },
     lastThreadMessage: deps.lastThreadMessage ?? lastThreadMessage,
+    lastAgentError,
     removeUnchangedWorktrees: async () => {
       const run = await deps.runs.get(job.run.id);
       const ids = run.isOk() && run.value ? run.value.threadIds : job.run.threadIds;

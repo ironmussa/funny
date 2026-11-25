@@ -632,6 +632,27 @@ describe('factory over tRPC', () => {
     );
   });
 
+  test('the size gate starts off, and turning it on keeps the line limit', async () => {
+    expect((await save('alice', { projectId: 'p1', enabled: true })).body).toMatchObject({
+      sizeGateEnabled: false,
+      maxLowRiskLines: 400,
+    });
+    const on = await save('alice', {
+      projectId: 'p1',
+      enabled: true,
+      sizeGateEnabled: true,
+      maxLowRiskLines: 600,
+    });
+    expect(on.body).toMatchObject({ sizeGateEnabled: true, maxLowRiskLines: 600 });
+    // Omitted, it keeps its value; turned off, the limit is kept for next time.
+    expect((await save('alice', { projectId: 'p1', enabled: true })).body).toMatchObject({
+      sizeGateEnabled: true,
+    });
+    expect(
+      (await save('alice', { projectId: 'p1', enabled: true, sizeGateEnabled: false })).body,
+    ).toMatchObject({ sizeGateEnabled: false, maxLowRiskLines: 600 });
+  });
+
   test('the size limit and the globs left out of the size are saved and read back', async () => {
     expect((await save('alice', { projectId: 'p1', enabled: true })).body).toMatchObject({
       maxLowRiskLines: 400,
@@ -780,6 +801,29 @@ describe('factory over tRPC', () => {
     expect(
       (await save('alice', { projectId: 'p1', enabled: true, dependencies: 'merge' })).status,
     ).toBe(400);
+  });
+
+  test("the factory merges into the repository's default branch unless it names another", async () => {
+    expect((await save('alice', { projectId: 'p1', enabled: true })).body).toMatchObject({
+      baseBranch: '',
+    });
+    const saved = await save('alice', { projectId: 'p1', enabled: true, baseBranch: 'develop' });
+    expect(saved.body).toMatchObject({ baseBranch: 'develop' });
+    const { factoryBaseBranchOf } = await import('../../services/factory/factory-settings.js');
+    expect(await factoryBaseBranchOf('alice', 'p1')).toBe('develop');
+    // Saving something else keeps it; an empty name goes back to the default.
+    expect(
+      (await save('alice', { projectId: 'p1', enabled: true, maxConcurrent: 3 })).body,
+    ).toMatchObject({ baseBranch: 'develop' });
+    expect(
+      (await save('alice', { projectId: 'p1', enabled: true, baseBranch: '' })).body,
+    ).toMatchObject({ baseBranch: '' });
+    expect(await factoryBaseBranchOf('alice', 'p1')).toBeNull();
+    for (const bad of ['-x', 'a..b', 'has space', 'feat/', '.hidden']) {
+      expect(
+        (await save('alice', { projectId: 'p1', enabled: true, baseBranch: bad })).status,
+      ).toBe(400);
+    }
   });
 
   test('a too-large issue is commented unless the factory splits it', async () => {

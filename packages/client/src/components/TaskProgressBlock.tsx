@@ -142,11 +142,11 @@ function IssueList({ issues, total, t }: { issues: TaskIssue[]; total: number; t
       <span className="text-muted-foreground font-medium">{t('taskProgress.issues')}</span>
       <ul className="flex flex-col gap-0.5">
         {shown.map((issue, index) => {
-          const Icon = issue.severity === 'error' ? XCircle : AlertTriangle;
+          const SeverityIcon = issue.severity === 'error' ? XCircle : AlertTriangle;
           const location = issueLocation(issue);
           return (
             <li key={index} className="flex min-w-0 items-start gap-2">
-              <Icon
+              <SeverityIcon
                 className={cn(
                   'mt-0.5 size-3.5 shrink-0',
                   issue.severity === 'error' ? 'text-status-error' : 'text-status-warning',

@@ -24,6 +24,15 @@ function sorted(classes: string): string[] {
   return classes.split(/\s+/).filter(Boolean).sort();
 }
 
+/**
+ * What a call site that passed `className` rendered: the component merges its
+ * own classes with `className` through `cn`, last one winning, so the default
+ * render merged with the old classes is the same set.
+ */
+function withOld(el: Element | null, oldClass: string): string[] {
+  return sorted(cn(el?.getAttribute('class') ?? '', oldClass));
+}
+
 describe('Button variants replace hand-written ghost colors', () => {
   const cases: [string, string, string][] = [
     // [new variant, old variant, old className]
@@ -54,22 +63,18 @@ describe('Badge variants', () => {
         x
       </Badge>,
     );
-    const { container: then } = render(
-      <Badge variant="info" className="text-3xs rounded px-1 py-0 leading-none font-medium">
-        x
-      </Badge>,
+    const { container: base } = render(<Badge variant="info">x</Badge>);
+    expect(classSet(now.firstElementChild)).toEqual(
+      withOld(base.firstElementChild, 'text-3xs rounded px-1 py-0 leading-none font-medium'),
     );
-    expect(classSet(now.firstElementChild)).toEqual(classSet(then.firstElementChild));
   });
 
   test('muted = secondary + bg-muted text-muted-foreground', () => {
     const { container: now } = render(<Badge variant="muted">x</Badge>);
-    const { container: then } = render(
-      <Badge variant="secondary" className="bg-muted text-muted-foreground">
-        x
-      </Badge>,
+    const { container: base } = render(<Badge variant="secondary">x</Badge>);
+    expect(classSet(now.firstElementChild)).toEqual(
+      withOld(base.firstElementChild, 'bg-muted text-muted-foreground'),
     );
-    expect(classSet(now.firstElementChild)).toEqual(classSet(then.firstElementChild));
   });
 
   test('weight normal + mono = font-mono font-normal', () => {
@@ -78,32 +83,25 @@ describe('Badge variants', () => {
         x
       </Badge>,
     );
-    const { container: then } = render(
-      <Badge variant="outline" size="xs" className="font-mono font-normal">
+    const { container: base } = render(
+      <Badge variant="outline" size="xs">
         x
       </Badge>,
     );
-    expect(classSet(now.firstElementChild)).toEqual(classSet(then.firstElementChild));
+    expect(classSet(now.firstElementChild)).toEqual(
+      withOld(base.firstElementChild, 'font-mono font-normal'),
+    );
   });
 });
 
 describe('container variants', () => {
   test('ScrollArea muted / muted-outline / divided', () => {
-    const same = (a: HTMLElement, b: HTMLElement) =>
-      expect(classSet(a.firstElementChild)).toEqual(classSet(b.firstElementChild));
-    same(
-      render(<ScrollArea variant="muted">x</ScrollArea>).container,
-      render(<ScrollArea className="bg-muted rounded">x</ScrollArea>).container,
-    );
-    same(
-      render(<ScrollArea variant="muted-outline">x</ScrollArea>).container,
-      render(<ScrollArea className="border-border bg-muted rounded border">x</ScrollArea>)
-        .container,
-    );
-    same(
-      render(<ScrollArea variant="divided">x</ScrollArea>).container,
-      render(<ScrollArea className="border-border/40 border-t">x</ScrollArea>).container,
-    );
+    const base = () => render(<ScrollArea>x</ScrollArea>).container.firstElementChild;
+    const now = (variant: 'muted' | 'muted-outline' | 'divided') =>
+      classSet(render(<ScrollArea variant={variant}>x</ScrollArea>).container.firstElementChild);
+    expect(now('muted')).toEqual(withOld(base(), 'bg-muted rounded'));
+    expect(now('muted-outline')).toEqual(withOld(base(), 'border-border bg-muted rounded border'));
+    expect(now('divided')).toEqual(withOld(base(), 'border-border/40 border-t'));
   });
 
   test('SearchBar floating = the find bar hand-written in ThreadSearchBar', () => {
@@ -111,53 +109,48 @@ describe('container variants', () => {
     const { getByTestId: now } = render(
       <SearchBar {...props} testIdPrefix="a" variant="floating" />,
     );
-    const { getByTestId: then } = render(
-      <SearchBar
-        {...props}
-        testIdPrefix="b"
-        className="border-border bg-popover gap-1.5 rounded-b-lg border border-t-0 px-2 py-1.5 shadow-md"
-      />,
+    const { getByTestId: base } = render(<SearchBar {...props} testIdPrefix="b" />);
+    expect(classSet(now('a-bar'))).toEqual(
+      withOld(
+        base('b-bar'),
+        'border-border bg-popover gap-1.5 rounded-b-lg border border-t-0 px-2 py-1.5 shadow-md',
+      ),
     );
-    expect(classSet(now('a-bar'))).toEqual(classSet(then('b-bar')));
   });
 
   test('EmptyState surface and inset', () => {
-    const same = (a: HTMLElement, b: HTMLElement) =>
-      expect(classSet(a.firstElementChild)).toEqual(classSet(b.firstElementChild));
-    same(
-      render(<EmptyState title="t" fill={false} surface="dashed" />).container,
-      render(<EmptyState title="t" fill={false} className="rounded-md border border-dashed p-6" />)
-        .container,
-    );
-    same(
-      render(<EmptyState title="t" fill={false} padding="md" surface="dashed-muted" />).container,
-      render(
-        <EmptyState
-          title="t"
-          fill={false}
-          padding="md"
-          className="border-border/50 rounded-lg border border-dashed"
-        />,
-      ).container,
-    );
-    same(
-      render(<EmptyState title="t" fill={false} padding="md" surface="card" />).container,
-      render(<EmptyState title="t" fill={false} padding="md" className="settings-card" />)
-        .container,
-    );
-    same(
-      render(<EmptyState title="t" fill={false} inset="sm" />).container,
-      render(<EmptyState title="t" fill={false} className="px-2" />).container,
-    );
+    const first = (c: HTMLElement) => c.firstElementChild;
+    const plain = first(render(<EmptyState title="t" fill={false} />).container);
+    const padded = () =>
+      first(render(<EmptyState title="t" fill={false} padding="md" />).container);
+    expect(
+      classSet(first(render(<EmptyState title="t" fill={false} surface="dashed" />).container)),
+    ).toEqual(withOld(plain, 'rounded-md border border-dashed p-6'));
+    expect(
+      classSet(
+        first(
+          render(<EmptyState title="t" fill={false} padding="md" surface="dashed-muted" />)
+            .container,
+        ),
+      ),
+    ).toEqual(withOld(padded(), 'border-border/50 rounded-lg border border-dashed'));
+    expect(
+      classSet(
+        first(render(<EmptyState title="t" fill={false} padding="md" surface="card" />).container),
+      ),
+    ).toEqual(withOld(padded(), 'settings-card'));
+    expect(
+      classSet(first(render(<EmptyState title="t" fill={false} inset="sm" />).container)),
+    ).toEqual(withOld(plain, 'px-2'));
   });
 
   test('Skeleton corners and Input inset', () => {
-    const { container: a } = render(<Skeleton corners="circle" className="size-3.5" />);
-    const { container: b } = render(<Skeleton className="size-3.5 rounded-full" />);
-    expect(classSet(a.firstElementChild)).toEqual(classSet(b.firstElementChild));
+    const { container: a } = render(<Skeleton corners="circle" />);
+    const { container: b } = render(<Skeleton />);
+    expect(classSet(a.firstElementChild)).toEqual(withOld(b.firstElementChild, 'rounded-full'));
 
     const { container: c } = render(<Input inset="icon" />);
-    const { container: d } = render(<Input className="pl-8" />);
-    expect(classSet(c.firstElementChild)).toEqual(classSet(d.firstElementChild));
+    const { container: d } = render(<Input />);
+    expect(classSet(c.firstElementChild)).toEqual(withOld(d.firstElementChild, 'pl-8'));
   });
 });

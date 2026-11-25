@@ -29,10 +29,10 @@ describe('PRBadge', () => {
     },
   );
 
-  test('supports a 15px compact size for powerline rows', () => {
+  test('supports a 16px compact size for powerline rows', () => {
     renderWithProviders(<PRBadge prNumber={31} size="compact" data-testid="pr-badge-compact" />);
 
-    expect(screen.getByTestId('pr-badge-compact')).toHaveClass('h-[15px]');
+    expect(screen.getByTestId('pr-badge-compact')).toHaveClass('h-4');
   });
 
   test('supports inverse styling for dark surfaces', () => {

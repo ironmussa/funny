@@ -43,11 +43,6 @@ export function AnnotationList() {
   const removeAnnotation = useBrowserPanelStore((s) => s.removeAnnotation);
   const fontSize = useSettingsStore((s) => s.fontSize);
 
-  const fontStyle = {
-    fontSize: PROSE_FONT_SIZE_PX[fontSize],
-    lineHeight: `${PROSE_LINE_HEIGHT_PX[fontSize]}px`,
-  };
-
   if (annotations.length === 0) {
     return (
       <EmptyState
@@ -61,11 +56,14 @@ export function AnnotationList() {
     <ScrollArea className="h-full">
       <ul
         data-testid="browser-panel-annotation-list"
-        className="divide-border flex flex-col divide-y"
-        style={fontStyle}
+        className="divide-border flex flex-col divide-y text-[length:var(--annotation-list-font-size)] leading-[var(--annotation-list-line-height)]"
+        style={{
+          '--annotation-list-font-size': `${PROSE_FONT_SIZE_PX[fontSize]}px`,
+          '--annotation-list-line-height': `${PROSE_LINE_HEIGHT_PX[fontSize]}px`,
+        }}
       >
         {annotations.map((a, i) => {
-          const Icon = kindIcon(a.kind);
+          const KindIcon = kindIcon(a.kind);
           const snippet = truncate(a.note.trim(), NOTE_SNIPPET_MAX);
           return (
             <li
@@ -79,7 +77,10 @@ export function AnnotationList() {
               >
                 {i + 1}
               </span>
-              <Icon className="text-muted-foreground mt-1 size-3.5 shrink-0" aria-label={a.kind} />
+              <KindIcon
+                className="text-muted-foreground mt-1 size-3.5 shrink-0"
+                aria-label={a.kind}
+              />
               <div className="flex min-w-0 flex-1 flex-col">
                 <span className="text-muted-foreground">{summarize(a)}</span>
                 {snippet && <span className="truncate">{snippet}</span>}

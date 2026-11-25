@@ -36,6 +36,13 @@ export interface Thread {
   createdAt: string;
 }
 
+/** The thread fields the helpers change through `threads.update`. */
+interface ThreadFieldUpdate {
+  archived?: boolean;
+  pinned?: boolean;
+  stage?: string;
+}
+
 /* ------------------------------------------------------------------ */
 /*  API helper class                                                   */
 /* ------------------------------------------------------------------ */
@@ -105,7 +112,7 @@ class ApiHelper {
   }
 
   /** Thread field updates have no REST route: the `threads.update` tRPC mutation. */
-  private async updateThread(id: string, data: Record<string, unknown>): Promise<void> {
+  private async updateThread(id: string, data: ThreadFieldUpdate): Promise<void> {
     await this.request.post(`${this.baseURL}/api/trpc/threads.update`, {
       headers: this.headers(),
       data: { id, data },

@@ -227,7 +227,7 @@ export function createMergeLane(deps: MergeLaneDeps) {
     baseRef: string,
     sha: string,
   ): Promise<{ updated: string } | { retry: true } | UpToDate> {
-    const asked = await deps.prs.updateBranch(pr, sha);
+    const asked = await deps.prs.updateBranch(pr, sha, deps.signal);
     if (asked.isErr()) return { kind: 'failed', error: asked.error.message };
     if (asked.value.kind === 'conflict') return conflict(pr, baseRef, sha);
     // Someone pushed meanwhile: look at the branch again.

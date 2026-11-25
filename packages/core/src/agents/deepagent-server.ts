@@ -42,8 +42,13 @@ const BUILTIN_SKILLS_DIR = pathJoin(__dirname, 'deepagent-skills');
 
 // ── CLI arg parsing ──────────────────────────────────────────────────────────
 
-function parseArgs(argv: string[]): Record<string, string | boolean> {
-  const args: Record<string, string | boolean> = {};
+/** The server's `--flag value` arguments, plus `--debug` as `true`. */
+interface CliArgs {
+  [flag: string]: string | boolean;
+}
+
+function parseArgs(argv: string[]): CliArgs {
+  const args: CliArgs = {};
   for (let i = 2; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === '--debug') {

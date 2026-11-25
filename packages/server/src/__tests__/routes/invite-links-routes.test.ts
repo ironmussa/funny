@@ -162,6 +162,19 @@ describe('Invite Links Routes (Integration)', () => {
       expect((await res.json()).error).toContain('Password');
     });
 
+    test('refuses a password that is not text as missing', async () => {
+      seedInviteLink(t.db, { token: 'register-array' });
+
+      // Ten letters and a digit: as text, "A,b,c,…,1" would pass every rule.
+      const res = await t.requestAs(adminId).post('/api/invite-links/register', {
+        token: 'register-array',
+        username: 'newbie',
+        password: ['A', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', '1'],
+      });
+      expect(res.status).toBe(400);
+      expect(await res.json()).toEqual({ error: 'Password is required' });
+    });
+
     test('registers a user and consumes an invite slot', async () => {
       const link = seedInviteLink(t.db, {
         token: 'register-ok',

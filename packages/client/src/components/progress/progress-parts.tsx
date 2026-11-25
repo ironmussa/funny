@@ -1,4 +1,4 @@
-import { CheckCircle2, Circle, Loader2, XCircle } from 'lucide-react';
+import { CheckCircle2, CircleIcon, Loader2, XCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -17,17 +17,17 @@ export const TONE = {
   skipped: 'text-status-warning',
 } as const;
 
-const STATUS_ICON: Record<ProgressStatus, typeof Circle> = {
-  queued: Circle,
+const STATUS_ICON: Record<ProgressStatus, typeof CircleIcon> = {
+  queued: CircleIcon,
   running: Loader2,
   passed: CheckCircle2,
   failed: XCircle,
 };
 
 export function StatusIcon({ status, className }: { status: ProgressStatus; className?: string }) {
-  const Icon = STATUS_ICON[status];
+  const Glyph = STATUS_ICON[status];
   return (
-    <Icon
+    <Glyph
       className={cn(
         'size-3.5 shrink-0',
         status === 'queued' && 'text-muted-foreground',

@@ -10,8 +10,16 @@ const certificatePath = resolve(packageRoot, 'fixtures', 'server-cert.pem');
 const privateKeyPath = resolve(packageRoot, 'fixtures', 'server-key.pem');
 const protocolPath = resolve(repositoryRoot, 'protocol', 'runner', 'v2', 'control.proto');
 
-type ControlMessage = Record<string, unknown>;
-type ControlCall = grpc.ServerDuplexStream<ControlMessage, ControlMessage>;
+/**
+ * A message as proto-loader decodes and encodes it with the options below:
+ * 64-bit integers and enums as strings, bytes as a Buffer, the set oneof's
+ * name in its virtual field (`message`).
+ */
+type ProtoField = string | number | boolean | Uint8Array | ProtoField[] | ProtoMessage | undefined;
+interface ProtoMessage {
+  [field: string]: ProtoField;
+}
+type ControlCall = grpc.ServerDuplexStream<ProtoMessage, ProtoMessage>;
 
 function loadRunnerService(): grpc.ServiceDefinition {
   const definition = loadSync(protocolPath, {
@@ -46,7 +54,7 @@ function control(call: ControlCall): void {
   }
 
   let negotiated = false;
-  call.on('data', (request: ControlMessage) => {
+  call.on('data', (request: ProtoMessage) => {
     if (negotiated || request.message !== 'hello') return;
     negotiated = true;
 

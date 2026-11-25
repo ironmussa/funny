@@ -244,12 +244,12 @@ async function reproveMovedHead(
   reproving.set(run.id, controller);
   const proofDeps = proofsFor(factory.userId, target.threadId);
   void settleParkedProof(target, proofDeps, repository, controller.signal)
-    .catch((error: unknown) => {
+    .catch((cause: unknown) => {
       log.error("Issue factory failed while proving a parked run's new head", {
         namespace: 'factory',
         runId: run.id,
         headSha: target.sha,
-        error: String(error),
+        error: String(cause),
       });
     })
     .finally(() => reproving.delete(run.id));

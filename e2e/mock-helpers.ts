@@ -2,6 +2,27 @@ import type { Page, Request, Route } from '@playwright/test';
 
 import './browser-globals';
 
+/*
+ * An injected event's data crosses into the page as JSON. Its fields are plain
+ * values or one level of nested fields (a tool call's `input`); the type is not
+ * recursive because `page.evaluate`'s argument type cannot unbox a recursive one.
+ */
+type EventScalar = string | number | boolean | null;
+type EventFieldValue = EventScalar | { [key: string]: EventScalar };
+
+/** An injected realtime event, serialized into the page. */
+interface InjectedEvent {
+  type: string;
+  threadId: string;
+  data: { [key: string]: EventFieldValue };
+}
+
+/**
+ * The input of a tRPC call when a mock does not name its shape: the mocks that
+ * leave `T` out read only string fields (`id`, `projectId`, `timeRange`, …).
+ */
+type TrpcStringFields = { [key: string]: string | undefined };
+
 /* ------------------------------------------------------------------ */
 /*  Mock data factories                                                */
 /* ------------------------------------------------------------------ */
@@ -324,14 +345,7 @@ export function conversationWithContextUsage(threadId: string, projectId: string
  * This dispatches a MessageEvent on the existing WebSocket,
  * simulating a server-sent event.
  */
-export async function injectWSEvent(
-  page: Page,
-  event: {
-    type: string;
-    threadId: string;
-    data: Record<string, unknown>;
-  },
-) {
+export async function injectWSEvent(page: Page, event: InjectedEvent) {
   await page.evaluate((evt) => {
     // Find the active WebSocket instance
     const allWs = window.__playwright_ws_instances;
@@ -350,14 +364,7 @@ export async function injectWSEvent(
  * transport. Unlike `injectWSEvent`, this uses Socket.IO's `42[...]` packet
  * framing, so the normal client event dispatcher receives the update.
  */
-export async function injectSocketIOEvent(
-  page: Page,
-  event: {
-    type: string;
-    threadId: string;
-    data: Record<string, unknown>;
-  },
-) {
+export async function injectSocketIOEvent(page: Page, event: InjectedEvent) {
   await page.evaluate((evt) => {
     const allWs = window.__playwright_ws_instances;
     const ws = allWs
@@ -419,7 +426,7 @@ export function trpcProcedure(procedure: string | ((name: string) => boolean)) {
 }
 
 /** The input of a tRPC call: the `input` query param of a query, the JSON body of a mutation. */
-export function trpcInput<T = Record<string, any>>(request: Request): T | undefined {
+export function trpcInput<T = TrpcStringFields>(request: Request): T | undefined {
   const raw =
     request.method() === 'GET'
       ? new URL(request.url()).searchParams.get('input')

@@ -238,7 +238,7 @@ describe('classifyRisk', () => {
     over: {
       sensitivePaths?: string[];
       riskHints?: string[];
-      maxLowRiskLines?: number;
+      maxLowRiskLines?: number | null;
       sizeIgnoredPaths?: string[];
       lintCleanup?: boolean;
     } = {},
@@ -314,6 +314,13 @@ describe('classifyRisk', () => {
     });
     const huge = [file('src/big.ts', [], { additions: 900, deletions: 0 })];
     expect(risk(huge, { maxLowRiskLines: 1000 }).level).toBe('low');
+  });
+
+  test('with the size gate off, no size makes a change high risk; sensitive paths still do', () => {
+    const huge = [file('src/big.ts', [], { additions: 90_000, deletions: 0 })];
+    expect(risk(huge, { maxLowRiskLines: null })).toMatchObject({ level: 'low', reasons: [] });
+    const sensitive = [...huge, file('.github/workflows/ci.yml', ['+on: push'])];
+    expect(risk(sensitive, { maxLowRiskLines: null }).level).toBe('high');
   });
 
   test("the factory's ignored globs leave their files out of the size, not out of sensitive paths", () => {

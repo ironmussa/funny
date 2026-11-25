@@ -121,6 +121,13 @@ function canonicalize(identity: ForwardedIdentity, timestamp: number, nonce: str
   return base;
 }
 
+/** The signature of a forwarded identity, with the timestamp and nonce it covers. */
+export interface SignedForwardedIdentity {
+  signature: string;
+  timestamp: number;
+  nonce: string;
+}
+
 /**
  * Sign a forwarded identity. Returns the headers the proxy should attach.
  *
@@ -133,7 +140,7 @@ export function signForwardedIdentity(
   secret: string,
   timestamp: number = Date.now(),
   nonce: string = randomUUID(),
-): { signature: string; timestamp: number; nonce: string } {
+): SignedForwardedIdentity {
   const payload = canonicalize(identity, timestamp, nonce);
   const signature = createHmac('sha256', secret).update(payload).digest('hex');
   return { signature, timestamp, nonce };

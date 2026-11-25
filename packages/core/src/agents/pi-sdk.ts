@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import { existsSync, readFileSync, statSync } from 'fs';
 import { isAbsolute, join, resolve } from 'path';
 
+import type { JsonObject } from '@funny/shared/json';
 import { parseStoredJson } from '@funny/shared/json-validation';
 import { z } from 'zod';
 
@@ -31,18 +32,20 @@ const PI_DEFAULT_TOOL_ALLOWLIST = [
   'subagent',
   'mcp',
 ];
-const FUNNY_TOOL_TO_PI_TOOLS: Record<string, string[]> = {
-  Bash: ['bash', 'shell', 'shell_command', 'exec_command', 'write_stdin'],
-  Read: ['read', 'view_image'],
-  Edit: ['edit', 'apply_patch'],
-  Write: ['write', 'apply_patch'],
-  Glob: ['find', 'ls'],
-  Grep: ['grep'],
-  WebSearch: ['web_search'],
-  WebFetch: ['web_fetch'],
-  Task: ['subagent'],
-  TodoWrite: ['update_plan'],
-};
+const FUNNY_TOOL_TO_PI_TOOLS = new Map(
+  Object.entries({
+    Bash: ['bash', 'shell', 'shell_command', 'exec_command', 'write_stdin'],
+    Read: ['read', 'view_image'],
+    Edit: ['edit', 'apply_patch'],
+    Write: ['write', 'apply_patch'],
+    Glob: ['find', 'ls'],
+    Grep: ['grep'],
+    WebSearch: ['web_search'],
+    WebFetch: ['web_fetch'],
+    Task: ['subagent'],
+    TodoWrite: ['update_plan'],
+  }),
+);
 const THINKING_LEVELS = new Set(['off', 'minimal', 'low', 'medium', 'high', 'xhigh']);
 const PI_GPT_56_MODELS = [
   { id: 'gpt-5.6-sol', name: 'GPT-5.6 Sol', inputCost: 5, outputCost: 30 },
@@ -81,18 +84,20 @@ type PiAssistantMessageEvent = Extract<
   PiSessionEvent,
   { type: 'message_update' }
 >['assistantMessageEvent'];
+/** A pi message as `turn_end` / `agent_end` carry it; only its `usage` block is read. */
+type PiAgentMessage = Extract<PiSessionEvent, { type: 'turn_end' }>['message'];
+/** A JSON value as pi decodes it (its arrays are read-only). */
+type PiJsonValue = null | boolean | number | string | readonly PiJsonValue[] | PiJsonObject;
+/** A JSON object as pi decodes it: a tool call's arguments. */
+type PiJsonObject = { [key: string]: PiJsonValue };
 /** A pi tool call's arguments: the model's JSON object, or the bare string some tools send. */
-type PiToolArgs = Readonly<Record<string, unknown>> | string;
+type PiToolArgs = PiJsonObject | string;
 /** A pi tool result as `tool_execution_end` reports it: usually `{ content: blocks }`, or text. */
 type PiToolResult = { readonly content?: unknown } | string | null | undefined;
 /** One block of a pi tool result's `content`; only text and image blocks are read. */
 interface PiResultBlock {
   readonly type?: unknown;
   readonly text?: unknown;
-}
-/** A pi message as `turn_end` / `agent_end` carry it; only its `usage` block is read. */
-interface PiMessageWithUsage {
-  readonly usage?: unknown;
 }
 
 export class PiSDKProcess extends BaseAgentProcess {
@@ -218,7 +223,7 @@ export class PiSDKProcess extends BaseAgentProcess {
 
   private handleSessionEvent(event: PiSessionEvent): void {
     if (!isObject(event)) return;
-    const e = event as Record<string, any>;
+    const e = event;
     switch (e.type) {
       case 'message_update':
         this.handleMessageUpdate(e.assistantMessageEvent);
@@ -248,7 +253,7 @@ export class PiSDKProcess extends BaseAgentProcess {
             type: 'compact_boundary',
             trigger: e.reason === 'manual' ? 'manual' : 'auto',
             preTokens: e.result.tokensBefore ?? 0,
-            postTokens: e.result.tokensAfter ?? 0,
+            postTokens: 'tokensAfter' in e.result ? (e.result.tokensAfter ?? 0) : 0,
             sessionId: this.session?.sessionId ?? '',
           } as CLIMessage);
         }
@@ -260,7 +265,7 @@ export class PiSDKProcess extends BaseAgentProcess {
 
   private handleMessageUpdate(event: PiAssistantMessageEvent | undefined): void {
     if (!isObject(event)) return;
-    const e = event as Record<string, any>;
+    const e = event;
     if (e.type === 'text_delta' && isNonEmptyString(e.delta)) {
       this.flushPendingThought();
       this.accumulatedText += e.delta;
@@ -362,14 +367,15 @@ export class PiSDKProcess extends BaseAgentProcess {
     this.seenToolCalls.clear();
   }
 
-  private captureMessagesUsage(messages: readonly PiMessageWithUsage[] | undefined): void {
+  private captureMessagesUsage(messages: readonly PiAgentMessage[] | undefined): void {
     if (!Array.isArray(messages)) return;
     for (const msg of messages) this.captureUsage(msg);
   }
 
-  private captureUsage(message: PiMessageWithUsage | null | undefined): void {
+  /** Reads the `usage` block a pi message (`turn_end`, `agent_end`) may carry. */
+  private captureUsage(message: PiAgentMessage | null | undefined): void {
     if (!isObject(message)) return;
-    const usage = message.usage;
+    const usage = 'usage' in message ? message.usage : undefined;
     if (!isPiUsage(usage)) return;
     const input = Number(usage.input ?? 0);
     const output = Number(usage.output ?? 0);
@@ -396,10 +402,16 @@ function normalizePiToolNames(names: string[]): string[] {
   return [...normalized];
 }
 
+/** A pi tool call under its funny tool name, with the input fields funny's cards read. */
+interface PiToolCall {
+  name: string;
+  input: unknown;
+}
+
 function normalizePiToolCall(
   toolName: string | undefined,
   input: PiToolArgs | null | undefined,
-): { name: string; input: PiToolArgs } {
+): PiToolCall {
   const name = normalizePiToolName(toolName);
   switch (name) {
     case 'Bash':
@@ -498,9 +510,9 @@ function normalizeSearchInput(input: PiToolArgs | null | undefined): PiToolArgs 
   return record;
 }
 
-function cloneRecord(input: PiToolArgs | null | undefined): Record<string, unknown> | null {
+function cloneRecord(input: PiToolArgs | null | undefined): PiJsonObject | null {
   if (!isObject(input) || Array.isArray(input)) return null;
-  return { ...(input as Record<string, unknown>) };
+  return { ...input };
 }
 
 function firstString(...values: unknown[]): string | undefined {
@@ -678,7 +690,7 @@ export function piToolsFromMcp(bridge: McpToolBridge) {
     parameters: tool.inputSchema as any,
     execute: async (
       _toolCallId: string,
-      params: Record<string, unknown> | undefined,
+      params: JsonObject | undefined,
       signal: AbortSignal | undefined,
     ) => {
       const result = await tool.call(params ?? {}, signal);
@@ -700,7 +712,7 @@ export function resolvePiTools(allowed?: string[], disallowed?: string[]): strin
 function normalizePiToolAliases(tools?: string[]): Set<string> {
   const normalized = new Set<string>();
   for (const tool of tools ?? []) {
-    const aliases = FUNNY_TOOL_TO_PI_TOOLS[tool];
+    const aliases = FUNNY_TOOL_TO_PI_TOOLS.get(tool);
     if (aliases) {
       for (const alias of aliases) normalized.add(alias);
     } else {
@@ -736,7 +748,7 @@ function resolvePiExtensionPath(path: string, cwd: string): string[] {
   if (!safeStat(resolved)?.isDirectory()) return [resolved];
 
   const manifestPath = join(resolved, 'package.json');
-  const manifest = readJson(manifestPath) as { pi?: { extensions?: unknown } } | null;
+  const manifest = readJson(manifestPath);
   const extensions = manifest?.pi?.extensions;
   if (Array.isArray(extensions)) {
     const entries = extensions.filter((entry): entry is string => typeof entry === 'string');
@@ -821,7 +833,7 @@ function stringifyToolResult(result: PiToolResult): string {
   if (result == null) return '';
   if (isString(result)) return result;
   if (!isObject(result)) return String(result);
-  const content = (result as Record<string, any>).content;
+  const content = result.content;
   if (Array.isArray(content)) {
     const text = content
       .map((block: PiResultBlock | string | null | undefined) => {

@@ -126,8 +126,38 @@ export class InvalidClientPlatformError extends Error {
   }
 }
 
-/** Properties of a candidate platform, read before they are checked. */
-type UncheckedProperties = Record<string, unknown>;
+type Capability = keyof typeof REQUIRED_METHODS;
+
+function isCapability(key: string): key is Capability {
+  return key in REQUIRED_METHODS;
+}
+
+/** The capabilities, in `REQUIRED_METHODS` order. */
+const CAPABILITIES: readonly Capability[] = Object.keys(REQUIRED_METHODS).filter(isCapability);
+
+/**
+ * The properties `validateClientPlatform` reads from a candidate platform and
+ * its services, before they are checked. Reading `service[method]` below fails
+ * to type-check if a required method is missing here.
+ */
+interface UncheckedProperties {
+  readonly storage?: unknown;
+  readonly navigation?: unknown;
+  readonly transport?: unknown;
+  readonly lifecycle?: unknown;
+  readonly effects?: unknown;
+  readonly diagnostics?: unknown;
+  readonly read?: unknown;
+  readonly write?: unknown;
+  readonly remove?: unknown;
+  readonly subscribe?: unknown;
+  readonly current?: unknown;
+  readonly navigate?: unknown;
+  readonly request?: unknown;
+  readonly emit?: unknown;
+  readonly report?: unknown;
+  readonly environment?: unknown;
+}
 
 /** Whether `value` can carry properties (an object or a function). */
 function hasProperties(value: unknown): value is UncheckedProperties {
@@ -138,13 +168,13 @@ export function validateClientPlatform(candidate: unknown): asserts candidate is
   const value = hasProperties(candidate) ? candidate : null;
   const missing: string[] = [];
 
-  for (const [capability, methods] of Object.entries(REQUIRED_METHODS)) {
+  for (const capability of CAPABILITIES) {
     const service = value?.[capability];
     if (!hasProperties(service) || typeof service !== 'object') {
       missing.push(capability);
       continue;
     }
-    for (const method of methods) {
+    for (const method of REQUIRED_METHODS[capability]) {
       if (typeof service[method] !== 'function') missing.push(`${capability}.${method}`);
     }
   }

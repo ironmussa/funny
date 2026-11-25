@@ -36,6 +36,15 @@ import { cn } from '@/lib/utils';
 export const GRAPH_REF_CHIP_HEIGHT_PX = 15;
 export const GRAPH_REF_CHIP_GAP_PX = 4;
 
+/**
+ * Size of the thread-branch arrowhead and its gap to the chip, in px: the
+ * emphasized leader line stops at the arrowhead's base (`GraphCommitRow`), so
+ * the head, not the line's round cap, is the arrow's tip.
+ */
+export const THREAD_BRANCH_MARKER_WIDTH_PX = 7;
+const THREAD_BRANCH_MARKER_HEIGHT_PX = 10;
+export const THREAD_BRANCH_MARKER_GAP_PX = 2;
+
 function branchStateLabel(t: ReturnType<typeof useTranslation>['t'], branch: GraphBranchSummary) {
   switch (branch.state) {
     case 'synced':
@@ -148,7 +157,8 @@ function ThreadBranchMarker({ branch, color }: { branch: string; color: string }
         >
           <svg
             viewBox="0 0 7 10"
-            className="h-[0.625rem] w-[0.4375rem]"
+            width={THREAD_BRANCH_MARKER_WIDTH_PX}
+            height={THREAD_BRANCH_MARKER_HEIGHT_PX}
             fill="currentColor"
             aria-hidden="true"
           >
@@ -523,8 +533,10 @@ function GraphRefChip({
         height: GRAPH_REF_CHIP_HEIGHT_PX,
         backgroundColor: color,
         color: textColor,
-        // The thread's chip is outlined in a darker shade of its own color.
-        boxShadow: isThreadBranch ? `0 0 0 1.5px ${darkenHex(color, 0.35)}` : undefined,
+        // The thread's chip is outlined in a darker shade of its own color. The
+        // ring is inset: the refs line clips at the chip's exact height, so an
+        // outer ring would be cut at the top and bottom.
+        boxShadow: isThreadBranch ? `inset 0 0 0 1.5px ${darkenHex(color, 0.35)}` : undefined,
       }}
       data-testid={`graph-ref-chip-${gitRef.kind}:${gitRef.name}`}
       data-merged={isMergedRef(gitRef) || undefined}
@@ -638,7 +650,10 @@ export function GraphRefChips({
             key={`${gitRef.kind}:${gitRef.name}`}
             className="relative flex max-w-full min-w-0 items-center"
           >
-            <span className="absolute top-1/2 right-full mr-0.5 inline-flex -translate-y-1/2">
+            <span
+              className="absolute top-1/2 right-full inline-flex -translate-y-1/2"
+              style={{ marginRight: THREAD_BRANCH_MARKER_GAP_PX }}
+            >
               <ThreadBranchMarker branch={gitRef.name} color={color} />
             </span>
             {chip}

@@ -18,6 +18,8 @@ import {
   GRAPH_REF_CHIP_GAP_PX,
   GRAPH_REF_CHIP_HEIGHT_PX,
   GraphRefChips,
+  THREAD_BRANCH_MARKER_GAP_PX,
+  THREAD_BRANCH_MARKER_WIDTH_PX,
   isThreadBranchRef,
 } from '@/components/commit-graph/GraphRefChips';
 import { PRBadge } from '@/components/PRBadge';
@@ -207,6 +209,12 @@ function RefLeaderLine({
     chipLeftX,
   });
   if (!leaderLine) return null;
+  // With the thread's arrowhead in front of the chip, the line stops 1px inside
+  // the head's base, so the head is the tip instead of the line running through it.
+  const x2 = emphasized
+    ? leaderLine.x2 - THREAD_BRANCH_MARKER_GAP_PX - THREAD_BRANCH_MARKER_WIDTH_PX + 1
+    : leaderLine.x2;
+  if (x2 <= leaderLine.x1) return null;
   return (
     <svg
       className="pointer-events-none absolute inset-0"
@@ -216,11 +224,11 @@ function RefLeaderLine({
       <line
         x1={leaderLine.x1}
         y1={y}
-        x2={leaderLine.x2}
+        x2={x2}
         y2={y}
         stroke={color}
         strokeWidth={emphasized ? 3 : 1.6}
-        strokeLinecap="round"
+        strokeLinecap={emphasized ? 'butt' : 'round'}
       />
     </svg>
   );

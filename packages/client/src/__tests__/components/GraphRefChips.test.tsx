@@ -112,6 +112,10 @@ describe('GraphRefChips', () => {
     expect(screen.getByTestId('graph-ref-chip-local:funny/fix-issues').style.boxShadow).toMatch(
       /#6b75a4|rgb\(107, 117, 164\)/,
     );
+    // Inset: the refs line clips at the chip's height, so an outer ring is cut.
+    expect(screen.getByTestId('graph-ref-chip-local:funny/fix-issues').style.boxShadow).toMatch(
+      /^inset /,
+    );
     expect(screen.getByTestId('graph-ref-chip-local:master').style.boxShadow).toBe('');
   });
 

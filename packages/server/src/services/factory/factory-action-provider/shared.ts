@@ -156,8 +156,8 @@ export interface FactoryActionProviderDeps {
   issueLabels?: string[];
   /** The factory's own sensitive path globs (they make a change high risk). */
   sensitivePaths?: readonly string[];
-  /** The factory's size limit for a low-risk change. */
-  maxLowRiskLines?: number;
+  /** The factory's size limit for a low-risk change; null: the size gate is off. */
+  maxLowRiskLines?: number | null;
   /**
    * Whether a member marked the run as a lint cleanup, read from the row when
    * a commit is classed (a member may mark it while the run waits).

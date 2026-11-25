@@ -2538,6 +2538,21 @@ const migrations: Migration[] = [
       await backfillFactoryRunIssueTitles();
     },
   },
+  {
+    // The branch a factory merges into; null keeps the repository's default branch.
+    name: '132_factory_settings_base_branch',
+    async up() {
+      await ctx().addColumn('factory_settings', 'base_branch', 'TEXT');
+    },
+  },
+  {
+    // Whether a change's size makes it high risk; null: no, so the size gate
+    // starts off, also for the factories saved before it could be turned off.
+    name: '133_factory_settings_size_gate_enabled',
+    async up() {
+      await ctx().addColumn('factory_settings', 'size_gate_enabled', 'INTEGER');
+    },
+  },
 ];
 
 /**

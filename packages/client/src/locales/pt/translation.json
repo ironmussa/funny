@@ -722,6 +722,8 @@
     "projectFactoryAutoMergeAllDesc": "Toda mudança que passou na revisão, também as de risco alto",
     "projectFactorySensitivePaths": "Caminhos sensíveis",
     "projectFactorySensitivePathsDesc": "Globs separados por vírgulas. Uma mudança que toca um deles é de risco alto, além de .github/, migrações e auth/",
+    "projectFactorySizeGate": "Limite de tamanho",
+    "projectFactorySizeGateDesc": "Uma mudança com mais linhas alteradas que o limite que você definir é de risco alto. Desligado: o tamanho de uma mudança não a torna de risco alto",
     "projectFactoryMaxLowRiskLines": "Tamanho de uma mudança de risco baixo",
     "projectFactoryMaxLowRiskLinesDesc": "Uma mudança com mais linhas alteradas que isto é de risco alto. Testes, Markdown, traduções, stories, snapshots e lockfiles não contam",
     "projectFactoryApprovalAdjust": "Ajuste que uma aprovação acompanha",
@@ -792,7 +794,10 @@
       "openai": "OpenAI",
       "ollama": "Ollama",
       "openai-compatible": "Compatível com OpenAI"
-    }
+    },
+    "projectFactoryBaseBranch": "Mesclar em",
+    "projectFactoryBaseBranchDesc": "A branch de onde as execuções partem e na qual seus pull requests são mesclados. Os fluxos continuam sendo lidos da branch padrão",
+    "projectFactoryBaseBranchDefault": "Padrão do repositório"
   },
   "skills": {
     "showingFor": "Mostrando skills para:",

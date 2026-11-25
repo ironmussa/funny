@@ -494,7 +494,7 @@ export function createRunProvider(ctx: FlowRunsContext, attempt: RunAttempt) {
     ...issueDepsOf(deps, job, scope),
     split: splitDepsOf(deps, job, scope),
     sensitivePaths: job.factory.sensitivePaths,
-    maxLowRiskLines: job.factory.maxLowRiskLines,
+    maxLowRiskLines: job.factory.sizeGateEnabled ? job.factory.maxLowRiskLines : null,
     lintCleanup: async () => {
       const run = await deps.runs.get(job.run.id);
       return run.isOk() && run.value !== null && lintCleanupSource(run.value) !== null;

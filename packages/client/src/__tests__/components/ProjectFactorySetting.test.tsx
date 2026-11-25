@@ -80,6 +80,7 @@ const configured = (over: Partial<FactorySettings> = {}): FactorySettings => ({
   maxConcurrent: 2,
   autoMerge: 'low_risk',
   sensitivePaths: [],
+  sizeGateEnabled: false,
   maxLowRiskLines: 400,
   approvalAdjustMaxLines: 0,
   sizeIgnoredPaths: [],
@@ -89,6 +90,7 @@ const configured = (over: Partial<FactorySettings> = {}): FactorySettings => ({
   dependencies: 'wait',
   tooBig: 'ask',
   holdPathsAwaitingApproval: false,
+  baseBranch: '',
   blockedReason: null,
   updatedAt: '2026-11-16T00:00:00.000Z',
   ...over,
@@ -239,8 +241,21 @@ describe('review and merge settings', () => {
     });
   });
 
-  test('the size limit is saved when it is a whole number in range', () => {
+  test('the size gate is off by default and hides its line limit until it is on', () => {
     mocks.settings = configured();
+    render(<ProjectFactorySetting projectId="p1" />);
+    expect(screen.getByTestId('settings-factory-size-gate')).not.toBeChecked();
+    expect(screen.queryByTestId('settings-factory-max-low-risk-lines')).toBeNull();
+    fireEvent.click(screen.getByTestId('settings-factory-size-gate'));
+    expect(mocks.save).toHaveBeenCalledWith({
+      projectId: 'p1',
+      enabled: true,
+      sizeGateEnabled: true,
+    });
+  });
+
+  test('the size limit is saved when it is a whole number in range', () => {
+    mocks.settings = configured({ sizeGateEnabled: true });
     render(<ProjectFactorySetting projectId="p1" />);
     expect(screen.getByTestId('settings-factory-max-low-risk-lines')).toHaveValue(400);
     blur('settings-factory-max-low-risk-lines', '400');

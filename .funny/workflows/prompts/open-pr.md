@@ -8,7 +8,7 @@ open pull request from the branch `{{branch}}`:
 ```
 
 Check that your commits are on `{{branch}}`, push it to `origin`, and open a
-pull request from it against the default branch whose body contains
+pull request from it against {{#base_branch}}`{{base_branch}}`{{/base_branch}}{{^base_branch}}the default branch{{/base_branch}} whose body contains
 `Closes #{{issue_number}}` (what changed, how it was tested, the decisions
 you made). If you decided there is nothing to change, push nothing and say
 so in your final message. End with the pull request's URL.

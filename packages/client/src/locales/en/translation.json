@@ -734,6 +734,8 @@
     "projectFactoryAutoMergeAllDesc": "Every change that passed its review, also high-risk ones",
     "projectFactorySensitivePaths": "Sensitive paths",
     "projectFactorySensitivePathsDesc": "Globs, separated by commas. A change that touches one is high risk, besides .github/, migrations and auth/",
+    "projectFactorySizeGate": "Size gate",
+    "projectFactorySizeGateDesc": "A change with more changed lines than a limit you set is high risk. Off: the size of a change does not make it high risk",
     "projectFactoryMaxLowRiskLines": "Size of a low-risk change",
     "projectFactoryMaxLowRiskLinesDesc": "A change with more changed lines than this is high risk. Tests, Markdown, translations, stories, snapshots and lockfiles do not count",
     "projectFactoryApprovalAdjust": "Adjustment an approval follows",
@@ -804,7 +806,10 @@
       "openai": "OpenAI",
       "ollama": "Ollama",
       "openai-compatible": "OpenAI-compatible"
-    }
+    },
+    "projectFactoryBaseBranch": "Merge into",
+    "projectFactoryBaseBranchDesc": "The branch runs start from and their pull requests merge into. Flows are still read from the default branch",
+    "projectFactoryBaseBranchDefault": "Repository default"
   },
   "skills": {
     "showingFor": "Showing skills for:",

@@ -27,6 +27,7 @@ type MergeSettings = Pick<
   FactorySettings,
   | 'autoMerge'
   | 'sensitivePaths'
+  | 'sizeGateEnabled'
   | 'maxLowRiskLines'
   | 'approvalAdjustMaxLines'
   | 'sizeIgnoredPaths'
@@ -291,7 +292,7 @@ export function ProjectFactoryMergeRows({
   const { definition } = useFactoryFlowDefinition(projectId, flowName);
   const { autoMerge, sensitivePaths, stageLimits, batch, dependencies } = settings;
   const { maxLowRiskLines, sizeIgnoredPaths, tooBig, approvalAdjustMaxLines } = settings;
-  const { holdPathsAwaitingApproval } = settings;
+  const { holdPathsAwaitingApproval, sizeGateEnabled } = settings;
 
   return (
     <>
@@ -361,27 +362,44 @@ export function ProjectFactoryMergeRows({
       </ProjectSettingRow>
 
       <ProjectSettingRow
-        settingId="factory.maxLowRiskLines"
-        title={t('settings.projectFactoryMaxLowRiskLines', 'Size of a low-risk change')}
+        settingId="factory.sizeGateEnabled"
+        title={t('settings.projectFactorySizeGate', 'Size gate')}
         description={t(
-          'settings.projectFactoryMaxLowRiskLinesDesc',
-          'A change with more changed lines than this is high risk. Tests, Markdown, translations, stories, snapshots and lockfiles do not count',
+          'settings.projectFactorySizeGateDesc',
+          'A change with more changed lines than a limit you set is high risk. Off: the size of a change does not make it high risk',
         )}
       >
-        <Input
-          key={`max-lines-${rowKey}`}
-          type="number"
-          min={LOW_RISK_LINES_MIN}
-          max={LOW_RISK_LINES_MAX}
-          defaultValue={maxLowRiskLines}
-          className="w-[96px]"
-          data-testid="settings-factory-max-low-risk-lines"
-          onBlur={(e) => {
-            const next = wholeNumber(e.target.value, LOW_RISK_LINES_MIN, LOW_RISK_LINES_MAX);
-            if (next !== null && next !== maxLowRiskLines) onSave({ maxLowRiskLines: next });
-          }}
+        <Switch
+          checked={sizeGateEnabled}
+          onCheckedChange={(checked) => onSave({ sizeGateEnabled: checked })}
+          data-testid="settings-factory-size-gate"
         />
       </ProjectSettingRow>
+
+      {sizeGateEnabled && (
+        <ProjectSettingRow
+          settingId="factory.maxLowRiskLines"
+          title={t('settings.projectFactoryMaxLowRiskLines', 'Size of a low-risk change')}
+          description={t(
+            'settings.projectFactoryMaxLowRiskLinesDesc',
+            'A change with more changed lines than this is high risk. Tests, Markdown, translations, stories, snapshots and lockfiles do not count',
+          )}
+        >
+          <Input
+            key={`max-lines-${rowKey}`}
+            type="number"
+            min={LOW_RISK_LINES_MIN}
+            max={LOW_RISK_LINES_MAX}
+            defaultValue={maxLowRiskLines}
+            className="w-[96px]"
+            data-testid="settings-factory-max-low-risk-lines"
+            onBlur={(e) => {
+              const next = wholeNumber(e.target.value, LOW_RISK_LINES_MIN, LOW_RISK_LINES_MAX);
+              if (next !== null && next !== maxLowRiskLines) onSave({ maxLowRiskLines: next });
+            }}
+          />
+        </ProjectSettingRow>
+      )}
 
       <ProjectSettingRow
         settingId="factory.sizeIgnoredPaths"

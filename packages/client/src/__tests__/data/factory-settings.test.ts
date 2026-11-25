@@ -25,6 +25,7 @@ const settings: FactorySettings = {
   maxConcurrent: 2,
   autoMerge: 'low_risk',
   sensitivePaths: [],
+  sizeGateEnabled: false,
   maxLowRiskLines: 400,
   approvalAdjustMaxLines: 0,
   sizeIgnoredPaths: [],
@@ -34,6 +35,7 @@ const settings: FactorySettings = {
   dependencies: 'wait',
   tooBig: 'ask',
   holdPathsAwaitingApproval: false,
+  baseBranch: '',
   blockedReason: null,
   updatedAt: '2026-11-21T00:00:00.000Z',
 };

@@ -17,6 +17,7 @@ import { useCanSteerProject } from '@/data/projects/hooks';
 import type { FactoryMode, FactorySettings, SaveFactorySettingsInput } from '@/lib/api/factory';
 import { toastError } from '@/lib/toast-error';
 
+import { ProjectFactoryBaseBranch } from './ProjectFactoryBaseBranch';
 import { ProjectFactoryIncident } from './ProjectFactoryIncident';
 import { ProjectFactoryMergeRows } from './ProjectFactoryMergeRows';
 import { ProjectFactoryStepOptions } from './ProjectFactoryStepOptions';
@@ -34,6 +35,7 @@ const DEFAULT_FORM = {
   maxConcurrent: 2,
   autoMerge: 'low_risk' as FactorySettings['autoMerge'],
   sensitivePaths: [] as string[],
+  sizeGateEnabled: false,
   maxLowRiskLines: 400,
   approvalAdjustMaxLines: 0,
   sizeIgnoredPaths: [] as string[],
@@ -43,6 +45,7 @@ const DEFAULT_FORM = {
   dependencies: 'wait' as FactorySettings['dependencies'],
   tooBig: 'ask' as FactorySettings['tooBig'],
   holdPathsAwaitingApproval: false,
+  baseBranch: '',
 };
 
 /** What the form shows: the saved settings, or the defaults before the first save. */
@@ -51,7 +54,7 @@ function formValues(settings: FactorySettings | null | undefined) {
   const { enabled, mode, label, flowName, maxConcurrent } = settings;
   const { autoMerge, sensitivePaths, stageLimits, stepOverrides, batch, dependencies } = settings;
   const { maxLowRiskLines, sizeIgnoredPaths, tooBig, approvalAdjustMaxLines } = settings;
-  const { holdPathsAwaitingApproval } = settings;
+  const { holdPathsAwaitingApproval, baseBranch, sizeGateEnabled } = settings;
   return {
     enabled,
     mode,
@@ -60,6 +63,7 @@ function formValues(settings: FactorySettings | null | undefined) {
     maxConcurrent,
     autoMerge,
     sensitivePaths,
+    sizeGateEnabled,
     maxLowRiskLines,
     approvalAdjustMaxLines,
     sizeIgnoredPaths,
@@ -69,6 +73,7 @@ function formValues(settings: FactorySettings | null | undefined) {
     dependencies,
     tooBig,
     holdPathsAwaitingApproval,
+    baseBranch,
   };
 }
 
@@ -260,6 +265,12 @@ function ProjectFactorySettingRows({ projectId }: { projectId: string }) {
               onBlur={(e) => setConcurrency(e.target.value)}
             />
           </ProjectSettingRow>
+
+          <ProjectFactoryBaseBranch
+            projectId={projectId}
+            baseBranch={form.baseBranch}
+            onSave={(baseBranch) => void save({ enabled, baseBranch })}
+          />
 
           <ProjectFactoryMergeRows
             projectId={projectId}

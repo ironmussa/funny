@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, spyOn, test } from 'bun:test';
 import type { GithubCallError } from '@funny/core/github-app';
 import { EMPTY_FACTORY_RUN_METRICS } from '@funny/shared/contracts/factory';
 import type { RegressionProofOpts } from '@funny/workflows/compiler';
-import { err, errAsync, ok, okAsync, type ResultAsync } from 'neverthrow';
+import { err, errAsync, ok, okAsync, type Result, type ResultAsync } from 'neverthrow';
 
 import * as telemetry from '../../../lib/telemetry.js';
 import {
@@ -44,6 +44,30 @@ const reviewed = (sha: string) => ({
   reviewedAt: '2026-11-22T00:00:00.000Z',
 });
 
+/** The GitHub side the provider tests start from. */
+const defaultGithub = () => ({
+  branchAhead: () => okAsync(true),
+  commentOnIssue: () => okAsync(undefined),
+  findPullRequest: () => okAsync(null),
+  pullRequests: {
+    prState: () => okAsync('open' as const),
+    changedFiles: () => okAsync({ files: [], truncated: false }),
+    publishReview: () => okAsync({ status: true }),
+    baseDistance: () => okAsync({ behindBy: 0, aheadBy: 1 }),
+    updateBranch: () => okAsync({ kind: 'updating' as const }),
+    commitParents: () => okAsync([]),
+    baseChanges: () => okAsync({ commits: [], files: [] }),
+    mergeQueueRequired: () => okAsync(false),
+    enqueue: () => okAsync({ kind: 'queued' as const }),
+    queueState: () => okAsync('merged' as const),
+    pullHead: () => okAsync({ sha: 'sha-head', baseRef: 'main', autoMerge: false }),
+    publishProofCheck: () => okAsync(undefined),
+    ciState: () => okAsync({ kind: 'green' as const }),
+    merge: () =>
+      okAsync({ kind: 'merged' as const, method: 'squash' as const, branchDeleted: false }),
+  },
+});
+
 function providerWith(over: Partial<Parameters<typeof createFactoryActionProvider>[0]> = {}) {
   const waited: string[] = [];
   const deps = {
@@ -59,28 +83,7 @@ function providerWith(over: Partial<Parameters<typeof createFactoryActionProvide
       waited.push(threadId);
       return { status: 'completed' as const, output: 'done' };
     },
-    github: {
-      branchAhead: () => okAsync(true),
-      commentOnIssue: () => okAsync(undefined),
-      findPullRequest: () => okAsync(null),
-      pullRequests: {
-        prState: () => okAsync('open' as const),
-        changedFiles: () => okAsync({ files: [], truncated: false }),
-        publishReview: () => okAsync({ status: true }),
-        baseDistance: () => okAsync({ behindBy: 0, aheadBy: 1 }),
-        updateBranch: () => okAsync({ kind: 'updating' as const }),
-        commitParents: () => okAsync([]),
-        baseChanges: () => okAsync({ commits: [], files: [] }),
-        mergeQueueRequired: () => okAsync(false),
-        enqueue: () => okAsync({ kind: 'queued' as const }),
-        queueState: () => okAsync('merged' as const),
-        pullHead: () => okAsync({ sha: 'sha-head', baseRef: 'main', autoMerge: false }),
-        publishProofCheck: () => okAsync(undefined),
-        ciState: () => okAsync({ kind: 'green' as const }),
-        merge: () =>
-          okAsync({ kind: 'merged' as const, method: 'squash' as const, branchDeleted: false }),
-      },
-    },
+    github: defaultGithub(),
     record: async () => undefined,
     signal: new AbortController().signal,
     ...over,
@@ -89,6 +92,48 @@ function providerWith(over: Partial<Parameters<typeof createFactoryActionProvide
 }
 
 describe('factory action provider', () => {
+  describe('a pull request opened against another branch than the base', () => {
+    function withPr(baseRef: string, retarget?: (base: string) => Promise<Result<void, string>>) {
+      const github = {
+        ...defaultGithub(),
+        findPullRequest: () =>
+          okAsync({ number: 9, url: 'https://github.com/o/r/pull/9', baseRef }),
+      };
+      return providerWith({
+        github,
+        defaultBranch: () => okAsync('develop'),
+        ...(retarget && { retarget }),
+      }).provider;
+    }
+
+    test('is pointed at the base the factory merges into', async () => {
+      const targets: string[] = [];
+      const provider = withPr('main', async (base) => {
+        targets.push(base);
+        return ok(undefined);
+      });
+      expect(await provider.createPr({ cwd: '', title: 'Fix it' })).toMatchObject({ ok: true });
+      expect(targets).toEqual(['develop']);
+    });
+
+    test('already on the base, it is left alone', async () => {
+      const targets: string[] = [];
+      const provider = withPr('develop', async (base) => {
+        targets.push(base);
+        return ok(undefined);
+      });
+      expect(await provider.createPr({ cwd: '', title: 'Fix it' })).toMatchObject({ ok: true });
+      expect(targets).toEqual([]);
+    });
+
+    test('that cannot be retargeted stops the run before anything merges elsewhere', async () => {
+      const provider = withPr('main', async () => err('GitHub answered 422'));
+      const result = await provider.createPr({ cwd: '', title: 'Fix it' });
+      expect(result.ok).toBe(false);
+      expect(result.error).toContain('merges into main');
+    });
+  });
+
   test('a replayed step that a later step continued on the same thread does not wait on it', async () => {
     const { provider, waited } = providerWith({ threadIds: ['A', 'A'] });
     // The implement step: the fix (step 2) already ran on A after it.

@@ -227,6 +227,30 @@ export function approvalGapFor(
 /** What the factory does with an issue triage finds too large for one change. */
 export type FactoryTooBig = 'ask' | 'split';
 
+/**
+ * A branch name the factory may merge into: what git accepts as a branch
+ * (`git check-ref-format --branch`), kept to the common subset. Empty means the
+ * repository's default branch.
+ */
+export const factoryBaseBranchSchema = z
+  .string()
+  .trim()
+  .max(200)
+  .refine(
+    (name) =>
+      name === '' ||
+      (/^[A-Za-z0-9._/-]+$/.test(name) &&
+        !name.startsWith('-') &&
+        !name.startsWith('/') &&
+        !name.endsWith('/') &&
+        !name.endsWith('.') &&
+        !name.endsWith('.lock') &&
+        !name.includes('..') &&
+        !name.includes('//') &&
+        !name.split('/').some((part) => part.startsWith('.'))),
+    'Not a valid branch name',
+  );
+
 export const saveFactorySettingsInput = z
   .object({
     projectId,
@@ -237,6 +261,8 @@ export const saveFactorySettingsInput = z
     maxConcurrent: z.number().int().min(1).max(20).optional(),
     autoMerge: z.enum(['low_risk', 'all']).optional(),
     sensitivePaths: z.array(z.string().trim().min(1).max(200)).max(MAX_SENSITIVE_PATHS).optional(),
+    /** Whether a change's size makes it high risk (off by default). */
+    sizeGateEnabled: z.boolean().optional(),
     maxLowRiskLines: z
       .number()
       .int()
@@ -269,6 +295,8 @@ export const saveFactorySettingsInput = z
     tooBig: z.enum(['ask', 'split']).optional(),
     /** Whether a run parked for a member's approval keeps its likely paths (at most 12 hours). */
     holdPathsAwaitingApproval: z.boolean().optional(),
+    /** The branch the factory's pull requests merge into; empty: the repository's default branch. */
+    baseBranch: factoryBaseBranchSchema.optional(),
   })
   .strict();
 
@@ -287,7 +315,9 @@ export interface FactorySettings {
   autoMerge: FactoryAutoMerge;
   /** Globs that make a change high risk, besides the default list. */
   sensitivePaths: string[];
-  /** A change with more counted lines than this is high risk. */
+  /** Whether a change's size makes it high risk; off by default. */
+  sizeGateEnabled: boolean;
+  /** With the size gate on, a change with more counted lines than this is high risk. */
   maxLowRiskLines: number;
   /** Globs whose lines do not count toward a change's size, besides tests, Markdown and the like. */
   sizeIgnoredPaths: string[];
@@ -308,6 +338,12 @@ export interface FactorySettings {
   tooBig: FactoryTooBig;
   /** Whether a run parked for a member's approval of a high-risk change keeps its likely paths. */
   holdPathsAwaitingApproval: boolean;
+  /**
+   * The branch the factory's pull requests merge into (and its runs start
+   * from); empty: the repository's default branch. Flows are still read from
+   * the default branch.
+   */
+  baseBranch: string;
   /** Why the factory cannot make progress now (e.g. its runner is offline), or null. */
   blockedReason: string | null;
   /**

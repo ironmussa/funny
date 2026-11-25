@@ -9,13 +9,21 @@
  */
 
 import type { ActionResult } from '@funny/workflows/compiler';
+import type { Result } from 'neverthrow';
 
 import { log } from '../../../lib/logger.js';
 import type { ActionCore } from './core.js';
 import { keptWorktreeLine, NO_CHANGE_LINE, NO_CHANGE_REASON } from './shared.js';
 
+/** Where the run's pull request must merge, and how to point it there. */
+export interface PullRequestTarget {
+  /** The run's base: its blocker's branch while stacked, else the branch the factory merges into. */
+  base: () => PromiseLike<Result<string, { message: string }>> | undefined;
+  retarget?: (base: string) => Promise<Result<void, string>>;
+}
+
 /** `create_pr`: find the agent's pull request, or end the run with no change. */
-export function createPullRequestStep(core: ActionCore) {
+export function createPullRequestStep(core: ActionCore, target?: PullRequestTarget) {
   const { deps, scope, threadIds, state, count, reader } = core;
   /** Say the no-change outcome on the issue; a comment that fails is logged, not fatal. */
   async function commentNoChange(issueNumber: number, body: string): Promise<void> {
@@ -71,6 +79,32 @@ export function createPullRequestStep(core: ActionCore) {
     };
   }
 
+  /**
+   * The agent may open its pull request against another branch than the run's
+   * base (the repository's default instead of the factory's configured one):
+   * point it at the base, so the factory never merges elsewhere. The reason
+   * the run cannot go on, or null.
+   */
+  async function retargetIfMisdirected(baseRef: string | undefined): Promise<string | null> {
+    if (!baseRef || !target) return null;
+    const base = await target.base();
+    if (!base || base.isErr() || base.value === baseRef) return null;
+    if (!target.retarget) {
+      return `The pull request merges into ${baseRef}, not the factory's base ${base.value}.`;
+    }
+    const done = await target.retarget(base.value);
+    if (done.isErr()) {
+      return `The pull request merges into ${baseRef}, not the factory's base ${base.value}, and retargeting it failed (${done.error}).`;
+    }
+    log.info('Issue factory retargeted a pull request to its base branch', {
+      namespace: 'factory',
+      runId: scope.runId,
+      from: baseRef,
+      to: base.value,
+    });
+    return null;
+  }
+
   async function createPr(): Promise<ActionResult> {
     const found = await deps.github.findPullRequest(reader, scope.branch);
     if (found.isErr()) return { ok: false, error: found.error.message };
@@ -84,6 +118,8 @@ export function createPullRequestStep(core: ActionCore) {
     }
     state.prUrl = found.value.url;
     await deps.record({ state: 'pr_open', prUrl: state.prUrl });
+    const misdirected = await retargetIfMisdirected(found.value.baseRef);
+    if (misdirected) return { ok: false, error: misdirected };
     return { ok: true, output: state.prUrl, metadata: { number: found.value.number } };
   }
 

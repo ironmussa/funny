@@ -293,6 +293,13 @@ export interface FactoryPullRequestsDeps {
   retrySleep?: (ms: number) => PromiseLike<void>;
 }
 
+/** How a write GitHub failed to answer is tried again (`factory-github-retry.ts`). */
+const retryOptionsOf = (
+  deps: Pick<FactoryPullRequestsDeps, 'transientRetryDelaysMs' | 'retrySleep'>,
+  what: string,
+  signal: AbortSignal | undefined,
+) => ({ what, signal, delaysMs: deps.transientRetryDelaysMs, sleep: deps.retrySleep });
+
 /** What to do about each way a token could not be minted. */
 function accessError(error: IssueError, repo: string): FactoryPullRequestError {
   switch (error.kind) {
@@ -545,10 +552,7 @@ export function createFactoryPullRequests(deps: FactoryPullRequestsDeps): Factor
       () =>
         createRepoCheckOps(repoGithubFor(pr, 'write')).pinnedMerge(pr.repo, pr.number, sha, method),
       {
-        what: `merge of ${pr.repo}#${pr.number}`,
-        signal: options.signal,
-        delaysMs: deps.transientRetryDelaysMs,
-        sleep: deps.retrySleep,
+        ...retryOptionsOf(deps, `merge of ${pr.repo}#${pr.number}`, options.signal),
         alreadyDone: () =>
           pullRequestsFor(pr, 'read')
             .mergeState(pr.repo, pr.number)
@@ -633,12 +637,7 @@ export function createFactoryPullRequests(deps: FactoryPullRequestsDeps): Factor
       // take effect behind an error is answered "head moved" the second time.
       return retryTransientGithub(
         () => updateBranch(repoGithubFor(pr, 'write'), pr.repo, pr.number, headSha),
-        {
-          what: `update-branch of ${pr.repo}#${pr.number}`,
-          signal,
-          delaysMs: deps.transientRetryDelaysMs,
-          sleep: deps.retrySleep,
-        },
+        retryOptionsOf(deps, `update-branch of ${pr.repo}#${pr.number}`, signal),
       ).mapErr(callError);
     },
 

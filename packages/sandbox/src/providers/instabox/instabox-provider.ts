@@ -79,8 +79,13 @@ const instaboxCapabilities: SandboxCapabilities = {
   preStopHook: 'native',
 };
 
+/** A provider's state name → its normalized state. */
+interface ProviderStates {
+  readonly [providerState: string]: NormalizedSandboxState;
+}
+
 /** InstaBox machine states → normalized states (`running` also needs `runtime.ready`). */
-const STATE_MAP: Record<string, NormalizedSandboxState> = {
+const STATE_MAP: ProviderStates = {
   creating: 'provisioning',
   starting: 'provisioning',
   resuming: 'provisioning',

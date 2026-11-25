@@ -122,8 +122,10 @@ export async function connectMcpTools(
   const connected = await Promise.all(
     entries.map(([server, cfg]) =>
       connectServer(server, cfg.url, (cfg.headers ?? {}) as Record<string, string>).catch(
-        (err: unknown) => {
-          dlog.warn(`skipping MCP server ${server}: ${err instanceof Error ? err.message : err}`);
+        (cause: unknown) => {
+          dlog.warn(
+            `skipping MCP server ${server}: ${cause instanceof Error ? cause.message : cause}`,
+          );
           return null;
         },
       ),

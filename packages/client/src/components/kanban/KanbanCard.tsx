@@ -64,6 +64,8 @@ interface Props {
   menuItems?: ReactNode;
   /** Replaces the footer's time (the factory board: the run's time in its step). */
   time?: ReactNode;
+  /** Replaces the thread's title (the factory board: the run's issue title). */
+  title?: string;
 }
 
 /** Scrolls a highlighted card into view and makes the card draggable between columns. */
@@ -254,7 +256,9 @@ export const KanbanCard = memo(function KanbanCard({
   testId,
   menuItems,
   time,
+  title: titleProp,
 }: Props) {
+  const title = titleProp ?? thread.title;
   const { t } = useTranslation();
   const now = useMinuteTick();
   const navigate = useNavigate();
@@ -301,7 +305,7 @@ export const KanbanCard = memo(function KanbanCard({
       }
       title={
         <ThreadTitle
-          title={thread.title}
+          title={title}
           search={search || ''}
           multiline
           containerClassName="flex-1"
@@ -325,7 +329,7 @@ export const KanbanCard = memo(function KanbanCard({
         />
       }
     >
-      <KanbanCardSnippet title={thread.title} contentSnippet={contentSnippet} search={search} />
+      <KanbanCardSnippet title={title} contentSnippet={contentSnippet} search={search} />
       {children}
     </BoardCard>
   );

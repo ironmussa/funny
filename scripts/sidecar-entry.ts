@@ -17,7 +17,7 @@ import { join } from 'path';
 const FUNNY_DIR = join(homedir(), '.funny');
 const ENV_FILE = join(FUNNY_DIR, '.env');
 
-function parseEnvFile(content: string): Record<string, string> {
+function parseEnvFile(content: string) {
   const vars: Record<string, string> = {};
   for (const line of content.split('\n')) {
     const trimmed = line.trim();

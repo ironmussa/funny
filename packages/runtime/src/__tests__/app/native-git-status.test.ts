@@ -1,16 +1,15 @@
 import { describe, expect, test } from 'bun:test';
 
-import { reportNativeGitStatus } from '../../app/native-git-status.js';
+import { reportNativeGitStatus, type NativeGitStatusMeta } from '../../app/native-git-status.js';
 
 function recorder() {
-  const calls: Array<{ level: 'info' | 'warn'; message: string; meta: Record<string, unknown> }> =
-    [];
+  const calls: Array<{ level: 'info' | 'warn'; message: string; meta: NativeGitStatusMeta }> = [];
   return {
     calls,
     logger: {
-      info: (message: string, meta: Record<string, unknown>) =>
+      info: (message: string, meta: NativeGitStatusMeta) =>
         calls.push({ level: 'info', message, meta }),
-      warn: (message: string, meta: Record<string, unknown>) =>
+      warn: (message: string, meta: NativeGitStatusMeta) =>
         calls.push({ level: 'warn', message, meta }),
     },
   };

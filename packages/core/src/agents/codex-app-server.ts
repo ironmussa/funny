@@ -25,6 +25,25 @@ const rpcMessageSchema = z.object({
   result: z.unknown().optional(),
   error: z.object({ message: z.string() }).optional(),
 });
+type RpcMessage = z.infer<typeof rpcMessageSchema>;
+/** A value `JSON.stringify` writes as-is (an `undefined` field is left out). */
+type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | readonly JsonValue[]
+  | { readonly [key: string]: JsonValue };
+/** JSON-RPC `params`: the method's named arguments. */
+type CodexRpcParams = { readonly [key: string]: JsonValue };
+/** A message this client writes: a request, a notification, or an error reply. */
+interface CodexRpcOutgoing {
+  id?: number | string;
+  method?: string;
+  params?: CodexRpcParams;
+  error?: { code: number; message: string };
+}
 interface CodexNotification {
   method: string;
   params: NonNullable<z.infer<typeof rpcMessageSchema>['params']>;
@@ -36,7 +55,7 @@ export class CodexAppServer {
   private nextId = 0;
   private pending = new Map<
     number | string,
-    { resolve: (value: unknown) => void; reject: (error: Error) => void }
+    { settle: (response: RpcMessage) => void; reject: (error: Error) => void }
   >();
   private listeners = new Set<(event: CodexNotification) => void>();
   private failure: Error | undefined;
@@ -70,8 +89,7 @@ export class CodexAppServer {
         } else if (message.id != null) {
           const request = this.pending.get(message.id);
           this.pending.delete(message.id);
-          if (message.error) request?.reject(new Error(message.error.message));
-          else request?.resolve(message.result);
+          request?.settle(message);
         } else if (message.method) {
           for (const listener of this.listeners)
             listener({ method: message.method, params: message.params ?? {} });
@@ -105,24 +123,35 @@ export class CodexAppServer {
       listener({ method: 'connection/error', params: { error } });
   }
 
-  private write(message: unknown) {
+  private write(message: CodexRpcOutgoing) {
     this.process.stdin.write(`${JSON.stringify(message)}\n`);
   }
 
   async initialize() {
-    await this.request('initialize', {
-      clientInfo: { name: 'funny', version: '0.1.0' },
-      capabilities: { experimentalApi: true },
-    });
+    await this.request(
+      'initialize',
+      {
+        clientInfo: { name: 'funny', version: '0.1.0' },
+        capabilities: { experimentalApi: true },
+      },
+      z.unknown(),
+    );
     this.write({ method: 'initialized', params: {} });
   }
 
-  async request(method: string, params: unknown): Promise<unknown> {
+  /** Send a request; its `result` is parsed with `resultSchema` (a ZodError rejects). */
+  async request<T>(method: string, params: CodexRpcParams, resultSchema: z.ZodType<T>): Promise<T> {
     if (this.failure) throw this.failure;
     const id = this.nextId++;
-    return waitFor(
+    return waitFor<T>(
       (resolve, reject) => {
-        this.pending.set(id, { resolve, reject });
+        const settle = (response: RpcMessage) => {
+          if (response.error) return reject(new Error(response.error.message));
+          const parsed = resultSchema.safeParse(response.result);
+          if (parsed.success) resolve(parsed.data);
+          else reject(parsed.error);
+        };
+        this.pending.set(id, { settle, reject });
         try {
           this.write({ id, method, params });
         } catch (error) {
@@ -137,10 +166,7 @@ export class CodexAppServer {
   }
 
   /** Register before sending: completion can arrive before the RPC response. */
-  async runTurn(
-    method: string,
-    params: { threadId: string; [key: string]: unknown },
-  ): Promise<string> {
+  async runTurn(method: string, params: CodexRpcParams & { threadId: string }): Promise<string> {
     let output = '';
     let listener: (event: CodexNotification) => void = () => {};
     const controller = new AbortController();
@@ -174,7 +200,7 @@ export class CodexAppServer {
       },
     );
     try {
-      const [, result] = await Promise.all([this.request(method, params), completion]);
+      const [, result] = await Promise.all([this.request(method, params, z.unknown()), completion]);
       return result;
     } finally {
       controller.abort();

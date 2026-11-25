@@ -13,7 +13,6 @@ import { eq, and, gte, lt, sql } from 'drizzle-orm';
 
 import { db, dbAll, dbGet, dbDialect, schema } from '../db/index.js';
 
-type TimeRange = 'day' | 'week' | 'month' | 'all';
 type GroupBy = 'day' | 'week' | 'month' | 'year';
 
 /**
@@ -90,7 +89,7 @@ export function getDateRange(
   const end = endDate ? new Date(endDate) : now;
 
   let start: Date;
-  switch (timeRange as TimeRange) {
+  switch (timeRange) {
     case 'day':
       start = new Date(now);
       start.setDate(start.getDate() - 1);
@@ -154,6 +153,11 @@ export interface OverviewParams {
   offsetMinutes?: number;
 }
 
+/** Stage → how many threads are in it now (every stage present, 0 when empty). */
+interface StageDistribution {
+  [stage: string]: number;
+}
+
 export async function getOverview(params: OverviewParams): Promise<AnalyticsOverview> {
   const { userId, projectId, timeRange, offsetMinutes = 0 } = params;
   const range = getDateRange(timeRange, offsetMinutes);
@@ -173,7 +177,7 @@ export async function getOverview(params: OverviewParams): Promise<AnalyticsOver
   ] = await Promise.all([
     // Stage distribution of threads created within the selected time range
     dbAll(
-      (db as any)
+      db
         .select({
           stage: schema.threads.stage,
           count: countOf(),
@@ -247,7 +251,7 @@ export async function getOverview(params: OverviewParams): Promise<AnalyticsOver
     countTransitionsTo('archived', filters, range),
   ]);
 
-  const distribution: Record<string, number> = {
+  const distribution: StageDistribution = {
     backlog: 0,
     planning: 0,
     in_progress: 0,
@@ -312,6 +316,7 @@ async function stageTransitionsByDate(
 
 export async function getTimeline(params: TimelineParams): Promise<AnalyticsTimeline> {
   const { userId, projectId, timeRange, groupBy: gb = 'day', offsetMinutes = 0 } = params;
+  // SAFETY: dateBucket's switches send any value outside GroupBy to their 'day' default.
   const groupBy = gb as GroupBy;
   const range = getDateRange(timeRange, offsetMinutes);
   const filters = baseFiltersFor({ projectId, userId });

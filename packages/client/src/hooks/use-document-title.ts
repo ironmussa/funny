@@ -61,14 +61,17 @@ function titleProjectId(
   return thread?.projectId || selectedProjectId || undefined;
 }
 
+/** The branch shown in the title, and where it came from. */
+interface TitleBranch {
+  branch: string | undefined;
+  branchSource: 'thread' | 'cwd' | 'none';
+}
+
 /**
  * Thread focused → its own branch only (stable, no async cwd race).
  * No thread → the project's current cwd branch.
  */
-function titleBranch(
-  thread: ThreadLike | undefined,
-  cwdBranch: string | undefined,
-): { branch: string | undefined; branchSource: 'thread' | 'cwd' | 'none' } {
+function titleBranch(thread: ThreadLike | undefined, cwdBranch: string | undefined): TitleBranch {
   if (thread) return { branch: branchForDocumentTitle(thread), branchSource: 'thread' };
   return { branch: cwdBranch, branchSource: cwdBranch ? 'cwd' : 'none' };
 }

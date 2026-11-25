@@ -12,6 +12,8 @@ process.env.BETTER_AUTH_SECRET = 'test-auth-secret';
 
 import { okAsync } from 'neverthrow';
 
+import type { BrowserEvent } from '../../../services/runner-ports.js';
+
 const wakes: Array<[string, string]> = [];
 mock.module('../../../services/thread-sandboxes/sandbox-lifecycle.js', () => ({
   sandboxWaker: () => ({
@@ -153,7 +155,7 @@ describe('factory thread requests', () => {
       runner('r-alice', 'alice');
       worktreeThread('t1');
 
-      const events: Array<{ userId: string; event: Record<string, unknown> }> = [];
+      const events: Array<{ userId: string; event: BrowserEvent }> = [];
       await cleanupFactoryWorktrees(ports(), 'alice', ['t1', 't1'], {
         toUser: (userId, event) => events.push({ userId, event }),
       });

@@ -63,7 +63,14 @@ export interface SearchBarProps {
   onInputKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
   /** Forward a ref to the input element */
   inputRef?: React.Ref<HTMLInputElement>;
+  /** `floating`: a find bar hanging from the top edge of a pane, over its content. */
+  variant?: keyof typeof SEARCH_BAR_VARIANT;
 }
+
+const SEARCH_BAR_VARIANT = {
+  default: '',
+  floating: 'rounded-b-lg border border-t-0 border-border bg-popover px-2 py-1.5 shadow-md',
+} as const;
 
 export function SearchBar({
   query,
@@ -88,6 +95,7 @@ export function SearchBar({
   resultLabel,
   onInputKeyDown,
   inputRef: externalInputRef,
+  variant = 'default',
 }: SearchBarProps) {
   const internalInputRef = useRef<HTMLInputElement>(null);
   useImperativeHandle(externalInputRef, () => internalInputRef.current as HTMLInputElement, []);
@@ -155,7 +163,7 @@ export function SearchBar({
     // Blank-bar clicks only forward focus to the nested input; this layout wrapper is not a control.
     // react-doctor-disable-next-line react-doctor/no-static-element-interactions
     <div
-      className={cn('flex items-center gap-1.5', className)}
+      className={cn('flex items-center gap-1.5', SEARCH_BAR_VARIANT[variant], className)}
       onClick={(e) => {
         if (e.target === e.currentTarget) internalInputRef.current?.focus();
       }}

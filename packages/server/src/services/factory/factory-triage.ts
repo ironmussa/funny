@@ -43,11 +43,11 @@ import { err, ok, type Result } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
 import type { StartedThread, StartThreadError } from '../runner-thread-launcher.js';
-import type { IssueRunScope } from './factory-action-provider.js';
+import type { FactoryLaunchBody, IssueRunScope } from './factory-action-provider.js';
 import { issueInstruction, type FactoryIssueText } from './factory-issue-text.js';
 import { contractText, launchedThread, readOnlyRoleLaunch } from './factory-review.js';
-import { readRoleResult } from './factory-role-results.js';
-import type { UpdateRunInput } from './factory-runs.js';
+import { READ_ONLY_SHELL_RULE, readRoleResult } from './factory-role-results.js';
+import { HIGH_RISK_HOLD, type UpdateRunInput } from './factory-runs.js';
 import type { ThreadOutcome, WaitAfter } from './factory-thread-waits.js';
 
 /** Why a run parked on its issue waits (shown in the run row). */
@@ -148,18 +148,24 @@ export function triageComment(
 }
 
 /** Whether the issue is a part the factory opened in a split. */
-const isSplitPart = (issue: FactoryIssueText | null): boolean =>
+export const isSplitPart = (issue: FactoryIssueText | null): boolean =>
   issue !== null && issue.body.includes(SPLIT_MARKER);
 
 /** Mentions turned into plain text, so copying a description pings nobody again. */
 const withoutMentions = (text: string): string => text.replace(/@(?=[\w-])/g, '');
+
+/** The title and body of an issue to open. */
+interface SplitPartIssue {
+  title: string;
+  body: string;
+}
 
 /** The issue opened for part `index` (from 0) of `parts`, already sanitized by `publicItems`. */
 export function splitPartIssue(input: {
   parent: { number: number; title: string; body: string | null };
   parts: readonly string[];
   index: number;
-}): { title: string; body: string } {
+}): SplitPartIssue {
   const { parent, parts, index } = input;
   const part = parts[index];
   const position = `${index + 1}/${parts.length}`;
@@ -207,7 +213,7 @@ export function splitComment(parts: readonly string[], opened: readonly number[]
 const RESULT_FORMAT = [
   'One of these three, as a fenced json block:',
   '```json',
-  '{ "decision": "ready", "contract": { "acceptanceCriteria": ["<what must be true when it is done>"], "likelyPaths": ["<glob of files the change will probably touch>"], "riskHints": ["<why it may be risky, if it is>"] } }',
+  '{ "decision": "ready", "contract": { "acceptanceCriteria": ["<what must be true when it is done>"], "likelyPaths": ["<glob of files the change will probably touch>"], "riskHints": ["<why it may be risky, if it is>"], "lintCleanup": false, "lintRules": [] } }',
   '```',
   '```json',
   '{ "decision": "needs_info", "questions": ["<one question the issue must answer>"] }',
@@ -238,12 +244,14 @@ function triagePrompt(input: {
     `The issue is #${input.issueNumber} of ${input.repo}${input.issueUrl ? ` (${input.issueUrl})` : ''}.`,
     issueInstruction(input.issueNumber, input.issue),
     'Then read the code it is about in the checkout.',
+    READ_ONLY_SHELL_RULE,
     // Seen in a real run: a contract without the changelog line the repository's
     // CI requires cost the implementer a CI round to find it out.
     'Also read what the repository requires of every change before it merges: its CI workflows (`.github/workflows/`), the scripts they run, and its contributing notes (`CONTRIBUTING.md`, `AGENTS.md`, `CLAUDE.md`). Each requirement this change must meet (a changelog line, a test next to the code, a lint or format step) is an acceptance criterion of the contract, naming the file or script that enforces it.',
     '',
     'Decide one of:',
     '- `ready`: an agent can do it without asking anyone. Write its contract: acceptance criteria someone could check against the code, the files it will probably touch (globs, at most 50), and risk hints only when the change is risky (it changes a migration, authentication, a public API, CI, or deletes data).',
+    'Set `lintCleanup` to true only when the issue asks for nothing but clearing lint or type-check warnings and must not change what the code does (for example "clear rule X in package Y"). A feature, a bug fix or a refactor that also changes behavior is false, whatever it is called. When true, list in `lintRules` every rule the issue asks to clear, as the linter names it (`eslint/max-lines`, `anti-slop/no-unknown-returns`); when the issue does not name its rules, list the ones its warnings come from. The factory does not hold a lint cleanup for its size only when every rule is one whose fix cannot change behavior (splitting long functions or files, sorting imports), so name them all and add a risk hint about the size only when one of them can change behavior.',
     '- `needs_info`: something the issue must say is missing or ambiguous, and a wrong guess would waste the work. Ask at most five short questions. Do not ask what the code already answers.',
     '- `too_big`: it is several independent changes. Propose the parts.',
     'Prefer `ready` when a reasonable decision can be made and stated.',
@@ -275,7 +283,7 @@ export interface FactoryTriageDeps {
   /** Triage threads started before this are not this attempt's. */
   since: string;
   signal: AbortSignal;
-  launch(body: Record<string, unknown>): Promise<Result<StartedThread, StartThreadError>>;
+  launch(body: FactoryLaunchBody): Promise<Result<StartedThread, StartThreadError>>;
   /** The newest triage thread of this run whose title starts with `titlePrefix`, since `since`. */
   findLaunched(titlePrefix: string, since: string): Promise<string | null>;
   waitThread(threadId: string, signal: AbortSignal, after?: WaitAfter): Promise<ThreadOutcome>;
@@ -294,7 +302,7 @@ export interface FactoryTriageDeps {
   /** The issue's text: the triage agent has no network to read it. Null when unreadable. */
   issueText?(): Promise<FactoryIssueText | null>;
   /** The likely paths of the factory's other runs in progress, by issue. */
-  busyPaths?(): Promise<Array<{ issue: number; paths: string[] }>>;
+  busyPaths?(): Promise<BusyPaths[]>;
   /** Leave the slot and wait in the queue behind `blockers` (a compare-and-set from `triaging`). */
   hold?(blockers: number[]): Promise<boolean>;
   /**
@@ -323,6 +331,73 @@ function splitParent(scope: IssueRunScope, issue: FactoryIssueText | null) {
 }
 
 const STOPPED: ActionResult = { ok: false, error: 'The run was stopped.' };
+
+/** A split to open: the parent issue, its sanitized parts and the issues already opened. */
+export interface SplitWork {
+  runId: string;
+  parent: { number: number; title: string; body: string | null };
+  /** The parts as posted (`publicItems`). */
+  parts: string[];
+  /** Issues opened for the first parts by an earlier attempt, in order. */
+  opened: readonly number[];
+}
+
+/**
+ * Open the parts not opened yet, calling `progress` with the list after each
+ * one so an interrupted split resumes without opening a part twice; stops at
+ * the first that cannot be opened. The issues opened, the earlier ones first.
+ * Shared by triage's automatic split and a member's split of a parked run.
+ */
+export async function openSplitParts(
+  split: Pick<FactorySplitDeps, 'openIssue'>,
+  work: SplitWork,
+  progress: (opened: number[]) => Promise<void>,
+): Promise<number[]> {
+  const opened = [...work.opened];
+  while (opened.length < work.parts.length) {
+    const index = opened.length;
+    const created = await split.openIssue(
+      splitPartIssue({ parent: work.parent, parts: work.parts, index }),
+    );
+    if (created.isErr()) {
+      log.warn('Issue factory could not open a part of a split issue', {
+        namespace: 'factory',
+        runId: work.runId,
+        issue: work.parent.number,
+        part: index + 1,
+        error: created.error,
+      });
+      break;
+    }
+    opened.push(created.value);
+    await progress([...opened]);
+  }
+  return opened;
+}
+
+/**
+ * After the parts are open: queue the new ones, list them on the parent, and
+ * take the factory's label off it (handing it to a person when a part is
+ * missing). The comment is best effort and logged.
+ */
+export async function announceSplit(
+  split: FactorySplitDeps,
+  comment: (body: string) => Promise<Result<void, string>>,
+  work: SplitWork,
+  opened: readonly number[],
+): Promise<void> {
+  await split.queue(opened.slice(work.opened.length));
+  const commented = await comment(splitComment(work.parts, opened));
+  if (commented.isErr()) {
+    log.warn('Issue factory could not comment the split on the issue', {
+      namespace: 'factory',
+      runId: work.runId,
+      issue: work.parent.number,
+      error: commented.error,
+    });
+  }
+  await split.release(opened.length === work.parts.length);
+}
 
 /** The run goes on: with its contract as text, or without one. */
 function proceed(triage: FactoryTriage): ActionResult {
@@ -446,39 +521,6 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
   }
 
   /**
-   * Open the parts not opened yet, recording the list after each one; stops at
-   * the first that cannot be opened. The parts opened, the earlier ones first.
-   */
-  async function openParts(
-    split: FactorySplitDeps,
-    shown: string[],
-    threadId: string,
-    issue: FactoryIssueText | null,
-    at: string,
-  ): Promise<number[]> {
-    const opened = [...resumedParts(deps.stored, threadId)];
-    const parent = splitParent(scope, issue);
-    while (opened.length < shown.length) {
-      const index = opened.length;
-      const created = await split.openIssue(splitPartIssue({ parent, parts: shown, index }));
-      if (created.isErr()) {
-        log.warn('Issue factory could not open a part of a split issue', {
-          namespace: 'factory',
-          runId: scope.runId,
-          issue: scope.issueNumber,
-          part: index + 1,
-          error: created.error,
-        });
-        break;
-      }
-      opened.push(created.value);
-      current = { decision: 'too_big', at, threadId, items: shown, splitInto: [...opened] };
-      await deps.record({ triage: current });
-    }
-    return opened;
-  }
-
-  /**
    * Open the parts as issues and end the run (the factory's `split` setting).
    * The issues opened so far are recorded after each one, so a resumed run
    * answering from the same thread does not open them again. Nothing opened:
@@ -492,16 +534,19 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
   ): Promise<ActionResult> {
     const shown = publicItems(parts);
     const at = new Date().toISOString();
-    const resumedCount = resumedParts(deps.stored, threadId).length;
-    const opened = await openParts(split, shown, threadId, issue, at);
+    const work: SplitWork = {
+      runId: scope.runId,
+      parent: splitParent(scope, issue),
+      parts: shown,
+      opened: resumedParts(deps.stored, threadId),
+    };
+    const opened = await openSplitParts(split, work, async (splitInto) => {
+      current = { decision: 'too_big', at, threadId, items: shown, splitInto };
+      await deps.record({ triage: current });
+    });
     if (opened.length === 0) return askOnIssue('too_big', parts, threadId);
 
-    await split.queue(opened.slice(resumedCount));
-    warnIfFailed(
-      await deps.comment(splitComment(shown, opened)),
-      'Issue factory could not comment the split on the issue',
-    );
-    await split.release(opened.length === shown.length);
+    await announceSplit(split, deps.comment, work, opened);
     current = { decision: 'too_big', at, threadId, items: shown, splitInto: opened };
     await deps.record({ state: 'done', failureReason: null, triage: current });
     await deps.count('triage_too_big');
@@ -517,14 +562,17 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
   async function heldForPaths(triage: FactoryTriage): Promise<ActionResult | null> {
     const paths = triage.contract?.likelyPaths ?? [];
     if (paths.length === 0 || !deps.busyPaths || !deps.hold) return null;
-    const blockers = overlappingIssues(paths, await deps.busyPaths());
+    const busy = await deps.busyPaths();
+    const blockers = overlappingIssues(paths, busy);
     if (blockers.length === 0) return null;
     if (!(await deps.hold(blockers))) return null;
     await deps.count('triage_path_hold');
     const named = blockers.map((issue) => `#${issue}`).join(', ');
     return {
       ok: false,
-      error: `Waiting for ${named}: it works on the same files.`,
+      error: allAwaitApproval(blockers, busy)
+        ? `Waiting for ${named}: it waits for a member's approval and holds the same files.`
+        : `Waiting for ${named}: it works on the same files.`,
       metadata: { outcome: 'path_hold', blockers },
     };
   }
@@ -626,31 +674,91 @@ const WORKING_ON_PATHS: ReadonlySet<string> = new Set([
   'merging',
 ]);
 
+/**
+ * How long a run parked for a member's approval keeps its paths (openspec
+ * factory-merge-fewer-bounces, D6): an approval nobody gives must not block
+ * its files for good.
+ */
+const APPROVAL_PATH_HOLD_MS = 12 * 60 * 60 * 1000;
+
+/** A run as `busyPathsOf` reads it. */
+export interface PathHolder {
+  id: string;
+  issueNumber: number | null;
+  state: string;
+  triage: FactoryTriage | null;
+  stackedOn?: { runId: string } | null;
+  failureReason?: string | null;
+  prUrl?: string | null;
+  completedAt?: string | null;
+}
+
+/** Likely paths taken by a run, by its issue; `awaitingApproval` when it is parked for one. */
+export interface BusyPaths {
+  issue: number;
+  paths: string[];
+  awaitingApproval?: true;
+}
+
+/** Parked for a member's approval of its high-risk pull request, for less than the hold. */
+function awaitsApprovalAt(run: PathHolder, now: number): boolean {
+  if (run.state !== 'waiting_human' || run.failureReason !== HIGH_RISK_HOLD || !run.prUrl) {
+    return false;
+  }
+  const parked = run.completedAt ? Date.parse(run.completedAt) : Number.NaN;
+  return Number.isFinite(parked) && now - parked < APPROVAL_PATH_HOLD_MS;
+}
+
 /** The likely paths of the runs in progress other than `exceptRunId`, by issue. */
 export function busyPathsOf(
-  runs: ReadonlyArray<{
-    id: string;
-    issueNumber: number | null;
-    state: string;
-    triage: FactoryTriage | null;
-    stackedOn?: { runId: string } | null;
-  }>,
+  runs: ReadonlyArray<PathHolder>,
   exceptRunId: string,
   /**
    * The run `exceptRunId` is stacked on (D10): it builds on that run's branch
    * on purpose, so sharing its files is the point and its paths do not count.
    */
   stackedOnRunId: string | null = null,
-): Array<{ issue: number; paths: string[] }> {
-  return runs.flatMap((run) => {
+  /**
+   * Present when the factory keeps the paths of a run parked for a member's
+   * approval (its `holdPathsAwaitingApproval` setting): the time to measure
+   * the hold from.
+   */
+  approvalHold: { now: number } | null = null,
+): BusyPaths[] {
+  return runs.flatMap((run): BusyPaths[] => {
     // Neither way round: a blocker is not held by the runs stacked on it
     // either, since they wait for it to merge (holding it would deadlock).
     if (run.id === stackedOnRunId || run.stackedOn?.runId === exceptRunId) return [];
     // A run without an issue has no triage contract, so no likely paths.
-    if (run.issueNumber === null || run.id === exceptRunId || !takesPaths(run.state)) return [];
-    const paths = readyPathsOf(run.triage);
-    return paths.length > 0 ? [{ issue: run.issueNumber, paths }] : [];
+    if (run.issueNumber === null || run.id === exceptRunId) return [];
+    const held = pathsTakenBy(run, approvalHold);
+    return held ? [{ issue: run.issueNumber, ...held }] : [];
   });
+}
+
+/** The paths `run` takes: while it changes files, or while it waits for an approval the factory holds them for. */
+function pathsTakenBy(
+  run: PathHolder,
+  approvalHold: { now: number } | null,
+): Omit<BusyPaths, 'issue'> | null {
+  const awaitingApproval = approvalHold !== null && awaitsApprovalAt(run, approvalHold.now);
+  if (!takesPaths(run.state) && !awaitingApproval) return null;
+  const paths = readyPathsOf(run.triage);
+  if (paths.length === 0) return null;
+  return awaitingApproval ? { paths, awaitingApproval } : { paths };
+}
+
+/**
+ * Whether every one of `blockers` holds its paths only because it waits for a
+ * member's approval: what the run waiting for them is told.
+ */
+export function allAwaitApproval(blockers: readonly number[], busy: readonly BusyPaths[]): boolean {
+  return (
+    blockers.length > 0 &&
+    blockers.every((issue) =>
+      busy.some((other) => other.issue === issue && other.awaitingApproval === true),
+    )
+  );
 }
 
 /**

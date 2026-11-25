@@ -85,6 +85,31 @@ const FORWARDED_MESSAGE_FIELDS = [
   'roleInputs',
 ] as const;
 
+/**
+ * The runner's `POST /api/threads/:id/message` body that starts a sandbox
+ * thread's agent (its `sendMessageSchema`). The forwarded fields are not read
+ * here: they go as the request carried them, and the runner validates them.
+ * A retry forwards the rest of the user's message the same way.
+ */
+export type SandboxMessageBody = {
+  content: string;
+  provider?: string;
+  model?: string;
+  permissionMode?: string;
+  effort?: string;
+  images?: unknown;
+  fileReferences?: unknown;
+  symbolReferences?: unknown;
+  allowedTools?: unknown;
+  disallowedTools?: unknown;
+  roleInputs?: unknown;
+  /** The first message the server already saved, so the runner does not save it again. */
+  savedMessageId?: string;
+  /** A retry: the never-answered initial prompt the agent sees first. */
+  precedingPrompt?: string;
+  precedingImages?: unknown[];
+};
+
 export interface SandboxThreadFailure {
   status: 400 | 403 | 404 | 409;
   code: string;
@@ -163,7 +188,7 @@ export interface SandboxThreadDeps {
   sendMessage(input: {
     userId: string;
     threadId: string;
-    body: Record<string, unknown>;
+    body: SandboxMessageBody;
   }): ResultAsync<void, string>;
   newId(): string;
   now?: () => string;
@@ -220,14 +245,14 @@ function newSandboxThreadRow(
 }
 
 /** The first message: the prompt, the agent settings and the forwarded extras. */
-function firstMessageBody(input: SandboxThreadInput, payload: unknown): Record<string, unknown> {
-  const body: Record<string, unknown> = { content: input.prompt };
+function firstMessageBody(input: SandboxThreadInput): SandboxMessageBody {
+  const body: SandboxMessageBody = { content: input.prompt };
   for (const key of ['provider', 'model', 'permissionMode', 'effort'] as const) {
     if (input[key]) body[key] = input[key];
   }
-  const extras = payload as Record<string, unknown>;
+  // The schema passes the payload's other fields through as they are.
   for (const key of FORWARDED_MESSAGE_FIELDS) {
-    if (extras[key] !== undefined) body[key] = extras[key];
+    if (input[key] !== undefined) body[key] = input[key];
   }
   return body;
 }
@@ -250,7 +275,7 @@ function retryMessageBody(
   input: z.infer<typeof retrySandboxThreadSchema>,
   initialPrompt: string | null,
   initialImages: unknown[] | null,
-): Record<string, unknown> {
+): SandboxMessageBody {
   if (!initialPrompt) return { ...input };
   return {
     ...input,
@@ -302,7 +327,7 @@ export function createSandboxThreadLauncher(deps: SandboxThreadDeps) {
     userId: string,
     threadId: string,
     launch: PreparedSandboxLaunch,
-    body: Record<string, unknown>,
+    body: SandboxMessageBody,
   ): Promise<void> {
     const provisioned = await launch.provision();
     if (provisioned.isOk()) {
@@ -360,7 +385,7 @@ export function createSandboxThreadLauncher(deps: SandboxThreadDeps) {
     userId: string,
     threadId: string,
     launch: PreparedSandboxLaunch,
-    body: Record<string, unknown>,
+    body: SandboxMessageBody,
   ): Promise<void> {
     return runInBackground(userId, threadId, launch, body).catch((error) => {
       log.error('Sandbox thread launch crashed', {
@@ -527,7 +552,7 @@ export function createSandboxThreadLauncher(deps: SandboxThreadDeps) {
 
       const createdAt = now();
       await deps.insertThread(newSandboxThreadRow(threadId, userId, input, createdAt));
-      const body = firstMessageBody(input, payload);
+      const body = firstMessageBody(input);
       const savedMessageId = await deps.saveFirstMessage({
         userId,
         threadId,

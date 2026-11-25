@@ -39,20 +39,27 @@ export function SidebarThreadsSection({
       onOpenChange={setIsExpanded}
       className={cn('flex shrink-0 flex-col contain-paint', isExpanded && 'max-h-[40%] min-h-20')}
     >
-      <CollapsibleTrigger
-        data-testid="sidebar-activity-toggle"
-        className={cn(
-          'group/activity focus-visible:ring-sidebar-ring mx-2 flex items-center gap-1 rounded-md px-2 pb-2 pt-3 text-left cursor-pointer select-none focus:outline-hidden focus-visible:ring-1 focus-visible:ring-inset',
-          'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
-        )}
-      >
-        <ChevronRight className={cn('icon-sm', isExpanded && 'rotate-90')} />
-        <h2 className="text-xs font-semibold tracking-wider uppercase">
-          {t('sidebar.threadsTitle')}
-        </h2>
+      <CollapsibleTrigger asChild>
+        <button
+          type="button"
+          data-testid="sidebar-activity-toggle"
+          className={cn(
+            'group/activity focus-visible:ring-sidebar-ring mx-2 flex items-center gap-1 rounded-md px-2 pb-2 pt-3 text-left cursor-pointer select-none focus:outline-hidden focus-visible:ring-1 focus-visible:ring-inset',
+            'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
+          )}
+        >
+          <ChevronRight className={cn('icon-sm', isExpanded && 'rotate-90')} />
+          <h2 className="text-xs font-semibold tracking-wider uppercase">
+            {t('sidebar.threadsTitle')}
+          </h2>
+        </button>
       </CollapsibleTrigger>
       <CollapsibleContent className="flex min-h-0 flex-1 flex-col">
-        <ScrollArea viewportRef={scrollRef} className="relative min-h-0 flex-1 px-2 pb-2">
+        <ScrollArea
+          viewportRef={scrollRef}
+          className="relative min-h-0 flex-1"
+          viewportProps={{ className: 'px-2 pb-2' }}
+        >
           <ThreadList
             onRenameThread={onRenameThread}
             onArchiveThread={onArchiveThread}

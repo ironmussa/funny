@@ -42,8 +42,8 @@ const HEAD_LINE = /^head ([0-9a-f]{40,64})$/m;
 
 export type UndoSnapshotKind = 'worktree' | 'stash';
 
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+function messageOf(cause: unknown): string {
+  return cause instanceof Error ? cause.message : String(cause);
 }
 
 /** The ref of an activity's snapshot; refuses an id that could not be one. */

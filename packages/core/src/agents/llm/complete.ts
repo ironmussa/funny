@@ -53,20 +53,20 @@ const chatResponseSchema = z.object({
   error: z.object({ message: z.string().optional() }).passthrough().optional(),
 });
 
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+function messageOf(cause: unknown): string {
+  return cause instanceof Error ? cause.message : String(cause);
 }
 
-function toError(error: unknown, signal: AbortSignal | undefined): CompleteOnceError {
-  if (signal?.aborted || (error instanceof Error && error.name === 'AbortError')) {
+function toError(cause: unknown, signal: AbortSignal | undefined): CompleteOnceError {
+  if (signal?.aborted || (cause instanceof Error && cause.name === 'AbortError')) {
     return { kind: 'aborted', message: signal?.reason ? messageOf(signal.reason) : 'Aborted' };
   }
-  if (isObject(error) && 'kind' in error) {
+  if (isObject(cause) && 'kind' in cause) {
     // SAFETY: the only non-Error value thrown inside this module with a `kind`
     // is post()'s `{ kind: 'provider-error', ... }` object, a CompleteOnceError.
-    return error as CompleteOnceError;
+    return cause as CompleteOnceError;
   }
-  return { kind: 'provider-error', message: messageOf(error) };
+  return { kind: 'provider-error', message: messageOf(cause) };
 }
 
 async function post(options: CompleteOnceOptions, apiKey: string | undefined): Promise<string> {

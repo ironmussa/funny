@@ -15,8 +15,8 @@ export function AuthorAvatar({ author }: Props) {
     <Tooltip>
       <TooltipTrigger asChild>
         <Avatar className="mt-0.5">
-          <AvatarFallback className="text-primary text-xs font-medium" name={author}>
-            {author.slice(0, 2).toUpperCase()}
+          <AvatarFallback textSize="xs" name={author}>
+            <span className="font-medium">{author.slice(0, 2).toUpperCase()}</span>
           </AvatarFallback>
         </Avatar>
       </TooltipTrigger>

@@ -10,6 +10,7 @@ import {
   CarrierEnvelopeSchema,
   type CarrierEnvelope,
 } from './generated/browser-v1/browser/v1/transport_pb.js';
+import type { SocketIoArgument } from './socket-events.js';
 
 export const BROWSER_V1_PROTOCOL_MAJOR = 1;
 export const BROWSER_V1_PROTOCOL_MINOR = 0;
@@ -39,19 +40,22 @@ function safeStatus(code: StatusCode, message: string, retryable = false): Statu
   return create(StatusSchema, { code, message, retryable });
 }
 
-export function normalizeBrowserCarrierPayload(payload: unknown): Uint8Array | null {
-  if (payload instanceof Uint8Array) {
-    return new Uint8Array(payload.buffer, payload.byteOffset, payload.byteLength);
-  }
-  if (payload instanceof ArrayBuffer) return new Uint8Array(payload);
-  if (ArrayBuffer.isView(payload)) {
-    return new Uint8Array(payload.buffer, payload.byteOffset, payload.byteLength);
-  }
-  return null;
+/** A binary carrier frame as Socket.IO delivers it (a Buffer is a Uint8Array). */
+export type BrowserCarrierBinary = Uint8Array | ArrayBuffer | ArrayBufferView;
+
+/** True for the binary values `normalizeBrowserCarrierPayload` turns into bytes. */
+function isBrowserCarrierBinary<T>(payload: T): payload is T & BrowserCarrierBinary {
+  return payload instanceof ArrayBuffer || ArrayBuffer.isView(payload);
 }
 
-export const browserCarrierPayloadSchema = z.custom<Uint8Array | ArrayBuffer | ArrayBufferView>(
-  (payload) => normalizeBrowserCarrierPayload(payload) !== null,
+export function normalizeBrowserCarrierPayload(payload: SocketIoArgument): Uint8Array | null {
+  if (!isBrowserCarrierBinary(payload)) return null;
+  if (payload instanceof ArrayBuffer) return new Uint8Array(payload);
+  return new Uint8Array(payload.buffer, payload.byteOffset, payload.byteLength);
+}
+
+export const browserCarrierPayloadSchema = z.custom<BrowserCarrierBinary>(
+  isBrowserCarrierBinary,
   'Expected binary payload',
 );
 
@@ -106,7 +110,7 @@ function validateEnvelope(envelope: CarrierEnvelope): Status | null {
 }
 
 export function decodeBrowserCarrier(
-  payload: unknown,
+  payload: SocketIoArgument,
   options: {
     maxMessageBytes?: number;
     expectedSchemaFingerprint?: string;

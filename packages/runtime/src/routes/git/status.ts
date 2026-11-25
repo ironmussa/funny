@@ -14,6 +14,7 @@ import {
   deriveGitSyncState,
   type BranchPRInfo,
 } from '@funny/core/git';
+import type { GitStatusInfo } from '@funny/shared';
 import { badRequest } from '@funny/shared/errors';
 import { Hono, type Context } from 'hono';
 import { err } from 'neverthrow';
@@ -553,7 +554,7 @@ statusRoutes.get('/project/:projectId/status', (c) =>
 );
 
 function statusWithPR(
-  baseStatus: Record<string, unknown>,
+  baseStatus: GitStatusInfo,
   prInfo: { prNumber: number; prUrl: string; prState: string } | null | undefined,
 ) {
   return {

@@ -34,11 +34,17 @@ export function renderedRangeOf(virtualItems: ReadonlyArray<{ index: number }>):
 }
 
 /** Each laid-out row's position, by commit hash, and the height of the whole list. */
+interface RebaseLinkLayout {
+  rowsByHash: Map<string, RebaseLinkRow>;
+  totalHeight: number;
+}
+
+/** Each laid-out row's position, by commit hash, and the height of the whole list. */
 function layoutRebaseLinkRows(
   entries: GraphEntry[],
   layoutRows: GraphRow[],
   rowHeightFor: (entry: GraphEntry) => number,
-): { rowsByHash: Map<string, RebaseLinkRow>; totalHeight: number } {
+): RebaseLinkLayout {
   let totalHeight = 0;
   const rowsByHash = new Map<string, RebaseLinkRow>();
   for (let index = 0; index < entries.length; index += 1) {

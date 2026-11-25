@@ -88,9 +88,8 @@ export function StartupCommandsPopover({ projectId, threadId, worktreeBranch }: 
           <PopoverTrigger asChild>
             <Button
               data-testid="header-startup-commands"
-              variant="ghost"
+              variant={anyRunning ? 'ghost-success' : 'muted'}
               size="icon-sm"
-              className={anyRunning ? 'text-status-success' : 'text-muted-foreground'}
             >
               <Rocket className="icon-base" />
             </Button>
@@ -98,7 +97,7 @@ export function StartupCommandsPopover({ projectId, threadId, worktreeBranch }: 
         </TooltipTrigger>
         <TooltipContent>{t('startup.title', 'Startup Commands')}</TooltipContent>
       </Tooltip>
-      <PopoverContent align="end" className="w-64 p-2" {...contentProps}>
+      <PopoverContent align="end" padding="sm" className="w-64" {...contentProps}>
         {threadId && (
           <div
             data-testid="startup-worktree-banner"
@@ -141,20 +140,20 @@ export function StartupCommandsPopover({ projectId, threadId, worktreeBranch }: 
                   </div>
                   {isRunning ? (
                     <Button
-                      variant="ghost"
+                      variant="ghost-error"
                       size="icon-xs"
                       onClick={() => handleStop(cmd)}
-                      className="text-status-error hover:text-status-error/80 shrink-0"
+                      className="shrink-0"
                     >
                       <Square className="icon-xs" />
                     </Button>
                   ) : (
                     <Button
-                      variant="ghost"
+                      variant="ghost-success"
                       size="icon-xs"
                       onClick={() => handleRun(cmd)}
                       disabled={!!pendingCommandId}
-                      className="text-status-success hover:text-status-success/80 shrink-0"
+                      className="shrink-0"
                     >
                       {isPending ? (
                         <Loader2 className="icon-xs animate-spin" />

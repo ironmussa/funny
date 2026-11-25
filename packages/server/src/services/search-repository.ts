@@ -289,10 +289,7 @@ async function searchViaFts5(
 
   // SQLite: synchronous .all() on raw SQL is the correct API for FTS5 queries.
   // This is intentionally dialect-specific — guarded by the dbDialect check above.
-  const rows = (db as any).all(stmt) as {
-    threadId: string;
-    snippet: string;
-  }[];
+  const rows = db.all<{ threadId: string; snippet: string }>(stmt);
 
   const result = new Map<string, string>();
   for (const row of rows) {
@@ -332,6 +329,8 @@ async function searchViaTsvector(
   stmt = sql`${stmt} GROUP BY m.thread_id, m.content, m.search_vector`;
 
   // PostgreSQL: async execute
+  // SAFETY: searchViaTsvector runs only when dbDialect is 'pg', where db is a drizzle
+  // Postgres database with execute(); AppDatabase types only the SQLite one.
   const rows = await dbAll<{ threadId: string; snippet: string }>((db as any).execute(stmt));
 
   const result = new Map<string, string>();

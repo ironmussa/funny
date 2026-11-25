@@ -16,6 +16,7 @@
 
 import { z } from 'zod';
 
+import type { JsonValue } from './json-validation.js';
 import type { ProviderManifest } from './provider-manifest.js';
 
 /** Bumped when the on-disk `funny.provider.json` shape changes incompatibly. */
@@ -171,12 +172,12 @@ void ({} as ValidatedProviderManifest satisfies ProviderManifest);
 void ({} as ProviderManifest satisfies ValidatedProviderManifest);
 
 /**
- * Parse + validate an unknown value as a `funny.provider.json` file. Never
+ * Parse + validate a decoded `funny.provider.json` file. Never
  * throws — returns a typed result so the loader can skip a bad manifest and
  * keep the others.
  */
 export function parseFunnyProviderFile(
-  raw: unknown,
+  raw: JsonValue,
 ): { ok: true; file: FunnyProviderFile } | { ok: false; error: string } {
   const result = funnyProviderFileSchema.safeParse(raw);
   if (result.success) return { ok: true, file: result.data };

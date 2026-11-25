@@ -53,6 +53,8 @@ function normalize(row: any): PermissionRule {
     projectPath: row.projectPath ?? row.project_path,
     toolName: row.toolName ?? row.tool_name,
     pattern: row.pattern ?? null,
+    // SAFETY: permission_rules.decision is written only by createRule from its typed
+    // PermissionDecision input.
     decision: (row.decision as PermissionDecision) ?? 'allow',
     createdAt: row.createdAt ?? row.created_at,
   };
@@ -95,6 +97,8 @@ export function findMatch(input: FindMatchInput): ResultAsync<PermissionRule | n
     (err) => {
       log.error('permission-rules.findMatch failed', {
         namespace: 'permission-rules',
+        // SAFETY: `?.message` reads the field off any rejection value; a non-Error logs its
+        // own message field or undefined.
         error: (err as Error)?.message,
         userId: input.userId,
         toolName: input.toolName,
@@ -130,6 +134,8 @@ export function createRule(input: CreateRuleInput): ResultAsync<PermissionRule, 
     (err) => {
       log.error('permission-rules.create failed', {
         namespace: 'permission-rules',
+        // SAFETY: `?.message` reads the field off any rejection value; a non-Error logs its
+        // own message field or undefined.
         error: (err as Error)?.message,
       });
       return err instanceof Error ? err : new Error(String(err));
@@ -157,6 +163,8 @@ export function listRules(input: {
     (err) => {
       log.error('permission-rules.list failed', {
         namespace: 'permission-rules',
+        // SAFETY: `?.message` reads the field off any rejection value; a non-Error logs its
+        // own message field or undefined.
         error: (err as Error)?.message,
       });
       return err instanceof Error ? err : new Error(String(err));

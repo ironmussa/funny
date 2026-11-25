@@ -7,8 +7,13 @@ import { Separator } from '@/components/ui/separator';
 
 import { useViewerStore } from '../stores/viewer-store';
 
+/** File extension → Monaco language id. */
+interface MonacoLanguages {
+  readonly [ext: string]: string;
+}
+
 function getMonacoLanguage(ext: string): string {
-  const map: Record<string, string> = {
+  const map: MonacoLanguages = {
     ts: 'typescript',
     tsx: 'typescript',
     js: 'javascript',

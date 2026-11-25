@@ -111,7 +111,7 @@ export function buildSettingsItems(opts: {
   return items;
 }
 
-export const settingsLabelKeys: Record<string, string> = {
+export const settingsLabelKeys: Record<SettingsItemId, string> = {
   general: 'settings.general',
   'agent-resources': 'settings.agentResources',
   'agent-profiles': 'settings.agentProfiles',

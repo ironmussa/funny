@@ -38,7 +38,7 @@ const grants = repos.grants();
  * before the dual-write — or lazily by `setMemberLocalPath` — have no grant.
  */
 async function getProjectMemberRole(userId: string, projectId: string): Promise<Role | null> {
-  const rows = await dbAll(
+  const rows = await dbAll<{ role: string }>(
     db
       .select({ role: schema.projectMembers.role })
       .from(schema.projectMembers)
@@ -49,7 +49,7 @@ async function getProjectMemberRole(userId: string, projectId: string): Promise<
         ),
       ),
   );
-  const role = (rows[0] as { role?: string } | undefined)?.role;
+  const role = rows[0]?.role;
   return role ? projectRoleToRole(role) : null;
 }
 
@@ -61,48 +61,50 @@ export const authorizer = createAuthorizer({
 
   // Org role is canonical in Better Auth `member` (D1), mapped to the lattice.
   getOrgRole: async (subjectId, orgId) => {
-    const rows = await dbAll(
+    const rows = await dbAll<{ role: string }>(
       db
         .select({ role: schema.member.role })
         .from(schema.member)
         .where(and(eq(schema.member.organizationId, orgId), eq(schema.member.userId, subjectId))),
     );
-    const role = (rows[0] as { role?: string } | undefined)?.role;
+    const role = rows[0]?.role;
+    // SAFETY: member.role is written by Better Auth's organization plugin, whose
+    // roles are the OrgRole set configured in lib/auth.ts (creatorRole 'owner').
     return role ? orgRoleToRole(role as OrgRole) : null;
   },
 
   loadThreadMeta: async (threadId) => {
-    const rows = await dbAll(
+    const rows = await dbAll<{ ownerId: string }>(
       db
         .select({ ownerId: schema.threads.userId })
         .from(schema.threads)
         .where(eq(schema.threads.id, threadId)),
     );
-    const r = rows[0] as { ownerId: string } | undefined;
+    const r = rows[0];
     return r ? { ownerId: r.ownerId } : null;
   },
 
   loadProjectMeta: async (projectId) => {
-    const rows = await dbAll(
+    const rows = await dbAll<{ ownerId: string }>(
       db
         .select({ ownerId: schema.projects.userId })
         .from(schema.projects)
         .where(eq(schema.projects.id, projectId)),
     );
-    const r = rows[0] as { ownerId: string } | undefined;
+    const r = rows[0];
     return r ? { ownerId: r.ownerId } : null;
   },
 
   // `team_projects` is the live org↔project share edge (a project can be shared
   // with several orgs; `projects.organization_id` only denormalizes one).
   listProjectOrgIds: async (projectId) => {
-    const rows = await dbAll(
+    const rows = await dbAll<{ orgId: string }>(
       db
         .select({ orgId: schema.teamProjects.teamId })
         .from(schema.teamProjects)
         .where(eq(schema.teamProjects.projectId, projectId)),
     );
-    return (rows as { orgId: string }[]).map((r) => r.orgId);
+    return rows.map((r) => r.orgId);
   },
 });
 

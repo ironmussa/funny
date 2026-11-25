@@ -26,6 +26,7 @@ import {
   startAgent,
   stopAllAgents,
 } from './agent-runner-control.js';
+import type { AgentMcpServers } from './agent-startup/load-mcp-servers.js';
 import { AgentStateTracker } from './agent-state.js';
 import { IdleReaper } from './idle-reaper.js';
 import type { IThreadManager, IWSBroker } from './server-interfaces.js';
@@ -95,7 +96,7 @@ export class AgentRunner {
     disallowedTools?: string[],
     allowedTools?: string[],
     provider?: AgentProvider,
-    mcpServers?: Record<string, any>,
+    mcpServers?: AgentMcpServers,
     skipMessageInsert?: boolean,
     effort?: string,
     steer?: boolean,
@@ -199,8 +200,7 @@ export { startAgent };
 
 // ── Bridge core debug logs to Winston/OTLP ──────────────────
 setLogSink((level, namespace, message, data) => {
-  const meta: Record<string, unknown> = { namespace: `core:${namespace}`, ...data };
-  log[level](message, meta);
+  log[level](message, { namespace: `core:${namespace}`, ...data });
 });
 
 // ── Self-register with ShutdownManager ──────────────────────

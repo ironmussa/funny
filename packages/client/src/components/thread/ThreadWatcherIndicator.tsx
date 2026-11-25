@@ -93,7 +93,7 @@ function WatcherIcon({
 }
 
 function IndicatorIcon({
-  icon: Icon,
+  icon: GlyphIcon,
   className,
   testId,
   tooltip,
@@ -108,12 +108,10 @@ function IndicatorIcon({
       <TooltipTrigger asChild>
         <span className="flex shrink-0 items-center" data-testid={testId}>
           {/* icon-sm to match the thread status icon in ThreadStatusPin */}
-          <Icon className={cn('icon-sm', className)} />
+          <GlyphIcon className={cn('icon-sm', className)} />
         </span>
       </TooltipTrigger>
-      <TooltipContent side="top" className="text-xs">
-        {tooltip}
-      </TooltipContent>
+      <TooltipContent side="top">{tooltip}</TooltipContent>
     </Tooltip>
   );
 }

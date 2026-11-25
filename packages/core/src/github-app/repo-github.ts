@@ -21,6 +21,19 @@ export interface GithubCallError {
   detail?: string;
 }
 
+/** A value `JSON.stringify` writes as-is (an `undefined` field is left out). */
+type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | readonly JsonValue[]
+  | { readonly [key: string]: JsonValue };
+
+/** A REST request body: a JSON object, sent as `JSON.stringify(body)`. */
+export type GithubRequestBody = { readonly [key: string]: JsonValue };
+
 /** Where a repository's token comes from. */
 export type RepoTokenSource = (
   repo: string,
@@ -32,7 +45,7 @@ export interface RepoGithub {
     repo: string,
     method: string,
     path: string,
-    body?: unknown,
+    body?: GithubRequestBody,
   ): ResultAsync<T, GithubCallError>;
   /** A text answer (a job log). */
   text(repo: string, path: string): ResultAsync<string, GithubCallError>;
@@ -64,7 +77,7 @@ export function createRepoGithub(deps: {
 }): RepoGithub {
   const rest = createGithubRest({ fetch: deps.fetch, api: deps.api, userAgent: deps.userAgent });
 
-  const request = (repo: string, method: string, path: string, body?: unknown) =>
+  const request = (repo: string, method: string, path: string, body?: GithubRequestBody) =>
     deps
       .tokenFor(repo)
       .mapErr((e) => fail(e.message, undefined, e.kind))
@@ -86,7 +99,7 @@ export function createRepoGithub(deps: {
       });
 
   return {
-    json: <T>(repo: string, method: string, path: string, body?: unknown) =>
+    json: <T>(repo: string, method: string, path: string, body?: GithubRequestBody) =>
       request(repo, method, path, body).andThen((res): ResultAsync<T, GithubCallError> => {
         if (res.status === 204) {
           // SAFETY: as documented on RepoGithub.json, a 204 answers `undefined`;

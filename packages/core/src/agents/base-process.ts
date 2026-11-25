@@ -35,6 +35,15 @@ export type ResultSubtype =
   | 'error_max_budget_usd';
 
 /**
+ * ACP `PromptResponse.usage`. Some agents write `cacheRead/WriteTokens`
+ * instead of the protocol's `cachedRead/WriteTokens`; both are read.
+ */
+type AcpPromptUsage = import('@agentclientprotocol/sdk/unstable').Usage & {
+  cacheReadTokens?: number | null;
+  cacheWriteTokens?: number | null;
+};
+
+/**
  * Terminate a child process AND its entire descendant tree.
  *
  * ACP agents (and DeepAgent) spawn MCP servers as their own children, so
@@ -326,7 +335,7 @@ export abstract class BaseAgentProcess extends EventEmitter {
   }
 
   /** Map ACP `PromptResponse.usage` (camelCase) to a context-usage CLIMessage. */
-  protected emitAcpPromptResponseUsage(usage: unknown): void {
+  protected emitAcpPromptResponseUsage(usage: AcpPromptUsage | null | undefined): void {
     if (!usage || !isObject(usage)) return;
     // SAFETY: `usage` is an object (checked above) from the ACP PromptResponse,
     // whose token fields are numbers when present. They are not checked here:
@@ -456,16 +465,16 @@ export abstract class BaseAgentProcess extends EventEmitter {
    * JSON metadata (quota violations, retry info, etc.). We extract just the
    * human-readable parts so the UI shows a clean message.
    */
-  protected extractErrorMessage(err: unknown): string {
-    if (err == null) return 'Unknown error';
-    if (isString(err)) return this.cleanErrorDetails(err);
-    if (!isObject(err)) return String(err);
+  protected extractErrorMessage(cause: unknown): string {
+    if (cause == null) return 'Unknown error';
+    if (isString(cause)) return this.cleanErrorDetails(cause);
+    if (!isObject(cause)) return String(cause);
 
-    const base = 'message' in err && isString(err.message) ? err.message : String(err);
+    const base = 'message' in cause && isString(cause.message) ? cause.message : String(cause);
 
     // ACP RequestError: { code, message, data: { details } }
-    if ('data' in err && err.data && isObject(err.data) && 'details' in err.data) {
-      const details = err.data.details;
+    if ('data' in cause && cause.data && isObject(cause.data) && 'details' in cause.data) {
+      const details = cause.data.details;
       if (isString(details)) {
         return this.cleanErrorDetails(details);
       }

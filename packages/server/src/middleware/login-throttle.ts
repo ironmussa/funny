@@ -8,7 +8,9 @@
  * response status to record success/failure.
  */
 
+import { parseStoredJson } from '@funny/shared/json-validation';
 import type { Context, Next } from 'hono';
+import { z } from 'zod';
 
 import { log } from '../lib/logger.js';
 import {
@@ -18,21 +20,34 @@ import {
 } from '../lib/login-throttle.js';
 import type { ServerEnv } from '../lib/types.js';
 
+/**
+ * The fields of a sign-in body that can name the account. Each is checked to be
+ * a string in `pickIdentifier`; Better Auth validates the body itself.
+ */
+const signInIdentifierFieldsSchema = z.object({
+  username: z.unknown().optional(),
+  email: z.unknown().optional(),
+  identifier: z.unknown().optional(),
+});
+
+type SignInIdentifierFields = z.infer<typeof signInIdentifierFieldsSchema>;
+
 /** Best-effort JSON body read; returns {} on any failure. */
-async function readBody(c: Context<ServerEnv>): Promise<Record<string, unknown>> {
+async function readBody(c: Context<ServerEnv>): Promise<SignInIdentifierFields> {
   // The body has to be cloned because Better Auth's handler runs next and
   // needs an unread stream.
   try {
     const cloned = c.req.raw.clone();
     const text = await cloned.text();
     if (!text) return {};
-    return JSON.parse(text) as Record<string, unknown>;
+    const parsed = parseStoredJson(signInIdentifierFieldsSchema, text, 'sign-in body');
+    return parsed.ok ? parsed.value : {};
   } catch {
     return {};
   }
 }
 
-function pickIdentifier(body: Record<string, unknown>): string | null {
+function pickIdentifier(body: SignInIdentifierFields): string | null {
   const fields = ['username', 'email', 'identifier'] as const;
   for (const f of fields) {
     const v = body[f];

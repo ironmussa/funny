@@ -19,6 +19,12 @@ export interface ACPToolCallData {
   content?: unknown[]; // ACP ToolCallContent blocks (resource / resource_link can carry a file path)
 }
 
+/** The result side of an ACP tool call update: `ToolCallUpdate.rawOutput` and `.content`. */
+export interface ACPToolResultData {
+  rawOutput?: unknown; // Opaque output from the provider (string or object)
+  content?: unknown[]; // ACP ToolCallContent blocks (text, diff, terminal)
+}
+
 /**
  * Map ACP kind + title to a canonical tool name for the client UI.
  *
@@ -33,7 +39,8 @@ function isTodoToolName(name: string): boolean {
   return TODO_TOOL_ALIASES.has(name.toLowerCase().replace(/[_-]/g, ''));
 }
 
-function inferTodoToolFromRawInput(rawInput: unknown): boolean {
+function inferTodoToolFromRawInput(call: Pick<ACPToolCallData, 'rawInput'> | undefined): boolean {
+  const rawInput = call?.rawInput;
   if (rawInput == null || !isObject(rawInput)) return false;
   // SAFETY: `rawInput` is a non-null object (checked above); the name fields are read
   // optionally and only a string one is used.
@@ -46,11 +53,11 @@ export function inferACPToolName(
   kind: string | undefined,
   title: string,
   overrides?: { thinkToolName?: string },
-  rawInput?: unknown,
+  call?: Pick<ACPToolCallData, 'rawInput'>,
 ): string {
   const thinkName = overrides?.thinkToolName ?? 'Task';
 
-  if (inferTodoToolFromRawInput(rawInput)) return 'TodoWrite';
+  if (inferTodoToolFromRawInput(call)) return 'TodoWrite';
 
   switch (kind) {
     case 'read':
@@ -143,10 +150,13 @@ type ToolInputFiller = (
   toolName: string,
 ) => Record<string, unknown> | undefined;
 
-/** First value among `keys` that is not null/undefined (mirrors a `??` chain). */
-function firstDefined(input: Record<string, unknown>, keys: readonly string[]): unknown {
+/** First value among `keys` that is not null/undefined (mirrors a `??` chain), boxed; undefined when none. */
+function firstDefined(
+  input: Record<string, unknown>,
+  keys: readonly string[],
+): { value: unknown } | undefined {
   for (const key of keys) {
-    if (input[key] != null) return input[key];
+    if (input[key] != null) return { value: input[key] };
   }
   return undefined;
 }
@@ -187,7 +197,7 @@ function resolveFilePath(
   data: ACPToolCallData,
   diff: DiffBlock | null,
 ): { value: unknown } | null {
-  const alias = firstDefined(input, FILE_PATH_ALIASES);
+  const alias = firstDefined(input, FILE_PATH_ALIASES)?.value;
   if (alias) return { value: alias };
   if (data.locations?.length) return { value: data.locations[0].path };
   const fallback =
@@ -220,7 +230,7 @@ const fillFileTool: ToolInputFiller = (input, data, toolName) => {
 const fillBash: ToolInputFiller = (input, data) => {
   if (!input.command) {
     input.command =
-      firstDefined(input, ['cmd', 'shell_command', 'script', 'CommandLine']) ?? data.title;
+      firstDefined(input, ['cmd', 'shell_command', 'script', 'CommandLine'])?.value ?? data.title;
   }
   return undefined;
 };
@@ -239,7 +249,7 @@ const fillGrep: ToolInputFiller = (input, data) => {
     input.pattern = searchMatch[1].trim();
     if (searchMatch[2]) input.path = searchMatch[2];
   } else {
-    input.pattern = firstDefined(input, ['query', 'search']) ?? data.title;
+    input.pattern = firstDefined(input, ['query', 'search'])?.value ?? data.title;
   }
   return undefined;
 };
@@ -364,9 +374,10 @@ export function buildTodoWriteInputFromRaw(
 /** Merge todos from a completed tool result when the initial tool_call lacked rawInput. */
 export function enrichTodoWriteInputFromOutput(
   input: Record<string, unknown>,
-  rawOutput: unknown,
+  result: Pick<ACPToolResultData, 'rawOutput'>,
 ): Record<string, unknown> {
   if (hasRenderableTodoInput(input)) return input;
+  const rawOutput = result.rawOutput;
   if (rawOutput != null && isObject(rawOutput)) {
     // SAFETY: `rawOutput` is a non-null object (checked above), and
     // `buildTodoWriteInputFromRaw` checks every field it reads.
@@ -398,11 +409,8 @@ export function enrichTodoWriteInputFromOutput(
  * 2. content[] blocks (text, diff, terminal)
  * 3. fallbackTitle as last resort
  */
-export function extractACPToolOutput(
-  rawOutput: unknown,
-  content: unknown[] | undefined,
-  fallbackTitle: string,
-): string {
+export function extractACPToolOutput(result: ACPToolResultData, fallbackTitle: string): string {
+  const { rawOutput, content } = result;
   if (rawOutput != null) {
     if (isString(rawOutput)) return rawOutput;
     // Cursor read_file returns `{ content: "<file text>" }`; unwrap so the

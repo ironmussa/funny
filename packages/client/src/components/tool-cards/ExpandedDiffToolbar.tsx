@@ -20,7 +20,6 @@ import { Button } from '@/components/ui/button';
 import { SearchBar } from '@/components/ui/search-bar';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
 
 import { DiffCommentThread } from '../DiffCommentThread';
 import type { DiffViewMode } from '../VirtualDiff';
@@ -116,11 +115,11 @@ function ToolbarToggleButton({
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
-          variant="muted"
+          variant={active ? 'pressed' : 'muted'}
           size="icon-sm"
           onClick={onClick}
           disabled={disabled}
-          className={cn('shrink-0', active && 'bg-accent text-accent-foreground')}
+          className="shrink-0"
           data-testid={testId}
         >
           {children}
@@ -211,7 +210,8 @@ export function DiffSearchOverlay({
       placeholder="Search in diff..."
       showIcon={false}
       testIdPrefix={`${testIdPrefix}-search`}
-      className="border-border bg-popover absolute top-0 right-4 z-30 gap-1.5 rounded-b-lg border border-t-0 px-2 py-1.5 shadow-md"
+      variant="floating"
+      className="absolute top-0 right-4 z-30"
     />
   );
 }

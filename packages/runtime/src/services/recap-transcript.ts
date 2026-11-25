@@ -14,7 +14,8 @@
  * produce a bounded input.
  */
 
-import { parseStoredJson } from '@funny/shared/json-validation';
+import type { JsonObject } from '@bufbuild/protobuf';
+import { parseStoredJson, type JsonValue } from '@funny/shared/json-validation';
 import { z } from 'zod';
 
 /** A tool call as stored (`tool_calls` row): input and output are raw strings. */
@@ -86,13 +87,13 @@ function clip(text: string, max: number): string {
 }
 
 /** A stored tool input: its JSON value, or the raw text when it is not JSON. */
-function parseInput(raw: string): unknown {
-  const parsed = parseStoredJson(z.unknown(), raw, 'tool call input');
+function parseInput(raw: string): JsonValue {
+  const parsed = parseStoredJson(z.json(), raw, 'tool call input');
   return parsed.ok ? parsed.value : raw;
 }
 
 /** The pending question's text, from an `AskUserQuestion` input. */
-function questionText(input: unknown): string | null {
+function questionText(input: JsonValue): string | null {
   if (!input || typeof input !== 'object') return null;
   const questions = (input as { questions?: unknown }).questions;
   if (Array.isArray(questions)) {
@@ -113,9 +114,10 @@ export function summarizeToolInput(raw: string | null | undefined): string {
   if (input && typeof input === 'object' && !Array.isArray(input)) {
     const question = questionText(input);
     if (question) return clip(oneLine(question), TOOL_INPUT_SUMMARY_CHARS);
-    const record = input as Record<string, unknown>;
+    // SAFETY: `input` is parsed JSON (parseInput) and a non-array object.
+    const fields = input as JsonObject;
     for (const key of INPUT_SUMMARY_KEYS) {
-      const value = record[key];
+      const value = fields[key];
       if (typeof value === 'string' && value.trim()) {
         return clip(oneLine(value), TOOL_INPUT_SUMMARY_CHARS);
       }

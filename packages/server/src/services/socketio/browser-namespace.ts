@@ -39,7 +39,7 @@ export function setupBrowserNamespace(dependencies: BrowserNamespaceDependencies
 
   browserNsp.use(async (socket, next) => {
     try {
-      const origin = socket.handshake.headers.origin as string | undefined;
+      const origin = socket.handshake.headers.origin;
       if (!isAllowedBrowserOrigin(origin, allowedOrigins)) {
         log.warn('Socket.IO browser namespace rejected upgrade: Origin not in allowlist', {
           namespace: 'socketio',
@@ -72,6 +72,8 @@ export function setupBrowserNamespace(dependencies: BrowserNamespaceDependencies
   });
 
   browserNsp.on('connection', (socket: Socket) => {
+    // SAFETY: the namespace middleware above admits a socket only after setting
+    // socket.data.userId to the session's user id.
     const userId = socket.data.userId as string;
 
     socket.join(`user:${userId}`);

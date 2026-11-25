@@ -277,12 +277,20 @@ async function headFileSha(c: Context<HonoEnv>, f: PullRequestFile): Promise<str
   return ((await res.json()) as any).sha;
 }
 
+/** Body of GitHub's contents API write, minus the `sha` and `branch` added here. */
+interface HeadFileWriteBody {
+  /** Commit message. */
+  message: string;
+  /** New file content, base64 (PUT only). */
+  content?: string;
+}
+
 /** Write the file on the head branch (`method` PUT to update, DELETE to remove). */
 async function writeHeadFile(
   c: Context<HonoEnv>,
   f: PullRequestFile,
   method: 'PUT' | 'DELETE',
-  body: Record<string, unknown>,
+  body: HeadFileWriteBody,
   action: 'deleted' | 'reverted',
 ): Promise<Response> {
   const sha = await headFileSha(c, f);

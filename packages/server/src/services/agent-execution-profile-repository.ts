@@ -35,6 +35,8 @@ function toProfile(row: ProfileRow): AgentExecutionProfile {
     id: row.id,
     userId: row.userId,
     name: row.name,
+    // SAFETY: agent_execution_profiles.provider is written only by createProfile from
+    // createAgentExecutionProfileSchema's provider enum; updates never change it.
     provider: row.provider as AgentExecutionProfile['provider'],
     config: parseConfig(row.config),
     createdAt: row.createdAt,
@@ -43,7 +45,7 @@ function toProfile(row: ProfileRow): AgentExecutionProfile {
 }
 
 async function getProfileRow(id: string, userId: string): Promise<ProfileRow | undefined> {
-  return dbGet(
+  return dbGet<ProfileRow>(
     db
       .select()
       .from(schema.agentExecutionProfiles)
@@ -53,11 +55,11 @@ async function getProfileRow(id: string, userId: string): Promise<ProfileRow | u
           eq(schema.agentExecutionProfiles.userId, userId),
         ),
       ),
-  ) as Promise<ProfileRow | undefined>;
+  );
 }
 
 export async function listProfiles(userId: string): Promise<AgentExecutionProfileResponse[]> {
-  const rows = (await dbAll(
+  const rows = await dbAll<ProfileRow>(
     db
       .select()
       .from(schema.agentExecutionProfiles)
@@ -66,7 +68,7 @@ export async function listProfiles(userId: string): Promise<AgentExecutionProfil
         asc(schema.agentExecutionProfiles.name),
         asc(schema.agentExecutionProfiles.createdAt),
       ),
-  )) as ProfileRow[];
+  );
 
   return rows.map((row) => toAgentExecutionProfileResponse(toProfile(row)));
 }
@@ -144,7 +146,7 @@ export async function getProjectBinding(
   projectId: string,
   userId: string,
 ): Promise<ProjectAgentProfileBindingResponse> {
-  const row = (await dbGet(
+  const row = await dbGet<{ binding: BindingRow; profile: ProfileRow }>(
     db
       .select({
         binding: schema.projectAgentProfileBindings,
@@ -162,7 +164,7 @@ export async function getProjectBinding(
           eq(schema.agentExecutionProfiles.userId, userId),
         ),
       ),
-  )) as { binding: BindingRow; profile: ProfileRow } | undefined;
+  );
 
   return {
     projectId,

@@ -13,7 +13,7 @@ import { db } from '../../db/index.js';
 import { repos } from '../../db/repos.js';
 import { messages } from '../../db/schema.js';
 import { log } from '../../lib/logger.js';
-import type { RunnerPresencePort, RunnerRequestPort } from '../runner-ports.js';
+import type { BrowserEvent, RunnerPresencePort, RunnerRequestPort } from '../runner-ports.js';
 import { createInfraConnectionService } from './infra-connections.js';
 import { findLaunchableProject } from './launch-project.js';
 import { createProjectSandboxSettingsService } from './project-sandbox-settings.js';
@@ -24,7 +24,7 @@ import { createSandboxThreadLauncher } from './sandbox-thread.js';
 import { sqlThreadSandboxStore } from './thread-sandbox-store.js';
 
 interface BrowserEventsPort {
-  toUser(userId: string, event: Record<string, unknown>): void;
+  toUser(userId: string, event: BrowserEvent): void;
 }
 
 export function sandboxThreadLauncherFor(env: {

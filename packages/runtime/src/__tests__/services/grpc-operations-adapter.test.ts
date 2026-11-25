@@ -5,6 +5,7 @@ import {
   mapRunnerOperation,
   mapRunnerOperationOutcome,
   normalizeRunnerOperationValue,
+  type RunnerOperation,
 } from '../../services/grpc-operations-adapter.js';
 
 describe('GrpcOperationsAdapter mapping', () => {
@@ -43,9 +44,11 @@ describe('GrpcOperationsAdapter mapping', () => {
       provider: 'anthropic',
       active: ['a'],
       direction: 'after',
+      runId: 'run1',
+      action: 'retry',
       payload: P,
     };
-    const expected: Record<string, { kind: string; value: Record<string, unknown> }> = {
+    const expected: Record<string, RunnerOperation> = {
       'data:get_thread': { kind: 'getThread', value: { threadId: 't1' } },
       'data:get_thread_by_external_request_id': {
         kind: 'getThreadByExternalRequestId',
@@ -155,6 +158,15 @@ describe('GrpcOperationsAdapter mapping', () => {
         value: { activityId: 'i1', patch: { x: 1 } },
       },
       'data:activity_reconcile': { kind: 'activityReconcile', value: { liveActivityIds: [] } },
+      'data:factory_list_runs': { kind: 'factoryListRuns', value: { threadId: 't1' } },
+      'data:factory_control_run': {
+        kind: 'factoryControlRun',
+        value: { threadId: 't1', runId: 'run1', action: 'retry' },
+      },
+      'data:factory_request_approval': {
+        kind: 'factoryRequestApproval',
+        value: { threadId: 't1', runId: 'run1' },
+      },
     };
     expect(Object.keys(expected).sort()).toEqual([...RUNNER_OPERATION_EVENT_TYPES].sort());
     for (const eventType of RUNNER_OPERATION_EVENT_TYPES) {

@@ -6,7 +6,7 @@ import type {
 import {
   ChevronDown,
   ChevronRight,
-  Circle,
+  CircleIcon,
   FolderPlus,
   RefreshCw,
   Server,
@@ -196,140 +196,140 @@ function RunnerCard({ runner, onDeleted }: RunnerCardProps) {
   const projects = useProjects();
 
   return (
-    <Collapsible
-      open={open}
-      onOpenChange={setOpen}
-      className="border-border/50 bg-card overflow-hidden rounded-lg border"
-    >
-      <div
-        className="flex items-center gap-3 px-3 py-2.5"
-        data-testid={`runner-item-${runner.runnerId}`}
-      >
-        {/* Status dot */}
-        <Circle
-          className={cn(
-            'size-2 shrink-0 fill-current',
-            runner.status === 'online' && 'text-status-success',
-            runner.status === 'busy' && 'text-status-warning',
-            runner.status !== 'online' && runner.status !== 'busy' && 'text-muted-foreground',
-          )}
+    <div className="border-border/50 bg-card overflow-hidden rounded-lg border">
+      <Collapsible open={open} onOpenChange={setOpen}>
+        <div
+          className="flex items-center gap-3 px-3 py-2.5"
+          data-testid={`runner-item-${runner.runnerId}`}
+        >
+          {/* Status dot */}
+          <CircleIcon
+            className={cn(
+              'size-2 shrink-0 fill-current',
+              runner.status === 'online' && 'text-status-success',
+              runner.status === 'busy' && 'text-status-warning',
+              runner.status !== 'online' && runner.status !== 'busy' && 'text-muted-foreground',
+            )}
+          />
+
+          {/* Name + meta */}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className="truncate text-sm font-medium">{runner.name}</span>
+              <span className="text-xs">{osEmoji(runner.os)}</span>
+              <Badge variant={runnerBadgeVariant(runner.status)} size="xxs">
+                {statusLabel(runner.status)}
+              </Badge>
+            </div>
+            <div className="text-muted-foreground truncate text-xs">
+              {runner.hostname} · last seen {formatRelativeTime(runner.lastHeartbeatAt, now)}
+              {runner.assignedProjectIds.length > 0 && (
+                <>
+                  {' '}
+                  · {runner.assignedProjectIds.length} project
+                  {runner.assignedProjectIds.length !== 1 ? 's' : ''}
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="flex items-center gap-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <CollapsibleTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-6"
+                    data-testid={`runner-item-${runner.runnerId}-expand`}
+                  >
+                    {open ? (
+                      <ChevronDown className="icon-sm" />
+                    ) : (
+                      <ChevronRight className="icon-sm" />
+                    )}
+                  </Button>
+                </CollapsibleTrigger>
+              </TooltipTrigger>
+              <TooltipContent>{open ? t('common.collapse') : t('common.expand')}</TooltipContent>
+            </Tooltip>
+            <TooltipIconButton
+              variant="ghost-destructive"
+              size="icon"
+              className="size-6"
+              onClick={() => setConfirmDelete(true)}
+              disabled={deleting}
+              data-testid={`runner-item-${runner.runnerId}-delete`}
+              tooltip={t('common.delete')}
+            >
+              <Trash2 className="icon-sm" />
+            </TooltipIconButton>
+          </div>
+        </div>
+
+        <ConfirmDialog
+          open={confirmDelete}
+          onOpenChange={setConfirmDelete}
+          title="Remove runner"
+          description={`Are you sure you want to remove "${runner.name}"? This action cannot be undone.`}
+          confirmLabel={t('common.remove', 'Remove')}
+          loading={deleting}
+          onCancel={() => setConfirmDelete(false)}
+          onConfirm={handleDelete}
         />
 
-        {/* Name + meta */}
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="truncate text-sm font-medium">{runner.name}</span>
-            <span className="text-xs">{osEmoji(runner.os)}</span>
-            <Badge variant={runnerBadgeVariant(runner.status)} size="xxs">
-              {statusLabel(runner.status)}
-            </Badge>
+        <CollapsibleContent>
+          <div className="px-3 pb-3">
+            <div className="mt-2 space-y-1">
+              {assignments.length === 0 ? (
+                <p className="text-muted-foreground text-xs">No projects assigned yet.</p>
+              ) : (
+                assignments.map((a) => {
+                  const project = projects.find((p) => p.id === a.projectId);
+                  return (
+                    <div
+                      key={a.projectId}
+                      className="hover:bg-muted/40 flex items-center justify-between rounded px-2 py-1 text-xs"
+                    >
+                      <span className="truncate">{project?.name ?? a.projectId}</span>
+                      <TooltipIconButton
+                        variant="ghost-destructive"
+                        size="icon"
+                        className="size-5"
+                        onClick={() => handleUnassign(a.projectId)}
+                        data-testid={`runner-item-${runner.runnerId}-unassign-${a.projectId}`}
+                        tooltip={t('common.unassign')}
+                      >
+                        <Trash2 className="icon-xs" />
+                      </TooltipIconButton>
+                    </div>
+                  );
+                })
+              )}
+
+              <button
+                className="text-primary mt-1 flex items-center gap-1 text-xs hover:underline"
+                onClick={() => setShowAssignForm((v) => !v)}
+                data-testid={`runner-item-${runner.runnerId}-add-project`}
+              >
+                <FolderPlus className="icon-sm" />
+                Assign a project
+              </button>
+              {showAssignForm && (
+                <AssignProjectForm
+                  runnerId={runner.runnerId}
+                  onAssigned={() => {
+                    setShowAssignForm(false);
+                    loadAssignments();
+                  }}
+                />
+              )}
+            </div>
           </div>
-          <div className="text-muted-foreground truncate text-xs">
-            {runner.hostname} · last seen {formatRelativeTime(runner.lastHeartbeatAt, now)}
-            {runner.assignedProjectIds.length > 0 && (
-              <>
-                {' '}
-                · {runner.assignedProjectIds.length} project
-                {runner.assignedProjectIds.length !== 1 ? 's' : ''}
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Actions */}
-        <div className="flex items-center gap-1">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <CollapsibleTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="size-6"
-                  data-testid={`runner-item-${runner.runnerId}-expand`}
-                >
-                  {open ? (
-                    <ChevronDown className="icon-sm" />
-                  ) : (
-                    <ChevronRight className="icon-sm" />
-                  )}
-                </Button>
-              </CollapsibleTrigger>
-            </TooltipTrigger>
-            <TooltipContent>{open ? t('common.collapse') : t('common.expand')}</TooltipContent>
-          </Tooltip>
-          <TooltipIconButton
-            variant="ghost-destructive"
-            size="icon"
-            className="size-6"
-            onClick={() => setConfirmDelete(true)}
-            disabled={deleting}
-            data-testid={`runner-item-${runner.runnerId}-delete`}
-            tooltip={t('common.delete')}
-          >
-            <Trash2 className="icon-sm" />
-          </TooltipIconButton>
-        </div>
-      </div>
-
-      <ConfirmDialog
-        open={confirmDelete}
-        onOpenChange={setConfirmDelete}
-        title="Remove runner"
-        description={`Are you sure you want to remove "${runner.name}"? This action cannot be undone.`}
-        confirmLabel={t('common.remove', 'Remove')}
-        loading={deleting}
-        onCancel={() => setConfirmDelete(false)}
-        onConfirm={handleDelete}
-      />
-
-      <CollapsibleContent className="px-3 pb-3">
-        <div className="mt-2 space-y-1">
-          {assignments.length === 0 ? (
-            <p className="text-muted-foreground text-xs">No projects assigned yet.</p>
-          ) : (
-            assignments.map((a) => {
-              const project = projects.find((p) => p.id === a.projectId);
-              return (
-                <div
-                  key={a.projectId}
-                  className="hover:bg-muted/40 flex items-center justify-between rounded px-2 py-1 text-xs"
-                >
-                  <span className="truncate">{project?.name ?? a.projectId}</span>
-                  <TooltipIconButton
-                    variant="ghost-destructive"
-                    size="icon"
-                    className="size-5"
-                    onClick={() => handleUnassign(a.projectId)}
-                    data-testid={`runner-item-${runner.runnerId}-unassign-${a.projectId}`}
-                    tooltip={t('common.unassign')}
-                  >
-                    <Trash2 className="icon-xs" />
-                  </TooltipIconButton>
-                </div>
-              );
-            })
-          )}
-
-          <button
-            className="text-primary mt-1 flex items-center gap-1 text-xs hover:underline"
-            onClick={() => setShowAssignForm((v) => !v)}
-            data-testid={`runner-item-${runner.runnerId}-add-project`}
-          >
-            <FolderPlus className="icon-sm" />
-            Assign a project
-          </button>
-          {showAssignForm && (
-            <AssignProjectForm
-              runnerId={runner.runnerId}
-              onAssigned={() => {
-                setShowAssignForm(false);
-                loadAssignments();
-              }}
-            />
-          )}
-        </div>
-      </CollapsibleContent>
-    </Collapsible>
+        </CollapsibleContent>
+      </Collapsible>
+    </div>
   );
 }
 
@@ -480,7 +480,7 @@ export function RunnersSettings() {
           <EmptyState
             padding="md"
             fill={false}
-            className="border-border/50 rounded-lg border border-dashed"
+            surface="dashed-muted"
             icon={Server}
             title="No runners connected yet."
             description="Copy the install command above and run it on any machine."

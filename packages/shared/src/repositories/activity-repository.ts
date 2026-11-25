@@ -77,7 +77,7 @@ const effectsSchema = z.array(z.unknown());
 function parseEffects(raw: string | null): ActivityEffect[] | null {
   if (!raw) return null;
   const parsed = parseStoredJson(effectsSchema, raw, 'activity effects');
-  return parsed.ok ? parseActivityEffects(parsed.value) : null;
+  return parsed.ok ? parseActivityEffects({ effects: parsed.value }) : null;
 }
 
 function toActivity(row: StoredRow): Activity {

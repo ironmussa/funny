@@ -221,7 +221,7 @@ export function AgentExecutionProfilesSettings() {
         {profiles.length === 0 ? (
           <EmptyState
             fill={false}
-            className="rounded-md border border-dashed p-6"
+            surface="dashed"
             icon={Bot}
             title={t('agentProfiles.empty', 'No profiles yet.')}
           />
@@ -398,7 +398,7 @@ function CreateProfileForm({
         value={draft.configDir}
         onChange={(value) => onDraftChange((current) => ({ ...current, configDir: value }))}
         placeholder="~/.claude-work"
-        className="font-mono"
+        mono
         data-testid="agent-profile-create-config-dir"
       />
       <div className="flex items-end">
@@ -424,7 +424,7 @@ function LabeledInput({
   value,
   onChange,
   placeholder,
-  className,
+  mono = false,
   'data-testid': testId,
 }: {
   id: string;
@@ -432,7 +432,7 @@ function LabeledInput({
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
-  className?: string;
+  mono?: boolean;
   'data-testid'?: string;
 }) {
   return (
@@ -443,7 +443,8 @@ function LabeledInput({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className={cn('h-8 text-sm', className)}
+        mono={mono}
+        className="h-8"
         data-testid={testId}
       />
     </label>
@@ -484,7 +485,7 @@ function ProfileEditor({
         label={t('agentProfiles.configDir', 'CLAUDE_CONFIG_DIR')}
         value={draft.configDir}
         onChange={(value) => onDraftChange(profile.id, 'configDir', value)}
-        className="font-mono"
+        mono
         data-testid={`agent-profile-${profile.id}-config-dir`}
       />
       <div className="flex items-end gap-2">

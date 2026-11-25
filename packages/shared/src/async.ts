@@ -4,16 +4,18 @@ import { Cause, Clock, Duration, Effect, Exit, Schedule, Semaphore, Stream } fro
 export interface AsyncOptions {
   signal?: AbortSignal;
   timeoutMs?: number;
-  timeoutError?: () => unknown;
+  /** The value a timed-out operation rejects with (an Error, or a caller's own failure object). */
+  timeoutError?: () => object;
 }
 
-function abortReason(signal: AbortSignal): unknown {
-  return signal.reason ?? new DOMException('The operation was aborted', 'AbortError');
+/** Rejects with the signal's reason, or a standard AbortError when it has none. */
+function throwAborted(signal: AbortSignal): never {
+  throw signal.reason ?? new DOMException('The operation was aborted', 'AbortError');
 }
 
 /** Preserve original errors (including domain error identity) across the runtime boundary. */
 async function run<A>(effect: Effect.Effect<A, unknown>, options: AsyncOptions): Promise<A> {
-  if (options.signal?.aborted) throw abortReason(options.signal);
+  if (options.signal?.aborted) throwAborted(options.signal);
   const timed =
     options.timeoutMs === undefined
       ? effect
@@ -23,7 +25,7 @@ async function run<A>(effect: Effect.Effect<A, unknown>, options: AsyncOptions):
         });
   const exit = await Effect.runPromiseExit(timed, { signal: options.signal });
   if (Exit.isSuccess(exit)) return exit.value;
-  if (options.signal?.aborted) throw abortReason(options.signal);
+  if (options.signal?.aborted) throwAborted(options.signal);
   throw Cause.squash(exit.cause);
 }
 
@@ -38,11 +40,11 @@ export function runAsync<A>(
 export interface RetryOptions extends AsyncOptions {
   /** Retries after the first attempt; omit to retry until success or a non-retryable error. */
   times?: number;
-  /** Delay before retry `retry` (1-based) after `error`. */
-  delayMs: (retry: number, error: unknown) => number;
+  /** Delay before retry `retry` (1-based) after the failure `cause`. */
+  delayMs: (retry: number, cause: unknown) => number;
   /** Errors for which this returns false are rethrown immediately. */
-  while?: (error: unknown) => boolean;
-  onRetry?: (error: unknown, retry: number, delayMs: number) => void;
+  while?: (cause: unknown) => boolean;
+  onRetry?: (cause: unknown, retry: number, delayMs: number) => void;
   /** Injected wait for deterministic tests; defaults to Effect's interruptible clock. */
   sleep?: (ms: number) => PromiseLike<void>;
 }
@@ -86,7 +88,7 @@ export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 
 /** Subscribe once; unsubscribe on success, failure, cancellation, or timeout. */
 export function waitFor<A>(
-  subscribe: (resolve: (value: A) => void, reject: (error: unknown) => void) => () => void,
+  subscribe: (resolve: (value: A) => void, reject: (cause: unknown) => void) => () => void,
   options: AsyncOptions = {},
 ): Promise<A> {
   let cleanup: (() => void) | undefined;
@@ -196,7 +198,7 @@ export interface RepeatOptions {
   /** Let the process exit while only this timer is pending. */
   unref?: boolean;
   /** Task failures are reported here and the schedule keeps running. */
-  onError?: (error: unknown) => void;
+  onError?: (cause: unknown) => void;
 }
 
 /**

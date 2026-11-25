@@ -11,9 +11,17 @@ import { classifyCheckCommand } from '@funny/shared/checks';
 import { log } from '../../lib/logger.js';
 import { metric } from '../../lib/telemetry.js';
 
+/** A tool call as the agent's `tool_use` block carries it; `input` is the model's, unchecked. */
+export interface ToolUseCall {
+  name: string;
+  input: unknown;
+}
+
 /** Records a Bash tool call that runs a check; ignores any other tool or command. */
-export function recordBashCheck(threadId: string, tool: string, input: unknown): void {
-  const command = tool === 'Bash' ? (input as { command?: unknown } | null)?.command : undefined;
+export function recordBashCheck(threadId: string, call: ToolUseCall): void {
+  const tool = call.name;
+  const command =
+    tool === 'Bash' ? (call.input as { command?: unknown } | null)?.command : undefined;
   if (typeof command !== 'string') return;
   const check = classifyCheckCommand(command);
   if (!check) return;

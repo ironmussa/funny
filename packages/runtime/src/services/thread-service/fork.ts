@@ -22,6 +22,7 @@ import { ResultAsync } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
 import { metric, startSpan } from '../../lib/telemetry.js';
+import { isString } from '../../lib/value-guards.js';
 import { copyGitCheckpoint } from '../git-checkpoints.js';
 import type { RuntimeThreadInsert } from '../server-interfaces.js';
 import { getServices } from '../service-registry.js';
@@ -146,7 +147,7 @@ async function forkThreadImpl(params: ForkThreadParams) {
           parentToolCallId: remappedParent ?? null,
         });
         toolCallIdMap.set(tc.id, newToolCallId);
-        if (typeof tc.output === 'string' && tc.output.length > 0) {
+        if (isString(tc.output) && tc.output.length > 0) {
           await tm.updateToolCallOutput(newToolCallId, tc.output);
         }
       }
@@ -162,6 +163,8 @@ async function forkThreadImpl(params: ForkThreadParams) {
           namespace: 'thread-fork',
           threadId: source.id,
           messageId: m.id,
+          // SAFETY: only `.message` is read, optional-chained; it is undefined when the
+          // copy rejects with something that is not Error-like.
           error: (err as Error)?.message,
         });
         return false;

@@ -24,6 +24,7 @@ import { nanoid } from 'nanoid';
 import { db } from '../db/index.js';
 import { runners, runnerTasks, runnerProjectAssignments } from '../db/schema.js';
 import { log } from '../lib/logger.js';
+import { isString } from '../lib/value-guards.js';
 import { interruptActivitiesOfRunner } from './activities/activity-service.js';
 import {
   bindSandboxRunner,
@@ -632,7 +633,7 @@ export async function completeTask(
   runnerId: string,
   req: RunnerTaskResultRequest,
 ): Promise<boolean> {
-  if (typeof req?.taskId !== 'string' || !req.taskId) return false;
+  if (!isString(req?.taskId) || !req.taskId) return false;
   const now = new Date().toISOString();
   const updated = await db
     .update(runnerTasks)

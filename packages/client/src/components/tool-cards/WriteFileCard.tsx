@@ -1,3 +1,4 @@
+import type { JsonObject } from '@funny/shared/json';
 import { ChevronRight, FileText } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -31,16 +32,18 @@ export function WriteFileCard({
   hideLabel,
   displayTime,
 }: {
-  parsed: Record<string, unknown>;
+  parsed: JsonObject;
   hideLabel?: boolean;
   displayTime?: string | null;
 }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(true);
   const defaultEditor = useSettingsStore((s) => s.defaultEditor);
+  // SAFETY: the Write tool declares file_path and content as strings in its input schema.
   const filePath = parsed.file_path as string | undefined;
   const projectPath = useCurrentProjectPath();
   const displayPath = filePath ? makeRelativePath(filePath, projectPath) : undefined;
+  // SAFETY: see file_path above; content is a string in the Write input schema.
   const content = parsed.content as string | undefined;
   const ext = filePath ? getFileExtension(filePath).toLowerCase() : '';
   const fileName = filePath ? getFileName(filePath) : 'unknown';

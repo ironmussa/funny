@@ -214,7 +214,7 @@ shutdownManager.register(
     if (mode === 'hotReload') {
       const snapshot = extractActiveAgentSnapshot();
       if (snapshot.agents.size > 0) {
-        (globalThis as any).__funnyActiveAgentSnapshot = snapshot;
+        globalThis.__funnyActiveAgentSnapshot = snapshot;
         log.info(`Preserved ${snapshot.agents.size} agent(s) for next instance`, {
           namespace: 'agent',
         });

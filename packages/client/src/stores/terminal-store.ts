@@ -311,8 +311,7 @@ export const useTerminalStore = create<TerminalState>()(
         // Socket.IO may surface binary attachments as ArrayBuffer; xterm only
         // accepts string | Uint8Array, so normalize once here at the boundary
         // instead of at every write site.
-        const normalized: PtyChunk =
-          data instanceof ArrayBuffer ? new Uint8Array(data) : (data as PtyChunk);
+        const normalized: PtyChunk = data instanceof ArrayBuffer ? new Uint8Array(data) : data;
         const callback = get().ptyDataCallbacks[ptyId];
         if (callback) {
           callback(normalized);
@@ -386,7 +385,7 @@ export const useTerminalStore = create<TerminalState>()(
             // open-terminal-tab.ts) so a restored session without a stored
             // label gets a unique "<shell> N" name per project instead of
             // every tab collapsing to "Terminal".
-            const shellId = (s.shell as TerminalShell) ?? 'default';
+            const shellId = s.shell ?? 'default';
             const shellName = shellId === 'default' ? 'Terminal' : shellId;
             const sameShellCount = [...tabs, ...newTabs].filter(
               (t) => t.projectId === resolvedProjectId && (t.shell ?? 'default') === shellId,
@@ -398,7 +397,7 @@ export const useTerminalStore = create<TerminalState>()(
               alive: true,
               projectId: resolvedProjectId,
               type: 'pty',
-              shell: (s.shell as TerminalShell) ?? undefined,
+              shell: s.shell,
               restored: true,
             });
           }

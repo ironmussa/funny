@@ -136,7 +136,8 @@ export function ArchivedThreadsSettings() {
           autoFocus
           placeholder={t('archived.searchPlaceholder')}
           testIdPrefix="archived-search"
-          className="border-input h-7 w-72 shrink-0 rounded-md border bg-transparent px-2"
+          variant="outline"
+          className="h-7 w-72 shrink-0"
         />
         <div className="bg-border h-4 w-px" />
         <span className="text-muted-foreground text-xs">

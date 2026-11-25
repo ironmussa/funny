@@ -243,9 +243,10 @@ export function useDictation({ onPartial, onFinal, onError }: UseDictationOption
       });
       processorRef.current = processor;
 
-      processor.port.onmessage = (e) => {
+      // The pcm-processor worklet posts only PCM16 ArrayBuffer chunks on this port.
+      processor.port.onmessage = (e: MessageEvent<ArrayBuffer>) => {
         if (ws.readyState !== WebSocket.OPEN) return;
-        ws.send(e.data as ArrayBuffer);
+        ws.send(e.data);
       };
 
       source.connect(processor);

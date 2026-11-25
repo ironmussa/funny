@@ -12,6 +12,7 @@
 import { parseStoredJson } from '@funny/shared/json-validation';
 import { z } from 'zod';
 
+import { isString } from '../../../lib/value-guards.js';
 import {
   authorizedRunnerRequests,
   runnerActor,
@@ -167,7 +168,7 @@ async function sendCertified(
   if (response.status < 200 || response.status >= 400) {
     return { ok: false, status: response.status, message: errorMessage(response.body ?? '') };
   }
-  const parsed = parseStoredJson(z.unknown(), response.body ?? '', parseLabel);
+  const parsed = parseStoredJson(z.json(), response.body ?? '', parseLabel);
   if (!parsed.ok) throw new Error(parsed.error);
   return { ok: true, thread: parsed.value };
 }
@@ -181,11 +182,7 @@ export function createRemoteCreationAdapter(deps: RunnerAdapterDeps): RemoteThre
   return {
     create(runnerId, actor, intent, payload) {
       const projectId =
-        payload.isScratch === true
-          ? null
-          : typeof payload.projectId === 'string'
-            ? payload.projectId
-            : null;
+        payload.isScratch === true ? null : isString(payload.projectId) ? payload.projectId : null;
       return sendCertified(
         deps,
         actor,

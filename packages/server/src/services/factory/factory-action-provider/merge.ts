@@ -12,6 +12,7 @@
 import type { ActionResult, MergeOpts } from '@funny/workflows/compiler';
 
 import { log } from '../../../lib/logger.js';
+import { isString } from '../../../lib/value-guards.js';
 import type { createFactoryCiActions } from '../factory-ci-actions.js';
 import { mergeAsBatch } from '../factory-merge-batch.js';
 import type { createMergeLane } from '../factory-merge-lane.js';
@@ -146,7 +147,7 @@ export function createMergeStep(core: ActionCore, links: MergeStepLinks) {
         'The pull request it was stacked on merged: this pull request now targets the default branch, and the base is merged in before it merges.',
       );
     }
-    if (typeof retarget === 'object') return holdMerge(MERGE_HOLD_REASONS.stacked, retarget.error);
+    if (retarget !== 'not-stacked') return holdMerge(MERGE_HOLD_REASONS.stacked, retarget.error);
     if (opts.regenerate && state.regenerating !== opts.regenerate) {
       state.regenerating = opts.regenerate;
       await deps.record({ regenerateNode: opts.regenerate });
@@ -188,7 +189,7 @@ export function createMergeStep(core: ActionCore, links: MergeStepLinks) {
     let from = head;
     for (let refusals = 1; ; refusals++) {
       const sha = await upToDate(opts, from);
-      if (typeof sha !== 'string') return sha;
+      if (!isString(sha)) return sha;
       const merged = await mergeCommit(opts, sha);
       if (merged.ok || merged.metadata?.outcome !== 'not-mergeable') return merged;
       const moved = await lane.movedSince(sha);

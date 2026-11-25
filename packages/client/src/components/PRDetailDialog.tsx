@@ -121,7 +121,8 @@ function PRDetailInfoTab({
       <div className="border-border flex shrink-0 items-center gap-2 border-b px-4 py-2">
         <Select value={selectedCommit} onValueChange={onSelectedCommitChange}>
           <SelectTrigger
-            className="text-compact h-6 w-auto max-w-[400px]"
+            textSize="compact"
+            className="h-6 w-auto max-w-[400px]"
             data-testid="pr-detail-commit-select"
           >
             <GitCommitHorizontal className="text-muted-foreground mr-1 size-3 shrink-0" />
@@ -541,11 +542,12 @@ export function PRDetailDialog({
 
         <Tabs
           value={activeTab}
+          // SAFETY: the only TabsTrigger values below are 'info' and 'conversation'.
           onValueChange={(value) => setActiveTab(value as 'info' | 'conversation')}
           className="flex min-h-0 flex-1 flex-col"
         >
           <div className="border-border shrink-0 border-b px-4 py-2">
-            <TabsList className="h-7 rounded-md p-0.5" data-testid="pr-detail-tabs">
+            <TabsList size="sm" corners="md" data-testid="pr-detail-tabs">
               <TabsTrigger
                 value="info"
                 onClick={() => setActiveTab('info')}

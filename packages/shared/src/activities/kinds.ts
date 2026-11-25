@@ -21,7 +21,7 @@
  */
 import { z } from 'zod';
 
-import type { ActivityEffect, ActivityEffectType, ActivityOrigin } from '../types.js';
+import type { Activity, ActivityEffect, ActivityEffectType, ActivityOrigin } from '../types.js';
 
 /** Removes the user and password of a URL (`https://user:token@host/x` → `https://host/x`). */
 export function stripUrlCredentials(url: string): string {
@@ -52,6 +52,8 @@ export const WORKSPACE_CLEANUP_REASONS = [
   'factory-merged',
   // A factory run that ended without a commit; removed only when nothing is lost.
   'factory-no-change',
+  // A retried factory run: the old worktree held the run's branch; removed only when nothing is lost.
+  'factory-retried',
   'review-finished',
   'manual',
   'setup-undone',
@@ -327,10 +329,10 @@ export interface ReportedActivityInput {
 export function parseActivityInput({
   kind,
   input,
-}: ReportedActivityInput): Record<string, unknown> | null {
+}: ReportedActivityInput): Activity['input'] | null {
   if (!isActivityKind(kind)) return null;
   const parsed = ACTIVITY_KINDS[kind].input.safeParse(input ?? {});
-  return parsed.success ? (parsed.data as Record<string, unknown>) : null;
+  return parsed.success ? parsed.data : null;
 }
 
 /** True for a kind whose successful runs leave no activity (design D5). */
@@ -352,7 +354,7 @@ export const ACTIVITY_ORIGINS = [
 ] as const satisfies readonly ActivityOrigin[];
 
 export function isActivityOrigin(value: unknown): value is ActivityOrigin {
-  return typeof value === 'string' && (ACTIVITY_ORIGINS as readonly string[]).includes(value);
+  return typeof value === 'string' && ACTIVITY_ORIGINS.some((origin) => origin === value);
 }
 
 export const ACTIVITY_EFFECTS = [

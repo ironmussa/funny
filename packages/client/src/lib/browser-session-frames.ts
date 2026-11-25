@@ -51,6 +51,8 @@ export function subscribeToFrames(
   onFrame: (base64: string) => void,
 ): () => void {
   const listener = (e: Event) => {
+    // SAFETY: 'browser-session:frame' is only dispatched by notifyFrame above, as a
+    // CustomEvent whose detail is { sessionId }.
     const detail = (e as CustomEvent<{ sessionId: string }>).detail;
     if (detail.sessionId !== sessionId) return;
     const frame = latestFrameBySession.get(sessionId);

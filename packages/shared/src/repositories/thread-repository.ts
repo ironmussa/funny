@@ -84,7 +84,7 @@ export function createThreadRepository(deps: ThreadRepositoryDeps) {
       db
         .select({ threadId: schema.threads.id, content: snippet.as('content') })
         .from(schema.threads)
-        .where(inArray(schema.threads.id, threadIds)) as any,
+        .where(inArray(schema.threads.id, threadIds)),
     );
 
     const map = new Map<string, string>();
@@ -128,6 +128,8 @@ export function createThreadRepository(deps: ThreadRepositoryDeps) {
     );
     return [
       inArray(schema.threads.projectId, orgProjectIds),
+      // SAFETY: or() returns undefined only when every operand is undefined; both
+      // operands here are SQL conditions, so the result is an SQL condition.
       or(ownedByCaller, sharedWithCaller) as ReturnType<typeof eq>,
     ];
   }
@@ -230,6 +232,8 @@ export function createThreadRepository(deps: ThreadRepositoryDeps) {
 
     if (search) {
       filters.push(
+        // SAFETY: or() returns undefined only when every operand is undefined; the
+        // three like() conditions are always defined, so this is an SQL condition.
         or(
           like(schema.threads.title, `%${safeSearch}%`),
           like(schema.threads.branch, `%${safeSearch}%`),
@@ -411,7 +415,7 @@ export function createThreadRepository(deps: ThreadRepositoryDeps) {
         );
 
         if (currentThread && currentThread.stage !== updates.stage) {
-          await recordStageChange(id, currentThread.stage, updates.stage, tx as any);
+          await recordStageChange(id, currentThread.stage, updates.stage, tx);
         }
       }
 
@@ -425,14 +429,9 @@ export function createThreadRepository(deps: ThreadRepositoryDeps) {
 
         if (currentThread) {
           if (updates.archived === 1 && currentThread.archived === 0) {
-            await recordStageChange(id, currentThread.stage, 'archived', tx as any);
+            await recordStageChange(id, currentThread.stage, 'archived', tx);
           } else if (updates.archived === 0 && currentThread.archived === 1) {
-            await recordStageChange(
-              id,
-              'archived',
-              updates.stage ?? currentThread.stage,
-              tx as any,
-            );
+            await recordStageChange(id, 'archived', updates.stage ?? currentThread.stage, tx);
           }
         }
       }

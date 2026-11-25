@@ -113,7 +113,7 @@ export function IssueDetailDialog({
             <CircleCheck className="icon-base text-status-violet mt-1 shrink-0" />
           )}
           <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-            <DialogTitle size="sm" className="leading-snug" data-testid="issue-detail-title">
+            <DialogTitle size="sm" leading="snug" data-testid="issue-detail-title">
               {issue.title}{' '}
               <span className="text-muted-foreground font-normal">#{issue.number}</span>
             </DialogTitle>

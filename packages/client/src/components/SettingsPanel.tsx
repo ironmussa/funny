@@ -42,8 +42,8 @@ export function SettingsPanelBody() {
   return (
     <>
       {/* Header */}
-      <SidebarHeader className="px-4 py-3">
-        <div className="flex items-center gap-2">
+      <SidebarHeader>
+        <div className="flex items-center gap-2 px-2 py-1">
           <TooltipIconButton
             variant="muted"
             onClick={leave}
@@ -58,7 +58,7 @@ export function SettingsPanelBody() {
       </SidebarHeader>
 
       {/* Menu list */}
-      <SidebarContent className="px-2 pb-2">
+      <SidebarContent inset="list">
         <SettingsNavFilter
           scope="project"
           pages={pages}

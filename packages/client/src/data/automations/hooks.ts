@@ -29,7 +29,7 @@ export function useProjectAutomations(projectId: string | null | undefined): Aut
   });
   return useMemo(() => {
     if (!rows || rows.length === 0) return NONE;
-    return rows.map((row) => data.fromRow(row as Automation)).sort(compareAutomations(data));
+    return rows.map((row) => data.fromRow(row)).sort(compareAutomations(data));
   }, [rows, data]);
 }
 
@@ -43,7 +43,7 @@ export function useAutomationRuns(automationId: string | null | undefined): Auto
   });
   return useMemo(() => {
     if (!rows || rows.length === 0) return NONE;
-    return rows.map((row) => data.fromRow(row as AutomationRun)).sort(compareRuns);
+    return rows.map((row) => data.fromRow(row)).sort(compareRuns);
   }, [rows, data]);
 }
 
@@ -56,7 +56,7 @@ export function useAutomationInbox(): { inbox: InboxRow[]; pendingCount: number 
   });
   return useMemo(() => {
     if (!rows || rows.length === 0) return { inbox: NONE, pendingCount: 0 };
-    const inbox = rows.map((row) => data.fromRow(row as InboxRow)).sort(compareInbox);
+    const inbox = rows.map((row) => data.fromRow(row)).sort(compareInbox);
     const pendingCount = inbox.filter((item) => item.run.triageStatus === 'pending').length;
     return { inbox, pendingCount };
   }, [rows, data]);

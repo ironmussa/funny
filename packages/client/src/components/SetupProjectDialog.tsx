@@ -48,9 +48,11 @@ export function SetupProjectDialog({
       <Dialog open={open && !folderPickerOpen} onOpenChange={onOpenChange}>
         <DialogContent data-testid="setup-project-dialog">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <AlertTriangle className="icon-base text-status-warning" />
-              Set up local directory
+            <DialogTitle>
+              <span className="flex items-center gap-2">
+                <AlertTriangle className="icon-base text-status-warning" />
+                Set up local directory
+              </span>
             </DialogTitle>
             <DialogDescription>
               <strong>{projectName}</strong> is a shared team project. To create threads, you need

@@ -133,7 +133,7 @@ class WSBroker {
       log.warn('Dropping oversized WS payload', {
         namespace: 'ws',
         event: event.type,
-        threadId: (event as any).threadId,
+        threadId: event.threadId,
         bytes,
         maxBytes: MAX_PAYLOAD_DROP_BYTES,
       });
@@ -144,7 +144,7 @@ class WSBroker {
       log.warn('Large WS payload', {
         namespace: 'ws',
         event: event.type,
-        threadId: (event as any).threadId,
+        threadId: event.threadId,
         bytes,
       });
       metric('ws.payload_large', 1, { type: 'sum', attributes: { event: event.type } });

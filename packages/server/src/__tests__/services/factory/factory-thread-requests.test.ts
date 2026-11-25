@@ -26,7 +26,7 @@ mock.module('../../../services/thread-sandboxes/sandbox-lifecycle.js', () => ({
 
 const { RunnerGrpcSessionRegistry } = await import('../../../services/grpc/session-registry.js');
 const { resetRunnerScopeCache } = await import('../../../services/runner-scope.js');
-const { cleanupFactoryWorktrees, sendFactoryFollowUp, stopFactoryThreads } =
+const { cleanupFactoryWorktrees, freeRunBranchForRetry, sendFactoryFollowUp, stopFactoryThreads } =
   await import('../../../services/factory/factory-thread-requests.js');
 const { FakeRunnerRequestPort } = await import('../../helpers/runner-port-fakes.js');
 const { createTestDb, seedProject, seedRunner, seedRunnerProjectAssignment, seedThread } =
@@ -284,6 +284,119 @@ describe('factory thread requests', () => {
         worktreePath: '/srv/wt/t1',
         branch: 'factory/issue-7-t1',
       });
+    });
+  });
+
+  // Issues #457, #483, #488: a retry archived the old thread but left its
+  // worktree on the run's branch. The new thread was put on a branch named from
+  // its title, and every later step was refused with 409 until a person removed it.
+  describe('freeing the run branch for a retry', () => {
+    const RUN_BRANCH = 'factory/issue-483-59664eba';
+    const worktreeThread = (id: string, extra: Record<string, unknown> = {}) =>
+      seedThread(testDb.db, {
+        id,
+        projectId: 'p1',
+        userId: 'alice',
+        status: 'failed',
+        mode: 'worktree',
+        branch: RUN_BRANCH,
+        worktreePath: `/srv/wt/${id}`,
+        ...extra,
+      });
+    const row = async (id: string) =>
+      (await testDb.db.select().from(threads).where(eq(threads.id, id)))[0]!;
+    const removed = () => {
+      requests.response = {
+        status: 200,
+        headers: {},
+        body: JSON.stringify({ removed: true }),
+        bodyEncoding: 'utf8',
+      };
+    };
+    const bodies = () => requests.requests.map((r) => JSON.parse(String(r.request.body)));
+
+    test("removes the old worktree on the run's branch and keeps the branch", async () => {
+      runner('r-alice', 'alice');
+      // Archived by an earlier retry: no longer one of the run's threads.
+      worktreeThread('t-old', { archived: 1 });
+      removed();
+
+      const kept = await freeRunBranchForRetry(
+        ports(),
+        { runBranch: RUN_BRANCH, threadIds: [] },
+        [],
+      );
+
+      expect(kept).toEqual([]);
+      expect(requests.requests[0]!.request).toMatchObject({
+        method: 'POST',
+        path: '/api/worktrees/remove-unchanged',
+      });
+      expect(bodies()[0]).toMatchObject({
+        worktreePath: '/srv/wt/t-old',
+        branchName: RUN_BRANCH,
+        deleteBranch: false,
+        reason: 'factory-retried',
+      });
+      expect(await row('t-old')).toMatchObject({ worktreePath: null, branch: null });
+    });
+
+    test('a replaced thread put on another branch loses its worktree and that branch', async () => {
+      runner('r-alice', 'alice');
+      worktreeThread('t-new', {
+        status: 'completed',
+        branch: 'funny/factory-483-clear-8ELOME',
+      });
+      removed();
+
+      await freeRunBranchForRetry(ports(), { runBranch: RUN_BRANCH, threadIds: ['t-new'] }, []);
+
+      expect(bodies()[0]).toMatchObject({
+        branchName: 'funny/factory-483-clear-8ELOME',
+        deleteBranch: true,
+      });
+    });
+
+    test('the thread the retry continues, and a running one, keep their worktrees', async () => {
+      runner('r-alice', 'alice');
+      worktreeThread('t-kept', { status: 'completed' });
+      worktreeThread('t-running', { status: 'running' });
+
+      const kept = await freeRunBranchForRetry(
+        ports(),
+        { runBranch: RUN_BRANCH, threadIds: ['t-kept', 't-running'] },
+        ['t-kept'],
+      );
+
+      expect(kept).toEqual([]);
+      expect(requests.requests).toEqual([]);
+    });
+
+    test('a worktree with unsaved work is kept and reported', async () => {
+      runner('r-alice', 'alice');
+      worktreeThread('t-dirty');
+      requests.response = {
+        status: 200,
+        headers: {},
+        body: JSON.stringify({ removed: false, dirtyFileCount: 69, unpushedCommitCount: 0 }),
+        bodyEncoding: 'utf8',
+      };
+
+      const kept = await freeRunBranchForRetry(
+        ports(),
+        { runBranch: RUN_BRANCH, threadIds: [] },
+        [],
+      );
+
+      expect(kept).toEqual([
+        {
+          threadId: 't-dirty',
+          worktreePath: '/srv/wt/t-dirty',
+          dirtyFileCount: 69,
+          unpushedCommitCount: 0,
+        },
+      ]);
+      expect((await row('t-dirty')).worktreePath).toBe('/srv/wt/t-dirty');
     });
   });
 

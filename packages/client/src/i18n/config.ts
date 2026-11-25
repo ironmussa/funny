@@ -1,3 +1,4 @@
+import type { JsonObject } from '@funny/shared/json';
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 
@@ -8,7 +9,7 @@ import en from '../locales/en/translation.json';
 export const SUPPORTED_LANGUAGES = ['en', 'es', 'pt'] as const;
 export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number];
 
-type TranslationModule = { default: Record<string, unknown> };
+type TranslationModule = { default: JsonObject };
 const LAZY_TRANSLATIONS: Record<
   Exclude<SupportedLanguage, 'en'>,
   () => Promise<TranslationModule>
@@ -28,6 +29,8 @@ i18n.use(initReactI18next).init({
 
 /** Load a language's translations if needed, then switch to it. */
 export async function changeLanguage(code: string): Promise<void> {
+  // SAFETY: a code that is not a lazy language key reads `undefined`, which the
+  // `load &&` check below skips; `en` ships in the main bundle.
   const load = LAZY_TRANSLATIONS[code as keyof typeof LAZY_TRANSLATIONS];
   if (load && !i18n.hasResourceBundle(code, 'translation')) {
     const translations = await load();

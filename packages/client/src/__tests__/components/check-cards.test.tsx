@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { checkInputKey } from '@funny/shared/checks';
+import type { JsonObject } from '@funny/shared/json';
 import { screen, waitFor } from '@testing-library/react';
 import { ok, err } from 'neverthrow';
 
@@ -43,7 +44,7 @@ const testRun = (status: 'running' | 'failed') =>
 /** The MCP envelope a finished call's output is stored as. */
 const envelope = (text: string) => JSON.stringify({ content: [{ type: 'text', text }] });
 
-const renderRun = (parsed: Record<string, unknown>, output?: string) =>
+const renderRun = (parsed: JsonObject, output?: string) =>
   renderWithProviders(<CheckRunCard parsed={parsed} output={output} displayTime={null} />, {
     threadId: THREAD,
   });
@@ -131,7 +132,7 @@ describe('CheckRunCard', () => {
 });
 
 describe('dispatchToolCard for checks', () => {
-  const card = (name: string, parsed: Record<string, unknown>, output?: string) =>
+  const card = (name: string, parsed: JsonObject, output?: string) =>
     renderWithProviders(
       <>
         {dispatchToolCard({ name, parsed, output, displayTime: null, renderToolCall: () => null })}

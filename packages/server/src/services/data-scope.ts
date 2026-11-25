@@ -18,6 +18,7 @@
  */
 
 import { eq } from 'drizzle-orm';
+import { z } from 'zod';
 
 import { db } from '../db/index.js';
 import * as schema from '../db/schema.js';
@@ -206,7 +207,10 @@ async function firstRowId(query: Promise<Array<{ id: string }>>): Promise<string
   return row ? row.id : undefined;
 }
 
-const str = (v: unknown): string | undefined => (typeof v === 'string' && v ? v : undefined);
+/** A non-empty string from a runner's message; any other value reads as absent. */
+const nonEmptyString = z.string().min(1).optional().catch(undefined);
+/** A row's thread id when it is a string; any other value reads as absent. */
+const threadIdOf = z.string().optional().catch(undefined);
 
 /**
  * An indirect thread reference: `key` extracts the entity id from the request
@@ -218,7 +222,7 @@ interface IndirectThreadRef {
 }
 
 const threadByExternalRequestId: IndirectThreadRef = {
-  key: (data) => str(data.externalRequestId),
+  key: (data) => nonEmptyString.parse(data.externalRequestId),
   thread: (id) =>
     firstRowId(
       db
@@ -229,7 +233,7 @@ const threadByExternalRequestId: IndirectThreadRef = {
 };
 
 const threadBySessionId: IndirectThreadRef = {
-  key: (data) => str(data.sessionId),
+  key: (data) => nonEmptyString.parse(data.sessionId),
   thread: (id) =>
     firstRowId(
       db
@@ -240,7 +244,7 @@ const threadBySessionId: IndirectThreadRef = {
 };
 
 const threadByMessageId: IndirectThreadRef = {
-  key: (_data, payload) => str(payload.messageId),
+  key: (_data, payload) => nonEmptyString.parse(payload.messageId),
   thread: (id) =>
     firstThreadId(
       db
@@ -260,7 +264,7 @@ const threadOfToolCall = (id: string) =>
   );
 
 const threadByQueuedMessageId: IndirectThreadRef = {
-  key: (data) => str(data.messageId),
+  key: (data) => nonEmptyString.parse(data.messageId),
   thread: (id) =>
     firstThreadId(
       db
@@ -271,7 +275,7 @@ const threadByQueuedMessageId: IndirectThreadRef = {
 };
 
 const threadByWatcherId: IndirectThreadRef = {
-  key: (_data, payload) => str(payload.id),
+  key: (_data, payload) => nonEmptyString.parse(payload.id),
   thread: (id) =>
     firstThreadId(
       db
@@ -282,7 +286,7 @@ const threadByWatcherId: IndirectThreadRef = {
 };
 
 const threadByJobId: IndirectThreadRef = {
-  key: (_data, payload) => str(payload.id),
+  key: (_data, payload) => nonEmptyString.parse(payload.id),
   thread: (id) =>
     firstThreadId(
       db.select({ threadId: schema.jobs.threadId }).from(schema.jobs).where(eq(schema.jobs.id, id)),
@@ -290,7 +294,7 @@ const threadByJobId: IndirectThreadRef = {
 };
 
 const threadByPermissionRequestId: IndirectThreadRef = {
-  key: (_data, payload) => str(payload.requestId),
+  key: (_data, payload) => nonEmptyString.parse(payload.requestId),
   thread: (id) =>
     firstThreadId(
       db
@@ -310,10 +314,13 @@ const INDIRECT_THREAD_REFS = new Map<string, IndirectThreadRef>([
   ['data:update_message', threadByMessageId],
   ['data:find_tool_call', threadByMessageId],
   ['data:insert_tool_call', threadByMessageId],
-  ['data:get_tool_call', { key: (data) => str(data.toolCallId), thread: threadOfToolCall }],
+  [
+    'data:get_tool_call',
+    { key: (data) => nonEmptyString.parse(data.toolCallId), thread: threadOfToolCall },
+  ],
   [
     'data:update_tool_call_output',
-    { key: (_data, payload) => str(payload.toolCallId), thread: threadOfToolCall },
+    { key: (_data, payload) => nonEmptyString.parse(payload.toolCallId), thread: threadOfToolCall },
   ],
   ['data:cancel_queued_message', threadByQueuedMessageId],
   ['data:update_queued_message', threadByQueuedMessageId],
@@ -328,9 +335,11 @@ const INDIRECT_THREAD_REFS = new Map<string, IndirectThreadRef>([
 /** Thread ids referenced (directly or indirectly) by a data request. */
 async function referencedThreadIds(data: any): Promise<string[]> {
   const payload = data?.payload ?? {};
-  const ids = [str(data?.threadId), str(payload.threadId), str(payload.row?.threadId)].filter(
-    (x): x is string => !!x,
-  );
+  const ids = [
+    nonEmptyString.parse(data?.threadId),
+    nonEmptyString.parse(payload.threadId),
+    nonEmptyString.parse(payload.row?.threadId),
+  ].filter((x): x is string => !!x);
 
   const indirect = INDIRECT_THREAD_REFS.get(data?.type);
   const key = indirect?.key(data, payload);
@@ -354,7 +363,9 @@ async function referencedProjects(
 ): Promise<{ projectIds: Set<string>; projectless: boolean }> {
   const payload = data?.payload ?? {};
   const projectIds = new Set(
-    [str(data?.projectId), str(payload.projectId)].filter((x): x is string => !!x),
+    [nonEmptyString.parse(data?.projectId), nonEmptyString.parse(payload.projectId)].filter(
+      (x): x is string => !!x,
+    ),
   );
   let projectless = false;
   for (const threadId of await referencedThreadIds(data)) {
@@ -413,9 +424,11 @@ async function refsScope(runnerId: string, data: any): Promise<DataScopeDecision
  * started with neither a thread nor a project (a clone).
  */
 function isProjectlessWork(type: string, data: any): boolean {
-  const projectId = str(data?.payload?.projectId) ?? str(data?.projectId);
+  const projectId =
+    nonEmptyString.parse(data?.payload?.projectId) ?? nonEmptyString.parse(data?.projectId);
   if (type === 'data:create_thread') return !projectId;
-  if (type === 'data:activity_start') return !projectId && !str(data?.payload?.threadId);
+  if (type === 'data:activity_start')
+    return !projectId && !nonEmptyString.parse(data?.payload?.threadId);
   return false;
 }
 
@@ -466,7 +479,10 @@ async function sandboxRefsScope(boundThread: string, data: any): Promise<DataSco
       return { ok: false, reason: `thread ${threadId} outside sandbox runner scope` };
     }
   }
-  for (const projectId of [str(data?.projectId), str(data?.payload?.projectId)]) {
+  for (const projectId of [
+    nonEmptyString.parse(data?.projectId),
+    nonEmptyString.parse(data?.payload?.projectId),
+  ]) {
     if (projectId && projectId !== boundProject) {
       return { ok: false, reason: `project ${projectId} outside sandbox runner scope` };
     }
@@ -489,8 +505,9 @@ export async function filterDataResponse(runnerId: string, type: string, respons
     }
     return projectAllowed.get(projectId)!;
   };
-  const allowThread = async (threadId: unknown) =>
-    typeof threadId === 'string' &&
+  // A row without a string thread id is dropped (an empty id is still looked up).
+  const allowThread = async (threadId: string | undefined) =>
+    threadId !== undefined &&
     (boundThread ? threadId === boundThread : allowProject(await projectOfThread(threadId)));
 
   const filterBy = async <T>(items: T[] | undefined, keep: (item: T) => Promise<boolean>) => {
@@ -509,20 +526,24 @@ export async function filterDataResponse(runnerId: string, type: string, respons
     case 'data:search_threads':
       return {
         ...response,
-        results: await filterBy(response.results, (r: any) => allowThread(r?.threadId)),
+        results: await filterBy(response.results, (r: any) =>
+          allowThread(threadIdOf.parse(r?.threadId)),
+        ),
       };
     case 'data:watcher_list_pending':
     case 'data:watcher_list_due':
     case 'data:watcher_list_by_user':
       return {
         ...response,
-        watchers: await filterBy(response.watchers, (w: any) => allowThread(w?.threadId)),
+        watchers: await filterBy(response.watchers, (w: any) =>
+          allowThread(threadIdOf.parse(w?.threadId)),
+        ),
       };
     case 'data:job_list_running':
     case 'data:job_list_by_user':
       return {
         ...response,
-        jobs: await filterBy(response.jobs, (j: any) => allowThread(j?.threadId)),
+        jobs: await filterBy(response.jobs, (j: any) => allowThread(threadIdOf.parse(j?.threadId))),
       };
     default:
       return response;

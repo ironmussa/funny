@@ -65,6 +65,8 @@ export function TestIdOverlay() {
       try {
         const result = await browserSessionClient.execute(sessionId, COLLECT_TESTIDS_EXPR);
         if (!cancelled && Array.isArray(result)) {
+          // SAFETY: COLLECT_TESTIDS_EXPR returns an array of { testid, x, y, w, h } objects, the
+          // TestIdLabel shape, and Array.isArray ruled out any other result.
           setLabels(result as TestIdLabel[]);
         }
       } catch (err) {
@@ -95,13 +97,15 @@ export function TestIdOverlay() {
         return (
           <div
             key={`${label.testid}-${label.x}-${label.y}-${label.w}-${label.h}`}
-            className="border-primary/70 absolute border"
-            style={{ left, top, width, height }}
+            className="border-primary/70 absolute top-[var(--testid-label-top)] left-[var(--testid-label-left)] h-[var(--testid-label-height)] w-[var(--testid-label-width)] border"
+            style={{
+              '--testid-label-left': left,
+              '--testid-label-top': top,
+              '--testid-label-width': width,
+              '--testid-label-height': height,
+            }}
           >
-            <span
-              className="bg-primary text-primary-foreground text-2xs absolute -top-4 right-0 rounded-sm px-1.5 py-0.5 font-medium"
-              style={{ whiteSpace: 'nowrap' }}
-            >
+            <span className="bg-primary text-primary-foreground text-2xs absolute -top-4 right-0 rounded-sm px-1.5 py-0.5 font-medium whitespace-nowrap">
               {label.testid}
             </span>
           </div>

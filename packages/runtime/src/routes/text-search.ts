@@ -89,7 +89,7 @@ app.get('/files', async (c) => {
 
     const cwdResult = await ensureThreadCwd(thread, userId);
     if (cwdResult.isErr()) {
-      return c.json({ error: cwdResult.error.message }, errorStatus(cwdResult.error) as 400);
+      return c.json({ error: cwdResult.error.message }, errorStatus(cwdResult.error));
     }
     cwd = cwdResult.value;
   } else {
@@ -135,7 +135,7 @@ app.post('/files/selection', async (c) => {
 
     const cwdResult = await ensureThreadCwd(thread, userId);
     if (cwdResult.isErr()) {
-      return c.json({ error: cwdResult.error.message }, errorStatus(cwdResult.error) as 400);
+      return c.json({ error: cwdResult.error.message }, errorStatus(cwdResult.error));
     }
     cwd = cwdResult.value;
   } else {
@@ -203,7 +203,7 @@ app.get('/text', async (c) => {
 
     const cwdResult = await ensureThreadCwd(thread, userId);
     if (cwdResult.isErr()) {
-      return c.json({ error: cwdResult.error.message }, errorStatus(cwdResult.error) as 400);
+      return c.json({ error: cwdResult.error.message }, errorStatus(cwdResult.error));
     }
     cwd = cwdResult.value;
   } else {

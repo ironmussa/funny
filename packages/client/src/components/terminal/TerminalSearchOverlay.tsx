@@ -121,7 +121,8 @@ export function TerminalSearchOverlay({
       onWholeWordChange={setWholeWord}
       regex={regex}
       onRegexChange={setRegex}
-      className="bg-popover absolute top-2 right-3 z-20 w-104 rounded-md border px-1.5 py-1 shadow-md"
+      variant="overlay-compact"
+      className="absolute top-2 right-3 z-20 w-104"
     />
   );
 }

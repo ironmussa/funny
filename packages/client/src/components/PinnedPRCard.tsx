@@ -148,8 +148,8 @@ function ReactionBar({
         <Button
           key={key}
           variant="outline"
-          size="xs"
-          className="text-2xs h-5 gap-1 px-1.5"
+          size="3xs"
+          gap="tight"
           disabled={disabled}
           onClick={() => onReact(key)}
           data-testid={`${testIdBase}-reaction-${key}`}
@@ -693,7 +693,8 @@ export function PinnedPRCard({
                 <DropdownMenuTrigger asChild>
                   <Button
                     size="xs"
-                    className="shrink-0 gap-1"
+                    gap="tight"
+                    className="shrink-0"
                     disabled={merging}
                     data-testid={`pinned-pr-merge-${pr.number}`}
                   >
@@ -715,11 +716,11 @@ export function PinnedPRCard({
                     <DropdownMenuItem
                       key={method}
                       onSelect={() => handleMerge(method)}
-                      className="flex flex-col items-start gap-0.5"
+                      className="flex flex-col items-start"
                       data-testid={`pinned-pr-merge-${method}-${pr.number}`}
                     >
                       <span className="text-xs font-medium">{label}</span>
-                      <span className="text-muted-foreground text-2xs">{hint}</span>
+                      <span className="text-muted-foreground text-2xs mt-0.5">{hint}</span>
                     </DropdownMenuItem>
                   ))}
                 </DropdownMenuContent>
@@ -837,8 +838,8 @@ export function PinnedPRCard({
                         {th.node_id && (
                           <Button
                             variant="ghost"
-                            size="xs"
-                            className="text-2xs h-5 gap-1 px-1.5"
+                            size="3xs"
+                            gap="tight"
                             disabled={resolving}
                             onClick={() => handleResolve(th)}
                             data-testid={`pinned-pr-thread-resolve-${th.id}`}
@@ -903,8 +904,8 @@ export function PinnedPRCard({
                         <div className="pl-3">
                           <Button
                             variant="ghost"
-                            size="xs"
-                            className="text-2xs h-5 gap-1 px-1.5"
+                            size="3xs"
+                            gap="tight"
                             onClick={() => {
                               setReplyForThread(th.id);
                               setReplyBody('');

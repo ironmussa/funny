@@ -228,6 +228,8 @@ export function useVisibleMessageObserver({
         if (!userHasScrolledUpRef.current) return;
         for (const entry of entries) {
           if (entry.isIntersecting) {
+            // SAFETY: observeAll only observes the HTMLElements returned by
+            // querySelectorAll<HTMLElement>('[data-user-msg]').
             const id = (entry.target as HTMLElement).dataset.userMsg;
             if (id) onVisibleMessageChangeEvent(id);
           }

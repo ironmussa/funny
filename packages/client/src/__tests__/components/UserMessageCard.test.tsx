@@ -1,4 +1,13 @@
-import { describe, test, expect, vi, beforeEach, afterEach, mock } from 'bun:test';
+import {
+  describe,
+  test,
+  expect,
+  vi,
+  beforeEach,
+  afterEach,
+  mock,
+  setDefaultTimeout,
+} from 'bun:test';
 
 import { mocked } from '@funny/test-kit';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
@@ -9,6 +18,10 @@ import { UserMessageCard } from '@/components/thread/UserMessageCard';
 
 import { mockT } from '../helpers/mock-i18n';
 import { renderWithProviders } from '../helpers/render';
+
+// The proof and pre-push run these files together under `bun test --parallel`; on a
+// loaded machine a first render (cold module load) ran well past the 5 s default.
+setDefaultTimeout(60_000);
 
 mock.module('react-i18next', () => ({
   useTranslation: () => ({
@@ -368,8 +381,7 @@ describe('UserMessageCard', () => {
       renderWithProviders(<UserMessageCard content={'line\n'.repeat(20)} data-testid="msg-8" />);
 
       const content = screen.getByTestId('msg-8').querySelector('pre');
-      expect(content).toHaveStyle({ maxHeight: '48px' });
-      expect(content).toHaveClass('overflow-hidden');
+      expect(content).toHaveClass('max-h-12', 'overflow-hidden');
     });
   });
 });

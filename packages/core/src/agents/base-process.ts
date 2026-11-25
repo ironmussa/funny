@@ -21,8 +21,9 @@ import { EventEmitter } from 'events';
 import { waitFor } from '@funny/shared/async';
 
 import type {
-  CLIMessage,
+  CLIAssistantMessage,
   CLISystemMessage,
+  CLIUserMessage,
   CLIResultMessage,
   ClaudeProcessOptions,
 } from './types.js';
@@ -309,19 +310,19 @@ export abstract class BaseAgentProcess extends EventEmitter {
     const inputTokens = params.inputTokens;
     if (!Number.isFinite(inputTokens) || inputTokens <= 0) return;
 
-    this.emit('message', {
+    // The cache fields ride along for the runtime's context ring; they are
+    // extra fields on top of the declared `usage` shape.
+    const usage = {
+      input_tokens: inputTokens,
+      output_tokens: params.outputTokens ?? 0,
+      cache_read_input_tokens: params.cacheReadTokens ?? 0,
+      cache_creation_input_tokens: params.cacheWriteTokens ?? 0,
+    };
+    const msg: CLIAssistantMessage = {
       type: 'assistant',
-      message: {
-        id: randomUUID(),
-        content: [],
-        usage: {
-          input_tokens: inputTokens,
-          output_tokens: params.outputTokens ?? 0,
-          cache_read_input_tokens: params.cacheReadTokens ?? 0,
-          cache_creation_input_tokens: params.cacheWriteTokens ?? 0,
-        },
-      },
-    } as CLIMessage);
+      message: { id: randomUUID(), content: [], usage },
+    };
+    this.emit('message', msg);
   }
 
   /** Handle ACP `sessionUpdate: "usage_update"`. Returns true when handled. */
@@ -336,18 +337,11 @@ export abstract class BaseAgentProcess extends EventEmitter {
   /** Map ACP `PromptResponse.usage` (camelCase) to a context-usage CLIMessage. */
   protected emitAcpPromptResponseUsage(usage: AcpPromptUsage | null | undefined): void {
     if (!usage || !isObject(usage)) return;
-    const u = usage as Record<string, unknown>;
     this.emitContextUsageMessage({
-      inputTokens: (u.inputTokens as number | undefined) ?? 0,
-      outputTokens: (u.outputTokens as number | undefined) ?? 0,
-      cacheReadTokens:
-        (u.cachedReadTokens as number | undefined) ??
-        (u.cacheReadTokens as number | undefined) ??
-        0,
-      cacheWriteTokens:
-        (u.cachedWriteTokens as number | undefined) ??
-        (u.cacheWriteTokens as number | undefined) ??
-        0,
+      inputTokens: usage.inputTokens ?? 0,
+      outputTokens: usage.outputTokens ?? 0,
+      cacheReadTokens: usage.cachedReadTokens ?? usage.cacheReadTokens ?? 0,
+      cacheWriteTokens: usage.cachedWriteTokens ?? usage.cacheWriteTokens ?? 0,
     });
   }
 
@@ -418,7 +412,7 @@ export abstract class BaseAgentProcess extends EventEmitter {
   protected emitErrorToolCall(errorText: string): void {
     const toolCallId = randomUUID();
     // tool_use (assistant)
-    this.emit('message', {
+    const toolUse: CLIAssistantMessage = {
       type: 'assistant',
       message: {
         id: randomUUID(),
@@ -431,9 +425,10 @@ export abstract class BaseAgentProcess extends EventEmitter {
           },
         ],
       },
-    } as CLIMessage);
+    };
+    this.emit('message', toolUse);
     // tool_result (user) — mark as error
-    this.emit('message', {
+    const toolResult: CLIUserMessage = {
       type: 'user',
       message: {
         content: [
@@ -445,7 +440,8 @@ export abstract class BaseAgentProcess extends EventEmitter {
           },
         ],
       },
-    } as CLIMessage);
+    };
+    this.emit('message', toolResult);
   }
 
   /**
@@ -462,12 +458,11 @@ export abstract class BaseAgentProcess extends EventEmitter {
     if (isString(cause)) return this.cleanErrorDetails(cause);
     if (!isObject(cause)) return String(cause);
 
-    const e = cause as Record<string, unknown>;
-    const base = isString(e.message) ? e.message : String(cause);
+    const base = 'message' in cause && isString(cause.message) ? cause.message : String(cause);
 
     // ACP RequestError: { code, message, data: { details } }
-    if (e.data && isObject(e.data)) {
-      const details = (e.data as Record<string, unknown>).details;
+    if ('data' in cause && cause.data && isObject(cause.data)) {
+      const details = 'details' in cause.data ? cause.data.details : undefined;
       if (isString(details)) {
         return this.cleanErrorDetails(details);
       }

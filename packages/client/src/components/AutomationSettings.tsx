@@ -96,9 +96,9 @@ export function AutomationSettings() {
   // re-trigger it.
   // The dialog opens during render (once per history entry); only the history
   // rewrite, a side effect, runs in the effect.
-  const openCreateRequested = Boolean(
-    (location.state as { openCreateAutomation?: boolean } | null)?.openCreateAutomation,
-  );
+  // react-router types `location.state` as `any`; ProjectActionsMenu sets this shape.
+  const navState: { openCreateAutomation?: boolean } | null = location.state;
+  const openCreateRequested = Boolean(navState?.openCreateAutomation);
   const [openedForLocationKey, setOpenedForLocationKey] = useState<string | null>(null);
   if (openCreateRequested && openedForLocationKey !== location.key) {
     setOpenedForLocationKey(location.key);
@@ -123,7 +123,7 @@ export function AutomationSettings() {
     setForm({
       name: a.name,
       prompt: a.prompt,
-      schedule: a.schedule as AutomationSchedule,
+      schedule: a.schedule,
       model: a.model,
       permissionMode: a.permissionMode,
     });
@@ -192,7 +192,7 @@ export function AutomationSettings() {
       {/* Header — hidden when empty state is shown */}
       {automations.length > 0 && (
         <div className="flex items-center justify-end">
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={openCreateDialog}>
+          <Button variant="outline" size="sm" gap="snug" onClick={openCreateDialog}>
             <Plus className="icon-sm" />
             Create
           </Button>
@@ -206,7 +206,7 @@ export function AutomationSettings() {
           fill={false}
           title="No automations yet."
           action={
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={openCreateDialog}>
+            <Button variant="outline" size="sm" gap="snug" onClick={openCreateDialog}>
               <Plus className="icon-sm" />
               Create your first automation
             </Button>
@@ -252,10 +252,9 @@ export function AutomationSettings() {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
-                      variant="ghost"
+                      variant="ghost-success-soft"
                       size="icon-sm"
                       onClick={() => handleTrigger(a)}
-                      className="text-status-success/80 hover:text-status-success"
                     >
                       <Play className="icon-sm" />
                     </Button>
@@ -337,8 +336,7 @@ export function AutomationSettings() {
                       </div>
                       <Button
                         variant="ghost"
-                        size="xs"
-                        className="h-5 px-1.5"
+                        size="2xs"
                         onClick={() => {
                           navigate(
                             buildPath(`/projects/${selectedProjectId}/threads/${run.threadId}`),
@@ -377,7 +375,6 @@ export function AutomationSettings() {
               </label>
               <Input
                 id="automation-name"
-                className="settings-form-input"
                 placeholder="e.g. Daily Issue Triage"
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
@@ -390,7 +387,8 @@ export function AutomationSettings() {
               </label>
               <Textarea
                 id="automation-prompt"
-                className="min-h-[100px] resize-y text-sm"
+                textSize="sm"
+                className="min-h-[100px] resize-y"
                 placeholder="What should the agent do?"
                 value={form.prompt}
                 onChange={(e) => setForm((f) => ({ ...f, prompt: e.target.value }))}
@@ -425,7 +423,7 @@ export function AutomationSettings() {
                   <Input
                     mono
                     size="xs"
-                    className="settings-form-input mt-1.5"
+                    className="mt-1.5"
                     placeholder="*/30 * * * *"
                     value={form.schedule}
                     onChange={(e) => setForm((f) => ({ ...f, schedule: e.target.value }))}
@@ -457,7 +455,7 @@ export function AutomationSettings() {
               size="sm"
               onClick={() => handleSave(true)}
               disabled={!form.name.trim() || !form.prompt.trim()}
-              className="gap-1.5"
+              gap="snug"
             >
               <Play className="icon-xs" />
               {editingId ? 'Save & Test' : 'Create & Test'}

@@ -28,8 +28,12 @@ export function seedProjects(
  * fixture keeps its shape: `useProjectStore.setState(withProjects({ projects, selectedProjectId }))`.
  */
 export function withProjects<T extends object>(patch: T): Omit<NoInfer<T>, 'projects'> {
+  // SAFETY: the patch is a project-store patch, whose `projects` field (when
+  // present) is a Project[]; only test and story fixtures call this.
   const { projects, ...rest } = patch as T & { projects?: Project[] };
   if (projects) seedProjects(projects);
+  // SAFETY: rest is the patch minus `projects`, which is Omit<T, 'projects'>;
+  // TypeScript cannot simplify the rest type of a generic intersection.
   return rest as Omit<T, 'projects'>;
 }
 

@@ -96,6 +96,9 @@ function useTeamMembersData() {
         .then(
           (res) => {
             if (res.data) {
+              // SAFETY: listMembers returns the org plugin's member rows, which carry every Member
+              // field; their role is one of the plugin's configured roles (owner, admin, member,
+              // viewer), which are the TeamRole values. createdAt may arrive as a Date but is not read.
               // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
               setMembers(res.data as unknown as Member[]);
             }
@@ -112,6 +115,8 @@ function useTeamMembersData() {
         (res) => {
           if (res.data) {
             setInvitations(
+              // SAFETY: listInvitations returns the org plugin's invitation rows, which carry every
+              // PendingInvitation field; expiresAt may be a Date, and it is only passed to new Date().
               // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
               (res.data as unknown as PendingInvitation[]).filter((i) => i.status === 'pending'),
             );
@@ -316,6 +321,7 @@ function InviteMemberSection({
             />
             <Select
               value={inviteRole}
+              // SAFETY: the items are rendered from INVITE_ROLES, whose values are InviteRole.
               onValueChange={(v) => setInviteRole(v as InviteRole)}
               disabled={smtpConfigured === false}
             >
@@ -406,7 +412,11 @@ function InviteLinkSection({
             Generate a shareable link to invite people to this organization.
           </p>
           <div className="flex items-center gap-2">
-            <Select value={linkRole} onValueChange={(v) => setLinkRole(v as InviteRole)}>
+            <Select
+              value={linkRole}
+              // SAFETY: the items are rendered from INVITE_ROLES, whose values are InviteRole.
+              onValueChange={(v) => setLinkRole(v as InviteRole)}
+            >
               <SelectTrigger className="w-[100px]" data-testid="team-link-role">
                 <SelectValue />
               </SelectTrigger>
@@ -542,6 +552,7 @@ function MembersSection({
               <div className="flex items-center gap-2">
                 <Select
                   value={member.role}
+                  // SAFETY: the items are rendered from ROLE_OPTIONS, whose values are TeamRole.
                   onValueChange={(v) => onRoleChange(member.id, v as TeamRole)}
                   disabled={isLastOwner && member.role === 'owner'}
                 >

@@ -1,3 +1,4 @@
+import type { JsonObject } from '@funny/shared/json';
 import { ChevronRight, Wrench, ListTodo, Bot } from 'lucide-react';
 import { useState, memo, useMemo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,7 +12,7 @@ import { getToolLabel, isTodoToolName } from './tool-cards/utils';
 export interface ToolCallItem {
   id: string;
   name: string;
-  input: string | Record<string, unknown>;
+  input: string | JsonObject;
   output?: string;
   author?: string;
   /** ISO timestamp of when this tool call was executed */

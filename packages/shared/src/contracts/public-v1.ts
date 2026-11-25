@@ -72,6 +72,8 @@ const publicImage = z.object({
  */
 const publicPermissionMode = z.enum(['ask', 'confirmEdit', 'plan']);
 
+// SAFETY: MODEL_REGISTRY is a non-empty literal object, so Object.keys returns its
+// provider keys with at least one element, the tuple z.enum requires.
 const registryProviders = Object.keys(MODEL_REGISTRY) as [
   keyof typeof MODEL_REGISTRY,
   ...(keyof typeof MODEL_REGISTRY)[],
@@ -96,6 +98,8 @@ export const createThreadInput = z
   })
   .superRefine((input, ctx) => {
     if (input.model === undefined) return;
+    // SAFETY: `input.provider` passed z.enum(registryProviders), and DEFAULT_PROVIDER
+    // ('claude') is a MODEL_REGISTRY key.
     const provider = (input.provider ?? DEFAULT_PROVIDER) as keyof typeof MODEL_REGISTRY;
     // `hasOwn`, not `in`: `toString` is not a model.
     if (!Object.hasOwn(MODEL_REGISTRY[provider], input.model)) {

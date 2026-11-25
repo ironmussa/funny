@@ -16,7 +16,7 @@ interface PreviewTab {
   label: string;
 }
 
-const isTauri = !!(window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
+const isTauri = !!('__TAURI_INTERNALS__' in window && window.__TAURI_INTERNALS__);
 
 /** The selected tab, or the last open tab when the selected one was closed. */
 function resolveActiveTabId(tabs: PreviewTab[], selectedTabId: string | null): string | null {

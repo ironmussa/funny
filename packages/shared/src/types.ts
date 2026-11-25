@@ -15,6 +15,8 @@ export type {
   ResumeReason,
 } from './primitives.js';
 
+// ─── Thread (interface lives in ./types/thread.js to avoid cycles) ──
+import type { JsonObject } from './json.js';
 import type {
   AgentProvider,
   EffortLevel,
@@ -31,7 +33,6 @@ import type {
   PendingPermissionRequest,
   PermissionApprovalCapability,
 } from './types/permission-approvals.js';
-// ─── Thread (interface lives in ./types/thread.js to avoid cycles) ──
 import type { Thread, PaginatedThreadsResponse } from './types/thread.js';
 export type { Thread, PaginatedThreadsResponse };
 
@@ -856,7 +857,7 @@ export interface WSWorkflowStepData {
   workflowName: string;
   stepName: string;
   status: 'pending' | 'running' | 'completed' | 'failed';
-  output?: Record<string, unknown>;
+  output?: JsonObject;
 }
 
 export interface WSWorkflowStatusData {
@@ -1099,7 +1100,7 @@ export interface Activity {
   step: string | null;
   error: string | null;
   /** The kind's input, validated and stripped of undeclared fields. */
-  input: Record<string, unknown>;
+  input: JsonObject;
   resultRef: ActivityResultRef | null;
   origin: ActivityOrigin;
   /** What it removed, stopped or changed; null when it reported nothing. */

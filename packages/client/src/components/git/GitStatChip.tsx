@@ -33,9 +33,7 @@ export function GitStatChip({
           {count ? <span className="font-mono">{count}</span> : null}
         </span>
       </TooltipTrigger>
-      <TooltipContent side="top" className="text-xs">
-        {tooltip}
-      </TooltipContent>
+      <TooltipContent side="top">{tooltip}</TooltipContent>
     </Tooltip>
   );
 }

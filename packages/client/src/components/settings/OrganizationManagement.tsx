@@ -69,16 +69,16 @@ export function OrganizationManagement() {
             const fulls = await Promise.all(
               res.data.map((org) =>
                 authClient.organization
-                  .getFullOrganization({ query: { organizationId: (org as any).id } })
+                  .getFullOrganization({ query: { organizationId: org.id } })
                   .catch(() => null),
               ),
             );
             for (let i = 0; i < res.data.length; i++) {
               const full = fulls[i];
               if (full?.data) {
-                const me = (full.data as any).members?.find((m: any) => m.userId === currentUserId);
+                const me = full.data.members?.find((m) => m.userId === currentUserId);
                 if (me) {
-                  memberMap.set((res.data[i] as any).id, me.role);
+                  memberMap.set(res.data[i].id, me.role);
                 }
               }
             }

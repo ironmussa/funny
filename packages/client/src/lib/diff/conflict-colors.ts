@@ -35,14 +35,6 @@ export const GUTTER_BG_ADDED = 'color-mix(in srgb, hsl(var(--diff-added)) 22%, h
 export const GUTTER_BG_REMOVED =
   'color-mix(in srgb, hsl(var(--diff-removed)) 22%, hsl(var(--card)))';
 
-/** Inline style for pane text when horizontal scroll is active (CSS variable driven).
- * position:relative + z-index:0 ensures the text stays BELOW the gutter (z-10). */
-export const H_SCROLL_STYLE: React.CSSProperties = {
-  transform: 'translateX(calc(-1 * var(--h-scroll, 0px)))',
-  position: 'relative',
-  zIndex: 0,
-};
-
 /**
  * Compute the unified-row background inline style for a DiffLine.
  * Returns undefined when there is no background to apply (context line, no conflict).

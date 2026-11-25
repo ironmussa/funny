@@ -1,3 +1,4 @@
+import type { JsonObject } from '@funny/shared/json';
 import { ChevronRight, Timer } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -71,7 +72,7 @@ export function BackgroundCard({
   hideLabel,
   displayTime,
 }: {
-  parsed: Record<string, unknown>;
+  parsed: JsonObject;
   output?: string;
   hideLabel?: boolean;
   displayTime?: string | null;

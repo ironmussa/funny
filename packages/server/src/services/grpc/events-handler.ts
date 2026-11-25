@@ -5,6 +5,7 @@ import { FailureCode } from '@funny/shared/runner-v2/common';
 
 import { db } from '../../db/index.js';
 import { threadEvents } from '../../db/schema.js';
+import { isString } from '../../lib/value-guards.js';
 import { relayToThreadStream, relayToUser } from '../browser-events.js';
 import { canRunnerActOnThread } from '../data-scope.js';
 import {
@@ -90,10 +91,14 @@ function defaultPublishEvent(context: RunnerGrpcCallContext, event: AcceptedAgen
   relayToThreadStream(event.scope.threadId, browserEvent);
 }
 
-function parseUnsigned(value: unknown): bigint | null {
+/** A wire uint64: the protobuf codec gives a bigint or string, the JSON codec a string or number. */
+type WireUnsigned = string | number | bigint;
+
+function parseUnsigned(value: WireUnsigned | undefined): bigint | null {
+  if (value === undefined) return null;
   try {
-    // SAFETY: BigInt throws on any value it cannot convert, and the catch below maps that to null.
-    const parsed = BigInt(value as string | number | bigint);
+    // BigInt throws on a string it cannot convert; the catch below maps that to null.
+    const parsed = BigInt(value);
     return parsed >= 0n && parsed <= BigInt(Number.MAX_SAFE_INTEGER) ? parsed : null;
   } catch {
     return null;
@@ -188,7 +193,7 @@ export function createEventsHandler(
       const type = userEvent.eventType ?? '';
       if (!userId || !isRunnerUserEventType(type)) return;
       const data = decodeStruct(userEvent.data);
-      const threadId = typeof data.threadId === 'string' ? data.threadId : '';
+      const threadId = isString(data.threadId) ? data.threadId : '';
       if (threadId && !(await userEventThreadAllowed(threadId))) return;
       publishUserEvent(userId, { type, threadId: '', data });
     };

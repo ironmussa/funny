@@ -15,7 +15,6 @@ import { settlePreSendStateFromFetch } from './optimistic-run-state';
 import { cleanupThreadActor } from './thread-machine-bridge';
 import * as mutations from './thread-mutations';
 import type { ThreadState } from './thread-state';
-import type { ThreadWithMessages } from './thread-types';
 import type { Get, Set } from './thread-ws-handlers/shared';
 
 // Ref-count for explicit registrations from live columns.
@@ -88,7 +87,7 @@ export function createLiveThreadActions(
       if ((liveThreadRefCounts.get(threadId) ?? 0) <= 0) return;
       settlePreSendStateFromFetch(result.value.id, result.value.status);
       adoptThreadDetail(result.value);
-      set((state) => mutations.setThreadData(state, threadId, result.value as ThreadWithMessages));
+      set((state) => mutations.setThreadData(state, threadId, result.value));
     },
 
     unregisterLiveThread: (threadId) => {

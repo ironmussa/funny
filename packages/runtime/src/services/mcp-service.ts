@@ -82,6 +82,9 @@ interface ClaudeProfileOptions {
 async function readClaudeConfig(options: ClaudeProfileOptions = {}): Promise<ClaudeConfig> {
   try {
     const raw = await readFile(claudeConfigJsonPath(options.claudeConfigDir), 'utf-8');
+    // SAFETY: ~/.claude.json is written by the Claude CLI (and by writeClaudeConfig
+    // with the object read here). Every field ClaudeConfig names is optional and
+    // read with `?? ` defaults; the rest is kept as-is and written back unchanged.
     return JSON.parse(raw) as ClaudeConfig;
   } catch {
     return {};
@@ -163,7 +166,7 @@ export function listMcpServers(
 ): ResultAsync<McpServer[], DomainError> {
   if (provider === 'codex') return listCodexMcpServers(projectPath);
   if (provider !== 'claude') {
-    return ResultAsync.fromPromise(Promise.resolve([] as McpServer[]), (error) =>
+    return ResultAsync.fromPromise(Promise.resolve<McpServer[]>([]), (error) =>
       internal(String(error)),
     );
   }
@@ -252,6 +255,9 @@ function configuredServer(
   source: 'user' | 'project',
   disabled: boolean,
 ): McpServer {
+  // SAFETY: unchecked. `type` comes from a user-edited ~/.claude.json or .mcp.json,
+  // where the Claude CLI writes `stdio`, `http` or `sse`; any other value is passed
+  // through to the client as written and handled below like stdio.
   const type = (cfg.type?.toLowerCase() ?? 'stdio') as McpServerType;
   const server: McpServer = { name, provider: 'claude', type, source };
   if (disabled) server.disabled = true;
@@ -594,6 +600,8 @@ export function parseMcpListOutput(output: string): McpServer[] {
     if (typedMatch) {
       const name = typedMatch[1];
       const value = typedMatch[2].trim();
+      // SAFETY: the third capture group only matches HTTP, http, SSE, sse, stdio or
+      // STDIO, so its lowercase form is one of `http`, `sse`, `stdio`.
       const type = typedMatch[3].toLowerCase() as McpServerType;
       const statusText = typedMatch[4]?.trim().toLowerCase() || '';
 
@@ -634,6 +642,9 @@ export function parseMcpListOutput(output: string): McpServer[] {
     const parts = trimmed.split(/\s{2,}/);
     if (parts.length >= 2) {
       const name = parts[0].trim();
+      // SAFETY: unchecked. The second column of `claude mcp list` is the transport
+      // (`stdio`, `http` or `sse`) in this layout; any other text is passed through
+      // as the type and gets neither a url nor a command below.
       const type = (parts[1]?.trim() || 'stdio') as McpServerType;
 
       const server: McpServer = { name, type };
@@ -867,93 +878,101 @@ function removeCodexMcpServer(opts: {
   );
 }
 
+/** A server offered in the "recommended" list of the MCP settings. */
+interface RecommendedMcpServer extends Pick<
+  McpServer,
+  'name' | 'type' | 'url' | 'command' | 'args'
+> {
+  description: string;
+}
+
 /**
  * Recommended MCP servers list.
  */
-export const RECOMMENDED_SERVERS = [
+export const RECOMMENDED_SERVERS: RecommendedMcpServer[] = [
   {
     name: 'github',
     description: 'GitHub repos, PRs, issues, and code reviews',
-    type: 'http' as McpServerType,
+    type: 'http',
     url: 'https://api.githubcopilot.com/mcp/',
   },
   {
     name: 'filesystem',
     description: 'Secure file system operations with configurable access',
-    type: 'stdio' as McpServerType,
+    type: 'stdio',
     command: 'npx',
     args: ['-y', '@modelcontextprotocol/server-filesystem'],
   },
   {
     name: 'fetch',
     description: 'Fetch and process web content from URLs',
-    type: 'stdio' as McpServerType,
+    type: 'stdio',
     command: 'npx',
     args: ['-y', '@modelcontextprotocol/server-fetch'],
   },
   {
     name: 'memory',
     description: 'Persistent knowledge graph for long-term memory',
-    type: 'stdio' as McpServerType,
+    type: 'stdio',
     command: 'npx',
     args: ['-y', '@modelcontextprotocol/server-memory'],
   },
   {
     name: 'postgres',
     description: 'Query and manage PostgreSQL databases',
-    type: 'stdio' as McpServerType,
+    type: 'stdio',
     command: 'npx',
     args: ['-y', '@modelcontextprotocol/server-postgres'],
   },
   {
     name: 'neon',
     description: 'Create and manage Neon Postgres databases and projects',
-    type: 'http' as McpServerType,
+    type: 'http',
     url: 'https://mcp.neon.tech/mcp',
   },
   {
     name: 'sequential-thinking',
     description: 'Dynamic problem solving with step-by-step reasoning',
-    type: 'stdio' as McpServerType,
+    type: 'stdio',
     command: 'npx',
     args: ['-y', '@modelcontextprotocol/server-sequential-thinking'],
   },
   {
     name: 'playwright',
     description: 'Browser automation and testing with Playwright',
-    type: 'stdio' as McpServerType,
+    type: 'stdio',
     command: 'npx',
     args: ['-y', '@playwright/mcp@latest'],
   },
   {
     name: 'sentry',
     description: 'Error monitoring and debugging via Sentry',
-    type: 'http' as McpServerType,
+    type: 'http',
     url: 'https://mcp.sentry.dev/sse',
   },
   {
     name: 'linear',
     description: 'Linear issues, projects, and team workflows',
-    type: 'http' as McpServerType,
+    type: 'http',
     url: 'https://mcp.linear.app/mcp',
   },
   {
     name: 'cloudflare',
     description: 'Manage Cloudflare Workers, DNS, R2, and other Cloudflare services',
-    type: 'http' as McpServerType,
+    type: 'http',
     url: 'https://mcp.cloudflare.com/mcp',
   },
   {
     name: 'slack',
     description: 'Team communication and Slack workspace access',
-    type: 'stdio' as McpServerType,
+    type: 'stdio',
     command: 'npx',
     args: ['-y', '@anthropic/mcp-server-slack'],
   },
   {
     name: 'brave-search',
     description: 'Web search powered by Brave Search API',
-    type: 'stdio' as McpServerType,
+    type: 'stdio',
     command: 'npx',
     args: ['-y', '@anthropic/mcp-server-brave-search'],
   },

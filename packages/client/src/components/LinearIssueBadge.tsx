@@ -51,9 +51,7 @@ export function LinearIssueBadge({
           data-testid={props['data-testid']}
         />
       </TooltipTrigger>
-      <TooltipContent side="top" className="text-xs">
-        {label}
-      </TooltipContent>
+      <TooltipContent side="top">{label}</TooltipContent>
     </Tooltip>
   );
 }

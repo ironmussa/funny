@@ -212,7 +212,7 @@ export class ThreadEventBus extends EventEmitter {
   }
 
   override on<K extends keyof ThreadEventMap>(event: K, listener: ThreadEventMap[K]): this {
-    return super.on(event, listener as (...args: any[]) => void);
+    return super.on(event, listener);
   }
 }
 

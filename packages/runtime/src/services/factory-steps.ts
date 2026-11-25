@@ -109,8 +109,11 @@ export interface FactoryStepJob {
 /** The secret values in `env`, longest first, so a value inside another is masked whole. */
 export function secretValues(env: Record<string, string | undefined>): string[] {
   return Object.entries(env)
-    .filter(([name, value]) => SECRET_NAME.test(name) && (value?.length ?? 0) >= MIN_SECRET_LENGTH)
-    .map(([, value]) => value as string)
+    .flatMap(([name, value]) =>
+      value !== undefined && SECRET_NAME.test(name) && value.length >= MIN_SECRET_LENGTH
+        ? [value]
+        : [],
+    )
     .sort((a, b) => b.length - a.length);
 }
 

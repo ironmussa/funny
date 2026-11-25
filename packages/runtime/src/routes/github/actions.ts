@@ -20,6 +20,7 @@ import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 
 import { log } from '../../lib/logger.js';
+import { isNumber, isString } from '../../lib/value-guards.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 import { parseJsonBody, parseQuery } from '../../validation/request.js';
 import { fetchAllPages, GITHUB_API, githubApiFetch, githubRepoFor } from './helpers.js';
@@ -32,9 +33,9 @@ export const actionRoutes = new Hono<HonoEnv>();
  * and answer 502 with what went wrong.
  */
 function upstreamFailure(c: Context<HonoEnv>, action: string, failure: number | Error) {
-  const detail = typeof failure === 'number' ? { status: failure } : { error: failure.message };
+  const detail = isNumber(failure) ? { status: failure } : { error: failure.message };
   log.warn('github actions request failed', { namespace: 'github-actions', action, ...detail });
-  const message = typeof failure === 'number' ? `GitHub API error: ${failure}` : failure.message;
+  const message = isNumber(failure) ? `GitHub API error: ${failure}` : failure.message;
   return c.json({ error: message }, 502);
 }
 
@@ -55,16 +56,15 @@ function actionStatus(status: GithubField): ActionStatus {
 }
 
 function conclusion(value: GithubField): CICheckConclusion {
-  return typeof value === 'string' ? (value as CICheckConclusion) : null;
+  // SAFETY: GitHub's run, job and step conclusions are the CICheckConclusion
+  // strings; any other string is passed through unchanged, as before.
+  return isString(value) ? (value as CICheckConclusion) : null;
 }
 
 /** GitHub's JSON is unchecked: a field of the wrong type becomes the fallback. */
-const text = (value: GithubField, fallback = ''): string =>
-  typeof value === 'string' ? value : fallback;
-const textOrNull = (value: GithubField): string | null =>
-  typeof value === 'string' ? value : null;
-const count = (value: GithubField, fallback = 0): number =>
-  typeof value === 'number' ? value : fallback;
+const text = (value: GithubField, fallback = ''): string => (isString(value) ? value : fallback);
+const textOrNull = (value: GithubField): string | null => (isString(value) ? value : null);
+const count = (value: GithubField, fallback = 0): number => (isNumber(value) ? value : fallback);
 
 /** The run's title; runs from before `display_title` existed fall back to the commit's subject. */
 function runTitle(run: any): string {
@@ -186,6 +186,8 @@ actionRoutes.get('/actions/runs', async (c) => {
       ctx.token,
     );
     if (!res.ok) return upstreamFailure(c, 'runs', res.status);
+    // SAFETY: GitHub's list-workflow-runs response; both fields are optional
+    // and each run is read field by field in mapActionRun.
     const body = (await res.json()) as { total_count?: number; workflow_runs?: any[] };
     const runs = (body.workflow_runs ?? []).map(mapActionRun);
     const total = body.total_count ?? runs.length;
@@ -289,6 +291,8 @@ actionRoutes.post('/actions/rerun-failed', async (c) => {
       { method: 'POST' },
     );
     if (res.ok) return c.json({ ok: true });
+    // SAFETY: a GitHub error response carries an optional `message`; a body that
+    // is not JSON becomes `{}` and the status text is used instead.
     const body = (await res.json().catch(() => ({}))) as { message?: string };
     const message = body.message || `GitHub API error: ${res.status}`;
     // 403: the token cannot write Actions; 409: the run is still in progress.

@@ -89,28 +89,33 @@ function FileRow({ file, label, t }: { file: TestFileResult; label: string; t: T
     <li data-testid={`test-progress-file-${label}`} data-status={fileStatus(file)}>
       <Collapsible open={open} onOpenChange={setOpen}>
         <CollapsibleTrigger
+          asChild
           disabled={!expandable}
           data-testid={`test-progress-file-toggle-${label}`}
-          className="hover:bg-accent/30 flex w-full min-w-0 items-center gap-2 rounded px-1 py-0.5 text-left disabled:cursor-default disabled:hover:bg-transparent"
         >
-          <ChevronRight
-            className={cn(
-              'size-3 shrink-0 text-muted-foreground',
-              open && 'rotate-90',
-              !expandable && 'invisible',
-            )}
-            aria-hidden
-          />
-          <StatusIcon status={fileStatus(file)} />
-          <span className="truncate font-mono" title={label}>
-            {label}
-          </span>
-          <span className="text-muted-foreground ml-auto flex shrink-0 items-center gap-2 tabular-nums">
-            {file.passed > 0 && <span className={TONE.passed}>✓ {file.passed}</span>}
-            {file.failed > 0 && <span className={TONE.failed}>✗ {file.failed}</span>}
-            {file.skipped > 0 && <span className={TONE.skipped}>○ {file.skipped}</span>}
-            {duration && <span>{duration}</span>}
-          </span>
+          <button
+            type="button"
+            className="hover:bg-accent/30 flex w-full min-w-0 items-center gap-2 rounded px-1 py-0.5 text-left disabled:cursor-default disabled:hover:bg-transparent"
+          >
+            <ChevronRight
+              className={cn(
+                'size-3 shrink-0 text-muted-foreground',
+                open && 'rotate-90',
+                !expandable && 'invisible',
+              )}
+              aria-hidden
+            />
+            <StatusIcon status={fileStatus(file)} />
+            <span className="truncate font-mono" title={label}>
+              {label}
+            </span>
+            <span className="text-muted-foreground ml-auto flex shrink-0 items-center gap-2 tabular-nums">
+              {file.passed > 0 && <span className={TONE.passed}>✓ {file.passed}</span>}
+              {file.failed > 0 && <span className={TONE.failed}>✗ {file.failed}</span>}
+              {file.skipped > 0 && <span className={TONE.skipped}>○ {file.skipped}</span>}
+              {duration && <span>{duration}</span>}
+            </span>
+          </button>
         </CollapsibleTrigger>
         <CollapsibleContent>
           <ul className="flex flex-col gap-0.5 py-0.5 pl-9">
@@ -154,15 +159,17 @@ export function TestFileList({ suites }: { suites: TestProgressSuite[] }) {
 
   return (
     <Collapsible open={open} onOpenChange={setOpen} data-testid="test-progress-files-list">
-      <CollapsibleTrigger
-        data-testid="test-progress-files-toggle"
-        className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 font-medium"
-      >
-        <ChevronRight className={cn('size-3.5 shrink-0', open && 'rotate-90')} aria-hidden />
-        {t('testProgress.ranTitle')}
-        <span className="font-normal tabular-nums">
-          {t('testProgress.ranSummary', { tests, files: files.length })}
-        </span>
+      <CollapsibleTrigger asChild data-testid="test-progress-files-toggle">
+        <button
+          type="button"
+          className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 font-medium"
+        >
+          <ChevronRight className={cn('size-3.5 shrink-0', open && 'rotate-90')} aria-hidden />
+          {t('testProgress.ranTitle')}
+          <span className="font-normal tabular-nums">
+            {t('testProgress.ranSummary', { tests, files: files.length })}
+          </span>
+        </button>
       </CollapsibleTrigger>
       <CollapsibleContent>
         <ul className="flex flex-col pt-1">

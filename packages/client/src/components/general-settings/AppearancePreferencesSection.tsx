@@ -94,15 +94,21 @@ function ThemeCard({
         selected ? 'border-primary' : 'border-border/50 hover:border-border',
       )}
     >
-      <div className="flex h-16" style={{ backgroundColor: bg }}>
-        <div
-          className="w-5 border-r"
-          style={{ backgroundColor: sidebar, borderColor: `${fg}15` }}
-        />
+      <div
+        className="flex h-16 bg-[color:var(--theme-preview-bg)]"
+        style={{
+          '--theme-preview-bg': bg,
+          '--theme-preview-sidebar': sidebar,
+          '--theme-preview-fg': fg,
+          '--theme-preview-accent': accent,
+          '--theme-preview-border': `${fg}15`,
+        }}
+      >
+        <div className="w-5 border-r border-[color:var(--theme-preview-border)] bg-[color:var(--theme-preview-sidebar)]" />
         <div className="flex flex-1 flex-col gap-1 p-2">
-          <div className="h-1.5 w-10 rounded-full" style={{ backgroundColor: fg, opacity: 0.7 }} />
-          <div className="h-1.5 w-14 rounded-full" style={{ backgroundColor: fg, opacity: 0.3 }} />
-          <div className="h-1.5 w-8 rounded-full" style={{ backgroundColor: accent }} />
+          <div className="h-1.5 w-10 rounded-full bg-[color:var(--theme-preview-fg)] opacity-70" />
+          <div className="h-1.5 w-14 rounded-full bg-[color:var(--theme-preview-fg)] opacity-30" />
+          <div className="h-1.5 w-8 rounded-full bg-[color:var(--theme-preview-accent)]" />
         </div>
       </div>
       <div className="flex items-center justify-between px-2.5 py-1.5">
@@ -149,6 +155,7 @@ function FontSizeCard() {
 
   const handleFontSizeChange = useCallback(
     (v: string) => {
+      // SAFETY: v comes from this Select, whose items are only 'small', 'default' and 'large', the FontSize values.
       setFontSize(v as FontSize);
       toastSettingsSaved(t);
     },
@@ -192,7 +199,11 @@ function ThreadViewerCard() {
           'Frozen renders messages in normal document flow (native scroll, find-in-page across the whole thread). Virtual is the current renderer.',
         )}
       >
-        <Select value={threadViewer} onValueChange={(v) => setThreadViewer(v as ThreadViewer)}>
+        <Select
+          value={threadViewer}
+          // SAFETY: v comes from this Select, whose items are only 'virtual' and 'frozen', the ThreadViewer values.
+          onValueChange={(v) => setThreadViewer(v as ThreadViewer)}
+        >
           <SelectTrigger className="w-[140px]" data-testid="preferences-thread-viewer-select">
             <SelectValue />
           </SelectTrigger>

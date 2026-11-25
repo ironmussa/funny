@@ -4,6 +4,7 @@ import type { DataInsertMessage, DataInsertToolCall } from '@funny/shared/runner
 import type { SearchThreads } from '@funny/shared/runner-v2/operations';
 
 import { log } from '../lib/logger.js';
+import { isNumber, isString } from '../lib/value-guards.js';
 import { sendRemoteData } from './remote-data-channel.js';
 import type {
   EnqueueMessageInput,
@@ -61,7 +62,7 @@ class RemoteThreadDataClient {
     messageId: string,
     data: string | { content: string; images?: string | null },
   ): Promise<void> {
-    const content = typeof data === 'string' ? data : data.content;
+    const content = isString(data) ? data : data.content;
     const existing = this.pendingMessageUpdates.get(messageId);
     if (existing) clearTimeout(existing.timer);
     const timer = setTimeout(() => {
@@ -160,8 +161,8 @@ class RemoteThreadDataClient {
       messages: Array.isArray(response?.messages) ? response.messages : [],
       hasMore: !!response?.hasMore,
       hasMoreAfter: !!response?.hasMoreAfter,
-      total: typeof response?.total === 'number' ? response.total : undefined,
-      windowStart: typeof response?.windowStart === 'number' ? response.windowStart : undefined,
+      total: isNumber(response?.total) ? response.total : undefined,
+      windowStart: isNumber(response?.windowStart) ? response.windowStart : undefined,
       leadingUserMessage: response?.leadingUserMessage,
     };
   }

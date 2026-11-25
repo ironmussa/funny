@@ -25,6 +25,8 @@ export const CODEX_COMMANDS = {
 } as const;
 
 export type CodexCommand = keyof typeof CODEX_COMMANDS;
+// SAFETY: CODEX_COMMANDS is a frozen literal with no inherited enumerable keys,
+// so Object.keys returns exactly its CodexCommand keys.
 export const CODEX_COMMAND_NAMES = Object.keys(CODEX_COMMANDS) as CodexCommand[];
 
 /** These commands belong to the Codex TUI or require a dedicated integration. */

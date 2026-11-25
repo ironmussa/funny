@@ -9,10 +9,12 @@
  * `mcp__<server>__<tool>` — so tool cards and permissions read the same.
  */
 
+import type { JsonObject } from '@funny/shared/json';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 
 import { createDebugLogger } from '../debug.js';
+import type { McpServerEntry, McpServerMap } from './mcp-server-map.js';
 
 const dlog = createDebugLogger('mcp-tool-bridge');
 
@@ -24,8 +26,8 @@ export interface BridgedMcpTool {
   name: string;
   description: string;
   /** JSON Schema of the arguments, as the server published it. */
-  inputSchema: Record<string, unknown>;
-  call(args: Record<string, unknown>, signal?: AbortSignal): Promise<BridgedMcpResult>;
+  inputSchema: JsonObject;
+  call(args: JsonObject, signal?: AbortSignal): Promise<BridgedMcpResult>;
 }
 
 export interface BridgedMcpResult {
@@ -84,13 +86,18 @@ async function connectServer(
     tools: tools.map((tool) => ({
       name: `mcp__${server}__${tool.name}`,
       description: tool.description ?? '',
-      inputSchema: (tool.inputSchema ?? { type: 'object' }) as Record<string, unknown>,
+      // SAFETY: the MCP client parsed the schema from the server's JSON `tools/list` response.
+      inputSchema: (tool.inputSchema ?? { type: 'object' }) as JsonObject,
       call: async (args, signal) => {
         const result = await client.callTool({ name: tool.name, arguments: args }, undefined, {
           signal,
           // Tools carry their own bounds (browser actions ≤ 30 s).
           timeout: 5 * 60_000,
         });
+        // SAFETY: callTool's result is typed as a union with the legacy
+        // `toolResult` shape, so `content` is not typed. The SDK validated the
+        // reply against CallToolResultSchema, whose content parts all carry a
+        // string `type` (text parts a `text`, media parts a `mimeType`).
         return {
           text: mcpResultText(result.content as McpContentPart[] | undefined),
           isError: result.isError === true,
@@ -106,12 +113,22 @@ async function connectServer(
  * blocks the agent.
  */
 export async function connectMcpTools(
-  mcpServers: Record<string, any> | undefined,
+  mcpServers: McpServerMap | undefined,
 ): Promise<McpToolBridge> {
   const entries = Object.entries(mcpServers ?? {}).filter(
-    ([, cfg]) =>
-      cfg && isObject(cfg) && String(cfg.type ?? '').toLowerCase() === 'http' && isString(cfg.url),
+    (entry): entry is [string, McpServerEntry & { url: string }] => {
+      const cfg = entry[1];
+      return (
+        !!cfg &&
+        isObject(cfg) &&
+        String(cfg.type ?? '').toLowerCase() === 'http' &&
+        isString(cfg.url)
+      );
+    },
   );
+  // SAFETY: an http entry of the internal MCP map carries `headers` as a
+  // string-to-string map (the runtime builds it with the auth header); the
+  // `url` was checked to be a string above.
   const connected = await Promise.all(
     entries.map(([server, cfg]) =>
       connectServer(server, cfg.url, (cfg.headers ?? {}) as Record<string, string>).catch(

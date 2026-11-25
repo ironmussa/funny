@@ -68,8 +68,13 @@ export const ACTIVE_SANDBOX_STATES: ReadonlySet<SandboxState> = new Set([
 
 const broken = { FAIL: 'failed', LOST: 'lost' } as const;
 
+interface SandboxMachineTypes {
+  events: { type: SandboxEventType };
+}
+
 export const sandboxMachine = setup({
-  types: {} as { events: { type: SandboxEventType } },
+  // SAFETY: xstate's `types` is a type-only carrier; the empty object is never read at runtime.
+  types: {} as SandboxMachineTypes,
 }).createMachine({
   id: 'thread-sandbox',
   initial: 'provisioning',
@@ -94,6 +99,8 @@ export function nextSandboxState(from: SandboxState, event: SandboxEventType): S
   const snapshot = sandboxMachine.resolveState({ value: from, context: undefined });
   if (!snapshot.can({ type: event })) return null;
   const [next] = transition(sandboxMachine, snapshot, { type: event });
+  // SAFETY: the machine is flat and its state names are the SandboxState values,
+  // so the snapshot value is one of them.
   return next.value as SandboxState;
 }
 

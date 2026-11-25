@@ -233,10 +233,10 @@ export function OtherAnswerEditor({
     <div
       ref={containerRef}
       onMouseDown={(e) => {
-        const target = e.target as HTMLElement;
+        const target = e.target instanceof Element ? e.target : null;
         // Mic and editor handle their own focus — don't interfere
-        if (target.closest('[data-testid="ask-question-dictate"]')) return;
-        if (target.closest('[data-testid="prompt-editor"]')) return;
+        if (target?.closest('[data-testid="ask-question-dictate"]')) return;
+        if (target?.closest('[data-testid="prompt-editor"]')) return;
         // Clicked padding/border — route caret into the input
         e.preventDefault();
         editorRef.current?.focus();

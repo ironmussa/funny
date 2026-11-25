@@ -18,6 +18,8 @@ export const THEMES = [
 export type ThemeName = (typeof THEMES)[number];
 
 /** Class applied to `<html>` for each theme. */
+// SAFETY: THEMES.map builds one entry for every ThemeName, so the object has
+// every key of the record.
 export const THEME_CLASSES: Record<ThemeName, string> = Object.fromEntries(
   THEMES.map((t) => [t, `theme-${t}`]),
 ) as Record<ThemeName, string>;

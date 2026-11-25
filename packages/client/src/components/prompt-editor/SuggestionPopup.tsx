@@ -37,35 +37,6 @@ interface SuggestionPopupProps {
   containerRef?: React.RefObject<HTMLElement | null>;
 }
 
-const POPUP_CLASS =
-  'max-h-52 overflow-y-auto rounded-md border border-border bg-popover text-popover-foreground shadow-md';
-const POPUP_BASE_STYLE: React.CSSProperties = { position: 'fixed', zIndex: 50 };
-/** Width of the popup when there is no container to match (Tailwind `w-80`). */
-const POPUP_FALLBACK_WIDTH = '20rem';
-
-/**
- * Places the popup above the container (matching its left edge and width) or,
- * without one, above the caret. Hidden while TipTap has no caret rect.
- */
-function positionSuggestionPopup(
-  popup: HTMLElement,
-  rect: (() => DOMRect | null) | null,
-  container: HTMLElement | null,
-) {
-  const caret = rect?.() ?? null;
-  const { style } = popup;
-  if (!caret) {
-    style.visibility = 'hidden';
-    return;
-  }
-  const containerRect = container?.getBoundingClientRect();
-  style.visibility = '';
-  style.left = `${containerRect ? containerRect.left : caret.left}px`;
-  style.width = containerRect ? `${containerRect.width}px` : POPUP_FALLBACK_WIDTH;
-  // Align the popup's bottom edge to the top of the container (or caret)
-  style.bottom = `${window.innerHeight - (containerRect ? containerRect.top : caret.top) + 4}px`;
-}
-
 /** Icon for a symbol kind */
 function SymbolKindIcon({ kind, className }: { kind?: string; className?: string }) {
   switch (kind) {
@@ -82,6 +53,61 @@ function SymbolKindIcon({ kind, className }: { kind?: string; className?: string
     default: // function, method, module
       return <Code2 className={className} />;
   }
+}
+
+/**
+ * Places the popup above the container (matching its left edge and width) or,
+ * without one, above the caret, through the CSS variables its classes read.
+ * Hidden while TipTap has no caret rect. Without a container the width falls
+ * back to 20rem (Tailwind `w-80`).
+ */
+function positionSuggestionPopup(
+  popup: HTMLElement,
+  rect: (() => DOMRect | null) | null,
+  container: HTMLElement | null,
+) {
+  const caret = rect?.() ?? null;
+  const { style } = popup;
+  if (!caret) {
+    style.visibility = 'hidden';
+    return;
+  }
+  const containerRect = container?.getBoundingClientRect();
+  style.visibility = '';
+  style.setProperty(
+    '--suggestion-popup-left',
+    `${containerRect ? containerRect.left : caret.left}px`,
+  );
+  if (containerRect) style.setProperty('--suggestion-popup-width', `${containerRect.width}px`);
+  else style.removeProperty('--suggestion-popup-width');
+  // Align the popup's bottom edge to the top of the container (or caret)
+  style.setProperty(
+    '--suggestion-popup-bottom',
+    `${window.innerHeight - (containerRect ? containerRect.top : caret.top) + 4}px`,
+  );
+}
+
+/**
+ * The fixed, portalled box of the suggestion popup. Its place and width come
+ * from CSS variables that `positionSuggestionPopup` sets before paint.
+ */
+function SuggestionPopupFrame({
+  ref,
+  children,
+}: {
+  ref: React.Ref<HTMLDivElement>;
+  children: React.ReactNode;
+}) {
+  return createPortal(
+    <div
+      ref={ref}
+      data-suggestion-popup
+      className="border-border bg-popover text-popover-foreground fixed bottom-[var(--suggestion-popup-bottom)] left-[var(--suggestion-popup-left)] z-50 max-h-52 w-[var(--suggestion-popup-width,20rem)] overflow-y-auto rounded-md border shadow-md"
+    >
+      {children}
+    </div>,
+    document.body,
+  );
 }
 
 export function SuggestionPopup({
@@ -114,8 +140,8 @@ export function SuggestionPopup({
   useEffect(() => {
     const container = popupRef.current;
     if (!container) return;
-    const el = container.children[selectedIndex] as HTMLElement | undefined;
-    if (!el) return;
+    const el = container.children.item(selectedIndex);
+    if (!(el instanceof HTMLElement)) return;
     const elTop = el.offsetTop;
     const elBottom = elTop + el.offsetHeight;
     if (elTop < container.scrollTop) {
@@ -127,20 +153,19 @@ export function SuggestionPopup({
 
   if (loading && items.length === 0) {
     const loadingLabel = getSuggestionLoadingLabel(type);
-    return createPortal(
-      <div ref={popupRef} data-suggestion-popup style={POPUP_BASE_STYLE} className={POPUP_CLASS}>
+    return (
+      <SuggestionPopupFrame ref={popupRef}>
         <div className="text-muted-foreground flex items-center gap-2 px-3 py-2 text-xs">
           <Loader2 className="icon-xs animate-spin" />
           {t(loadingLabel.key, loadingLabel.fallback)}
         </div>
-      </div>,
-      document.body,
+      </SuggestionPopupFrame>
     );
   }
 
   if (items.length === 0) {
-    return createPortal(
-      <div ref={popupRef} data-suggestion-popup style={POPUP_BASE_STYLE} className={POPUP_CLASS}>
+    return (
+      <SuggestionPopupFrame ref={popupRef}>
         <div className="text-muted-foreground px-3 py-2 text-xs">
           {
             // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
@@ -153,13 +178,12 @@ export function SuggestionPopup({
                   : t('skills.noSkillsFound', 'No skills found')
           }
         </div>
-      </div>,
-      document.body,
+      </SuggestionPopupFrame>
     );
   }
 
-  return createPortal(
-    <div ref={popupRef} data-suggestion-popup style={POPUP_BASE_STYLE} className={POPUP_CLASS}>
+  return (
+    <SuggestionPopupFrame ref={popupRef}>
       {items.map((item, i) => (
         <button
           type="button"
@@ -238,7 +262,6 @@ export function SuggestionPopup({
           {t('prompt.moreFilesHint', 'Type to narrow results\u2026')}
         </div>
       )}
-    </div>,
-    document.body,
+    </SuggestionPopupFrame>
   );
 }

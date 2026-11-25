@@ -78,7 +78,7 @@ export function InlineProgressSteps({ steps, showTotal = true }: InlineProgressS
                 <SubItemsList subItems={step.subItems} parentStatus={step.status} />
               )}
               {step.error && !(step.subItems && step.subItems.length > 0) && (
-                <ScrollArea className="bg-destructive/5 mt-0.5 max-h-40 rounded">
+                <ScrollArea variant="destructive" className="mt-0.5 max-h-40">
                   <pre className="text-destructive/80 text-compact p-1.5 font-mono wrap-break-word whitespace-pre-wrap">
                     {stripAnsi(step.error)}
                   </pre>

@@ -20,6 +20,7 @@ import { ResultAsync } from 'neverthrow';
 import { z } from 'zod';
 
 import { log } from '../../lib/logger.js';
+import { isString } from '../../lib/value-guards.js';
 import {
   augmentPromptWithFiles,
   hydrateReferencedFiles,
@@ -147,9 +148,10 @@ async function sendMessageImpl(rawParams: SendMessageParams): Promise<SendMessag
     return handleShellEscapeMessage(params, thread, cwd, shellCommand);
   }
 
-  const effectiveProvider = (params.provider ||
-    thread.provider ||
-    DEFAULT_PROVIDER) as AgentProvider;
+  const effectiveProvider: AgentProvider = params.provider || thread.provider || DEFAULT_PROVIDER;
+  // SAFETY: params.model passed agentModelSchema at the route and threads.model was
+  // validated the same way when written; ids of dynamic-catalog providers (pi, cursor, ...)
+  // are not in the AgentModel union and are passed through unchanged by resolveModelId.
   const effectiveModel = (params.model || thread.model || DEFAULT_MODEL) as AgentModel;
   const agentContent = await resolveSlashCommandContent(
     params,
@@ -159,6 +161,8 @@ async function sendMessageImpl(rawParams: SendMessageParams): Promise<SendMessag
     effectiveModel,
   );
 
+  // SAFETY: params.permissionMode passed permissionModeSchema at the route and
+  // threads.permission_mode is only written from such input: exactly PermissionMode values.
   let effectivePermission = (params.permissionMode ||
     thread.permissionMode ||
     'autoEdit') as PermissionMode;
@@ -431,9 +435,9 @@ type StoredDraftImages = ImageAttachment[] | string | null | undefined;
 
 function parseDraftImages(raw: StoredDraftImages): ImageAttachment[] | undefined {
   if (Array.isArray(raw)) return raw;
-  if (typeof raw !== 'string' || !raw) return undefined;
+  if (!isString(raw) || !raw) return undefined;
   const parsed = parseStoredJson(z.array(imageAttachmentSchema), raw, 'draft message images');
-  return parsed.ok ? (parsed.value as ImageAttachment[]) : undefined;
+  return parsed.ok ? parsed.value : undefined;
 }
 
 /** The images the agent sees: the earlier prompt's (sandbox retry), then the message's. */
@@ -550,7 +554,7 @@ async function broadcastQueueUpdate(threadId: string, userId: string | undefined
     type: 'thread:queue_update' as const,
     threadId,
     data: { threadId, queuedCount: qCount, nextMessage: nextMsg?.content?.slice(0, 100) },
-  } as WSEvent;
+  } satisfies WSEvent;
   if (userId) {
     wsBroker.emitToUser(userId, queueEvent);
   } else {
@@ -722,8 +726,8 @@ async function handleShellEscapeMessage(
 
   const emitMessage = (data: { messageId: string; role: string; content: string }) => {
     const event = { type: 'agent:message' as const, threadId: params.threadId, data };
-    if (thread.userId) wsBroker.emitToUser(thread.userId, event as WSEvent);
-    else wsBroker.emit(event as WSEvent);
+    if (thread.userId) wsBroker.emitToUser(thread.userId, event);
+    else wsBroker.emit(event);
   };
   const emitTool = (
     event:
@@ -739,7 +743,7 @@ async function handleShellEscapeMessage(
         }
       | { type: 'agent:tool_output'; data: { toolCallId: string; output: string } },
   ) => {
-    const wsEvent = { ...event, threadId: params.threadId } as WSEvent;
+    const wsEvent = { ...event, threadId: params.threadId };
     if (thread.userId) wsBroker.emitToUser(thread.userId, wsEvent);
     else wsBroker.emit(wsEvent);
   };

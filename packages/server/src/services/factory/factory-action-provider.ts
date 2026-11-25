@@ -165,7 +165,10 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     enterStage,
     carryChecks,
   });
-  const { createPr } = createPullRequestStep(core);
+  const { createPr } = createPullRequestStep(core, {
+    base: () => stacking.base(),
+    retarget: deps.retarget,
+  });
 
   // Triage and review judge a change against the run's issue. A run without
   // one never reaches them: its flow is refused when it has such a step

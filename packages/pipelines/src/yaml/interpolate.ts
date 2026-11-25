@@ -106,12 +106,12 @@ export function interpolateObject<T>(value: T, scope: TemplateScope, opts?: Inte
     return value.map((v) => interpolateObject(v, scope, opts)) as T & unknown[];
   }
   if (isObject(value)) {
-    const out: Record<string, unknown> = {};
+    const out: { [key: string]: T[keyof T] } = {};
     for (const [k, v] of Object.entries(value)) {
       out[k] = interpolateObject(v, scope, opts);
     }
     // SAFETY: `out` has exactly `value`'s own keys, each holding the interpolated field value.
-    return out as T & Record<string, unknown>;
+    return out as T;
   }
   return value;
 }
@@ -153,9 +153,9 @@ function resolvePath(scope: TemplateScope, path: string): unknown {
   for (const seg of segments) {
     if (current === null || current === undefined) return undefined;
     if (!isObject(current)) return undefined;
-    // SAFETY: `current` is a non-null object here (both checked above); a missing key reads as
-    // undefined, which ends the path.
-    current = (current as Record<string, unknown>)[seg];
+    // SAFETY: `current` is a non-null object here (both checked above), read like the scope it
+    // sits in; a missing key reads as undefined, which ends the path.
+    current = (current as TemplateScope)[seg];
   }
   return current;
 }

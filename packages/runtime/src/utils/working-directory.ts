@@ -13,6 +13,8 @@ export function requireWorkingDirectory(path: string): Result<string, DomainErro
       ),
     );
   } catch (error) {
+    // SAFETY: statSync only throws Node system errors (Error objects with an
+    // optional string `code`); an error without a code falls through below.
     const code = (error as NodeJS.ErrnoException).code;
     if (code === 'ENOENT' || code === 'ENOTDIR') {
       return err(

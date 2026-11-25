@@ -33,6 +33,7 @@ import {
   listRowActionBusyClassName,
   listRowActionClassName,
   listRowClassName,
+  listRowDestructiveActionClassName,
 } from '@/lib/list-row-styles';
 import { useThreadsForProject } from '@/lib/thread-selectors';
 import { toastError } from '@/lib/toast-error';
@@ -161,10 +162,10 @@ function WorktreeThreadItem({ thread, projectPath }: { thread: Thread; projectPa
  */
 function WorktreeRowGlyph({ isMain }: { isMain: boolean }) {
   const { t } = useTranslation();
-  const Icon = isMain ? House : GitBranch;
+  const GlyphIcon = isMain ? House : GitBranch;
   return (
     <span className="flex size-3.5 shrink-0 items-center justify-center">
-      <Icon
+      <GlyphIcon
         className="icon-xs text-muted-foreground"
         role="img"
         aria-label={isMain ? t('worktreeSettings.main') : t('worktreeSettings.noThread')}
@@ -306,8 +307,7 @@ function WorktreeCard({
                   disabled={removing}
                   // oxlint-disable shadcn/require-static-classes -- listRowActionClassName and listRowActionBusyClassName are static constants from list-row-styles
                   className={cn(
-                    listRowActionClassName,
-                    'hover:text-destructive',
+                    listRowDestructiveActionClassName,
                     removing && listRowActionBusyClassName,
                   )}
                   // oxlint-enable shadcn/require-static-classes

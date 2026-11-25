@@ -9,6 +9,7 @@ import {
   type FactoryTimelineCard,
 } from './factory-timeline';
 import { isGitTimelineEventType } from './git-timeline-events';
+import { parseThreadEventData } from './thread-event-data';
 
 export type ToolItem =
   | { type: 'toolcall'; tc: any }
@@ -247,7 +248,7 @@ function isPlanFilePath(fp: string): boolean {
 function extractWrittenPlanContent(tc: any): string | undefined {
   try {
     const inp = isString(tc.input) ? JSON.parse(tc.input) : tc.input;
-    const fp = (inp?.file_path || '') as string;
+    const fp: string = inp?.file_path || '';
     if (isPlanFilePath(fp) && isString(inp?.content)) return inp.content;
   } catch {
     /* ignore parse errors */
@@ -451,7 +452,7 @@ function withoutPendingStop(events: ThreadEvent[], threadStatus?: string): Threa
 function isStoppedOutcome(e: ThreadEvent): boolean {
   if (e.type !== 'turn_outcome') return false;
   try {
-    const data = isString(e.data) ? JSON.parse(e.data) : (e.data as any);
+    const data = isString(e.data) ? JSON.parse(e.data) : e.data;
     return data?.status === 'stopped';
   } catch {
     return false;
@@ -480,7 +481,7 @@ function buildThreadEventItems(threadEvents: ThreadEvent[]): RenderItem[] {
 
   // First pass: collect all events that carry a workflowId and group them
   for (const e of filteredEvents) {
-    const wfId = parseEventDataCompat(e.data).workflowId;
+    const wfId = parseThreadEventData(e.data).workflowId;
     if (!wfId) continue;
     if (!workflowGroups.has(wfId)) workflowGroups.set(wfId, []);
     workflowGroups.get(wfId)!.push(e);
@@ -548,21 +549,4 @@ export function buildGroupedRenderItems(
   const merged = [...final, ...eventItems, ...compactionItems, ...factoryItems];
   merged.sort(compareByTimestamp);
   return merged;
-}
-
-/** Event data arrives either as JSON text or already parsed. */
-function isEventDataText(data: string | Record<string, unknown>): data is string {
-  return typeof data === 'string';
-}
-
-/** Parse event data string or object */
-function parseEventDataCompat(data: string | Record<string, unknown>): Record<string, any> {
-  if (isEventDataText(data)) {
-    try {
-      return JSON.parse(data);
-    } catch {
-      return {};
-    }
-  }
-  return data as Record<string, any>;
 }

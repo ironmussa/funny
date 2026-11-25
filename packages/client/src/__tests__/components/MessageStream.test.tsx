@@ -1,4 +1,13 @@
-import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  test,
+  vi,
+  mock,
+  setDefaultTimeout,
+} from 'bun:test';
 
 import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { act, fireEvent, render, screen } from '@testing-library/react';
@@ -13,6 +22,10 @@ import { useSettingsStore } from '@/stores/settings-store';
 
 import { expectInstance } from '../helpers/builders-components';
 import { mockT } from '../helpers/mock-i18n';
+
+// The proof and pre-push run these files together under `bun test --parallel`; on a
+// loaded machine a first render (cold module load) ran well past the 5 s default.
+setDefaultTimeout(60_000);
 
 class MockIntersectionObserver {
   observe() {}
@@ -226,8 +239,7 @@ describe('MessageStream sticky bottom', () => {
       vi.runOnlyPendingTimers();
     });
 
-    expect(viewport.style.overflowAnchor).toBe('none');
-    expect(viewport.style.overscrollBehaviorY).toBe('contain');
+    expect(viewport).toHaveClass('[overflow-anchor:none]', 'overscroll-y-contain');
   });
 
   test('top-aligns the conversation and pushes only the prompt dock to the bottom', () => {

@@ -54,9 +54,10 @@ export function HistoryFilters({
     <div className="flex flex-wrap items-center gap-1.5" data-testid="history-filter-bar">
       <Select
         value={branchScope}
+        // SAFETY: value comes from this Select, whose items are only 'unmerged', 'all' and 'current', the GraphBranchScope values.
         onValueChange={(value) => onBranchScopeChange(value as GraphBranchScope)}
       >
-        <SelectTrigger size="xs" className="w-auto gap-1" data-testid="graph-toggle-all-branches">
+        <SelectTrigger size="xs" className="w-auto" data-testid="graph-toggle-all-branches">
           <GitBranch className="icon-xs opacity-70" />
           <span>{scopeLabels[branchScope]}</span>
         </SelectTrigger>
@@ -65,7 +66,7 @@ export function HistoryFilters({
             <SelectItem
               key={scope}
               value={scope}
-              className="text-xs"
+              textSize="xs"
               data-testid={`graph-branch-scope-${scope}`}
             >
               {scopeLabels[scope]}
@@ -73,8 +74,12 @@ export function HistoryFilters({
           ))}
         </SelectContent>
       </Select>
-      <Select value={syncFilter} onValueChange={(value) => setStatus(value as CommitSyncFilter)}>
-        <SelectTrigger size="xs" className="w-auto gap-1" data-testid="graph-filter-status">
+      <Select
+        value={syncFilter}
+        // SAFETY: value comes from this Select, whose items are only 'all', 'pull' and 'push', the CommitSyncFilter values.
+        onValueChange={(value) => setStatus(value as CommitSyncFilter)}
+      >
+        <SelectTrigger size="xs" className="w-auto" data-testid="graph-filter-status">
           <ArrowUpDown className="icon-xs opacity-70" />
           <span>{statusLabels[syncFilter]}</span>
         </SelectTrigger>
@@ -83,7 +88,7 @@ export function HistoryFilters({
             <SelectItem
               key={status}
               value={status}
-              className="text-xs"
+              textSize="xs"
               data-testid={`graph-filter-${status}`}
             >
               {statusLabels[status]}

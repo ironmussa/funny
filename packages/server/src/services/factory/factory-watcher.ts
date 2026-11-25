@@ -24,6 +24,7 @@
 
 import type { FactoryTrigger } from '@funny/shared/contracts/factory';
 import { contractOf } from '@funny/shared/contracts/factory';
+import { errorMessage } from '@funny/shared/errors';
 import { and, eq } from 'drizzle-orm';
 import { err, ok, type Result } from 'neverthrow';
 
@@ -290,11 +291,11 @@ function tick(id: string): Promise<void> {
   }
   busy.add(id);
   return fire(id)
-    .catch((error: unknown) => {
+    .catch((cause: unknown) => {
       log.error('Issue factory tick failed', {
         namespace: 'factory',
         factoryId: id,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorMessage(cause),
       });
     })
     .finally(() => busy.delete(id));

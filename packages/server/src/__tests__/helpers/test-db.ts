@@ -369,6 +369,8 @@ export function createTestDb() {
       max_low_risk_lines INTEGER,
       approval_adjust_max_lines INTEGER,
       hold_paths_awaiting_approval INTEGER,
+      size_gate_enabled INTEGER,
+      base_branch TEXT,
       size_ignored_paths TEXT,
       stage_limits TEXT,
       batch_size INTEGER,

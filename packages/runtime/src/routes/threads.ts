@@ -104,7 +104,10 @@ function toDomainError(cause: unknown): DomainError {
     }
   }
 
-  const e = cause as any;
+  // SAFETY: what thread-service rejects with besides ThreadServiceError is an
+  // Error (or an error-like object from a provider SDK); only its optional
+  // `message` string is read.
+  const e = cause as { message?: string };
   const isBinaryError =
     e.message?.includes('Could not find the claude CLI binary') ||
     e.message?.includes('CLAUDE_BINARY_PATH');

@@ -33,7 +33,10 @@ export interface OptimisticWrite<R> {
   failureMessageKey: string;
 }
 
-function notifyFailure(write: OptimisticWrite<unknown>, error: DomainError): void {
+function notifyFailure(
+  write: Pick<OptimisticWrite<unknown>, 'entity' | 'operation' | 'failureMessageKey'>,
+  error: DomainError,
+): void {
   metric(`data.${write.entity}.write_failed`, 1, {
     attributes: { operation: write.operation, type: error.type },
   });
@@ -63,7 +66,7 @@ async function run<R>(write: OptimisticWrite<R>): Promise<Result<R, DomainError>
   }
   if (result.isErr()) {
     tx.rollback();
-    notifyFailure(write as OptimisticWrite<unknown>, result.error);
+    notifyFailure(write, result.error);
     return err(result.error);
   }
   write.confirm(result.value);

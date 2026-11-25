@@ -37,7 +37,7 @@ export function preferencesPageLabel(page: GeneralPage, t: (key: string) => stri
 export function PreferencesPanelBody() {
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const activePreferencesPage = useUIStore((s) => s.activePreferencesPage) as GeneralPage;
+  const activePreferencesPage = useUIStore((s) => s.activePreferencesPage);
   const leave = useLeaveSettings('/');
   const pages = usePreferencesNavPages();
   const project = useProjectSettingsNavPages();
@@ -58,8 +58,8 @@ export function PreferencesPanelBody() {
 
   return (
     <>
-      <SidebarHeader className="px-4 py-3">
-        <div className="flex items-center gap-2">
+      <SidebarHeader>
+        <div className="flex items-center gap-2 px-2 py-1">
           <TooltipIconButton
             variant="muted"
             onClick={leave}
@@ -73,7 +73,7 @@ export function PreferencesPanelBody() {
         </div>
       </SidebarHeader>
 
-      <SidebarContent className="px-2 pb-2">
+      <SidebarContent inset="list">
         <SettingsNavFilter
           scope="preferences"
           pages={pages}

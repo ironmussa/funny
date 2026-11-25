@@ -25,19 +25,22 @@ export function OpenInEditorSubmenu({ onPick, testId = 'menu-open-editor' }: Pro
       </DropdownMenuSubTrigger>
       <DropdownMenuPortal>
         <DropdownMenuSubContent>
-          {(Object.keys(editorLabels) as Editor[]).map((editor) => (
-            <DropdownMenuItem
-              key={editor}
-              data-testid={`${testId}-${editor}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                onPick(editor);
-              }}
-              className="cursor-pointer"
-            >
-              {editorLabels[editor]}
-            </DropdownMenuItem>
-          ))}
+          {
+            // SAFETY: editorLabels is typed Record<Editor, string>, so each key is an Editor.
+            (Object.keys(editorLabels) as Editor[]).map((editor) => (
+              <DropdownMenuItem
+                key={editor}
+                data-testid={`${testId}-${editor}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onPick(editor);
+                }}
+                className="cursor-pointer"
+              >
+                {editorLabels[editor]}
+              </DropdownMenuItem>
+            ))
+          }
         </DropdownMenuSubContent>
       </DropdownMenuPortal>
     </DropdownMenuSub>

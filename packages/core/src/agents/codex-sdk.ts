@@ -125,7 +125,12 @@ export class CodexSDKProcess extends BaseAgentProcess {
       this.options.originalPermissionMode ?? this.options.permissionMode;
     // Funny's HTTP MCP servers (e.g. `funny_browser`); tokens ride in the env.
     const mcp = codexMcpSettings(this.options.mcpServers, requestedPermissionMode);
-    const env = { ...buildChildEnv(this.options.env), ...mcp.env } as Record<string, string>;
+    // Only the variables that are set: a spawn skips an unset one anyway.
+    const env = Object.fromEntries(
+      Object.entries({ ...buildChildEnv(this.options.env), ...mcp.env }).filter(
+        (entry): entry is [string, string] => entry[1] !== undefined,
+      ),
+    );
 
     this.codex = new Codex({
       codexPathOverride: env.CODEX_BINARY_PATH || env.CODEX_BIN,
@@ -262,30 +267,28 @@ export class CodexSDKProcess extends BaseAgentProcess {
         .join('\n');
     if (name === 'status')
       return `Session: ${this.activeSessionId ?? 'not started'}\nModel: ${this.options.model ?? 'default'}\nReasoning: ${this.options.effort ?? 'default'}\nPermissions: ${this.options.originalPermissionMode ?? this.options.permissionMode ?? 'default'}\nDirectory: ${this.options.cwd}`;
-    const methods: Record<string, string> = {
-      mcp: 'mcpServerStatus/list',
-      skills: 'skills/list',
-      apps: 'app/list',
-      plugins: 'plugin/list',
-    };
-    if (!methods[name] && name !== 'compact' && name !== 'review') {
+    const method = new Map(
+      Object.entries({
+        mcp: 'mcpServerStatus/list',
+        skills: 'skills/list',
+        apps: 'app/list',
+        plugins: 'plugin/list',
+      }),
+    ).get(name);
+    if (!method && name !== 'compact' && name !== 'review') {
       throw new Error(`/${name} must be executed from the Funny composer.`);
     }
     if (name === 'compact' && !this.activeSessionId)
       throw new Error('Send a message before compacting this conversation.');
-    const server = new CodexAppServer(
-      this.options.cwd,
-      buildChildEnv(this.options.env) as NodeJS.ProcessEnv,
-      signal,
-    );
+    const server = new CodexAppServer(this.options.cwd, buildChildEnv(this.options.env), signal);
     try {
       await server.initialize();
-      if (methods[name]) {
+      if (method) {
         const pages: unknown[] = [];
         let cursor: string | undefined;
         do {
           const page = await server.request(
-            methods[name],
+            method,
             {
               cwds: ['skills', 'plugins'].includes(name) ? [this.options.cwd] : undefined,
               cursor: cursor ?? undefined,
@@ -440,7 +443,7 @@ export class CodexSDKProcess extends BaseAgentProcess {
               id: this.scopedId(item.id),
               content: [{ type: 'text', text: item.text }],
             },
-          } as CLIMessage);
+          } satisfies CLIMessage);
         }
         if (completed) this.agentMessageTextByItemId.delete(item.id);
         return completed ? item.text : null;
@@ -625,7 +628,7 @@ export class CodexSDKProcess extends BaseAgentProcess {
         id: randomUUID(),
         content: [{ type: 'tool_use', id: toolUseId, name, input }],
       },
-    } as CLIMessage);
+    } satisfies CLIMessage);
     this.emit('message', {
       type: 'user',
       message: {
@@ -638,7 +641,7 @@ export class CodexSDKProcess extends BaseAgentProcess {
           },
         ],
       },
-    } as CLIMessage);
+    } satisfies CLIMessage);
   }
 
   private async buildInput(
@@ -878,6 +881,14 @@ export async function resolveCodexSandboxWritableDirectories(cwd: string): Promi
   }
 }
 
+/** The fields `imagesToLocalFiles` reads from a prompt image, all unchecked. */
+interface PromptImageAttachment {
+  source?: { data?: unknown; media_type?: unknown };
+  data?: unknown;
+  mimeType?: unknown;
+  media_type?: unknown;
+}
+
 async function imagesToLocalFiles(
   images: unknown[] | undefined,
   cleanupDirs: string[],
@@ -886,9 +897,14 @@ async function imagesToLocalFiles(
   const paths: string[] = [];
   let dir: string | null = null;
   for (const image of images) {
-    const src = (image as any)?.source;
-    const data = src?.data ?? (image as any)?.data;
-    const mediaType = src?.media_type ?? (image as any)?.mimeType ?? (image as any)?.media_type;
+    // SAFETY: prompt images are unvalidated attachments, either Claude blocks
+    // (`{ source: { data, media_type } }`) or ACP-style (`{ data, mimeType }`). Every field is
+    // read optionally as `unknown`, and the `typeof` check below skips an entry without a string
+    // `data` and media type.
+    const attachment = image as PromptImageAttachment | null | undefined;
+    const src = attachment?.source;
+    const data = src?.data ?? attachment?.data;
+    const mediaType = src?.media_type ?? attachment?.mimeType ?? attachment?.media_type;
     if (!isString(data) || !isString(mediaType)) continue;
     dir ??= await mkdtemp(join(tmpdir(), 'funny-codex-images-'));
     const ext = extensionForMime(mediaType);

@@ -30,10 +30,12 @@
  */
 
 import { sleep as interruptibleSleep } from '@funny/shared/async';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { parseStoredJson } from '@funny/shared/json-validation';
+import { and, desc, eq, gte, inArray } from 'drizzle-orm';
+import { z } from 'zod';
 
 import { db } from '../../db/index.js';
-import { jobs, messages, threads, toolCalls, watchers } from '../../db/schema.js';
+import { jobs, messages, threadEvents, threads, toolCalls, watchers } from '../../db/schema.js';
 import { log } from '../../lib/logger.js';
 import { metric } from '../../lib/telemetry.js';
 
@@ -239,6 +241,30 @@ export async function lastThreadMessage(threadId: string): Promise<string | null
     .orderBy(desc(messages.timestamp))
     .limit(1);
   return row?.content ?? null;
+}
+
+const AGENT_ERROR_SCHEMA = z.object({ error: z.string() });
+
+/**
+ * The last error the thread's agent reported (`agent:error`) since `since`, or
+ * null: what a failed turn says that its outcome does not.
+ */
+export async function lastAgentError(threadId: string, since: string): Promise<string | null> {
+  const [row] = await db
+    .select({ data: threadEvents.data })
+    .from(threadEvents)
+    .where(
+      and(
+        eq(threadEvents.threadId, threadId),
+        eq(threadEvents.eventType, 'agent:error'),
+        gte(threadEvents.createdAt, since),
+      ),
+    )
+    .orderBy(desc(threadEvents.createdAt))
+    .limit(1);
+  if (!row) return null;
+  const parsed = parseStoredJson(AGENT_ERROR_SCHEMA, row.data, 'thread_events.data');
+  return parsed.ok ? parsed.value.error : null;
 }
 
 const dbReadOutput = async (threadId: string): Promise<string> =>

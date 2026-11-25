@@ -1,3 +1,4 @@
+import type { AgentModel, EffortLevel, PermissionMode } from '@funny/shared';
 import { addReferencedEntries, parseReferencedFiles } from '@funny/shared/attachments';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -96,16 +97,19 @@ export function ThreadIdleStarter({ activeThread }: Props) {
       const fullPrompt = addReferencedEntries(prompt, stored.entries);
       setSending(true);
       return (async () => {
+        // SAFETY: these come from PromptInput's model, permission and effort selectors,
+        // which only offer AgentModel, PermissionMode and EffortLevel values; the
+        // submit options type them as plain strings.
         useThreadStore
           .getState()
           .appendOptimisticMessage(
             activeThread.id,
             fullPrompt,
             images,
-            opts.model as any,
-            opts.mode as any,
+            opts.model as AgentModel,
+            opts.mode as PermissionMode,
             opts.fileReferences,
-            opts.effort as any,
+            opts.effort as EffortLevel | undefined,
           );
         const { allowedTools, disallowedTools } = deriveToolLists(
           useSettingsStore.getState().toolPermissions,

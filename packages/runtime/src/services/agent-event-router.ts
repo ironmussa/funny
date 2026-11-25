@@ -61,6 +61,9 @@ export class AgentEventRouter {
    */
   private async persistTurnOutcome(event: AgentCompletedEvent): Promise<void> {
     const detail = await this.threadManager.getThreadWithMessages(event.threadId, 1);
+    // SAFETY: the server answers data:get_thread_with_messages with a ThreadWithMessages,
+    // which carries `lastUserMessage` that RuntimeThreadWithMessages does not declare;
+    // every level is optional-chained, so a response without it yields undefined.
     const userMessageId = (detail as { lastUserMessage?: { id?: string } } | null)?.lastUserMessage
       ?.id;
     if (!userMessageId) return;
@@ -165,6 +168,8 @@ export class AgentEventRouter {
         const { status } = transitionStatus(
           threadId,
           { type: 'STOP' },
+          // SAFETY: threads.status is only written from thread state machine results
+          // (or the 'running' default above), so the stored string is a ThreadStatus.
           currentStatus as ThreadStatus,
         );
         await this.threadManager.updateThread(threadId, {
@@ -224,6 +229,8 @@ export class AgentEventRouter {
     type: T,
     data: WSEventData<T>,
   ): void {
+    // SAFETY: `data` is WSEventData<T>, the data of the WSEvent member whose `type` is T,
+    // so the object is that member; TypeScript cannot correlate the generic pair itself.
     const event = { type, threadId, data } as WSEvent;
     if (userId) {
       this.wsBroker.emitToUser(userId, event);
@@ -278,6 +285,8 @@ export class AgentEventRouter {
       log.warn('Failed to persist changed-files summary', {
         namespace: 'agent',
         threadId,
+        // SAFETY: only `.message` is read, optional-chained; for a rejection that is not
+        // Error-like it is undefined and `String(err)` is logged instead.
         error: (err as Error)?.message ?? String(err),
       });
     });
@@ -296,6 +305,8 @@ export class AgentEventRouter {
     const { status: failedStatus } = transitionStatus(
       threadId,
       { type: 'FAIL', error: errorMessage },
+      // SAFETY: threads.status is only written from thread state machine results
+      // (or the 'running' default above), so the stored string is a ThreadStatus.
       currentStatus as ThreadStatus,
     );
     // A process that exits while waiting for an ACP response has lost its
@@ -326,6 +337,9 @@ export class AgentEventRouter {
   ): Promise<void> {
     if (status !== 'waiting') await this.persistChangedFilesSummary(threadId);
     if (thread) {
+      // SAFETY: not a checked invariant: `status` is the FAIL transition's result (normally
+      // 'failed'; a state that absorbs FAIL keeps its own) or 'waiting' for a lost permission
+      // continuation. A value outside the union is forwarded unchanged as the event's label.
       await this.emitAgentCompleted(threadId, thread, status as 'completed' | 'failed' | 'stopped');
     }
   }

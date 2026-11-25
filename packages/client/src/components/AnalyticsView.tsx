@@ -123,8 +123,8 @@ export function AnalyticsView() {
               <ChevronDown className="icon-xs opacity-50" />
             </button>
           </PopoverTrigger>
-          <PopoverContent align="start" className="w-auto min-w-[180px] p-0">
-            <ScrollArea className="max-h-[300px] p-1">
+          <PopoverContent align="start" padding="none" className="w-auto min-w-[180px]">
+            <ScrollArea className="max-h-[300px]" viewportProps={{ className: 'p-1' }}>
               <button
                 onClick={() => setProjectId('__all__')}
                 className={cn(
@@ -189,7 +189,8 @@ export function AnalyticsView() {
             {!overview ? (
               <EmptyState
                 fill={false}
-                className="py-16"
+                padding="lg"
+                className="my-4"
                 testId="analytics-no-data"
                 title={t('analytics.noData')}
               />

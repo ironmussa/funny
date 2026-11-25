@@ -15,6 +15,9 @@ import { z } from 'zod';
 
 /** Build a zod enum from the keys of a MODEL_REGISTRY sub-map. */
 function registryEnum<P extends keyof typeof MODEL_REGISTRY>(provider: P) {
+  // SAFETY: the providers this is called with (claude, codex, gemini,
+  // deepagent) each list at least one model in MODEL_REGISTRY, so the key
+  // list is non-empty, as z.enum's tuple type expects.
   const keys = Object.keys(MODEL_REGISTRY[provider]) as [string, ...string[]];
   return z.enum(keys);
 }
@@ -248,6 +251,13 @@ export const createThreadSchema = z
      * only, whatever the project checkout has checked out or not yet pushed.
      */
     baseFromRemote: z.boolean().optional(),
+    /**
+     * The worktree must be on `branch`: when another worktree has it checked
+     * out, the thread is refused (409) instead of put on a branch named from
+     * its title. The issue factory sends it: each later step is refused on any
+     * other branch, so a thread on another one could never go on.
+     */
+    requireBranch: z.boolean().optional(),
     /**
      * The agent may only read, at this start and every later one (stored on
      * the thread, `threads.read_only`): the issue factory's reviewer, triage

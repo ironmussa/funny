@@ -24,8 +24,31 @@ const clientDurationSeconds = Math.round(soakMinutes * 60);
 const maximumRssMiB = Number(process.env.RUNNER_GRPC_MAX_RSS_MIB ?? 512);
 const maximumRssGrowthMiB = Number(process.env.RUNNER_GRPC_MAX_RSS_GROWTH_MIB ?? 128);
 
-type Message = Record<string, any>;
-type Call = grpc.ServerDuplexStream<Message, Message>;
+/**
+ * A message as proto-loader encodes it with the options below: 64-bit integers
+ * and enums as strings, bytes as a Buffer.
+ */
+type ProtoField = string | number | boolean | Uint8Array | ProtoField[] | ProtoMessage | undefined;
+interface ProtoMessage {
+  [field: string]: ProtoField;
+}
+
+/**
+ * The request fields the harness services read, from the runner.v2 protos
+ * (each stream's request message has a subset of them).
+ */
+interface Message {
+  heartbeat?: { ordinal?: string };
+  metadata?: { correlationId?: string };
+  session?: ProtoMessage;
+  scope?: ProtoMessage;
+  sequence?: string;
+  data?: { data?: Uint8Array };
+  ready?: ProtoMessage;
+  tunnelId?: string;
+  terminalId?: string;
+}
+type Call = grpc.ServerDuplexStream<Message, ProtoMessage>;
 
 const observations = {
   deadlineCancelled: false,
@@ -300,8 +323,8 @@ try {
   if (!observations.slowReaderBackpressured)
     throw new Error('slow reader did not apply backpressure');
   // SAFETY: stdout is the JSON object grpc-sustained-client prints when it exits 0 (checked
-  // above); only `iterations` is read, through Number() with a default.
-  const result = JSON.parse(stdout) as Record<string, unknown>;
+  // above), whose `iterations` is a number; it is still read through Number() with a default.
+  const result = JSON.parse(stdout) as { iterations?: number };
   const iterations = Number(result.iterations ?? 1);
   if (observations.forcedDisconnects !== iterations)
     throw new Error(`forced disconnect count ${observations.forcedDisconnects} != ${iterations}`);

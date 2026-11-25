@@ -47,7 +47,7 @@ function getCombinedState(): CombinedState {
     ...useProjectStore.getState(),
     ...useThreadStore.getState(),
     ...useUIStore.getState(),
-  } as CombinedState;
+  };
   cachedVersion = storeVersion;
   return cachedCombined;
 }
@@ -113,21 +113,17 @@ const THREAD_KEYS = new Set([
 
 // setState support for tests
 useAppStore.setState = (partial: Partial<CombinedState>) => {
-  const projectPartial: Record<string, any> = {};
-  const threadPartial: Record<string, any> = {};
-  const uiPartial: Record<string, any> = {};
+  const entries = Object.entries(partial);
+  const isThreadKey = (key: string) => !PROJECT_KEYS.has(key) && THREAD_KEYS.has(key);
+  const projectPartial = Object.fromEntries(entries.filter(([key]) => PROJECT_KEYS.has(key)));
+  const threadPartial = Object.fromEntries(entries.filter(([key]) => isThreadKey(key)));
+  const uiPartial = Object.fromEntries(
+    entries.filter(([key]) => !PROJECT_KEYS.has(key) && !THREAD_KEYS.has(key)),
+  );
 
-  for (const [key, value] of Object.entries(partial)) {
-    if (PROJECT_KEYS.has(key)) {
-      projectPartial[key] = value;
-    } else if (THREAD_KEYS.has(key)) {
-      threadPartial[key] = value;
-    } else {
-      uiPartial[key] = value;
-    }
-  }
-
-  if (Object.keys(projectPartial).length > 0) useProjectStore.setState(projectPartial as any);
-  if (Object.keys(threadPartial).length > 0) useThreadStore.setState(threadPartial as any);
-  if (Object.keys(uiPartial).length > 0) useUIStore.setState(uiPartial as any);
+  // Every value comes from `partial`, a Partial<CombinedState>, and zustand's setState only
+  // shallow-merges it; this helper exists only for tests and stories.
+  if (Object.keys(projectPartial).length > 0) useProjectStore.setState(projectPartial);
+  if (Object.keys(threadPartial).length > 0) useThreadStore.setState(threadPartial);
+  if (Object.keys(uiPartial).length > 0) useUIStore.setState(uiPartial);
 };

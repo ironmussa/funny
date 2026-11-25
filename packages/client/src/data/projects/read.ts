@@ -9,12 +9,16 @@ import { compareProjects, getProjectsData, type ProjectsData } from './store';
  * handlers and effect callbacks. React components use `hooks.ts`.
  */
 
-const cachedLists = new WeakMap<ProjectsData, { list: Project[] | null }>();
+interface CachedList {
+  list: Project[] | null;
+}
 
-function cacheFor(data: ProjectsData): { list: Project[] | null } {
+const cachedLists = new WeakMap<ProjectsData, CachedList>();
+
+function cacheFor(data: ProjectsData): CachedList {
   let cache = cachedLists.get(data);
   if (!cache) {
-    const created = { list: null as Project[] | null };
+    const created: CachedList = { list: null };
     // Lives as long as the collection; the layer's dispose() cleans both up.
     data.collection.subscribeChanges(
       () => {

@@ -6,6 +6,7 @@ import { loadSync } from '@grpc/proto-loader';
 import { nanoid } from 'nanoid';
 
 import { log } from '../../lib/logger.js';
+import { isString } from '../../lib/value-guards.js';
 import { relayToUser } from '../browser-events.js';
 import type { RunnerPresencePort, RunnerRequestPort, RunnerTerminalPort } from '../runner-ports.js';
 import type { RunnerGrpcConfig } from './config.js';
@@ -67,7 +68,7 @@ export interface RunnerGrpcDependencies {
   markRunnerOnline?(runnerId: string): Promise<void>;
   markRunnerOffline?(runnerId: string): Promise<void>;
   /** Expire durable permission requests whose in-memory continuation died with the runner. */
-  expirePendingPermissions?(runnerId: string): Promise<unknown>;
+  expirePendingPermissions?(runnerId: string): Promise<void>;
 }
 
 export type RunnerGrpcHandlers = Record<
@@ -109,13 +110,13 @@ function fail(call: RunnerGrpcCall, code: grpc.status, details: string): void {
 
 function correlationIdFrom(metadata: grpc.Metadata): string {
   const supplied = metadata.get('x-correlation-id')[0];
-  if (typeof supplied === 'string' && CORRELATION_ID_PATTERN.test(supplied)) return supplied;
+  if (isString(supplied) && CORRELATION_ID_PATTERN.test(supplied)) return supplied;
   return nanoid();
 }
 
 function bearerTokenFrom(metadata: grpc.Metadata): string | null {
   const authorization = metadata.get('authorization')[0];
-  if (typeof authorization !== 'string' || !authorization.startsWith(AUTHORIZATION_SCHEME)) {
+  if (!isString(authorization) || !authorization.startsWith(AUTHORIZATION_SCHEME)) {
     return null;
   }
   const token = authorization.slice(AUTHORIZATION_SCHEME.length);
@@ -384,7 +385,7 @@ export async function startRunnerGrpcEndpoint(
     markRunnerOffline: runnerManager!.markRunnerOffline,
     expirePendingPermissions: async (runnerId) => {
       const { expirePendingPermissionRequestsForRunner } = await import('../data-handler.js');
-      return expirePendingPermissionRequestsForRunner(runnerId);
+      await expirePendingPermissionRequestsForRunner(runnerId);
     },
   };
   const sessions =

@@ -49,10 +49,10 @@ export function DiffStats({
 
   const textSize =
     // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
-    size === 'xxs' ? 'text-2xs' : size === 'xs' ? 'text-2xs leading-[15px]' : 'text-sm';
+    size === 'xxs' ? 'text-2xs' : size === 'xs' ? 'text-2xs leading-4' : 'text-sm';
   // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
   const padding = size === 'xxs' ? 'px-1 py-0' : size === 'xs' ? 'px-1.5 py-0' : 'px-2 py-0.5';
-  const height = size === 'xs' ? 'h-[15px]' : null;
+  const height = size === 'xs' ? 'h-4' : null;
 
   const addedTooltip =
     variant === 'pr'
@@ -140,9 +140,7 @@ function Stat({
   return (
     <Tooltip>
       <TooltipTrigger asChild>{content}</TooltipTrigger>
-      <TooltipContent side="top" className="text-xs">
-        {tooltip}
-      </TooltipContent>
+      <TooltipContent side="top">{tooltip}</TooltipContent>
     </Tooltip>
   );
 }

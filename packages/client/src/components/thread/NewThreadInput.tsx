@@ -242,6 +242,9 @@ export function NewThreadInput({
       opts: Parameters<typeof createThreadFromHook>[1],
       images?: any[],
     ): Promise<boolean> => {
+      // SAFETY: PromptInput fills model, mode and effort from its model, permission
+      // and effort selectors, which only offer AgentModel, PermissionMode and
+      // EffortLevel values; SubmitOpts types them as plain strings.
       const metadata: PreparationMessageMetadata = {
         model: opts.model as PreparationMessageMetadata['model'],
         permissionMode: opts.mode as PreparationMessageMetadata['permissionMode'],
@@ -585,6 +588,8 @@ async function createWorkflowThread({
   const createResult = await api.createIdleThread({
     projectId,
     title: workflowPrompt.slice(0, 200),
+    // SAFETY: PromptInput's buildThreadOptions sets threadMode from a
+    // 'local' | 'worktree' value; SubmitOpts types it as a plain string.
     mode: (opts.threadMode as 'local' | 'worktree') || defaultThreadMode,
     baseBranch: opts.baseBranch,
     prompt: workflowPrompt,

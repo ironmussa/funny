@@ -33,6 +33,8 @@ export function mergeThreadView<T extends { id: string }>(
     byRow = new WeakMap();
     merged.set(payload, byRow);
   }
+  // SAFETY: `byRow` belongs to this `payload`, and the only value stored under `row` is the
+  // `{ ...payload, ...row }` view built below, which is a T.
   let view = byRow.get(row) as T | undefined;
   if (!view) {
     view = { ...payload, ...row };

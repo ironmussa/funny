@@ -53,6 +53,9 @@ type BunWebSocketConstructor = new (
   url: string,
   options?: { headers?: Record<string, string> },
 ) => BridgeWebSocket;
+// SAFETY: Bun's global WebSocket constructor takes a second options argument
+// with upgrade `headers` (Bun docs, WebSocket client), and its instances have
+// every member BridgeWebSocket lists.
 // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- Bun extends the DOM WebSocket constructor with an options param; no shared base type exists
 const BunWebSocket = WebSocket as unknown as BunWebSocketConstructor;
 
@@ -105,15 +108,14 @@ export function startGrpcWebSocketBridge(
         ws.onmessage = (event) => {
           if (conn.closed) return;
           const bytes = frameBytes(event.data);
-          if (!bytes) return shut(socket as BridgeSocket, 'unexpected text frame');
-          if (!conn.toSocket.push(bytes))
-            return shut(socket as BridgeSocket, 'grpc client too slow');
-          if (!conn.toSocket.flush(socket)) shut(socket as BridgeSocket, 'grpc client closed');
+          if (!bytes) return shut(socket, 'unexpected text frame');
+          if (!conn.toSocket.push(bytes)) return shut(socket, 'grpc client too slow');
+          if (!conn.toSocket.flush(socket)) shut(socket, 'grpc client closed');
         };
         ws.onerror = () => {
           log.warn('Runner gRPC WebSocket carrier error', { namespace: 'runner' });
         };
-        ws.onclose = () => shut(socket as BridgeSocket, 'carrier closed');
+        ws.onclose = () => shut(socket, 'carrier closed');
       },
       data(socket, chunk) {
         const conn = socket.data;

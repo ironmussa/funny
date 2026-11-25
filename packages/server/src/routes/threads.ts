@@ -24,6 +24,7 @@ import { authorizer } from '../lib/server-authorizer.js';
 import { startSpan } from '../lib/telemetry.js';
 import { toThread } from '../lib/thread-response.js';
 import type { ServerEnv } from '../lib/types.js';
+import { isObject, isString } from '../lib/value-guards.js';
 import { proxyToRunner } from '../middleware/proxy.js';
 import {
   canSteerThread,
@@ -43,6 +44,7 @@ import {
   type CreationIntent,
   type CreationPayload,
   type ForkVariant,
+  type RunnerJson,
 } from '../modules/threads/index.js';
 import { forgetThreadOwnership } from '../services/data-ownership.js';
 import { noteOwnerFollowUp } from '../services/factory/factory-follow-ups.js';
@@ -197,7 +199,7 @@ threadRoutes.post('/:id/comments', requireThreadView, async (c) => {
   if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
   const { content } = parsed.value;
 
-  if (!content || typeof content !== 'string' || !content.trim()) {
+  if (!content || !isString(content) || !content.trim()) {
     return c.json({ error: 'content is required' }, 400);
   }
 
@@ -248,7 +250,7 @@ threadRoutes.post('/:id/workflow-event', requireThreadOwner, async (c) => {
   if (parsed.isErr()) return c.json({ error: 'Invalid JSON body' }, 400);
   const body = parsed.value;
 
-  if (typeof body.type !== 'string' || !body.type) {
+  if (!isString(body.type) || !body.type) {
     return c.json({ error: 'Missing required string field "type"' }, 400);
   }
   // Constrain the event type to the workflow:* / pipeline:* namespaces so
@@ -259,9 +261,7 @@ threadRoutes.post('/:id/workflow-event', requireThreadOwner, async (c) => {
   // SAFETY: the request body was parsed as JSON, so `data` is JSON; a
   // non-null object that is not an array is a JSON object.
   const data: JsonObject =
-    body.data && typeof body.data === 'object' && !Array.isArray(body.data)
-      ? (body.data as JsonObject)
-      : {};
+    isObject(body.data) && !Array.isArray(body.data) ? (body.data as JsonObject) : {};
 
   await threadEventRepo.saveThreadEvent(id, body.type, data);
 
@@ -297,7 +297,11 @@ const createdThreadIdSchema = z.object({ id: z.string().min(1) });
  * If the row is somehow missing, the original payload goes out unchanged
  * rather than failing a creation that succeeded.
  */
-async function createdThreadResponse(c: Context<ServerEnv>, created: unknown, status: 201 | 202) {
+async function createdThreadResponse(
+  c: Context<ServerEnv>,
+  created: RunnerJson | undefined,
+  status: 201 | 202,
+) {
   const parsed = createdThreadIdSchema.safeParse(created);
   const row = parsed.success ? await threadRepo.getThread(parsed.data.id) : undefined;
   if (!row) {
@@ -305,7 +309,12 @@ async function createdThreadResponse(c: Context<ServerEnv>, created: unknown, st
       namespace: 'threads',
       threadId: parsed.success ? parsed.data.id : undefined,
     });
-    return c.json(created, status);
+    // Written as text: the runner's JSON goes back byte for byte, and Hono's
+    // typed `c.json` cannot expand a recursive JSON type. No payload at all
+    // (a sandbox thread whose row is missing) is an empty body, as `c.json` sent.
+    return c.newResponse(JSON.stringify(created), status, {
+      'Content-Type': 'application/json',
+    });
   }
   return c.json(toThread(row) satisfies Thread, status);
 }
@@ -630,7 +639,7 @@ threadRoutes.patch('/:id/queue/:messageId', requireThreadOwner, async (c) => {
   const parsed = await parseJsonBody(c, contentBodySchema);
   if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
   const { content } = parsed.value;
-  if (!content || typeof content !== 'string') {
+  if (!content || !isString(content)) {
     return c.json({ error: 'content is required' }, 400);
   }
   const updated = await messageQueueRepo.update(messageId, id, content);

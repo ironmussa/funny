@@ -31,6 +31,7 @@ import { badRequest, internal, type DomainError } from '@funny/shared/errors';
 import { err, ok, ResultAsync, type Result } from 'neverthrow';
 
 import { log } from '../lib/logger.js';
+import { isObject } from '../lib/value-guards.js';
 import {
   recordActivity as defaultRecordActivity,
   trackActivity as defaultTrackActivity,
@@ -78,8 +79,8 @@ export interface WorkspaceCleanupDeps {
 }
 
 function messageOf(cause: unknown): string {
-  if (cause && typeof cause === 'object' && 'message' in cause) {
-    return String((cause as { message: unknown }).message);
+  if (isObject(cause) && 'message' in cause) {
+    return String(cause.message);
   }
   return String(cause);
 }
@@ -155,13 +156,13 @@ export function createWorkspaceCleanup(overrides: Partial<WorkspaceCleanupDeps> 
 
   /** Stops what runs inside `dir`; each stopped thing becomes an effect. */
   async function stopProcessesUnder(dir: string, effects: ActivityEffect[]): Promise<void> {
-    const commands = await deps.stopCommandsByCwd(dir).catch((error) => {
+    const commands = await deps.stopCommandsByCwd(dir).catch((error): string[] => {
       log.warn('Failed to stop commands before removal', {
         namespace: 'workspace-cleanup',
         dir,
         error: messageOf(error),
       });
-      return [] as string[];
+      return [];
     });
     for (const command of commands) effects.push({ effect: 'command-stopped', target: command });
     for (const terminal of deps.killPtysUnderPath(dir)) {

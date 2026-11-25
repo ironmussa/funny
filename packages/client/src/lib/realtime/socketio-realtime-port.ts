@@ -81,6 +81,15 @@ function isString(value: unknown): value is string {
   return typeof value === 'string';
 }
 
+/** A terminal session in a legacy `pty:list` answer; each field is checked before use. */
+interface LegacyPtySession {
+  ptyId?: unknown;
+  cwd?: unknown;
+  projectId?: unknown;
+  label?: unknown;
+  shell?: unknown;
+}
+
 function scopeKey(scope: ScopeReference): string {
   return `${scope.kind}:${scope.parentId ?? ''}:${scope.id}`;
 }
@@ -349,7 +358,11 @@ export class SocketIoClientRealtimePort implements ClientRealtimePort {
     return Promise.all(
       cursors.flatMap((cursor) =>
         cursor.scope
-          ? [this.subscribeScope({ scope: cursor.scope, cursor } as SubscriptionRequest)]
+          ? [
+              this.subscribeScope(
+                create(SubscriptionRequestSchema, { scope: cursor.scope, cursor }),
+              ),
+            ]
           : [],
       ),
     );
@@ -490,11 +503,13 @@ export class SocketIoClientRealtimePort implements ClientRealtimePort {
     }
 
     try {
+      // SAFETY: the server's `pty:list` handler (socketio/browser-pty-list.ts) always
+      // acks { status, sessions, error? }; each session field is type-checked below.
       const response = (await this.socket
         .timeout(this.acknowledgementTimeoutMs)
         .emitWithAck('pty:list', {})) as {
         status?: string;
-        sessions?: Array<Record<string, unknown>>;
+        sessions?: LegacyPtySession[];
         error?: string;
       };
       if (response.status !== 'ok') {

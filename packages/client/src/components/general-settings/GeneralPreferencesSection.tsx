@@ -20,12 +20,7 @@ import {
 } from '@/hooks/use-notifications';
 import { changeLanguage, SUPPORTED_LANGUAGES } from '@/i18n/config';
 import { disableWebPush } from '@/lib/web-push';
-import {
-  editorLabels,
-  type Editor,
-  type TerminalShell,
-  useSettingsStore,
-} from '@/stores/settings-store';
+import { editorLabels, type Editor, useSettingsStore } from '@/stores/settings-store';
 
 import { toastSettingsSaved } from './preferences-hooks';
 
@@ -65,6 +60,7 @@ function EditorRows() {
 
   const handleEditorChange = useCallback(
     (v: string) => {
+      // SAFETY: v comes from this Select, whose items are the keys of editorLabels (a Record<Editor, string>).
       setDefaultEditor(v as Editor);
       toastSettingsSaved(t);
     },
@@ -91,7 +87,7 @@ function EditorRows() {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {(Object.entries(editorLabels) as [Editor, string][]).map(([value, label]) => (
+            {Object.entries(editorLabels).map(([value, label]) => (
               <SelectItem key={value} value={value}>
                 {label}
               </SelectItem>
@@ -158,7 +154,7 @@ function ShellRow() {
 
   const handleShellChange = useCallback(
     (v: string) => {
-      setTerminalShell(v as TerminalShell);
+      setTerminalShell(v);
       toastSettingsSaved(t);
     },
     [setTerminalShell, t],

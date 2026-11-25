@@ -74,7 +74,7 @@ export function getPRInfo(cwd: string, prNumber: number): ResultAsync<PRInfo, Do
         additions: data.additions ?? 0,
         deletions: data.deletions ?? 0,
         changedFiles: data.changedFiles ?? 0,
-      } as PRInfo;
+      } satisfies PRInfo;
     })(),
     (error) => {
       if (error instanceof ProcessExecutionError) {
@@ -274,6 +274,8 @@ export function lookupPRForBranch(
     return okAsync({
       prNumber: pr.number,
       prUrl: pr.url,
+      // SAFETY: `gh pr list --json state` reports a PR's state as OPEN, CLOSED
+      // or MERGED, the prState values; the schema only checks it is a string.
       prState: (pr.state ?? 'OPEN') as BranchPRInfo['prState'],
     });
   });

@@ -61,9 +61,17 @@ const CURRENT_VERSION = 'v1';
  * (Winston in runtime/server) plugs in without coupling.
  */
 export interface CryptoLog {
-  warn: (message: string, meta?: Record<string, unknown>) => void;
-  info: (message: string, meta?: Record<string, unknown>) => void;
+  warn: (message: string, meta?: CryptoLogMeta) => void;
+  info: (message: string, meta?: CryptoLogMeta) => void;
 }
+
+/** The structured fields this module logs. */
+type CryptoLogMeta = {
+  namespace: 'crypto';
+  keyId?: string;
+  newKeyId?: string;
+  deprecation?: string;
+};
 
 const SILENT_LOG: CryptoLog = {
   warn: () => undefined,
@@ -114,6 +122,12 @@ export interface CryptoApi {
   isEncryptedWithActiveKey(encrypted: string): boolean;
   /** Test-only: reset the in-memory cache. */
   __resetCryptoCacheForTests(): void;
+}
+
+/** The keyring's active key and its id. */
+interface ActiveKey {
+  id: string;
+  key: Buffer;
 }
 
 interface KeyStore {
@@ -273,7 +287,7 @@ export function createCrypto({
     return store;
   }
 
-  function getActiveKey(): { id: string; key: Buffer } {
+  function getActiveKey(): ActiveKey {
     const store = loadStore();
     return { id: store.active, key: store.keys[store.active] };
   }

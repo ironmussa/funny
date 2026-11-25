@@ -7,9 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { useBoxZoomPan } from '@/hooks/use-box-zoom-pan';
+import { cn } from '@/lib/utils';
 
 /** Inline box height — mirrors the Mermaid diagram card so the two read alike. */
-const IMAGE_CARD_HEIGHT = 360;
 
 /** Derive a display filename from a local path or a web URL (drops any query). */
 function fileNameOf(src: string): string {
@@ -86,11 +86,10 @@ export function MarkdownImageCard({
       )}
       <div
         ref={zoomContainerRef}
-        className="bg-muted/20 relative flex items-center justify-center overflow-hidden select-none"
-        style={{
-          height: IMAGE_CARD_HEIGHT,
-          cursor: zoomed ? (pz.isDragging ? 'grabbing' : 'grab') : 'default',
-        }}
+        className={cn(
+          'bg-muted/20 relative flex h-[360px] items-center justify-center overflow-hidden select-none',
+          zoomed ? (pz.isDragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-default',
+        )}
         onPointerDown={pz.onPointerDown}
         onPointerMove={pz.onPointerMove}
         onPointerUp={pz.onPointerUp}
@@ -102,11 +101,14 @@ export function MarkdownImageCard({
             if (!zoomed) setLightboxOpen(true);
           }}
           aria-label="Open image preview"
-          className="max-h-full max-w-full border-0 bg-transparent p-0"
+          className={cn(
+            'max-h-full max-w-full origin-center border-0 bg-transparent p-0 [transform:translate(var(--markdown-image-pan-x),var(--markdown-image-pan-y))_scale(var(--markdown-image-scale))]',
+            pz.isDragging ? '[transition:none]' : '[transition:transform_120ms]',
+          )}
           style={{
-            transform: `translate(${pz.offset.x}px, ${pz.offset.y}px) scale(${pz.scale})`,
-            transformOrigin: 'center center',
-            transition: pz.isDragging ? 'none' : 'transform 120ms',
+            '--markdown-image-pan-x': `${pz.offset.x}px`,
+            '--markdown-image-pan-y': `${pz.offset.y}px`,
+            '--markdown-image-scale': pz.scale,
           }}
         >
           <img
@@ -156,10 +158,9 @@ export function MarkdownImageCard({
                     variant="muted"
                     size="icon-sm"
                     onClick={pz.reset}
-                    className="text-xs"
                     data-testid="markdown-image-zoom-reset"
                   >
-                    1:1
+                    <span className="text-xs">1:1</span>
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>Reset zoom</TooltipContent>

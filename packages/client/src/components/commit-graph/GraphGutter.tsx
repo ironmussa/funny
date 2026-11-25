@@ -90,10 +90,13 @@ export const GraphGutter = memo(function GraphGutter({
     <svg
       width={width}
       height={height}
-      className="shrink-0"
-      // `overflow: visible` so the node avatar (which sits centered half a lane
+      // `overflow-visible` so the node avatar (which sits centered half a lane
       // from the left edge) isn't clipped by the SVG bounds when it's on lane 0.
-      style={{ width, height, overflow: 'visible' }}
+      className="h-[var(--graph-gutter-svg-height)] w-[var(--graph-gutter-svg-width)] shrink-0 overflow-visible"
+      style={{
+        '--graph-gutter-svg-width': `${width}px`,
+        '--graph-gutter-svg-height': `${height}px`,
+      }}
       aria-hidden="true"
     >
       {row.segments.map((s, i) => {

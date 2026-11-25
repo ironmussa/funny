@@ -1,3 +1,4 @@
+import type { JsonObject } from '@funny/shared/json';
 import { Brain } from 'lucide-react';
 import { Suspense, lazy } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -27,12 +28,13 @@ export function ThinkCard({
   hideLabel,
   displayTime,
 }: {
-  parsed: Record<string, unknown>;
+  parsed: JsonObject;
   output?: string;
   hideLabel?: boolean;
   displayTime?: string | null;
 }) {
   const { t } = useTranslation();
+  // SAFETY: Think inputs carry their text in content or description, both strings.
   const content = output || (parsed.content as string) || (parsed.description as string) || '';
 
   if (!content) return null;

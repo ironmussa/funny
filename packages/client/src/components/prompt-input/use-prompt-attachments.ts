@@ -42,6 +42,7 @@ function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
+      // SAFETY: readAsDataURL below makes reader.result a data URL string on load.
       const dataUrl = reader.result as string;
       const idx = dataUrl.indexOf(',');
       resolve(idx >= 0 ? dataUrl.slice(idx + 1) : dataUrl);
@@ -55,7 +56,10 @@ function readImageAttachment(file: File): Promise<ImageAttachment> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
+      // SAFETY: readAsDataURL below makes reader.result a data URL string on load.
       const base64 = (reader.result as string).split(',')[1];
+      // SAFETY: only the 'image' handler calls this, and classifyAttachment picks 'image' only
+      // when file.type is in MODEL_IMAGE_TYPES, the same four media types.
       const mediaType = file.type as ImageAttachment['source']['media_type'];
       resolve({ type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } });
     };
@@ -249,6 +253,8 @@ export function usePromptAttachments({
   useAttachmentsHandle(handleRef, images, setImages, setAttachedTextFiles);
 
   const attachmentLimits = useMemo(
+    // SAFETY: provider is the unified model id's prefix; an unknown value still works,
+    // since getAttachmentLimits falls back to Claude's limits.
     () => getAttachmentLimits(provider as Parameters<typeof getAttachmentLimits>[0]),
     [provider],
   );

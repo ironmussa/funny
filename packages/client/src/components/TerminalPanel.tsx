@@ -160,15 +160,16 @@ export function TerminalPanel() {
   return (
     <div
       className={cn(
-        'shrink-0 overflow-hidden',
+        'h-[var(--terminal-panel-visible-height)] shrink-0 overflow-hidden',
         !dragging && 'transition-[height] duration-200 ease-in-out',
       )}
       style={{
-        height: panelVisible ? panelHeight : 0,
+        '--terminal-panel-visible-height': panelVisible ? `${panelHeight}px` : '0px',
+        '--terminal-panel-height': `${panelHeight}px`,
       }}
     >
       {/* Inner wrapper always keeps full height so xterm terminals preserve their buffer */}
-      <div className="bg-background flex flex-col" style={{ height: panelHeight }}>
+      <div className="bg-background flex h-[var(--terminal-panel-height)] flex-col">
         {/* Drag handle — matches sidebar rail style */}
         <ResizeHandle
           direction="vertical"

@@ -12,6 +12,7 @@
  */
 
 import type { FactoryTrigger } from '@funny/shared/contracts/factory';
+import { errorMessage } from '@funny/shared/errors';
 import { and, asc, eq, isNotNull, lte } from 'drizzle-orm';
 import { ResultAsync } from 'neverthrow';
 
@@ -24,9 +25,9 @@ export type FactoryTriggersError = { kind: 'storage'; message: string };
 
 type Row = typeof factoryTriggers.$inferSelect;
 
-const storage = (error: unknown): FactoryTriggersError => ({
+const storage = (cause: unknown): FactoryTriggersError => ({
   kind: 'storage',
-  message: error instanceof Error ? error.message : String(error),
+  message: errorMessage(cause),
 });
 
 const toTrigger = (row: Row): FactoryTrigger => ({

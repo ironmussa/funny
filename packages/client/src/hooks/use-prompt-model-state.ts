@@ -336,6 +336,8 @@ function usePromptPermissionMode({
       if (isNewThread || !effectiveThreadId || nextMode === activeThreadPermissionMode) return;
 
       const mutation = ++modeMutationRef.current;
+      // SAFETY: nextMode is a value of usePermissionModeOptions (the mode picker and its
+      // shortcut cycle only offer those) or the 'autoEdit' fallback below; all are PermissionModes.
       void updateThreadPermissionMode(effectiveThreadId, nextMode as PermissionMode).then(
         (saved) => {
           // Preserve a newer picker action. The store rolled back the failed

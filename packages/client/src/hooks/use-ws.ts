@@ -311,7 +311,7 @@ function connect() {
         if (sessions.length > 0) {
           const projects = readProjects();
           useTerminalStore.getState().restoreTabs(
-            sessions as any,
+            sessions,
             projects.map((p: any) => ({ id: p.id, path: p.path })),
           );
         } else {

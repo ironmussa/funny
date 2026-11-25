@@ -250,8 +250,11 @@ export function ProjectHooksSettings() {
         if (!targets.length) return;
         if (source.data.type !== 'hook-item') return;
 
+        // SAFETY: type 'hook-item' was checked above; HookItem's getInitialData sets hookType from hook.hookType, a HookType.
         const sourceHookType = source.data.hookType as HookType;
+        // SAFETY: the same 'hook-item' data sets index from hook.index, a number.
         const sourceIndex = source.data.index as number;
+        // SAFETY: only HookItem drop targets accept a 'hook-item' source (canDrop), and their getData sets index from hook.index, a number.
         const targetIndex = targets[0].data.index as number;
         if (sourceIndex === targetIndex || sourceHookType !== targets[0].data.hookType) return;
 
@@ -399,7 +402,7 @@ export function ProjectHooksSettings() {
         <Button
           variant="outline"
           size="sm"
-          className="gap-1.5"
+          gap="snug"
           data-testid="hooks-add"
           onClick={() => {
             cancelEdit();
@@ -418,7 +421,7 @@ export function ProjectHooksSettings() {
           fill={false}
           title={t('hooks.noHooks')}
           action={
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setAdding(true)}>
+            <Button variant="outline" size="sm" gap="snug" onClick={() => setAdding(true)}>
               <Plus className="icon-sm" />
               {t('hooks.addFirst')}
             </Button>
@@ -441,17 +444,20 @@ export function ProjectHooksSettings() {
                     <span id="hooks-edit-type-label" className="settings-label">
                       {t('hooks.hookType')}
                     </span>
-                    <Select value={hookType} onValueChange={(v) => setHookType(v as HookType)}>
+                    <Select
+                      value={hookType}
+                      // SAFETY: the SelectItem values are the entries of HOOK_TYPES, each a HookType.
+                      onValueChange={(v) => setHookType(v as HookType)}
+                    >
                       <SelectTrigger
                         aria-labelledby="hooks-edit-type-label"
-                        className="text-sm"
                         data-testid="hooks-type-select"
                       >
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
                         {HOOK_TYPES.map((ht) => (
-                          <SelectItem key={ht} value={ht} className="text-sm">
+                          <SelectItem key={ht} value={ht}>
                             {hookTypeLabelFn(ht)}
                           </SelectItem>
                         ))}
@@ -464,7 +470,6 @@ export function ProjectHooksSettings() {
                     </label>
                     <Input
                       id="hooks-edit-label"
-                      className="settings-form-input"
                       placeholder={t('hooks.label')}
                       value={label}
                       onChange={(e) => setLabel(e.target.value)}
@@ -516,17 +521,17 @@ export function ProjectHooksSettings() {
             <span id="hooks-add-type-label" className="settings-label">
               {t('hooks.hookType')}
             </span>
-            <Select value={hookType} onValueChange={(v) => setHookType(v as HookType)}>
-              <SelectTrigger
-                aria-labelledby="hooks-add-type-label"
-                className="text-sm"
-                data-testid="hooks-type-select"
-              >
+            <Select
+              value={hookType}
+              // SAFETY: the SelectItem values are the entries of HOOK_TYPES, each a HookType.
+              onValueChange={(v) => setHookType(v as HookType)}
+            >
+              <SelectTrigger aria-labelledby="hooks-add-type-label" data-testid="hooks-type-select">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 {HOOK_TYPES.map((ht) => (
-                  <SelectItem key={ht} value={ht} className="text-sm">
+                  <SelectItem key={ht} value={ht}>
                     {hookTypeLabelFn(ht)}
                   </SelectItem>
                 ))}
@@ -539,7 +544,6 @@ export function ProjectHooksSettings() {
             </label>
             <Input
               id="hooks-add-label"
-              className="settings-form-input"
               placeholder={t('hooks.label')}
               value={label}
               onChange={(e) => setLabel(e.target.value)}

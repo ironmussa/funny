@@ -1,3 +1,4 @@
+import type { JsonObject } from '@funny/shared/json';
 import { ChevronRight, FileSearch } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -99,8 +100,8 @@ function HighlightedFileContent({ content, filePath }: { content: string; filePa
         <div key={line.key} className="flex">
           {line.num ? (
             <span
-              className="text-muted-foreground/60 mr-3 shrink-0 text-right select-none"
-              style={{ width: numWidth }}
+              className="text-muted-foreground/60 mr-3 w-[var(--read-file-line-number-width)] shrink-0 text-right select-none"
+              style={{ '--read-file-line-number-width': numWidth }}
             >
               {line.num}
             </span>
@@ -130,13 +131,14 @@ export function ReadFileCard({
   hideLabel,
   displayTime,
 }: {
-  parsed: Record<string, unknown>;
+  parsed: JsonObject;
   output?: string;
   hideLabel?: boolean;
   displayTime?: string | null;
 }) {
   const { t } = useTranslation();
   const defaultEditor = useSettingsStore((s) => s.defaultEditor);
+  // SAFETY: the Read tool declares file_path as a string in its input schema.
   const filePath = parsed.file_path as string | undefined;
   const projectPath = useCurrentProjectPath();
   const displayPath = filePath ? makeRelativePath(filePath, projectPath) : undefined;

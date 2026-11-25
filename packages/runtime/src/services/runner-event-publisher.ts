@@ -82,7 +82,7 @@ export class RunnerEventPublisher {
   private publishUserEvent(event: WSEvent): void {
     if (!this.userEventsEnabled || !isRunnerUserEventType(event.type)) return;
     this.sender.send('events', {
-      userEvent: { eventType: event.type, data: (event as { data?: unknown }).data ?? {} },
+      userEvent: { eventType: event.type, data: event.data ?? {} },
     });
   }
 

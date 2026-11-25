@@ -72,9 +72,8 @@ export type OutputParser = (line: string) => SuiteCounts;
 
 /** The counts as test-progress suite fields (without the parser's own flags). */
 export function suiteFields(counts: SuiteCounts): Omit<SuiteCounts, 'summarized'> {
-  const fields: Partial<SuiteCounts> = { ...counts };
-  delete fields.summarized;
-  return fields as Omit<SuiteCounts, 'summarized'>;
+  const { summarized: _summarized, ...fields } = counts;
+  return fields;
 }
 
 /** Where a stack frame or location line points: `(file:line:col)`, ` ❯ file:line:col`. */
@@ -87,6 +86,13 @@ function placeAt(failure: TestFailure, frame: RegExpExecArray): void {
   if (failure.line !== undefined) return;
   if (failure.file && failure.file !== frame[1]) return;
   Object.assign(failure, { file: frame[1], line: Number(frame[2]) });
+}
+
+/** The error bun printed before a test's `(fail)` line. */
+interface LastError {
+  message?: string;
+  file?: string;
+  line?: number;
 }
 
 interface Pending {
@@ -112,7 +118,7 @@ class Counter {
   /** A failure whose heading was printed, waiting for its message / location. */
   private pending: Pending | null = null;
   /** bun prints a failure's error before its `(fail)` line. */
-  private lastError: { message?: string; file?: string; line?: number } = {};
+  private lastError: LastError = {};
   fromEvents = false;
   /**
    * Counts of the runs that already printed their summary: one command may
@@ -134,6 +140,8 @@ class Counter {
 
   /** A runner's summary: its run's totals, on top of the runs before it. */
   summary(totals: Partial<Record<TestState, number>>): void {
+    // SAFETY: `totals` is typed Partial<Record<TestState, number>> and every caller
+    // builds it from TestState keys with numeric values, so each entry is one.
     for (const [state, n] of Object.entries(totals) as [TestState, number][]) {
       this.counts[state] = this.base[state] + n;
     }
@@ -262,6 +270,8 @@ class Counter {
 }
 
 function stripEmpty<T extends object>(value: T): Partial<T> {
+  // SAFETY: the entries are T's own keys and values with only the undefined ones
+  // dropped, which is exactly a Partial<T>.
   return Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined)) as Partial<T>;
 }
 
@@ -299,33 +309,35 @@ function summaryTotals(
   );
 }
 
-const STATE_OF: Record<string, TestState> = {
-  '✓': 'passed',
-  ok: 'passed',
-  '✘': 'failed',
-  x: 'failed',
-  '-': 'skipped',
-  '.': 'passed',
-  X: 'passed',
-  F: 'failed',
-  E: 'failed',
-  s: 'skipped',
-  PASSED: 'passed',
-  XPASS: 'passed',
-  FAILED: 'failed',
-  ERROR: 'failed',
-  SKIPPED: 'skipped',
-  XFAIL: 'skipped',
-  pass: 'passed',
-  fail: 'failed',
-  skip: 'skipped',
-  todo: 'skipped',
-  PASS: 'passed',
-  FAIL: 'failed',
-  SKIP: 'skipped',
-};
+const STATE_OF = new Map<string, TestState>(
+  Object.entries({
+    '✓': 'passed',
+    ok: 'passed',
+    '✘': 'failed',
+    x: 'failed',
+    '-': 'skipped',
+    '.': 'passed',
+    X: 'passed',
+    F: 'failed',
+    E: 'failed',
+    s: 'skipped',
+    PASSED: 'passed',
+    XPASS: 'passed',
+    FAILED: 'failed',
+    ERROR: 'failed',
+    SKIPPED: 'skipped',
+    XFAIL: 'skipped',
+    pass: 'passed',
+    fail: 'failed',
+    skip: 'skipped',
+    todo: 'skipped',
+    PASS: 'passed',
+    FAIL: 'failed',
+    SKIP: 'skipped',
+  } satisfies Record<string, TestState>),
+);
 
-const stateOf = (mark: string) => STATE_OF[mark] ?? 'skipped';
+const stateOf = (mark: string) => STATE_OF.get(mark) ?? 'skipped';
 
 const withMessage = (message: string | undefined) =>
   message ? { message: message.slice(0, MESSAGE_MAX) } : {};
@@ -436,6 +448,8 @@ const playwrightLine = readWith([
     (c, m) => {
       // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
       const field = m[2] === 'flaky' ? 'passed' : m[2] === 'did not run' ? 'skipped' : m[2];
+      // SAFETY: the pattern captures passed|failed|skipped|flaky|did not run, and the
+      // two non-states were mapped to `passed` / `skipped` above.
       c.summary({ [field as TestState]: Number(m[1]) });
     },
   ],

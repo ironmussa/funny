@@ -218,8 +218,6 @@ function useMermaidPanZoom(): PanZoom {
   };
 }
 
-const MERMAID_INLINE_HEIGHT = 420;
-
 export function MermaidBlock({ chart }: { chart: string }) {
   const { svg, error } = useMermaidSvg(chart);
   const [expanded, setExpanded] = useState(false);
@@ -252,14 +250,15 @@ export function MermaidBlock({ chart }: { chart: string }) {
   return (
     <>
       <div
-        className="group border-border bg-card relative overflow-hidden rounded border"
-        style={{ height: MERMAID_INLINE_HEIGHT }}
+        className="group border-border bg-card relative h-[420px] overflow-hidden rounded border"
         data-testid="mermaid-diagram"
       >
         <div
           ref={zoomContainerRef}
-          className="absolute inset-0 flex items-center justify-center select-none"
-          style={{ cursor: pz.isDragging ? 'grabbing' : 'grab' }}
+          className={cn(
+            'absolute inset-0 flex items-center justify-center select-none',
+            pz.isDragging ? 'cursor-grabbing' : 'cursor-grab',
+          )}
           onPointerDown={pz.onPointerDown}
           onPointerMove={pz.onPointerMove}
           onPointerUp={pz.onPointerUp}
@@ -268,10 +267,9 @@ export function MermaidBlock({ chart }: { chart: string }) {
           <div
             key={svg}
             ref={fitOnMount}
-            className="[&>svg]:max-w-none"
+            className="origin-center [transform:var(--mermaid-transform)] [&>svg]:max-w-none"
             style={{
-              transform: `translate(${pz.offset.x}px, ${pz.offset.y}px) scale(${pz.scale})`,
-              transformOrigin: 'center center',
+              '--mermaid-transform': `translate(${pz.offset.x}px, ${pz.offset.y}px) scale(${pz.scale})`,
             }}
             // SVG is sanitized by sanitizeMermaidSvg() (scripts removed,
             // javascript: URLs scrubbed).
@@ -317,10 +315,9 @@ export function MermaidBlock({ chart }: { chart: string }) {
                   variant="muted"
                   size="icon-sm"
                   onClick={pz.reset}
-                  className="text-xs"
                   data-testid="mermaid-inline-zoom-reset"
                 >
-                  1:1
+                  <span className="text-xs">1:1</span>
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Reset zoom</TooltipContent>
@@ -489,25 +486,17 @@ function ToolbarButton({
   label,
   testId,
   onClick,
-  className,
   children,
 }: {
   label: string;
   testId: string;
   onClick: () => void;
-  className?: string;
   children: React.ReactNode;
 }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Button
-          variant="muted"
-          size="icon-sm"
-          onClick={onClick}
-          className={cn(className)}
-          data-testid={testId}
-        >
+        <Button variant="muted" size="icon-sm" onClick={onClick} data-testid={testId}>
           {children}
         </Button>
       </TooltipTrigger>
@@ -516,11 +505,11 @@ function ToolbarButton({
   );
 }
 
-function CopyFeedbackIcon({ copied, icon: Icon }: { copied: boolean; icon: typeof Code }) {
+function CopyFeedbackIcon({ copied, icon: GlyphIcon }: { copied: boolean; icon: typeof Code }) {
   return copied ? (
     <Check className="icon-base copy-feedback-icon text-status-success" />
   ) : (
-    <Icon className="icon-base copy-feedback-icon" />
+    <GlyphIcon className="icon-base copy-feedback-icon" />
   );
 }
 
@@ -558,11 +547,12 @@ export function MermaidExpandedDialog({
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
       <DialogContent
+        flush
         className={cn(
           isFullscreen
             ? 'max-w-[100vw] max-h-screen w-screen h-screen'
             : 'w-[90vw] max-w-[1200px] h-[85vh]',
-          'flex flex-col gap-0 overflow-hidden p-0',
+          'flex flex-col overflow-hidden',
         )}
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
@@ -570,7 +560,7 @@ export function MermaidExpandedDialog({
           Invalid or unsupported diagram: {error}
         </div>
         <DialogHeader bordered>
-          <DialogTitle size="sm" className="flex items-center gap-2">
+          <DialogTitle size="sm" className="flex items-center">
             Mermaid Diagram
           </DialogTitle>
           <DialogDescription className="sr-only">Expanded Mermaid diagram view</DialogDescription>
@@ -606,13 +596,8 @@ export function MermaidExpandedDialog({
             <ToolbarButton label="Zoom in" testId="mermaid-zoom-in" onClick={() => pz.zoomBy(1.2)}>
               <ZoomIn className="icon-base" />
             </ToolbarButton>
-            <ToolbarButton
-              label="Reset zoom"
-              testId="mermaid-zoom-reset"
-              onClick={pz.reset}
-              className="text-xs"
-            >
-              1:1
+            <ToolbarButton label="Reset zoom" testId="mermaid-zoom-reset" onClick={pz.reset}>
+              <span className="text-xs">1:1</span>
             </ToolbarButton>
             <ToolbarButton
               label={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
@@ -633,8 +618,10 @@ export function MermaidExpandedDialog({
 
         <div
           ref={zoomContainerRef}
-          className="bg-background flex min-h-0 flex-1 items-center justify-center overflow-hidden select-none"
-          style={{ cursor: pz.isDragging ? 'grabbing' : 'grab' }}
+          className={cn(
+            'bg-background flex min-h-0 flex-1 items-center justify-center overflow-hidden select-none',
+            pz.isDragging ? 'cursor-grabbing' : 'cursor-grab',
+          )}
           onPointerDown={pz.onPointerDown}
           onPointerMove={pz.onPointerMove}
           onPointerUp={pz.onPointerUp}
@@ -643,10 +630,9 @@ export function MermaidExpandedDialog({
           <div
             key={dialogSvg}
             ref={fitOnMount}
-            className="[&>svg]:max-w-none"
+            className="origin-center [transform:var(--mermaid-transform)] [&>svg]:max-w-none"
             style={{
-              transform: `translate(${pz.offset.x}px, ${pz.offset.y}px) scale(${pz.scale})`,
-              transformOrigin: 'center center',
+              '--mermaid-transform': `translate(${pz.offset.x}px, ${pz.offset.y}px) scale(${pz.scale})`,
             }}
             // SVG is sanitized by sanitizeMermaidSvg() and mermaid runs at
             // SVG output is sanitized before insertion.

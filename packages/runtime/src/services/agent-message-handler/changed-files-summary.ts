@@ -21,7 +21,7 @@ import { latestSessionChanges } from '@funny/shared';
 
 import { log } from '../../lib/logger.js';
 import { computeBranchKey } from '../../utils/git-status-helpers.js';
-import type { ThreadEventData } from '../server-interfaces.js';
+import type { RuntimeThreadWithMessages, ThreadEventData } from '../server-interfaces.js';
 import { getServices } from '../service-registry.js';
 import { canDoGitOps } from '../thread-context.js';
 import type { MessageHandlerContext } from './context.js';
@@ -101,12 +101,12 @@ export async function persistChangedFilesSummary(
 ): Promise<void> {
   if (!claimChangedFilesSummary(ctx, threadId)) return;
 
-  const data = await loadLatestTurn(ctx, threadId);
+  const data: RuntimeThreadWithMessages | null = await loadLatestTurn(ctx, threadId);
   if (!data) return;
   // Scratch threads have no repo — nothing to diff or summarize.
-  if (!canDoGitOps(data as { isScratch?: boolean })) return;
+  if (!canDoGitOps(data)) return;
 
-  const messages = (data as { messages?: any[] }).messages ?? [];
+  const messages = data.messages ?? [];
   if (messages.length === 0) return;
 
   const cwd = await summaryCwd(ctx, data);

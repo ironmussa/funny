@@ -105,7 +105,7 @@ export function hasValidDeclaredDeliveryClass(
 ): boolean {
   const expected =
     message.$typeName === 'browser.v1.ApplicationEvent'
-      ? applicationEventDeliveryPolicy(message as ApplicationEvent)
-      : interactiveDeliveryPolicy(message as InteractiveEnvelope);
+      ? applicationEventDeliveryPolicy(message)
+      : interactiveDeliveryPolicy(message);
   return message.delivery?.deliveryClass === expected.deliveryClass;
 }

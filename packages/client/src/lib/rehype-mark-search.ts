@@ -1,11 +1,14 @@
 type TextNode = { type: 'text'; value: string };
+/** An element property's value, as hast types it. */
+type PropertyValue = string | number | boolean | null | undefined | Array<string | number>;
 type ElementNode = {
   type: 'element';
   tagName: string;
-  properties?: Record<string, unknown>;
+  properties?: { [name: string]: PropertyValue };
   children: NodeContent[];
 };
-type NodeContent = TextNode | ElementNode | { type: string; [key: string]: unknown };
+/** Any other node (comment, doctype, raw) is passed through untouched. */
+type NodeContent = TextNode | ElementNode | { type: string };
 type RootNode = { type: 'root'; children: NodeContent[] };
 
 export interface RehypeMarkSearchOptions {
@@ -31,6 +34,8 @@ export function rehypeMarkSearch(options: RehypeMarkSearchOptions = { query: '' 
       const out: NodeContent[] = [];
       for (const child of children) {
         if (child.type === 'element') {
+          // SAFETY: a hast node of type 'element' always carries tagName and
+          // children, which is the ElementNode shape.
           const element = child as ElementNode;
           const tag = element.tagName;
           if (tag === 'code' || tag === 'pre') {
@@ -40,6 +45,7 @@ export function rehypeMarkSearch(options: RehypeMarkSearchOptions = { query: '' 
           element.children = transformChildren(element.children);
           out.push(element);
         } else if (child.type === 'text') {
+          // SAFETY: a hast node of type 'text' always carries a string value.
           out.push(...splitTextNode(child as TextNode));
         } else {
           out.push(child);

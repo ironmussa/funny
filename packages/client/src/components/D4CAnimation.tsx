@@ -13,8 +13,8 @@ export function D4CAnimation({ size = 'default' }: { size?: 'default' | 'sm' }) 
       {D4C_FRAMES.map((frame, index) => (
         <span
           key={frame}
-          className="d4c-frame col-start-1 row-start-1 inline-block"
-          style={{ animationDelay: `${index * 1.8}s` }}
+          className="d4c-frame col-start-1 row-start-1 inline-block [animation-delay:var(--d4c-frame-delay)]!"
+          style={{ '--d4c-frame-delay': `${index * 1.8}s` }}
         >
           {frame}
         </span>

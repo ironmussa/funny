@@ -8,7 +8,7 @@
  */
 
 import { log } from '../../lib/logger.js';
-import { threadEventBus, type ThreadEventMap } from '../thread-event-bus.js';
+import { threadEventBus } from '../thread-event-bus.js';
 import { agentCompletedGitStatusHandler } from './agent-completed-git-status-handler.js';
 import { agentCompletedQueueHandler } from './agent-completed-queue-handler.js';
 import {
@@ -118,7 +118,7 @@ export function registerAllHandlers(ctx: HandlerServiceContext): void {
       }
     };
 
-    threadEventBus.on(handler.event as keyof ThreadEventMap, wrappedListener as any);
+    threadEventBus.on(handler.event, wrappedListener);
     log.debug(`Registered handler "${handler.name}" on "${handler.event}"`, {
       namespace: 'handler-registry',
       handler: handler.name,

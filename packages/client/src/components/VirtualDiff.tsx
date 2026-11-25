@@ -9,7 +9,6 @@ import {
   useRef,
   useState,
 } from 'react';
-import type { CSSProperties } from 'react';
 
 import { TriCheckbox } from '@/components/ui/tri-checkbox';
 import { ConflictActionBar } from '@/components/virtual-diff/ConflictActionBar';
@@ -173,8 +172,8 @@ export const VirtualDiff = memo(function VirtualDiff({
       // Restore previous isolation
       restore();
 
-      const target = e.target as HTMLElement;
-      const pane = target.closest('[data-pane]') as HTMLElement | null;
+      if (!(e.target instanceof Element)) return;
+      const pane = e.target.closest<HTMLElement>('[data-pane]');
       if (!pane) return;
 
       // Disable all panes that don't match the clicked one
@@ -189,7 +188,7 @@ export const VirtualDiff = memo(function VirtualDiff({
 
     // Clicking outside the diff container restores all panes
     const onDocMouseDown = (e: MouseEvent) => {
-      if (!container.contains(e.target as Node)) restore();
+      if (!(e.target instanceof Node && container.contains(e.target))) restore();
     };
 
     container.addEventListener('mousedown', onMouseDown);
@@ -319,8 +318,10 @@ export const VirtualDiff = memo(function VirtualDiff({
           const lineStart = row.lineIdx;
           let lineEnd = row.lineIdx;
           let j = i + 1;
-          while (j < rows.length && rows[j].type === 'line') {
-            lineEnd = (rows[j] as { type: 'line'; lineIdx: number }).lineIdx;
+          while (j < rows.length) {
+            const next = rows[j];
+            if (next.type !== 'line') break;
+            lineEnd = next.lineIdx;
             j++;
           }
           if (viewMode === 'three-pane') {
@@ -536,7 +537,8 @@ export const VirtualDiff = memo(function VirtualDiff({
   }>({ active: false, mode: true, startLineIdx: -1 });
 
   const getLineIdxFromEvent = useCallback((e: React.MouseEvent | MouseEvent): number | null => {
-    const el = (e.target as HTMLElement).closest('[data-line-idx]');
+    if (!(e.target instanceof Element)) return null;
+    const el = e.target.closest('[data-line-idx]');
     if (!el) return null;
     const v = Number(el.getAttribute('data-line-idx'));
     return Number.isFinite(v) ? v : null;
@@ -546,8 +548,7 @@ export const VirtualDiff = memo(function VirtualDiff({
     (e: React.MouseEvent) => {
       if (!selectable || !onDragSelect || e.button !== 0) return;
       // Only start drag when clicking on the gutter area (checkbox / line numbers)
-      const target = e.target as HTMLElement;
-      if (!target.closest('[data-gutter]')) return;
+      if (!(e.target instanceof Element) || !e.target.closest('[data-gutter]')) return;
       const lineIdx = getLineIdxFromEvent(e);
       if (lineIdx == null) return;
       const willSelect = !selectedLines?.has(lineIdx);
@@ -632,11 +633,10 @@ export const VirtualDiff = memo(function VirtualDiff({
     >
       <div
         className="relative min-h-0 flex-1 overflow-hidden"
-        style={
-          {
-            '--diff-scrollbar-gutter': '12px',
-          } as CSSProperties
-        }
+        style={{
+          '--diff-scrollbar-gutter': '12px',
+          '--vdiff-row-height': `${rowHeight}px`,
+        }}
         data-testid="diff-scroll-frame"
       >
         {/* Vertical scroll area */}
@@ -648,8 +648,8 @@ export const VirtualDiff = memo(function VirtualDiff({
           className={cn(
             'scroll-fade-none scrollbar-visible h-full min-h-0 relative',
             needsHScroll ? 'overflow-y-auto overflow-x-hidden' : 'overflow-auto',
+            '[scrollbar-gutter:stable]',
           )}
-          style={{ scrollbarGutter: 'stable' }}
           data-testid="diff-scroll-area"
           onMouseDown={selectable ? handleDragMouseDown : undefined}
           onMouseMove={selectable ? handleDragMouseMove : undefined}
@@ -657,8 +657,7 @@ export const VirtualDiff = memo(function VirtualDiff({
           onClickCapture={
             selectable
               ? (e) => {
-                  const target = e.target as HTMLElement;
-                  if (target.closest('[data-gutter]')) {
+                  if (e.target instanceof Element && e.target.closest('[data-gutter]')) {
                     e.stopPropagation();
                     e.preventDefault();
                   }
@@ -671,8 +670,8 @@ export const VirtualDiff = memo(function VirtualDiff({
             <div
               className={cn(
                 'sticky top-0 z-10 flex select-none items-center bg-accent/95 font-mono text-(length:--diff-font-size) text-muted-foreground backdrop-blur-xs border-b border-border/50 px-1',
+                'h-[var(--vdiff-row-height)] -mb-[var(--vdiff-row-height)]',
               )}
-              style={{ height: rowHeight, marginBottom: -rowHeight }}
               data-testid="diff-sticky-hunk"
             >
               {selectable && stickyHunk.hunkStartIdx != null ? (
@@ -701,15 +700,17 @@ export const VirtualDiff = memo(function VirtualDiff({
             </div>
           )}
           <div
-            style={{
-              height: totalSize,
-              minWidth: '100%',
+            className={cn(
+              'relative h-[var(--vdiff-total-size)] min-w-full',
               // In split/three-pane mode, horizontal scroll is handled via CSS
               // translateX on each pane's text — the container must stay at 100%
               // so flex-1 columns divide the *visible* width equally.
               // Only unified mode needs to expand the container for native h-scroll.
-              width: maxContentWidth > 0 && !needsHScroll ? maxContentWidth : '100%',
-              position: 'relative',
+              maxContentWidth > 0 && !needsHScroll ? 'w-[var(--vdiff-content-width)]' : 'w-full',
+            )}
+            style={{
+              '--vdiff-total-size': `${totalSize}px`,
+              '--vdiff-content-width': `${maxContentWidth}px`,
             }}
           >
             {virtualizer.getVirtualItems().map((vItem) => {
@@ -722,13 +723,13 @@ export const VirtualDiff = memo(function VirtualDiff({
                     ? { ref: virtualizer.measureElement, 'data-index': vItem.index }
                     : {})}
                   key={vItem.index}
+                  className={cn(
+                    'absolute top-0 left-0 w-full [transform:translateY(var(--vdiff-item-top))]',
+                    wordWrap ? 'min-h-[var(--vdiff-item-height)]' : 'h-[var(--vdiff-item-height)]',
+                  )}
                   style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    ...(wordWrap ? { minHeight: rowH } : { height: rowH }),
-                    transform: `translateY(${vItem.start}px)`,
+                    '--vdiff-item-top': `${vItem.start}px`,
+                    '--vdiff-item-height': `${rowH}px`,
                   }}
                 >
                   {
@@ -739,8 +740,8 @@ export const VirtualDiff = memo(function VirtualDiff({
                       <div
                         className={cn(
                           'flex select-none items-center bg-accent font-mono text-(length:--diff-font-size) text-muted-foreground px-1',
+                          'h-[var(--vdiff-row-height)]',
                         )}
-                        style={{ height: rowHeight }}
                       >
                         {selectable && row.hunkStartIdx != null ? (
                           (() => {
@@ -777,8 +778,8 @@ export const VirtualDiff = memo(function VirtualDiff({
                         type="button"
                         className={cn(
                           'flex w-full select-none items-center bg-muted/50 font-mono text-(length:--diff-font-size) text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground px-1',
+                          'h-[var(--vdiff-row-height)]',
                         )}
-                        style={{ height: rowHeight }}
                         onClick={() => toggleFold(row.sectionIdx)}
                         data-testid="diff-fold-toggle"
                       >
@@ -838,11 +839,13 @@ export const VirtualDiff = memo(function VirtualDiff({
       {needsHScroll && (
         <div
           ref={hScrollBarRef}
-          className="scroll-fade-none scrollbar-visible shrink-0 overflow-x-auto overflow-y-hidden"
-          style={{ height: 10 }}
+          className="scroll-fade-none scrollbar-visible h-2.5 shrink-0 overflow-x-auto overflow-y-hidden"
           data-testid="diff-h-scrollbar"
         >
-          <div style={{ width: hSpacerWidth, height: 1 }} />
+          <div
+            className="h-px w-[var(--vdiff-h-spacer-width)]"
+            style={{ '--vdiff-h-spacer-width': `${hSpacerWidth}px` }}
+          />
         </div>
       )}
     </div>

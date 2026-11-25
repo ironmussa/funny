@@ -69,13 +69,18 @@ const stateFromColor = (color: ColorInstance): ColorState => {
   };
 };
 
-const rgbaFromState = ({ hue, saturation, lightness, alpha }: ColorState) => {
+const rgbaFromState = ({
+  hue,
+  saturation,
+  lightness,
+  alpha,
+}: ColorState): [number, number, number, number] => {
   const rgba = createColor
     .hsl(hue, saturation, lightness)
     .alpha(alpha / 100)
     .rgb()
     .array();
-  return [rgba[0], rgba[1], rgba[2], alpha / 100] as [number, number, number, number];
+  return [rgba[0], rgba[1], rgba[2], alpha / 100];
 };
 
 const ColorPickerContext = createContext<ColorPickerContextValue | undefined>(undefined);
@@ -188,74 +193,83 @@ export const ColorPicker = ({
   );
 };
 
-export type ColorPickerSelectionProps = HTMLAttributes<HTMLDivElement>;
+export type ColorPickerSelectionProps = HTMLAttributes<HTMLDivElement> & {
+  /** `lg`: the 8px corners of a card-sized picker. */
+  corners?: 'default' | 'lg';
+};
 
-export const ColorPickerSelection = memo(({ className, ...props }: ColorPickerSelectionProps) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [positionX, setPositionX] = useState(0);
-  const [positionY, setPositionY] = useState(0);
-  const { hue, setSaturation, setLightness } = useColorPicker();
+export const ColorPickerSelection = memo(
+  ({ className, corners = 'default', ...props }: ColorPickerSelectionProps) => {
+    const containerRef = useRef<HTMLDivElement>(null);
+    const [isDragging, setIsDragging] = useState(false);
+    const [positionX, setPositionX] = useState(0);
+    const [positionY, setPositionY] = useState(0);
+    const { hue, setSaturation, setLightness } = useColorPicker();
 
-  const backgroundGradient = useMemo(() => {
-    return `linear-gradient(0deg, rgba(0,0,0,1), rgba(0,0,0,0)),
+    const backgroundGradient = useMemo(() => {
+      return `linear-gradient(0deg, rgba(0,0,0,1), rgba(0,0,0,0)),
             linear-gradient(90deg, rgba(255,255,255,1), rgba(255,255,255,0)),
             hsl(${hue}, 100%, 50%)`;
-  }, [hue]);
+    }, [hue]);
 
-  const updatePointerPosition = useCallback(
-    (event: PointerEvent) => {
-      if (!containerRef.current) return;
-      const rect = containerRef.current.getBoundingClientRect();
-      const x = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
-      const y = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
-      setPositionX(x);
-      setPositionY(y);
-      setSaturation(x * 100);
-      const topLightness = x < 0.01 ? 100 : 50 + 50 * (1 - x);
-      const lightness = topLightness * (1 - y);
-      setLightness(lightness);
-    },
-    [setLightness, setSaturation],
-  );
+    const updatePointerPosition = useCallback(
+      (event: PointerEvent) => {
+        if (!containerRef.current) return;
+        const rect = containerRef.current.getBoundingClientRect();
+        const x = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+        const y = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
+        setPositionX(x);
+        setPositionY(y);
+        setSaturation(x * 100);
+        const topLightness = x < 0.01 ? 100 : 50 + 50 * (1 - x);
+        const lightness = topLightness * (1 - y);
+        setLightness(lightness);
+      },
+      [setLightness, setSaturation],
+    );
 
-  const updatePointerPositionEvent = useStableCallback(updatePointerPosition);
+    const updatePointerPositionEvent = useStableCallback(updatePointerPosition);
 
-  useEffect(() => {
-    if (!isDragging) return;
-    const handlePointerMove = (e: PointerEvent) => updatePointerPositionEvent(e);
-    const handlePointerUp = () => setIsDragging(false);
-    window.addEventListener('pointermove', handlePointerMove);
-    window.addEventListener('pointerup', handlePointerUp);
-    return () => {
-      window.removeEventListener('pointermove', handlePointerMove);
-      window.removeEventListener('pointerup', handlePointerUp);
-    };
-  }, [isDragging, updatePointerPositionEvent]);
+    useEffect(() => {
+      if (!isDragging) return;
+      const handlePointerMove = (e: PointerEvent) => updatePointerPositionEvent(e);
+      const handlePointerUp = () => setIsDragging(false);
+      window.addEventListener('pointermove', handlePointerMove);
+      window.addEventListener('pointerup', handlePointerUp);
+      return () => {
+        window.removeEventListener('pointermove', handlePointerMove);
+        window.removeEventListener('pointerup', handlePointerUp);
+      };
+    }, [isDragging, updatePointerPositionEvent]);
 
-  return (
-    <div
-      className={cn('relative size-full cursor-crosshair rounded', className)}
-      onPointerDown={(e) => {
-        e.preventDefault();
-        setIsDragging(true);
-        updatePointerPosition(e.nativeEvent);
-      }}
-      ref={containerRef}
-      style={{ background: backgroundGradient }}
-      {...props}
-    >
+    return (
       <div
-        className="pointer-events-none absolute size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white"
-        style={{
-          left: `${positionX * 100}%`,
-          top: `${positionY * 100}%`,
-          boxShadow: '0 0 0 1px rgba(0,0,0,0.5)',
+        className={cn(
+          'relative size-full cursor-crosshair rounded',
+          corners === 'lg' && 'rounded-lg',
+          className,
+        )}
+        onPointerDown={(e) => {
+          e.preventDefault();
+          setIsDragging(true);
+          updatePointerPosition(e.nativeEvent);
         }}
-      />
-    </div>
-  );
-});
+        ref={containerRef}
+        style={{ background: backgroundGradient }}
+        {...props}
+      >
+        <div
+          className="pointer-events-none absolute size-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white"
+          style={{
+            left: `${positionX * 100}%`,
+            top: `${positionY * 100}%`,
+            boxShadow: '0 0 0 1px rgba(0,0,0,0.5)',
+          }}
+        />
+      </div>
+    );
+  },
+);
 ColorPickerSelection.displayName = 'ColorPickerSelection';
 
 export type ColorPickerHueProps = ComponentProps<typeof Slider.Root>;

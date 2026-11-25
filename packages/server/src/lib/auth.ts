@@ -21,7 +21,11 @@ import { audit } from './audit.js';
 import { resolveCorsOrigins } from './cors-origins.js';
 import { ensureDataDir } from './data-dir.js';
 import { log } from './logger.js';
-import { validateAuthRequestPassword, validatePasswordStrength } from './password-policy.js';
+import {
+  authRequestPasswordsSchema,
+  validateAuthRequestPassword,
+  validatePasswordStrength,
+} from './password-policy.js';
 import { getAuthSecret } from './server-secrets.js';
 
 /**
@@ -187,7 +191,10 @@ export async function initBetterAuth(): Promise<void> {
       // Issue #201: every endpoint that sets a password (change, reset,
       // admin create / set) must clear the same policy as invite registration.
       before: createAuthMiddleware(async (ctx) => {
-        const policy = validateAuthRequestPassword(ctx.path, ctx.body);
+        const policy = validateAuthRequestPassword(
+          ctx.path,
+          authRequestPasswordsSchema.parse(ctx.body),
+        );
         if (!policy.ok) {
           throw new APIError('BAD_REQUEST', {
             code: 'PASSWORD_POLICY',

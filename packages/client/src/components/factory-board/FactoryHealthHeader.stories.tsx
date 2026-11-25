@@ -73,6 +73,7 @@ export const WithIncident: Story = {
       maxConcurrent: 4,
       autoMerge: 'low_risk',
       sensitivePaths: [],
+      sizeGateEnabled: false,
       maxLowRiskLines: 400,
       approvalAdjustMaxLines: 0,
       sizeIgnoredPaths: [],
@@ -82,6 +83,7 @@ export const WithIncident: Story = {
       dependencies: 'wait',
       tooBig: 'ask',
       holdPathsAwaitingApproval: false,
+      baseBranch: '',
       blockedReason: null,
       updatedAt: ago(1),
       incident: {

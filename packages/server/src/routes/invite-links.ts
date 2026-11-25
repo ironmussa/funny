@@ -25,7 +25,7 @@ import { inviteLinks, user as userTable } from '../db/schema.js';
 import { audit } from '../lib/audit.js';
 import { auth } from '../lib/auth.js';
 import { log } from '../lib/logger.js';
-import { validatePasswordStrength } from '../lib/password-policy.js';
+import { authRequestPasswordsSchema, validatePasswordStrength } from '../lib/password-policy.js';
 import { authorizer } from '../lib/server-authorizer.js';
 import type { ServerEnv } from '../lib/types.js';
 import { parseJsonBody } from '../validation/request.js';
@@ -241,8 +241,9 @@ inviteLinkPublicRoutes.post('/register', async (c) => {
     return c.json({ error: 'Token, username, and password are required' }, 400);
   }
 
-  // Enforce shared password strength policy (Security M5).
-  const strength = validatePasswordStrength(body.password);
+  // Enforce shared password strength policy (Security M5). The body is not
+  // validated, so a password that is not text parses as missing.
+  const strength = validatePasswordStrength(authRequestPasswordsSchema.parse(body).password);
   if (!strength.ok) {
     return c.json({ error: strength.reason }, 400);
   }

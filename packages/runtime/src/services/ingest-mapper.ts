@@ -37,6 +37,19 @@ export interface IngestEvent {
   metadata?: JsonObject;
 }
 
+/**
+ * Reads one field of an ingest event's `data` or `metadata` as the type its
+ * producer sends. The field is not checked: the value is returned exactly as
+ * received (`undefined` when absent), like the inline casts this replaces.
+ */
+function field<T = string>(source: JsonObject | undefined, key: string): T | undefined {
+  // SAFETY: unchecked on purpose. `/api/ingest` does not validate the shape of
+  // `data` / `metadata` (it depends on `event_type`), and the pipeline and
+  // workflow producers send these fields with the type the caller names. A
+  // field of another JSON type passes through unchanged, as it always has.
+  return source?.[key] as T | undefined;
+}
+
 interface ExternalThreadState {
   threadId: string;
   projectId: string;
@@ -223,7 +236,7 @@ async function onAccepted(event: IngestEvent): Promise<string | undefined> {
         await tm.updateThread(existing.threadId, { provider: 'external' });
         threadStates.set(request_id, existing);
       }
-      const prompt = (data.prompt as string) ?? (metadata?.prompt as string);
+      const prompt = field(data, 'prompt') ?? field(metadata, 'prompt');
       if (prompt) {
         await tm.insertMessage({ threadId: existing.threadId, role: 'user', content: prompt });
         emitWS(existing, {
@@ -253,14 +266,16 @@ async function onAccepted(event: IngestEvent): Promise<string | undefined> {
   }
 
   // Resolve project — prefer top-level data.projectId, then metadata, then auto-detect by path or repo
+  const worktreePathHint = field(data, 'worktree_path');
+  const repoFullName = field(data, 'repo_full_name');
   let projectId: string | null =
-    (data.projectId as string) ??
-    (metadata?.projectId as string) ??
-    (data.worktree_path ? await resolveProjectId(data.worktree_path as string) : null);
+    field(data, 'projectId') ??
+    field(metadata, 'projectId') ??
+    (worktreePathHint ? await resolveProjectId(worktreePathHint) : null);
 
   // Fallback: resolve by GitHub owner/repo (e.g. from standalone reviewbot)
-  if (!projectId && data.repo_full_name) {
-    projectId = await resolveProjectByRepo(data.repo_full_name as string);
+  if (!projectId && repoFullName) {
+    projectId = await resolveProjectByRepo(repoFullName);
   }
 
   if (!projectId) {
@@ -271,22 +286,22 @@ async function onAccepted(event: IngestEvent): Promise<string | undefined> {
   }
 
   const threadId = nanoid();
-  const userId = (metadata?.userId as string) ?? '';
+  const userId = field(metadata, 'userId') ?? '';
   const title =
-    (data.title as string) ??
+    field(data, 'title') ??
     (data.branch ? `Pipeline: ${data.branch}` : `External: ${request_id.slice(0, 8)}`);
   // Resolve branch: prefer explicit value from event, fall back to current branch
   // so local-mode threads share branchKey with siblings on the same branch.
   const project = await getServices().projects.getProject(projectId);
-  let branch = (data.branch as string) ?? null;
+  let branch = field(data, 'branch') ?? null;
   if (!branch && project) {
     const branchResult = await getCurrentBranch(project.path);
     if (branchResult.isOk()) branch = branchResult.value;
   }
-  const baseBranch = (data.base_branch as string) ?? branch;
-  const worktreePath = (data.worktree_path as string) ?? null;
+  const baseBranch = field(data, 'base_branch') ?? branch;
+  const worktreePath = field(data, 'worktree_path') ?? null;
   // createdBy: allow external caller to specify agent/pipeline name, otherwise mark as "external"
-  const createdBy = (metadata?.createdBy as string) ?? (data.created_by as string) ?? 'external';
+  const createdBy = field(metadata, 'createdBy') ?? field(data, 'created_by') ?? 'external';
 
   await tm.createThread({
     id: threadId,
@@ -298,7 +313,7 @@ async function onAccepted(event: IngestEvent): Promise<string | undefined> {
     permissionMode: 'autoEdit',
     status: 'pending',
     stage: 'in_progress',
-    model: (data.model as string) ?? DEFAULT_MODEL,
+    model: field(data, 'model') ?? DEFAULT_MODEL,
     branch,
     baseBranch,
     worktreePath,
@@ -314,7 +329,7 @@ async function onAccepted(event: IngestEvent): Promise<string | undefined> {
   threadStates.set(request_id, state);
 
   // Insert initial prompt as user message if provided
-  const prompt = (data.prompt as string) ?? (metadata?.prompt as string);
+  const prompt = field(data, 'prompt') ?? field(metadata, 'prompt');
   if (prompt) {
     await tm.insertMessage({ threadId, role: 'user', content: prompt });
   }
@@ -351,7 +366,7 @@ async function onCompleted(event: IngestEvent): Promise<void> {
 
   // If the event carries an error_message (e.g. non-fatal warning from agent),
   // insert it as a visible chat message before completing the thread.
-  const errorMessage = event.data.error_message as string | undefined;
+  const errorMessage = field(event.data, 'error_message');
   if (errorMessage) {
     const msgId = await tm.insertMessage({
       threadId: state.threadId,
@@ -366,9 +381,9 @@ async function onCompleted(event: IngestEvent): Promise<void> {
   }
 
   const now = new Date().toISOString();
-  const costUsd = (event.data.cost_usd as number) ?? (event.data.cost as number) ?? 0;
+  const costUsd = field<number>(event.data, 'cost_usd') ?? field<number>(event.data, 'cost') ?? 0;
   const durationMs =
-    (event.data.duration_ms as number) ?? (event.data.duration as number) ?? undefined;
+    field<number>(event.data, 'duration_ms') ?? field<number>(event.data, 'duration') ?? undefined;
 
   await tm.updateThread(state.threadId, {
     status: 'completed',
@@ -384,7 +399,7 @@ async function onCompleted(event: IngestEvent): Promise<void> {
       status: 'completed',
       cost: costUsd,
       duration: durationMs,
-      result: (event.data.result as string) ?? 'Completed',
+      result: field(event.data, 'result') ?? 'Completed',
       stage: 'review',
     },
   });
@@ -409,7 +424,7 @@ async function onFailed(event: IngestEvent): Promise<void> {
 
   // If the event carries an error_message, insert it as a visible chat message before failing.
   const errorMessage =
-    (event.data.error_message as string) ?? (event.data.error as string) ?? undefined;
+    field(event.data, 'error_message') ?? field(event.data, 'error') ?? undefined;
   if (errorMessage) {
     const msgId = await tm.insertMessage({
       threadId: state.threadId,
@@ -424,10 +439,10 @@ async function onFailed(event: IngestEvent): Promise<void> {
   }
 
   const now = new Date().toISOString();
-  const error = (event.data.error as string) ?? (event.data.message as string) ?? 'Failed';
-  const costUsd = (event.data.cost_usd as number) ?? (event.data.cost as number) ?? 0;
+  const error = field(event.data, 'error') ?? field(event.data, 'message') ?? 'Failed';
+  const costUsd = field<number>(event.data, 'cost_usd') ?? field<number>(event.data, 'cost') ?? 0;
   const durationMs =
-    (event.data.duration_ms as number) ?? (event.data.duration as number) ?? undefined;
+    field<number>(event.data, 'duration_ms') ?? field<number>(event.data, 'duration') ?? undefined;
 
   await tm.updateThread(state.threadId, {
     status: 'failed',
@@ -443,7 +458,7 @@ async function onFailed(event: IngestEvent): Promise<void> {
       cost: costUsd,
       duration: durationMs,
       result: error,
-      errorReason: (event.data.subtype as string) ?? 'error',
+      errorReason: field(event.data, 'subtype') ?? 'error',
     },
   });
 
@@ -471,13 +486,13 @@ async function onCLIMessage(event: IngestEvent): Promise<void> {
   const threadState = await resolveState(event);
   if (!threadState) return;
 
-  const msg = event.data.cli_message as any;
+  const msg: any = event.data.cli_message;
   if (!msg || !msg.type) return;
 
   const stateKey = resolveStateKey(event);
   const cliState = getCLIState(stateKey);
   // Extract author from CLI message (set by pipeline agents)
-  const author = (msg.author as string) ?? (event.data.author as string) ?? undefined;
+  const author: string | undefined = msg.author ?? field(event.data, 'author') ?? undefined;
 
   switch (msg.type) {
     case 'system':
@@ -689,11 +704,11 @@ async function onMessage(event: IngestEvent): Promise<void> {
   if (!state) return;
 
   const content =
-    (event.data.text as string) ??
-    (event.data.content as string) ??
-    (event.data.message as string) ??
+    field(event.data, 'text') ??
+    field(event.data, 'content') ??
+    field(event.data, 'message') ??
     JSON.stringify(event.data);
-  const role = (event.data.role as string) ?? 'assistant';
+  const role = field(event.data, 'role') ?? 'assistant';
 
   const msgId = await tm.insertMessage({ threadId: state.threadId, role, content });
   emitWS(state, {
@@ -710,8 +725,8 @@ async function onWorkflowEvent(event: IngestEvent): Promise<void> {
   if (!state) return;
 
   const { event_type, data } = event;
-  const runId = (data.run_id as string) ?? event.request_id;
-  const workflowName = (data.workflow_name as string) ?? 'unknown';
+  const runId = field(data, 'run_id') ?? event.request_id;
+  const workflowName = field(data, 'workflow_name') ?? 'unknown';
 
   if (event_type === 'workflow.started') {
     const wsEvent: WSEvent = {
@@ -731,9 +746,9 @@ async function onWorkflowEvent(event: IngestEvent): Promise<void> {
       data: {
         runId,
         workflowName,
-        stepName: (data.step_name as string) ?? 'unknown',
+        stepName: field(data, 'step_name') ?? 'unknown',
         status: 'completed',
-        output: (data.output as JsonObject) ?? undefined,
+        output: field<JsonObject>(data, 'output') ?? undefined,
       } satisfies WSWorkflowStepData,
     };
     emitWS(state, wsEvent);
@@ -746,7 +761,8 @@ async function onWorkflowEvent(event: IngestEvent): Promise<void> {
         workflowName,
         status: 'completed',
         qualityScores:
-          (data.quality_scores as Record<string, { status: string; details: string }>) ?? undefined,
+          field<Record<string, { status: string; details: string }>>(data, 'quality_scores') ??
+          undefined,
       } satisfies WSWorkflowStatusData,
     };
     emitWS(state, wsEvent);
@@ -882,9 +898,9 @@ async function onSessionToolCall(event: IngestEvent): Promise<void> {
   const threadId = state.threadId;
   const data = event.data;
 
-  const toolName = (data.tool_name as string) ?? 'unknown';
+  const toolName = field(data, 'tool_name') ?? 'unknown';
   const toolInput = data.tool_input ?? {};
-  const toolCallId = (data.tool_call_id as string) ?? '';
+  const toolCallId = field(data, 'tool_call_id') ?? '';
 
   // Ensure a parent assistant message exists for the tool call
   const cliState = resolveCliState(event.request_id);
@@ -934,8 +950,8 @@ async function onSessionToolResult(event: IngestEvent): Promise<void> {
   if (!state) return;
 
   const data = event.data;
-  const agentToolCallId = (data.tool_call_id as string) ?? '';
-  const output = (data.output as string) ?? '';
+  const agentToolCallId = field(data, 'tool_call_id') ?? '';
+  const output = field(data, 'output') ?? '';
 
   const cliState = resolveCliState(event.request_id);
   const dbToolCallId = cliState.processedToolUseIds.get(agentToolCallId);
@@ -975,8 +991,8 @@ async function onBranchSet(event: IngestEvent): Promise<void> {
   const state = await resolveState(event);
   if (!state) return;
 
-  const branch = event.data.branch as string | undefined;
-  const worktreePath = event.data.worktreePath as string | undefined;
+  const branch = field(event.data, 'branch');
+  const worktreePath = field(event.data, 'worktreePath');
 
   if (!branch && !worktreePath) return;
 
@@ -1050,9 +1066,7 @@ export async function handleIngestEvent(event: IngestEvent): Promise<IngestResul
       const state = await resolveState(event);
       if (!state) return {};
       const detail =
-        (event.data.message as string) ??
-        (event.data.detail as string) ??
-        JSON.stringify(event.data);
+        field(event.data, 'message') ?? field(event.data, 'detail') ?? JSON.stringify(event.data);
       const content = `[${event.event_type}] ${detail}`;
       const msgId = await tm.insertMessage({ threadId: state.threadId, role: 'system', content });
       emitWS(state, {

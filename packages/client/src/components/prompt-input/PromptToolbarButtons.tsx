@@ -64,12 +64,11 @@ export function DictationButton(props: DictationButtonProps) {
         <Button
           data-testid="prompt-dictate"
           onClick={onToggleRecording}
-          variant="muted"
+          variant={isRecording ? 'ghost-destructive' : 'muted'}
           size="icon-sm"
           tabIndex={-1}
           aria-label={ariaLabel}
           disabled={loading || isTranscribing}
-          className={cn(isRecording && 'text-destructive hover:text-destructive')}
         >
           <DictationIcon {...props} />
         </Button>

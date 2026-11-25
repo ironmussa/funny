@@ -16,6 +16,7 @@ import type { Context, Hono } from 'hono';
 
 import { DATA_DIR } from '../lib/data-dir.js';
 import { log } from '../lib/logger.js';
+import { isString } from '../lib/value-guards.js';
 import {
   isInstallableProvider,
   providerSetupStatus,
@@ -50,7 +51,7 @@ async function readJsonOrRefuse<Body>(c: Context<HonoEnv>): Promise<Body | Respo
 }
 
 function isProviderId(id: unknown): id is string {
-  return typeof id === 'string' && id.length > 0;
+  return isString(id) && id.length > 0;
 }
 
 /** The body's provider `id` for a signed-in caller, or the response refusing the request. */
@@ -98,6 +99,8 @@ function registerHealthRoutes(app: Hono<HonoEnv>): void {
   });
 
   app.get('/api/system/shells', (c) => {
+    // SAFETY: the specifier is the module named in the type, loaded lazily so
+    // the health route does not import the shell detector at startup.
     const { detectShells } =
       require('../services/shell-detector.js') as typeof import('../services/shell-detector.js');
     return c.json({ shells: detectShells() });
@@ -131,10 +134,12 @@ function registerExternalSessionRoutes(app: Hono<HonoEnv>): void {
 
   app.post('/api/system/claude-code/external-sessions/:sessionId/import', (c) =>
     withExternalSession(c, async ({ sessionId, userId }) => {
+      // SAFETY: only `projectId` is read, typed `unknown`, and checked with
+      // isString before use; a body that is not JSON becomes `{}`.
       const body = (await c.req.json().catch(() => ({}))) as {
         projectId?: unknown;
       };
-      const projectId = typeof body.projectId === 'string' ? body.projectId : null;
+      const projectId = isString(body.projectId) ? body.projectId : null;
       const { importExternalClaudeSession } =
         await import('../services/external-claude-sessions.js');
       const result = await importExternalClaudeSession({
@@ -142,7 +147,11 @@ function registerExternalSessionRoutes(app: Hono<HonoEnv>): void {
         userId,
         projectId,
       });
-      if (!result.ok) return c.json({ error: result.error }, result.status as 400 | 404);
+      if (!result.ok) {
+        // SAFETY: importExternalClaudeSession fails only with 400 (bad session
+        // id or project) or 404 (session not found or another user's).
+        return c.json({ error: result.error }, result.status as 400 | 404);
+      }
       return c.json({
         imported: result.imported,
         thread: result.thread,
@@ -284,13 +293,13 @@ function registerProviderExtensionRoutes(app: Hono<HonoEnv>): void {
     const body = raw;
     const agents = await import('@funny/core/agents');
     let result;
-    if (typeof body.git === 'string' && body.git.trim()) {
+    if (isString(body.git) && body.git.trim()) {
       result = await agents.installProviderExtensionFromGit(
         body.git.trim(),
         { ref: body.ref, subdir: body.subdir },
         providerExtDir(),
       );
-    } else if (typeof body.path === 'string' && body.path.trim()) {
+    } else if (isString(body.path) && body.path.trim()) {
       result = agents.installProviderExtensionFromPath(body.path.trim(), providerExtDir());
     } else {
       return c.json({ ok: false, error: 'provide a `git` or `path` source' }, 400);
@@ -456,6 +465,9 @@ function registerNativeGitBuildRoute(app: Hono<HonoEnv>): void {
     }
 
     const emitBuild = (type: NativeGitBuildEventType, data: NativeGitBuildEventData) => {
+      // SAFETY: the native-git build events are not in the shared WSEvent
+      // union; the broker forwards any event to the user's sockets unchanged,
+      // and the settings screen listens for these two types by name.
       wsBroker.emitToUser(userId, { type, threadId: '', data } as any);
     };
 
@@ -485,8 +497,8 @@ function registerNativeGitBuildRoute(app: Hono<HonoEnv>): void {
       }
     };
 
-    void streamReader(proc.stdout as ReadableStream<Uint8Array>, 'stdout');
-    void streamReader(proc.stderr as ReadableStream<Uint8Array>, 'stderr');
+    void streamReader(proc.stdout, 'stdout');
+    void streamReader(proc.stderr, 'stderr');
 
     void proc.exited.then((exitCode) => {
       nativeGitBuildInProgress = false;

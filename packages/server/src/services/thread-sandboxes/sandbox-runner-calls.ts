@@ -27,6 +27,16 @@ const remoteUrlSchema = z.object({ remoteUrl: z.string().nullable() });
 
 const CHECKOUT_TIMEOUT_MS = 10 * 60_000;
 
+/** The checkout request: clone `repoUrl` at `path`, on `branch` when given. */
+interface SandboxCheckoutBody {
+  path: string;
+  repoUrl: string;
+  branch: string | undefined;
+}
+
+/** A JSON body POSTed to the thread's sandbox runner. */
+type SandboxRunnerPostBody = SandboxCheckoutBody | SandboxMessageBody;
+
 export function createSandboxRunnerCalls(ports: {
   requests?: RunnerRequestPort;
   presence?: RunnerPresencePort;
@@ -53,7 +63,7 @@ export function createSandboxRunnerCalls(ports: {
   const postToThreadRunner = (
     userId: string,
     path: string,
-    payload: unknown,
+    payload: SandboxRunnerPostBody,
     label: string,
     deadlineAt?: number,
   ): ResultAsync<void, string> =>

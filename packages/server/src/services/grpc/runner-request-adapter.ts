@@ -2,6 +2,7 @@ import { retryAsync } from '@funny/shared/async';
 import { isTextualContentType } from '@funny/shared/runner-protocol';
 import { FailureCode } from '@funny/shared/runner-v2/common';
 
+import { isString } from '../../lib/value-guards.js';
 import {
   RunnerRequestTimeoutError,
   type RunnerRequest,
@@ -19,7 +20,7 @@ const MAX_CAPACITY_RETRY_DELAY_MS = 50;
 
 const FIRST_CAPACITY_RETRY_DELAY_MS = 5;
 
-function isCapacityError(error: unknown): boolean {
+function isCapacityError(error: unknown): error is TunnelDispatchError {
   return (
     error instanceof TunnelDispatchError &&
     error.code === FailureCode.RESOURCE_EXHAUSTED &&
@@ -30,7 +31,7 @@ function isCapacityError(error: unknown): boolean {
 /** Exponential backoff while the tunnel is out of capacity, bounded by the request deadline. */
 function dispatchWithCapacityRetry<T>(
   dispatch: () => T,
-  firstError: unknown,
+  cause: unknown,
   deadlineAt: number,
   signal?: AbortSignal,
 ): Promise<T> {
@@ -43,7 +44,7 @@ function dispatchWithCapacityRetry<T>(
   return retryAsync(
     async (_signal, attempt) => {
       // Attempt 1 is the synchronous fast-path failure the caller already observed.
-      if (attempt === 1) throw firstError;
+      if (attempt === 1) throw cause;
       if (deadlineAt - Date.now() <= 0) throw deadlineExceeded();
       return dispatch();
     },
@@ -86,7 +87,7 @@ function streamTunnelBody(exchange: TunnelExchange): ReadableStream<Uint8Array> 
       }
     },
     cancel(reason) {
-      exchange.cancel(typeof reason === 'string' ? reason : 'browser closed the response');
+      exchange.cancel(isString(reason) ? reason : 'browser closed the response');
       void chunks.return?.();
     },
   });
@@ -116,7 +117,7 @@ export class GrpcRunnerRequestAdapter implements RunnerRequestPort {
         body:
           request.body == null
             ? undefined
-            : typeof request.body === 'string'
+            : isString(request.body)
               ? Buffer.from(request.body, 'utf8')
               : request.body,
         deadlineAt,

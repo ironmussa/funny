@@ -13,8 +13,7 @@ export const ConflictActionBar = memo(function ConflictActionBar({
 
   return (
     <div
-      className="flex items-center gap-1.5 px-2 py-0.5 font-sans text-(length:--diff-font-size)"
-      style={{ height: 'var(--diff-row-height)', backgroundColor: 'hsl(210 80% 55% / 0.10)' }}
+      className="bg-conflict-action-bar flex h-[var(--diff-row-height)] items-center gap-1.5 px-2 py-0.5 font-sans text-(length:--diff-font-size)"
       data-testid={`conflict-actions-${block.id}`}
     >
       <span className="text-muted-foreground mr-1 font-medium">Conflict {block.id + 1}:</span>

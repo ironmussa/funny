@@ -67,6 +67,7 @@ export function takeFencedFields(
 
 function shallowEqual(a: Thread, b: Thread): boolean {
   if (a === b) return true;
+  // SAFETY: the keys come from Object.keys(a), and a is a Thread.
   const aKeys = Object.keys(a) as (keyof Thread)[];
   if (aKeys.length !== Object.keys(b).length) return false;
   return aKeys.every((key) => Object.is(a[key], b[key]));
@@ -105,8 +106,9 @@ export function mergeIncomingThread(
 
   let next = incoming;
   if (fenced.size > 0) {
-    const kept: Partial<Record<keyof Thread, unknown>> = {};
-    for (const field of fenced) kept[field] = prev[field];
+    const kept = Object.fromEntries([...fenced].map((field) => [field, prev[field]]));
+    // SAFETY: each kept[field] is prev[field] for a keyof Thread field, so the
+    // spread overwrites Thread fields with values of their own Thread type.
     next = { ...incoming, ...kept } as Thread;
   }
   return shallowEqual(prev, next) ? prev : next;

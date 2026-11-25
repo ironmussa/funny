@@ -35,6 +35,9 @@ export interface FactoryGateChip {
 
 const short = (sha: string) => sha.slice(0, 7);
 
+/** Chip labels start with a capital, like every other chip on the card. */
+const sentenceCase = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);
+
 const PROOF_TONE: Record<'pass' | 'fail' | 'skipped', FactoryGateTone> = {
   pass: 'pass',
   fail: 'fail',
@@ -95,7 +98,11 @@ function problemChip(t: TFunction, run: GateRun): FactoryGateChip | null {
     ? t('factoryBoard.problem.noCommit', 'No commit')
     : (labels.get(reason) ??
       (step
-        ? t('factoryBoard.problem.stepFailed', '{{step}} failed', { step })
+        ? sentenceCase(
+            t('factoryBoard.problem.stepFailed', '{{step}} failed', {
+              step: step.replace(/[-_]+/g, ' '),
+            }),
+          )
         : t('factoryBoard.problem.other', 'Problem')));
   const detail = plainFactoryReason(
     factoryRunWaitingText(t, run) ?? factoryRunReasonText(t, reason),

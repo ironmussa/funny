@@ -8,6 +8,7 @@
  * each other or make an illegal move. `update` never touches the state.
  */
 
+import { errorMessage } from '@funny/shared/errors';
 import {
   sandboxTransitionsFor,
   type SandboxEventType,
@@ -45,7 +46,7 @@ export interface ThreadSandboxStore {
   remove(threadId: string): ResultAsync<void, string>;
 }
 
-const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
+const message = errorMessage;
 
 const get = (threadId: string) =>
   ResultAsync.fromPromise(

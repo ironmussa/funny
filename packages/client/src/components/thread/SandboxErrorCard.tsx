@@ -31,8 +31,14 @@ function isString(value: ThreadEvent['data']): value is string {
 }
 
 function parseData(data: ThreadEvent['data']): SandboxErrorData {
-  if (!isString(data)) return (data ?? {}) as SandboxErrorData;
+  if (!isString(data)) {
+    // SAFETY: only sandbox:error events reach this card, and the server writes
+    // their data as SandboxErrorEventData (thread-sandboxes/sandbox-events.ts),
+    // a superset of SandboxErrorData. A live event may carry it already parsed.
+    return (data ?? {}) as SandboxErrorData;
+  }
   try {
+    // SAFETY: same invariant as above, for data stored as a JSON string.
     return JSON.parse(data) as SandboxErrorData;
   } catch {
     return {};

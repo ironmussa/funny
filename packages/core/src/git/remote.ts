@@ -3,7 +3,7 @@
  */
 
 import { processError, badRequest, internal, type DomainError } from '@funny/shared/errors';
-import { ResultAsync } from 'neverthrow';
+import { errAsync, ResultAsync } from 'neverthrow';
 
 import { git, gitRemote, gitOptional, type GitIdentityOptions } from './base.js';
 import { getCurrentBranch } from './branch.js';
@@ -48,11 +48,8 @@ export function setOrigin(cwd: string, url: string): ResultAsync<void, DomainErr
   const trimmed = url.trim();
   const allowed = /^(https?:\/\/|git:\/\/|ssh:\/\/|git@[^\s:]+:)/;
   if (!trimmed || !allowed.test(trimmed)) {
-    return ResultAsync.fromPromise(
-      Promise.reject(
-        badRequest('Invalid remote URL. Use https://, ssh://, git://, or git@host:path form.'),
-      ),
-      (e) => e as DomainError,
+    return errAsync(
+      badRequest('Invalid remote URL. Use https://, ssh://, git://, or git@host:path form.'),
     );
   }
   return ResultAsync.fromPromise(

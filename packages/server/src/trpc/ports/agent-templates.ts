@@ -27,7 +27,12 @@ function canReadTemplate(row: { userId: string; shared: boolean | null }, userId
   return row.userId === userId || row.shared === true;
 }
 
-function toJson(value: unknown): string | null {
+/** A template field stored as a JSON column, as the shared type or a write body holds it. */
+type TemplateJsonValue =
+  | AgentTemplate[TemplateJsonField]
+  | UpdateAgentTemplateBody[TemplateJsonField];
+
+function toJson(value: TemplateJsonValue): string | null {
   if (value == null) return null;
   return JSON.stringify(value);
 }
@@ -84,6 +89,7 @@ const JSON_FIELDS = [
   'customSkillPaths',
   'variables',
 ] as const;
+type TemplateJsonField = (typeof JSON_FIELDS)[number];
 
 /** Column writes for a PATCH body: scalars as given, list fields as JSON. */
 function templateUpdates(body: UpdateAgentTemplateBody): TemplateUpdate {

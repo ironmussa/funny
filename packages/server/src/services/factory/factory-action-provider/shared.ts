@@ -156,8 +156,8 @@ export interface FactoryActionProviderDeps {
   issueLabels?: string[];
   /** The factory's own sensitive path globs (they make a change high risk). */
   sensitivePaths?: readonly string[];
-  /** The factory's size limit for a low-risk change. */
-  maxLowRiskLines?: number;
+  /** The factory's size limit for a low-risk change; null: the size gate is off. */
+  maxLowRiskLines?: number | null;
   /**
    * Whether a member marked the run as a lint cleanup, read from the row when
    * a commit is classed (a member may mark it while the run waits).
@@ -257,6 +257,8 @@ export interface FactoryActionProviderDeps {
   flowIntegrates?: boolean;
   /** The implementing thread's last assistant message (the "no change" explanation). */
   lastThreadMessage?: (threadId: string) => Promise<string | null>;
+  /** The last error the thread's agent reported since `since` (a failed turn's cause). */
+  lastAgentError?: (threadId: string, since: string) => Promise<string | null>;
   /**
    * Remove the run's worktrees on the enabler's runner (a "no change" run keeps
    * no checkout), except the ones holding work that exists nowhere else
@@ -387,6 +389,8 @@ export type FactoryLaunchBody = {
   baseFromRemote?: boolean;
   /** The worktree's branch: the run's, so the thread and its pull request share it. */
   branch?: string;
+  /** Refuse the launch (409) when another worktree holds `branch`, never use another one. */
+  requireBranch?: boolean;
   /** The agent may only read (`threads.read_only`). */
   readOnly?: boolean;
   /** What a read-only agent reads besides its checkout (the issue's text). */

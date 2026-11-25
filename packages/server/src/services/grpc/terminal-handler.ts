@@ -1,6 +1,7 @@
 import { FailureCode } from '@funny/shared/runner-v2/common';
 import { TERMINAL_SESSION_UNAVAILABLE } from '@funny/shared/socket-events';
 
+import { isString } from '../../lib/value-guards.js';
 import type {
   BrowserEvent,
   RunnerTerminalEvent,
@@ -88,10 +89,14 @@ interface ActiveTerminalStream {
   call: RunnerGrpcCall;
 }
 
-function unsigned(value: unknown): bigint | null {
+/** A wire uint64: the protobuf codec gives a bigint or string, the JSON codec a string or number. */
+type WireUnsigned = string | number | bigint;
+
+function unsigned(value: WireUnsigned | undefined): bigint | null {
+  if (value === undefined) return null;
   try {
-    // SAFETY: BigInt throws on any value it cannot convert, and the catch below maps that to null.
-    const parsed = BigInt(value as string | number | bigint);
+    // BigInt throws on a string it cannot convert; the catch below maps that to null.
+    const parsed = BigInt(value);
     return parsed >= 0n ? parsed : null;
   } catch {
     return null;
@@ -142,7 +147,7 @@ export class RunnerGrpcTerminalDispatcher {
     if (!stream || !this.sessions.isActive(runnerId, stream.epoch)) {
       throw new GrpcTerminalUnavailableError(`Runner ${runnerId} has no gRPC terminal stream`);
     }
-    const terminalId = typeof event.data.id === 'string' ? event.data.id : '';
+    const terminalId = isString(event.data.id) ? event.data.id : '';
     if (!terminalId) throw new Error('terminal ID is required');
     const key = this.key(runnerId, terminalId);
     let state = this.terminals.get(key);
@@ -213,7 +218,7 @@ export class RunnerGrpcTerminalDispatcher {
         this.write(stream, terminalId, { signal: { signal: event.data.signal ?? '' } });
         return;
       case 'pty:rename':
-        state.label = typeof event.data.label === 'string' ? event.data.label : state.label;
+        state.label = isString(event.data.label) ? event.data.label : state.label;
         return;
       case 'pty:close':
       case 'pty:kill':
@@ -253,7 +258,7 @@ export class RunnerGrpcTerminalDispatcher {
   ): void {
     const stream = this.currentStream(runnerId, epoch, call);
     if (!stream) return;
-    const terminalId = typeof frame.terminalId === 'string' ? frame.terminalId : '';
+    const terminalId = isString(frame.terminalId) ? frame.terminalId : '';
     const state = this.terminals.get(this.key(runnerId, terminalId));
     if (!state) return;
 

@@ -77,6 +77,7 @@ export type ThreadEvent =
 // ── Machine ───────────────────────────────────────────────────────
 
 export const threadMachine = setup({
+  // SAFETY: xstate's `types` is a type-only carrier; these empty objects are never read at runtime.
   types: {
     context: {} as ThreadContext,
     events: {} as ThreadEvent,
@@ -100,15 +101,17 @@ export const threadMachine = setup({
           : context.resultInfo,
     }),
     clearResultInfo: assign({ resultInfo: undefined }),
-    setResumeFresh: assign({ resumeReason: 'fresh' as ResumeReason }),
-    setResumeWaitingResponse: assign({ resumeReason: 'waiting-response' as ResumeReason }),
-    setResumeInterrupted: assign({ resumeReason: 'interrupted' as ResumeReason }),
-    setResumeFollowUp: assign({ resumeReason: 'follow-up' as ResumeReason }),
+    setResumeFresh: assign({ resumeReason: 'fresh' }),
+    setResumeWaitingResponse: assign({ resumeReason: 'waiting-response' }),
+    setResumeInterrupted: assign({ resumeReason: 'interrupted' }),
+    setResumeFollowUp: assign({ resumeReason: 'follow-up' }),
     clearResumeReason: assign({ resumeReason: null }),
   },
 }).createMachine({
   id: 'thread',
   initial: 'pending',
+  // SAFETY: the machine declares no input type, so `input` is unknown; every actor is
+  // created with a ThreadContext-shaped input and the optional fields get defaults here.
   context: ({ input }) => ({
     threadId: (input as ThreadContext).threadId,
     cost: (input as ThreadContext).cost ?? 0,
@@ -416,13 +419,15 @@ export function resolveThreadTransition(
   }
   const next = getNextSnapshot(threadMachine, snapshot, event);
   return {
+    // SAFETY: the machine is flat and its state names are the ThreadStatus values,
+    // so the snapshot value is one of them.
     status: next.value as ThreadStatus,
     resumeReason: next.context.resumeReason,
     accepted: true,
   };
 }
 
-const STATUS_WRITE_EVENTS: ThreadEvent['type'][] = [
+const STATUS_WRITE_EVENTS: Exclude<ThreadEvent['type'], 'SET_STATUS'>[] = [
   'START',
   'SETUP_COMPLETE',
   'RESPOND',
@@ -449,9 +454,7 @@ export function isThreadStatus(value: string): value is ThreadStatus {
 export function isThreadStatusWriteModelled(from: ThreadStatus, to: ThreadStatus): boolean {
   if (from === to) return true;
   if (resolveThreadTransition(from, { type: 'SET_STATUS', status: to }).status === to) return true;
-  return STATUS_WRITE_EVENTS.some(
-    (type) => resolveThreadTransition(from, { type } as ThreadEvent).status === to,
-  );
+  return STATUS_WRITE_EVENTS.some((type) => resolveThreadTransition(from, { type }).status === to);
 }
 
 /**

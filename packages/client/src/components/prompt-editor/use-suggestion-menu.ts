@@ -96,7 +96,7 @@ interface SuggestionKeyDownDeps {
   suggestionTypeRef: React.RefObject<SuggestionMenuType | null>;
   suggestionItemsRef: React.RefObject<SuggestionItem[]>;
   suggestionIndexRef: React.RefObject<number>;
-  suggestionCommandRef: React.RefObject<((props: Record<string, unknown>) => void) | null>;
+  suggestionCommandRef: React.RefObject<((item: SuggestionItem) => void) | null>;
   setSuggestionIndex: React.Dispatch<React.SetStateAction<number>>;
   setSuggestionType: React.Dispatch<React.SetStateAction<SuggestionMenuType | null>>;
 }
@@ -113,9 +113,7 @@ function createSuggestionKeyDown(menuType: SuggestionMenuType, deps: SuggestionK
       index: deps.suggestionIndexRef.current,
       setSuggestionIndex: deps.setSuggestionIndex,
       setSuggestionType: deps.setSuggestionType,
-      runCommand: (item) =>
-        // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
-        deps.suggestionCommandRef.current?.(item as unknown as Record<string, unknown>),
+      runCommand: (item) => deps.suggestionCommandRef.current?.(item),
     });
   };
 }
@@ -130,7 +128,7 @@ function useSuggestionMenuState() {
   const [suggestionTruncated, setSuggestionTruncated] = useState(false);
   const [suggestionQuery, setSuggestionQuery] = useState('');
   const [suggestionRect, setSuggestionRect] = useState<(() => DOMRect | null) | null>(null);
-  const suggestionCommandRef = useRef<((props: Record<string, unknown>) => void) | null>(null);
+  const suggestionCommandRef = useRef<((item: SuggestionItem) => void) | null>(null);
   return {
     suggestionType,
     setSuggestionType,
@@ -264,8 +262,7 @@ export function useSuggestionMenu() {
   // ── Handle suggestion item selection from the popup ──
   const handleSuggestionSelect = useCallback(
     (item: SuggestionItem) => {
-      // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
-      suggestionCommandRef.current?.(item as unknown as Record<string, unknown>);
+      suggestionCommandRef.current?.(item);
     },
     [suggestionCommandRef],
   );
@@ -337,7 +334,7 @@ export function useDismissSuggestionsOnOutsideClick(
   useEffect(() => {
     if (!suggestionType) return;
     const handleMouseDown = (e: MouseEvent) => {
-      const target = e.target as Node;
+      const target = e.target instanceof Node ? e.target : null;
       // Check if click is inside the editor
       try {
         if (editor?.view.dom.contains(target)) return;

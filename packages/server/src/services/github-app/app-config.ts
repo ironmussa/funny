@@ -11,6 +11,7 @@
  * manifest flow, stored in `instance_settings` with the key encrypted.
  */
 
+import { errorMessage } from '@funny/shared/errors';
 import { parseStoredJson } from '@funny/shared/json-validation';
 import { eq } from 'drizzle-orm';
 import { ResultAsync } from 'neverthrow';
@@ -54,8 +55,6 @@ const storedAppSchema = z.object({
   slug: z.string().min(1),
   owner: z.string().min(1),
 });
-
-const toMessage = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 /** Platforms that store one-line variables keep the PEM's newlines as `\n`. */
 function normalizePem(raw: string): string {
@@ -108,10 +107,10 @@ export function loadGithubAppConfig(
 ): ResultAsync<GithubAppConfig | null, string> {
   const environment = fromEnvironment(env);
   if (environment instanceof Error) {
-    return ResultAsync.fromPromise(Promise.reject(environment), toMessage);
+    return ResultAsync.fromPromise(Promise.reject(environment), errorMessage);
   }
   if (environment) return ResultAsync.fromSafePromise(Promise.resolve(environment));
-  return ResultAsync.fromPromise(fromDatabase(store), toMessage);
+  return ResultAsync.fromPromise(fromDatabase(store), errorMessage);
 }
 
 /** Store the App the manifest flow created; the private key is encrypted at rest. */
@@ -124,7 +123,7 @@ export function saveGithubApp(
       store.set(APP_KEY, JSON.stringify({ appId: app.appId, slug: app.slug, owner: app.owner })),
       store.set(PRIVATE_KEY_KEY, encrypt(app.privateKey)),
     ]).then(() => undefined),
-    toMessage,
+    errorMessage,
   );
 }
 
@@ -132,7 +131,7 @@ export function saveGithubApp(
 export function deleteGithubApp(store: SettingsStore): ResultAsync<void, string> {
   return ResultAsync.fromPromise(
     Promise.all([store.delete(APP_KEY), store.delete(PRIVATE_KEY_KEY)]).then(() => undefined),
-    toMessage,
+    errorMessage,
   );
 }
 

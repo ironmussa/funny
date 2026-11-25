@@ -1,25 +1,27 @@
 import type { ClientPlatform, StoreApi, AuthSessionState } from '@funny/client-core';
-import type { SafeUser } from '@funny/shared';
+import type { SafeUser, UserProfile } from '@funny/shared';
 import { retryAsync } from '@funny/shared/async';
+import type { JsonObject } from '@funny/shared/json';
 
 import type { NativeCookieJar } from '../platform/transport';
 import { NativeApiError, nativeJsonRequest } from './native-api';
 
+/** Better Auth's `get-session` answer; its user and session fields are checked where read. */
 interface BetterAuthSession {
-  user?: Record<string, unknown> | null;
-  session?: Record<string, unknown> | null;
+  user?: JsonObject | null;
+  session?: JsonObject | null;
 }
 
 export interface NativeAuthBootstrap {
   user: SafeUser;
-  profile: Record<string, unknown>;
+  profile: UserProfile;
 }
 
 function isString(value: unknown): value is string {
   return typeof value === 'string';
 }
 
-function safeUser(value: Record<string, unknown>): SafeUser | null {
+function safeUser(value: JsonObject): SafeUser | null {
   if (!isString(value.id)) return null;
   const username = isString(value.username)
     ? value.username
@@ -35,7 +37,7 @@ function safeUser(value: Record<string, unknown>): SafeUser | null {
 }
 
 export class NativeAuthService {
-  private profile: Record<string, unknown> | null = null;
+  private profile: UserProfile | null = null;
 
   constructor(
     private readonly options: {
@@ -47,7 +49,7 @@ export class NativeAuthService {
     },
   ) {}
 
-  currentProfile(): Record<string, unknown> | null {
+  currentProfile(): UserProfile | null {
     return this.profile;
   }
 
@@ -124,7 +126,7 @@ export class NativeAuthService {
   private async finishBootstrap(session: BetterAuthSession): Promise<NativeAuthBootstrap> {
     const user = session.user ? safeUser(session.user) : null;
     if (!user) throw new Error('Session user payload is invalid');
-    const profile = await this.request<Record<string, unknown>>('/profile');
+    const profile = await this.request<UserProfile>('/profile');
     const activeOrgId = session.session?.activeOrganizationId;
     this.profile = profile;
     this.options.state

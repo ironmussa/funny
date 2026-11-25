@@ -137,12 +137,17 @@ export const EveryState: Story = {
     now: NOW,
     singleProjectId: null,
     onSelect: () => {},
-    onShowOlderDone: () => {},
   },
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     await expect(canvas.getByTestId('factory-board-column-review')).toBeInTheDocument();
-    await expect(canvas.getByTestId('factory-board-done-hidden')).toHaveTextContent('+1');
+    // A run finished days ago still shows in Done.
+    const oldMerged = RUNS.at(-1)!;
+    await expect(
+      within(canvas.getByTestId('factory-board-column-done')).getByTestId(
+        `factory-board-card-${oldMerged.id}`,
+      ),
+    ).toBeInTheDocument();
   },
 };
 

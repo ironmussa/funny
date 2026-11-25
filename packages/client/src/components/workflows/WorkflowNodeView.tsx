@@ -25,13 +25,21 @@ import {
 
 import { cn } from '@/lib/utils';
 
-export type WorkflowNodeData = WorkflowGraphNodeData &
-  Record<string, unknown> & {
-    runStatus?: WorkflowNodeRunState['status'];
-    dimmed?: boolean;
-    /** The nodes declaring a loop whose region holds this node, outermost first. */
-    loops?: string[];
-  };
+interface WorkflowNodeDecoration {
+  runStatus?: WorkflowNodeRunState['status'];
+  dimmed?: boolean;
+  /** The nodes declaring a loop whose region holds this node, outermost first. */
+  loops?: string[];
+}
+
+/**
+ * A node's data as React Flow holds it. Mapped into a type literal because
+ * React Flow's node data must be indexable, which an interface is not.
+ */
+export type WorkflowNodeData = {
+  [K in keyof (WorkflowGraphNodeData & WorkflowNodeDecoration)]: (WorkflowGraphNodeData &
+    WorkflowNodeDecoration)[K];
+};
 export type WorkflowNode = Node<WorkflowNodeData, 'workflowNode'>;
 
 const STATUS_ICON: Partial<Record<WorkflowNodeRunState['status'], LucideIcon>> = {
@@ -172,6 +180,8 @@ export function decorateGraph(
   }
 
   const normalized = filter.trim().toLowerCase();
+  // SAFETY: both graph sources are built by workflowToGraph, whose nodes have type 'workflowNode'
+  // and WorkflowGraphNodeData data; the extra WorkflowNodeData fields are optional.
   const nodes = (graph.nodes as WorkflowNode[]).map((node) => ({
     ...node,
     data: {

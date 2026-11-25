@@ -45,8 +45,13 @@ export async function createAndStartScratchThread(rawParams: CreateAndStartThrea
   const { scratchCwd, params } = await prepareScratchThread(rawParams, threadId);
   const titleSource = params.title || stripReferencedFilesBlock(params.prompt) || params.prompt;
 
-  const resolvedProvider = (params.provider || 'claude') as AgentProvider;
+  const resolvedProvider: AgentProvider = params.provider || 'claude';
+  // SAFETY: params.model passed agentModelSchema at the route; ids of dynamic-catalog
+  // providers (pi, cursor, ...) are not in the AgentModel union and are passed through
+  // unchanged by resolveModelId.
   const resolvedModel = (params.model || DEFAULT_MODEL) as AgentModel;
+  // SAFETY: params.permissionMode passed permissionModeSchema at the route, whose values
+  // are exactly the PermissionMode union.
   const resolvedPermissionMode = (params.permissionMode || 'autoEdit') as PermissionMode;
 
   log.info('createAndStartScratchThread called', {
@@ -59,7 +64,7 @@ export async function createAndStartScratchThread(rawParams: CreateAndStartThrea
 
   const thread = {
     id: threadId,
-    projectId: null as string | null,
+    projectId: null,
     userId: params.userId,
     title: titleSource,
     mode: 'local' as const,
@@ -69,9 +74,9 @@ export async function createAndStartScratchThread(rawParams: CreateAndStartThrea
     model: resolvedModel,
     source: params.source || 'web',
     status: 'pending' as const,
-    branch: undefined as string | undefined,
-    baseBranch: undefined as string | undefined,
-    worktreePath: undefined as string | undefined,
+    branch: undefined,
+    baseBranch: undefined,
+    worktreePath: undefined,
     parentThreadId: params.parentThreadId,
     designId: params.designId,
     agentTemplateId: params.agentTemplateId,
@@ -95,7 +100,7 @@ export async function createAndStartScratchThread(rawParams: CreateAndStartThrea
     });
   }
 
-  await tm.createThread(thread as any);
+  await tm.createThread(thread);
 
   // Persist the user message ourselves so we can pass skipMessageInsert
   // to startAgent (matches the worktree-mode pattern above). Like project

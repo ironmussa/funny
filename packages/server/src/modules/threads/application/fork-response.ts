@@ -1,8 +1,8 @@
-import type { ForkVariant } from './ports.js';
+import type { ForkVariant, RunnerJson } from './ports.js';
 
 // Legacy response interpretation is deliberately permissive; not an authorization boundary.
 /** Where each variant's runner response carries the new thread. */
-export function extractForkedThread(variant: ForkVariant, body: unknown): any {
+export function extractForkedThread(variant: ForkVariant, body: RunnerJson): any {
   // SAFETY: the body is passed on untouched; only the optional `thread` key is read,
   // through `?.`.
   const data = body as any;

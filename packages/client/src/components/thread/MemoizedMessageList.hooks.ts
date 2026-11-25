@@ -222,8 +222,7 @@ export function usePretextWarmup(
     // extend INP on the click that mounted this list.
     const idleId = isCallable(globalThis.requestIdleCallback)
       ? requestIdleCallback(runPrepare, { timeout: 2000 })
-      : // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
-        (setTimeout(runPrepare, 0) as unknown as number);
+      : window.setTimeout(runPrepare, 0);
 
     return () => {
       cancelled = true;
@@ -260,7 +259,7 @@ export function useSyncRenderOnScrollCorrection(
   const rendersThisFrameRef = useRef(0);
 
   return useCallback(
-    (_instance: Virtualizer<HTMLElement, Element>, isScrollNotification: boolean) => {
+    (_instance: Virtualizer<HTMLElement, HTMLElement>, isScrollNotification: boolean) => {
       // Scroll notifications keep React's schedule, so mounting rows never
       // blocks the scroll handler.
       if (isScrollNotification || scheduledRef.current) return;

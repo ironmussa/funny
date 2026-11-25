@@ -27,15 +27,21 @@ async function ensureParser(): Promise<TreeSitterParserConstructor> {
 
   parserInitPromise = (async () => {
     const mod = requireFromCore('web-tree-sitter');
+    // SAFETY: `require` is untyped; web-tree-sitter exports `Parser` and
+    // `Language` (newer builds) or the Parser class itself as the module /
+    // `default` (older ones). Each member is optional and probed below.
     const moduleExports = mod as {
       Parser?: TreeSitterParserConstructor;
       Language?: { load: (path: string) => Promise<any> };
       default?: TreeSitterParserConstructor;
     };
+    // SAFETY: with neither named export, the module itself is the Parser
+    // class (older web-tree-sitter builds); `init()` below fails if it is not.
     const parser =
       moduleExports.Parser ?? moduleExports.default ?? (mod as TreeSitterParserConstructor);
     await parser.init();
 
+    // SAFETY: the same module-as-Parser fallback as `parser` above.
     Parser = moduleExports.Parser ?? moduleExports.default ?? (mod as TreeSitterParserConstructor);
     LanguageLoader = moduleExports.Language ?? Parser.Language ?? null;
     if (!LanguageLoader) {
@@ -53,33 +59,35 @@ async function ensureParser(): Promise<TreeSitterParserConstructor> {
 
 // ── Extension → language mapping ─────────────────────────────
 
-const EXT_TO_LANG: Record<string, string> = {
-  '.ts': 'typescript',
-  '.tsx': 'tsx',
-  '.js': 'javascript',
-  '.jsx': 'javascript',
-  '.mjs': 'javascript',
-  '.cjs': 'javascript',
-  '.py': 'python',
-  '.go': 'go',
-  '.rs': 'rust',
-  '.java': 'java',
-  '.c': 'c',
-  '.h': 'c',
-  '.cpp': 'cpp',
-  '.hpp': 'cpp',
-  '.cc': 'cpp',
-  '.cxx': 'cpp',
-  '.cs': 'c_sharp',
-  '.rb': 'ruby',
-  '.php': 'php',
-};
+const EXT_TO_LANG = new Map(
+  Object.entries({
+    '.ts': 'typescript',
+    '.tsx': 'tsx',
+    '.js': 'javascript',
+    '.jsx': 'javascript',
+    '.mjs': 'javascript',
+    '.cjs': 'javascript',
+    '.py': 'python',
+    '.go': 'go',
+    '.rs': 'rust',
+    '.java': 'java',
+    '.c': 'c',
+    '.h': 'c',
+    '.cpp': 'cpp',
+    '.hpp': 'cpp',
+    '.cc': 'cpp',
+    '.cxx': 'cpp',
+    '.cs': 'c_sharp',
+    '.rb': 'ruby',
+    '.php': 'php',
+  }),
+);
 
 function getLanguageName(filePath: string): string | null {
   const dot = filePath.lastIndexOf('.');
   if (dot === -1) return null;
   const ext = filePath.slice(dot).toLowerCase();
-  return EXT_TO_LANG[ext] ?? null;
+  return EXT_TO_LANG.get(ext) ?? null;
 }
 
 async function loadLanguage(langName: string): Promise<any> {
@@ -119,99 +127,101 @@ interface SymbolNodeDef {
   childKind?: SymbolKind;
 }
 
-const LANG_SYMBOL_DEFS: Record<string, SymbolNodeDef[]> = {
-  typescript: [
-    { nodeType: 'function_declaration', kind: 'function' },
-    { nodeType: 'class_declaration', kind: 'class', walkChildren: true, childKind: 'method' },
-    { nodeType: 'interface_declaration', kind: 'interface' },
-    { nodeType: 'type_alias_declaration', kind: 'type' },
-    { nodeType: 'enum_declaration', kind: 'enum' },
-    { nodeType: 'lexical_declaration', kind: 'variable' },
-    { nodeType: 'variable_declaration', kind: 'variable' },
-  ],
-  tsx: [], // Will fall back to typescript defs
-  javascript: [
-    { nodeType: 'function_declaration', kind: 'function' },
-    { nodeType: 'class_declaration', kind: 'class', walkChildren: true, childKind: 'method' },
-    { nodeType: 'lexical_declaration', kind: 'variable' },
-    { nodeType: 'variable_declaration', kind: 'variable' },
-  ],
-  python: [
-    { nodeType: 'function_definition', kind: 'function' },
-    { nodeType: 'class_definition', kind: 'class', walkChildren: true, childKind: 'method' },
-  ],
-  go: [
-    { nodeType: 'function_declaration', kind: 'function' },
-    { nodeType: 'method_declaration', kind: 'method' },
-    { nodeType: 'type_declaration', kind: 'type' },
-  ],
-  rust: [
-    { nodeType: 'function_item', kind: 'function' },
-    { nodeType: 'struct_item', kind: 'class' },
-    { nodeType: 'enum_item', kind: 'enum' },
-    { nodeType: 'trait_item', kind: 'interface' },
-    { nodeType: 'impl_item', kind: 'class', walkChildren: true, childKind: 'method' },
-    { nodeType: 'type_item', kind: 'type' },
-  ],
-  java: [
-    { nodeType: 'class_declaration', kind: 'class', walkChildren: true, childKind: 'method' },
-    {
-      nodeType: 'interface_declaration',
-      kind: 'interface',
-      walkChildren: true,
-      childKind: 'method',
-    },
-    { nodeType: 'enum_declaration', kind: 'enum' },
-    { nodeType: 'method_declaration', kind: 'method' },
-  ],
-  c: [
-    { nodeType: 'function_definition', kind: 'function' },
-    { nodeType: 'struct_specifier', kind: 'class', nameField: 'name' },
-    { nodeType: 'enum_specifier', kind: 'enum', nameField: 'name' },
-    { nodeType: 'type_definition', kind: 'type' },
-  ],
-  cpp: [
-    { nodeType: 'function_definition', kind: 'function' },
-    { nodeType: 'class_specifier', kind: 'class', walkChildren: true, childKind: 'method' },
-    { nodeType: 'struct_specifier', kind: 'class', nameField: 'name' },
-    { nodeType: 'enum_specifier', kind: 'enum', nameField: 'name' },
-    { nodeType: 'namespace_definition', kind: 'module' },
-  ],
-  c_sharp: [
-    { nodeType: 'class_declaration', kind: 'class', walkChildren: true, childKind: 'method' },
-    {
-      nodeType: 'interface_declaration',
-      kind: 'interface',
-      walkChildren: true,
-      childKind: 'method',
-    },
-    { nodeType: 'enum_declaration', kind: 'enum' },
-    { nodeType: 'method_declaration', kind: 'method' },
-    { nodeType: 'namespace_declaration', kind: 'module' },
-  ],
-  ruby: [
-    { nodeType: 'method', kind: 'function' },
-    { nodeType: 'class', kind: 'class', walkChildren: true, childKind: 'method' },
-    { nodeType: 'module', kind: 'module', walkChildren: true, childKind: 'method' },
-  ],
-  php: [
-    { nodeType: 'function_definition', kind: 'function' },
-    { nodeType: 'class_declaration', kind: 'class', walkChildren: true, childKind: 'method' },
-    {
-      nodeType: 'interface_declaration',
-      kind: 'interface',
-      walkChildren: true,
-      childKind: 'method',
-    },
-    { nodeType: 'method_declaration', kind: 'method' },
-  ],
-};
+const LANG_SYMBOL_DEFS = new Map<string, SymbolNodeDef[]>(
+  Object.entries({
+    typescript: [
+      { nodeType: 'function_declaration', kind: 'function' },
+      { nodeType: 'class_declaration', kind: 'class', walkChildren: true, childKind: 'method' },
+      { nodeType: 'interface_declaration', kind: 'interface' },
+      { nodeType: 'type_alias_declaration', kind: 'type' },
+      { nodeType: 'enum_declaration', kind: 'enum' },
+      { nodeType: 'lexical_declaration', kind: 'variable' },
+      { nodeType: 'variable_declaration', kind: 'variable' },
+    ],
+    tsx: [], // Will fall back to typescript defs
+    javascript: [
+      { nodeType: 'function_declaration', kind: 'function' },
+      { nodeType: 'class_declaration', kind: 'class', walkChildren: true, childKind: 'method' },
+      { nodeType: 'lexical_declaration', kind: 'variable' },
+      { nodeType: 'variable_declaration', kind: 'variable' },
+    ],
+    python: [
+      { nodeType: 'function_definition', kind: 'function' },
+      { nodeType: 'class_definition', kind: 'class', walkChildren: true, childKind: 'method' },
+    ],
+    go: [
+      { nodeType: 'function_declaration', kind: 'function' },
+      { nodeType: 'method_declaration', kind: 'method' },
+      { nodeType: 'type_declaration', kind: 'type' },
+    ],
+    rust: [
+      { nodeType: 'function_item', kind: 'function' },
+      { nodeType: 'struct_item', kind: 'class' },
+      { nodeType: 'enum_item', kind: 'enum' },
+      { nodeType: 'trait_item', kind: 'interface' },
+      { nodeType: 'impl_item', kind: 'class', walkChildren: true, childKind: 'method' },
+      { nodeType: 'type_item', kind: 'type' },
+    ],
+    java: [
+      { nodeType: 'class_declaration', kind: 'class', walkChildren: true, childKind: 'method' },
+      {
+        nodeType: 'interface_declaration',
+        kind: 'interface',
+        walkChildren: true,
+        childKind: 'method',
+      },
+      { nodeType: 'enum_declaration', kind: 'enum' },
+      { nodeType: 'method_declaration', kind: 'method' },
+    ],
+    c: [
+      { nodeType: 'function_definition', kind: 'function' },
+      { nodeType: 'struct_specifier', kind: 'class', nameField: 'name' },
+      { nodeType: 'enum_specifier', kind: 'enum', nameField: 'name' },
+      { nodeType: 'type_definition', kind: 'type' },
+    ],
+    cpp: [
+      { nodeType: 'function_definition', kind: 'function' },
+      { nodeType: 'class_specifier', kind: 'class', walkChildren: true, childKind: 'method' },
+      { nodeType: 'struct_specifier', kind: 'class', nameField: 'name' },
+      { nodeType: 'enum_specifier', kind: 'enum', nameField: 'name' },
+      { nodeType: 'namespace_definition', kind: 'module' },
+    ],
+    c_sharp: [
+      { nodeType: 'class_declaration', kind: 'class', walkChildren: true, childKind: 'method' },
+      {
+        nodeType: 'interface_declaration',
+        kind: 'interface',
+        walkChildren: true,
+        childKind: 'method',
+      },
+      { nodeType: 'enum_declaration', kind: 'enum' },
+      { nodeType: 'method_declaration', kind: 'method' },
+      { nodeType: 'namespace_declaration', kind: 'module' },
+    ],
+    ruby: [
+      { nodeType: 'method', kind: 'function' },
+      { nodeType: 'class', kind: 'class', walkChildren: true, childKind: 'method' },
+      { nodeType: 'module', kind: 'module', walkChildren: true, childKind: 'method' },
+    ],
+    php: [
+      { nodeType: 'function_definition', kind: 'function' },
+      { nodeType: 'class_declaration', kind: 'class', walkChildren: true, childKind: 'method' },
+      {
+        nodeType: 'interface_declaration',
+        kind: 'interface',
+        walkChildren: true,
+        childKind: 'method',
+      },
+      { nodeType: 'method_declaration', kind: 'method' },
+    ],
+  } satisfies Record<string, SymbolNodeDef[]>),
+);
 
 // TSX uses TypeScript defs
-LANG_SYMBOL_DEFS['tsx'] = LANG_SYMBOL_DEFS['typescript'];
+LANG_SYMBOL_DEFS.set('tsx', LANG_SYMBOL_DEFS.get('typescript') ?? []);
 
 function getSymbolDefs(langName: string): SymbolNodeDef[] {
-  return LANG_SYMBOL_DEFS[langName] ?? [];
+  return LANG_SYMBOL_DEFS.get(langName) ?? [];
 }
 
 // ── Name extraction helpers ──────────────────────────────────
@@ -410,5 +420,5 @@ export function isSupportedFile(filePath: string): boolean {
  * Get all supported file extensions.
  */
 export function getSupportedExtensions(): string[] {
-  return Object.keys(EXT_TO_LANG);
+  return [...EXT_TO_LANG.keys()];
 }

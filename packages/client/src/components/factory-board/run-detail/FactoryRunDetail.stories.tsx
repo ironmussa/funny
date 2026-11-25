@@ -39,6 +39,29 @@ const step = (stepId: string, threadId: string, thread: 'continue' | 'new' = 'co
   thread,
 });
 
+/** One step timing: step, attempt, status, start and end minutes after `at`, visit. */
+type TimingRow = [
+  step: string,
+  attempt: number,
+  status: 'succeeded' | 'failed',
+  start: number,
+  end: number,
+  visit?: string,
+];
+
+const TIMING_ROWS: TimingRow[] = [
+  ['triage', 1, 'succeeded', 0, 4],
+  ['implement', 1, 'succeeded', 5, 40],
+  ['pull-request', 1, 'succeeded', 40, 41],
+  ['regression-proof', 1, 'succeeded', 41, 47],
+  ['ci', 1, 'failed', 47, 60],
+  ['ci', 2, 'succeeded', 61, 72],
+  ['review', 1, 'succeeded', 72, 90],
+  ['address', 1, 'succeeded', 90, 110, '2'],
+  ['review', 1, 'succeeded', 112, 125, '2'],
+  ['merge', 1, 'succeeded', 150, 152],
+];
+
 const EVERY_SECTION: FactoryQueueRun = {
   ...buildFactoryRun({
     id: 'run-42',
@@ -112,24 +135,13 @@ const EVERY_SECTION: FactoryQueueRun = {
       },
     ],
     risk: { headSha: 'bbb2222ffff', level: 'high', reasons: ['touches packages/server/src/auth'] },
-    stepTimings: [
-      ['triage', 1, 'succeeded', 0, 4],
-      ['implement', 1, 'succeeded', 5, 40],
-      ['pull-request', 1, 'succeeded', 40, 41],
-      ['regression-proof', 1, 'succeeded', 41, 47],
-      ['ci', 1, 'failed', 47, 60],
-      ['ci', 2, 'succeeded', 61, 72],
-      ['review', 1, 'succeeded', 72, 90],
-      ['address', 1, 'succeeded', 90, 110, '2'],
-      ['review', 1, 'succeeded', 112, 125, '2'],
-      ['merge', 1, 'succeeded', 150, 152],
-    ].map(([step, attempt, status, start, end, visit]) => ({
-      step: step as string,
-      visit: (visit as string | undefined) ?? '1',
-      attempt: attempt as number,
-      status: status as 'succeeded' | 'failed',
-      startedAt: new Date(Date.parse(at) + (start as number) * 60_000).toISOString(),
-      finishedAt: new Date(Date.parse(at) + (end as number) * 60_000).toISOString(),
+    stepTimings: TIMING_ROWS.map(([stepId, attempt, status, start, end, visit]) => ({
+      step: stepId,
+      visit: visit ?? '1',
+      attempt,
+      status,
+      startedAt: new Date(Date.parse(at) + start * 60_000).toISOString(),
+      finishedAt: new Date(Date.parse(at) + end * 60_000).toISOString(),
     })),
     stepOptions: [
       step('triage', 't-triage', 'new'),

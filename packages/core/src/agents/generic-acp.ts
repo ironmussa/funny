@@ -19,8 +19,9 @@
 import { spawn, type ChildProcess } from 'child_process';
 import { randomUUID } from 'crypto';
 
+import type { JsonObject } from '@funny/shared/json';
 import type { ProviderManifest } from '@funny/shared/provider-manifest';
-import { resolveSpawnCommand } from '@funny/shared/provider-manifest';
+import { resolveSpawnCommand, type SpawnCommand } from '@funny/shared/provider-manifest';
 
 import { createDebugLogger, type DebugLogger } from '../debug.js';
 import { toACPImageBlocks, type ACPImageBlock } from './acp-image.js';
@@ -43,6 +44,24 @@ import type { CLIMessage, ClaudeProcessOptions } from './types.js';
 
 // Lazy-loaded SDK types (avoid crash if not installed). `/unstable` keeps the
 // full v1 surface the 1.x default import exposed (prompt `usage`, `usage_update`,
+// session config options); the wire protocol is still ACP v1.
+
+/**
+ * GenericACPProcess — one manifest-parameterized adapter that wraps any
+ * communicating via the Agent Client Protocol (ACP) over stdio.
+ *
+ * This is the hoist of the ~700-line skeleton that was duplicated across the
+ * five per-provider adapters (codex/gemini/pi/cursor/opencode). All of the
+ * model-select, mode-set, the prompt turn loop, permission handling, and the
+ * `translateUpdate` switch — lives here ONCE, parameterized by a
+ * {@link ProviderManifest}. The small per-provider divergences are toggled by
+ * the manifest's {@link QuirkFlags} (the Phase-0 audited set).
+ *
+ * Each provider becomes a zero-logic constructor shim that binds its manifest
+ * (see `opencode-acp.ts`), so the existing per-provider test suites pass
+ * unchanged.
+ */
+// Lazy-loaded SDK types (avoid crash if not installed). `/unstable` keeps the
 // session config options); the wire protocol is still ACP v1.
 type ACPSDK = typeof import('@agentclientprotocol/sdk/unstable');
 type ACPSessionUpdate = import('@agentclientprotocol/sdk/unstable').SessionUpdate;
@@ -77,6 +96,23 @@ interface ACPToolCallFields {
   rawInput: unknown;
   locations: Array<{ path: string; line?: number | null }> | undefined;
   content: unknown[] | undefined;
+}
+
+/** What a model-selection fallback logs besides the requested model. */
+interface ModelFallbackDetail {
+  available?: string[];
+  error?: string;
+}
+
+/**
+ * A plan entry as `planRender: 'text'` reads it: ACP's `content`, or the
+ * `title` / `description` some providers send instead.
+ */
+interface PlanTextEntry {
+  status?: string;
+  content?: string;
+  title?: string;
+  description?: string;
 }
 
 export class GenericACPProcess extends BaseAgentProcess {
@@ -128,7 +164,7 @@ export class GenericACPProcess extends BaseAgentProcess {
    * Buffered until an update carries the missing field, or dropped at terminal
    * status. Only used when `quirks.deferUnrenderableToolInput`.
    */
-  private deferredToolInputs = new Map<string, { name: string; input: Record<string, unknown> }>();
+  private deferredToolInputs = new Map<string, { name: string; input: JsonObject }>();
 
   /** True while loadSession is replaying historical events. */
   private replayingHistory = false;
@@ -162,14 +198,14 @@ export class GenericACPProcess extends BaseAgentProcess {
         id: randomUUID(),
         content: [{ type: 'tool_use', id, name: 'Think', input: { content: text } }],
       },
-    } as CLIMessage);
+    });
 
     this.emitMessage({
       type: 'user',
       message: {
         content: [{ type: 'tool_result', tool_use_id: id, content: text }],
       },
-    } as CLIMessage);
+    });
   }
 
   // ── Overrides ──────────────────────────────────────────────────
@@ -280,15 +316,14 @@ export class GenericACPProcess extends BaseAgentProcess {
 
       const supportsLoadSession = initResult.agentCapabilities?.loadSession === true;
       this.supportsImages = initResult.agentCapabilities?.promptCapabilities?.image === true;
-      const mcpCaps = (initResult.agentCapabilities as Record<string, any> | undefined)
-        ?.mcpCapabilities;
+      const mcpCaps = initResult.agentCapabilities?.mcpCapabilities;
       const supportsHttp = mcpCaps?.http === true;
       const supportsSse = mcpCaps?.sse === true;
 
       const allMcp = toACPMcpServers(this.options.mcpServers);
       const mcpServerList = this.manifest.quirks.filterMcpByCapability
         ? allMcp.filter((s) => {
-            const t = (s as { type?: string }).type;
+            const t = 'type' in s ? s.type : undefined;
             if (t === 'http') return supportsHttp;
             if (t === 'sse') return supportsSse;
             return true;
@@ -316,10 +351,7 @@ export class GenericACPProcess extends BaseAgentProcess {
           // has no model config option to set on resume and silently falls back
           // to the provider default — losing the user's model choice on every
           // follow-up message.
-          this.captureSessionConfigOptions(
-            (loadResponse as { configOptions?: ACPSessionConfigOptions } | undefined)
-              ?.configOptions,
-          );
+          this.captureSessionConfigOptions(loadResponse?.configOptions);
         } finally {
           this.replayingHistory = false;
         }
@@ -389,7 +421,7 @@ export class GenericACPProcess extends BaseAgentProcess {
   }
 
   /** Resolve the spawn command + args from the manifest (env override → npx → default). */
-  private resolveCommand(): { command: string; args: string[] } {
+  private resolveCommand(): SpawnCommand {
     const { command, args: baseArgs } = resolveSpawnCommand(this.manifest.spawn);
     const args = [...baseArgs];
     // gemini selects its model via the `--model` CLI arg (modelVia: 'cli-arg').
@@ -419,7 +451,7 @@ export class GenericACPProcess extends BaseAgentProcess {
   private notifyModelFallback(
     requestedModel: string,
     logMessage: string,
-    detail: Record<string, unknown> = {},
+    detail: ModelFallbackDetail = {},
   ): void {
     this.dlog.warn(logMessage, { modelId: requestedModel, ...detail });
     if (this.modelFallbackNotified) return;
@@ -437,7 +469,7 @@ export class GenericACPProcess extends BaseAgentProcess {
           },
         ],
       },
-    } as CLIMessage);
+    });
   }
 
   /**
@@ -498,6 +530,8 @@ export class GenericACPProcess extends BaseAgentProcess {
         requestedModel,
         'set-model failed — falling back to provider default',
         {
+          // SAFETY: ACP SDK rejections are Error instances or JSON-RPC error objects
+          // with `message`; the value is only logged, so a missing one is undefined.
           error: (e as Error)?.message,
         },
       );
@@ -543,10 +577,10 @@ export class GenericACPProcess extends BaseAgentProcess {
     const collect = (entries: ACPSessionConfigSelectOptions | undefined): void => {
       if (!Array.isArray(entries)) return;
       for (const e of entries) {
-        const entry = e as Record<string, unknown> | null;
-        if (!entry) continue;
-        if (isString(entry.value)) valueIds.add(entry.value);
-        if (Array.isArray(entry.options)) collect(entry.options);
+        if (!e || !isObject(e)) continue;
+        // A select option carries `value`; a group carries its own `options`.
+        if ('value' in e && isString(e.value)) valueIds.add(e.value);
+        if ('options' in e && Array.isArray(e.options)) collect(e.options);
       }
     };
     collect(options);
@@ -601,6 +635,8 @@ export class GenericACPProcess extends BaseAgentProcess {
   ): Promise<void> {
     if (this.manifest.modeVia !== 'acp-setSessionMode' || isResume || !this.activeSessionId) return;
     const funnyMode = this.options.originalPermissionMode ?? this.options.permissionMode;
+    // SAFETY: `modeMap` is keyed by every PermissionMode; an unknown or missing
+    // `funnyMode` indexes to undefined and returns below.
     const desiredMode = this.manifest.modeMap[funnyMode as keyof typeof this.manifest.modeMap];
     if (!desiredMode) return;
     try {
@@ -718,7 +754,7 @@ export class GenericACPProcess extends BaseAgentProcess {
     this.emitMessage({
       type: 'assistant',
       message: { id: randomUUID(), content: [{ type: 'text', text: notice }] },
-    } as CLIMessage);
+    });
     this.lastAssistantText = notice;
   }
 
@@ -754,14 +790,14 @@ export class GenericACPProcess extends BaseAgentProcess {
       return { outcome: { outcome: 'selected', optionId: allowOnceOptionId } };
     }
 
-    const acpKind = (toolCall.kind as string | undefined) ?? undefined;
+    const acpKind = toolCall.kind ?? undefined;
     const title = toolCall.title ?? '';
     const toolName = inferACPToolName(acpKind, title, undefined, toolCall);
     const toolInput = buildACPToolInput(toolName, {
       kind: acpKind,
       title,
       rawInput: toolCall.rawInput,
-      locations: (toolCall as any).locations,
+      locations: toolCall.locations,
     });
     const toolInputForRule = serializeToolInputForRule(toolName, toolInput);
 
@@ -801,13 +837,13 @@ export class GenericACPProcess extends BaseAgentProcess {
         id: randomUUID(),
         content: [{ type: 'tool_use', id: toolUseId, name: toolName, input: toolInput }],
       },
-    } as CLIMessage);
+    });
     this.emitMessage({
       type: 'user',
       message: {
         content: [{ type: 'tool_result', tool_use_id: toolUseId, content: denialText }],
       },
-    } as CLIMessage);
+    });
 
     return await new Promise<ACPRequestPermissionResponse>((resolve) => {
       const onAbort = () =>
@@ -829,7 +865,7 @@ export class GenericACPProcess extends BaseAgentProcess {
    * seen. Resets the per-turn assistant-text accumulator so any following
    * agent text starts a fresh bubble.
    */
-  private emitToolUse(toolCallId: string, toolName: string, input: Record<string, unknown>): void {
+  private emitToolUse(toolCallId: string, toolName: string, input: JsonObject): void {
     this.deferredToolInputs.delete(toolCallId);
     this.toolCallsSeen.set(toolCallId, toolName);
     this.emitMessage({
@@ -838,7 +874,7 @@ export class GenericACPProcess extends BaseAgentProcess {
         id: randomUUID(),
         content: [{ type: 'tool_use', id: toolCallId, name: toolName, input }],
       },
-    } as CLIMessage);
+    });
     this.accumulatedText = '';
     this.assistantMsgId = randomUUID();
   }
@@ -850,7 +886,7 @@ export class GenericACPProcess extends BaseAgentProcess {
       message: {
         content: [{ type: 'tool_result', tool_use_id: toolCallId, content }],
       },
-    } as CLIMessage);
+    });
   }
 
   private closeInFlightTaskToolCalls(content: string): void {
@@ -936,7 +972,7 @@ export class GenericACPProcess extends BaseAgentProcess {
         id: this.assistantMsgId,
         content: [{ type: 'text', text: visible }],
       },
-    } as CLIMessage);
+    });
     this.lastAssistantText = visible;
   }
 
@@ -1067,7 +1103,7 @@ export class GenericACPProcess extends BaseAgentProcess {
   private deferIfUnrenderable(
     toolCallId: string,
     toolName: string,
-    input: Record<string, unknown>,
+    input: JsonObject,
     isTerminal: boolean,
   ): boolean {
     if (!this.manifest.quirks.deferUnrenderableToolInput) return false;
@@ -1085,7 +1121,7 @@ export class GenericACPProcess extends BaseAgentProcess {
     if (this.manifest.quirks.planRender === 'todoCard') {
       this.emitPlanAsTodoCard(update.entries);
     } else {
-      this.emitPlanAsText(((update as any).entries ?? []) as Array<Record<string, any>>);
+      this.emitPlanAsText(update.entries ?? []);
     }
   }
 
@@ -1105,13 +1141,13 @@ export class GenericACPProcess extends BaseAgentProcess {
         id: randomUUID(),
         content: [{ type: 'tool_use', id: toolCallId, name: 'TodoWrite', input }],
       },
-    } as CLIMessage);
+    });
     this.emitMessage({
       type: 'user',
       message: {
         content: [{ type: 'tool_result', tool_use_id: toolCallId, content: 'Plan updated' }],
       },
-    } as CLIMessage);
+    });
     this.accumulatedText = '';
     this.assistantMsgId = randomUUID();
   }
@@ -1121,7 +1157,7 @@ export class GenericACPProcess extends BaseAgentProcess {
    * `**Plan:**` header (completed → [x], in_progress → [~], else [ ]).
    * Reuses the live assistant message id; does NOT rotate it.
    */
-  private emitPlanAsText(entries: Array<Record<string, any>>): void {
+  private emitPlanAsText(entries: readonly PlanTextEntry[]): void {
     if (entries.length === 0) return;
     const planText = formatPlanChecklist(
       entries.map((e) => [e.status, e.content ?? e.title ?? e.description ?? 'Task']),
@@ -1138,25 +1174,29 @@ export class GenericACPProcess extends BaseAgentProcess {
         id: this.assistantMsgId,
         content: [{ type: 'text', text: `**Plan:**\n${planText}` }],
       },
-    } as CLIMessage);
+    });
   }
 
-  private handleAvailableCommands(update: ACPSessionUpdate): void {
-    const commands = (((update as any).availableCommands ?? []) as Array<{ name?: string }>)
+  private handleAvailableCommands(update: ACPUpdateOf<'available_commands_update'>): void {
+    const commands = (update.availableCommands ?? [])
       .map((c) => c.name)
       .filter((n): n is string => typeof n === 'string' && n.length > 0);
     this.emitMessage({
       type: 'commands_changed',
       commands,
       sessionId: this.activeSessionId ?? '',
-    } as CLIMessage);
+    });
   }
 }
 
 // ── Helpers ─────────────────────────────────────────────────────
 
 function readToolCallFields(update: ACPToolCallUpdateLike): ACPToolCallFields {
+  // SAFETY: both `tool_call` and `tool_call_update` carry optional `kind`, `rawInput`,
+  // `locations` and `content`; they are read untyped here so an older or looser
+  // provider payload passes through unchanged, and every consumer reads them optionally.
   const u = update as any;
+  // SAFETY: same invariant as above; the casts only name the ACP field types.
   return {
     kind: u.kind as string | undefined,
     title: update.title || '',
@@ -1173,9 +1213,9 @@ function isTerminalToolStatus(status: ACPToolCallStatus | null | undefined): boo
 /** TodoWrite: pull todos from the tool output when missing and normalize to `{ todos }`. */
 function finalizeTodoInput(
   toolName: string,
-  input: Record<string, unknown>,
+  input: JsonObject,
   result: Pick<ACPToolResultData, 'rawOutput'>,
-): Record<string, unknown> {
+): JsonObject {
   if (toolName !== 'TodoWrite') return input;
   const enriched = enrichTodoWriteInputFromOutput(input, result);
   const clean = buildTodoWriteInputFromRaw(enriched);
@@ -1198,8 +1238,11 @@ function formatPlanChecklist(items: Array<[string | undefined, unknown]>): strin
  * Whether a built tool input has the primary field its client card needs to
  * render a meaningful summary. Used by `deferUnrenderableToolInput` providers.
  */
-function isRenderableToolInput(toolName: string, input: Record<string, unknown>): boolean {
-  const has = (key: string) => isString(input[key]) && (input[key] as string).length > 0;
+function isRenderableToolInput(toolName: string, input: JsonObject): boolean {
+  const has = (key: string) => {
+    const value = input[key];
+    return isString(value) && value.length > 0;
+  };
   switch (toolName) {
     case 'Read':
     case 'Write':
@@ -1221,10 +1264,7 @@ function isRenderableToolInput(toolName: string, input: Record<string, unknown>)
  * Merge a buffered tool input with a freshly built one, preferring non-empty
  * values from `next` (e.g. a file_path the initial deferred event was missing).
  */
-function mergeToolInput(
-  prev: Record<string, unknown>,
-  next: Record<string, unknown>,
-): Record<string, unknown> {
+function mergeToolInput(prev: JsonObject, next: JsonObject): JsonObject {
   const merged = { ...prev };
   for (const [key, value] of Object.entries(next)) {
     if (value !== undefined && value !== null && value !== '') {
@@ -1240,7 +1280,7 @@ function mergeToolInput(
  */
 function serializeToolInputForRule(
   toolName: string,
-  toolInput: Record<string, unknown> | undefined,
+  toolInput: JsonObject | undefined,
 ): string | undefined {
   if (!toolInput || !isObject(toolInput)) return undefined;
   if (toolName === 'Bash' && isString(toolInput.command)) {
@@ -1288,6 +1328,9 @@ async function ensureGeminiTrustedFolder(cwd: string, dlog: DebugLogger): Promis
     const trustedPath = path.join(os.homedir(), '.gemini', 'trustedFolders.json');
     let trusted: Record<string, string> = {};
     try {
+      // SAFETY: gemini writes trustedFolders.json as a folder → trust-level map; if the
+      // file holds something else, indexing or writing it below throws into the outer
+      // catch, which only logs a warning.
       trusted = JSON.parse(await fs.readFile(trustedPath, 'utf-8')) as Record<string, string>;
     } catch {
       // file missing / unreadable — start fresh
@@ -1298,6 +1341,7 @@ async function ensureGeminiTrustedFolder(cwd: string, dlog: DebugLogger): Promis
     await fs.writeFile(trustedPath, JSON.stringify(trusted, null, 2));
     dlog.info('marked folder as TRUST_FOLDER for gemini yolo mode', { cwd, trustedPath });
   } catch (e) {
+    // SAFETY: fs and JSON errors are Error instances; the message is only logged.
     dlog.warn('failed to mark gemini trusted folder', { cwd, error: (e as Error)?.message });
   }
 }

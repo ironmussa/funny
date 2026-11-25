@@ -186,7 +186,11 @@ function McpServerForm({
           <span id="agent-template-mcp-type-label" className="text-muted-foreground text-2xs">
             Type
           </span>
-          <Select value={type} onValueChange={(v) => setType(v as McpServerType)}>
+          <Select
+            value={type}
+            // SAFETY: the only items are stdio, http and sse, the McpServerType values.
+            onValueChange={(v) => setType(v as McpServerType)}
+          >
             <SelectTrigger
               aria-labelledby="agent-template-mcp-type-label"
               size="xs"

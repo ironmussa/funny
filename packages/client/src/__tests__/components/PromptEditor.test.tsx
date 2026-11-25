@@ -172,9 +172,14 @@ describe('PromptEditor', () => {
 
       const item = await screen.findByTestId('slash-item-compact');
       const popup = item.closest('[data-suggestion-popup]') as HTMLElement;
-      expect(popup.style.left).toBe('12px');
-      expect(popup.style.width).toBe('345px');
-      expect(popup).not.toHaveClass('w-80');
+      // The popup's classes read its place and width from these variables.
+      expect(popup.style.getPropertyValue('--suggestion-popup-left')).toBe('12px');
+      expect(popup.style.getPropertyValue('--suggestion-popup-width')).toBe('345px');
+      // Bottom edge sits 4px above the container's top.
+      expect(popup.style.getPropertyValue('--suggestion-popup-bottom')).toBe(
+        `${window.innerHeight - 100 + 4}px`,
+      );
+      expect(popup.style.visibility).not.toBe('hidden');
     } finally {
       container.remove();
     }

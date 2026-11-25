@@ -1,8 +1,9 @@
 import { getRemoteUrl } from '@funny/core/git';
-import type { GitHubPR, GitHubUserRef, PRCommit, PRFilterOptions, PRSortKey } from '@funny/shared';
+import type { GitHubPR, GitHubUserRef, PRCommit, PRFilterOptions } from '@funny/shared';
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 
+import { isString } from '../../lib/value-guards.js';
 import { recordedGithubWrite } from '../../services/github-write-activity.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 import { parseJsonBody } from '../../validation/request.js';
@@ -32,7 +33,7 @@ const prMergeBodySchema = z
 // ── Sorting + search helpers ────────────────────────────────
 
 /**
- * Translate a unified {@link PRSortKey} into the params each GitHub endpoint
+ * Translate a unified `PRSortKey` into the params each GitHub endpoint
  * expects. `/pulls` takes `sort` + `direction`; `/search/issues` takes `sort` +
  * `order`. "most-commented" maps to `popularity` on the list endpoint and
  * `comments` on search — the closest equivalent each one offers.
@@ -42,7 +43,7 @@ export function resolveSort(
   kind: 'pulls' | 'search',
 ): { sort: string; direction: string } {
   const commentSort = kind === 'pulls' ? 'popularity' : 'comments';
-  switch (key as PRSortKey) {
+  switch (key) {
     case 'oldest':
       return { sort: 'created', direction: 'asc' };
     case 'recently-updated':
@@ -156,6 +157,8 @@ async function anonymousPRList(
   );
   if (!res.ok) return { status: res.status };
   const prs = await addLastCommitToPRs(
+    // SAFETY: GitHub's list-pulls response for a 2xx answer (checked above)
+    // is an array of pull requests in the GitHubPR shape; it is not validated.
     (await res.json()) as GitHubPR[],
     owner,
     repo,
@@ -237,6 +240,8 @@ prRoutes.get('/prs-search', async (c) => {
       return c.json({ error: `GitHub API error: ${res.status}` }, 502);
     }
 
+    // SAFETY: the shape of GitHub's issue search response. Not validated: a
+    // missing `items` becomes [] and a missing `total_count` becomes 0 below.
     const body = (await res.json()) as { total_count: number; items: any[] };
     const items = Array.isArray(body.items) ? body.items : [];
     const prs = items.map(mapSearchItemToPR);
@@ -296,10 +301,10 @@ prRoutes.get('/pr-filter-options', async (c) => {
     ]);
 
     const labels = labelsRes.ok
-      ? ((await labelsRes.json()) as any[]).map((l) => ({ name: l.name, color: l.color }))
+      ? (await labelsRes.json()).map((l: any) => ({ name: l.name, color: l.color }))
       : [];
     const users: GitHubUserRef[] = usersRes.ok
-      ? ((await usersRes.json()) as any[]).map((u) => ({
+      ? (await usersRes.json()).map((u: any) => ({
           login: u.login,
           avatar_url: u.avatar_url,
         }))
@@ -345,7 +350,7 @@ prRoutes.post('/pr-merge', async (c) => {
   }
 
   const method = raw.method ?? 'squash';
-  if (typeof method !== 'string' || !MERGE_METHODS.has(method)) {
+  if (!isString(method) || !MERGE_METHODS.has(method)) {
     return c.json({ error: 'Invalid merge method' }, 400);
   }
 
@@ -384,6 +389,8 @@ async function mergePullRequest(
     });
 
     if (!res.ok) {
+      // SAFETY: a GitHub error response carries an optional `message`; a body
+      // that is not JSON becomes `{}` and the status text is used instead.
       const body = (await res.json().catch(() => ({}))) as { message?: string };
       const message = body.message || `GitHub API error: ${res.status}`;
       // 405 = not mergeable, 409 = head changed/merge conflict — surface as 409
@@ -391,6 +398,8 @@ async function mergePullRequest(
       return c.json({ error: message }, status);
     }
 
+    // SAFETY: GitHub's merge-pull-request response for a 2xx answer (checked
+    // above) carries `sha`, `merged` and `message`.
     const data = (await res.json()) as { sha: string; merged: boolean; message: string };
     return c.json({ merged: data.merged, sha: data.sha, message: data.message });
   } catch (error: any) {

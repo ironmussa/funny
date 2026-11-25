@@ -49,11 +49,12 @@ export function MediaPreviewDialog({ open, onOpenChange, filePath }: MediaPrevie
           <ExpandedImage src={src} name={fileName} />
         ) : (
           <DialogContent
-            className="flex max-h-[90vh] w-[90vw] max-w-5xl flex-col gap-3 p-4"
+            compact
+            className="flex max-h-[90vh] w-[90vw] max-w-5xl flex-col"
             data-testid="media-preview-dialog"
           >
             <DialogHeader>
-              <DialogTitle size="sm" className="truncate font-medium">
+              <DialogTitle size="sm" weight="medium" truncate>
                 {fileName ?? 'Preview'}
               </DialogTitle>
             </DialogHeader>
@@ -82,17 +83,18 @@ function ExpandedImage({ src, name }: { src: string; name?: string }) {
 
   return (
     <DialogContent
+      flush
       className={cn(
         isFullscreen
           ? 'h-screen max-h-screen w-screen max-w-[100vw]'
           : 'h-[85vh] w-[90vw] max-w-5xl',
-        'flex flex-col gap-0 overflow-hidden p-0',
+        'flex flex-col overflow-hidden',
       )}
       onOpenAutoFocus={(e) => e.preventDefault()}
       data-testid="media-preview-dialog"
     >
       <DialogHeader bordered>
-        <DialogTitle size="sm" className="truncate font-medium">
+        <DialogTitle size="sm" weight="medium" truncate>
           {name ?? 'Preview'}
         </DialogTitle>
         <DialogDescription className="sr-only">Expanded image view</DialogDescription>
@@ -125,10 +127,9 @@ function ExpandedImage({ src, name }: { src: string; name?: string }) {
                   variant="muted"
                   size="icon-sm"
                   onClick={pz.reset}
-                  className="text-xs"
                   data-testid="media-preview-zoom-reset"
                 >
-                  1:1
+                  <span className="text-xs">1:1</span>
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Reset zoom</TooltipContent>
@@ -152,8 +153,10 @@ function ExpandedImage({ src, name }: { src: string; name?: string }) {
 
       <div
         ref={zoomContainerRef}
-        className="bg-background flex min-h-0 flex-1 items-center justify-center overflow-hidden select-none"
-        style={{ cursor: zoomed ? (pz.isDragging ? 'grabbing' : 'grab') : 'default' }}
+        className={cn(
+          'bg-background flex min-h-0 flex-1 items-center justify-center overflow-hidden select-none',
+          zoomed ? (pz.isDragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-default',
+        )}
         onPointerDown={pz.onPointerDown}
         onPointerMove={pz.onPointerMove}
         onPointerUp={pz.onPointerUp}
@@ -164,11 +167,14 @@ function ExpandedImage({ src, name }: { src: string; name?: string }) {
           src={src}
           alt={name ?? 'preview'}
           draggable={false}
-          className="max-h-full max-w-full object-contain"
+          className={cn(
+            'max-h-full max-w-full origin-center object-contain [transform:translate(var(--media-preview-pan-x),var(--media-preview-pan-y))_scale(var(--media-preview-scale))]',
+            pz.isDragging ? '[transition:none]' : '[transition:transform_120ms]',
+          )}
           style={{
-            transform: `translate(${pz.offset.x}px, ${pz.offset.y}px) scale(${pz.scale})`,
-            transformOrigin: 'center center',
-            transition: pz.isDragging ? 'none' : 'transform 120ms',
+            '--media-preview-pan-x': `${pz.offset.x}px`,
+            '--media-preview-pan-y': `${pz.offset.y}px`,
+            '--media-preview-scale': pz.scale,
           }}
         />
       </div>

@@ -27,6 +27,7 @@ import { extractForkedThread } from './fork-response.js';
 import type {
   ForkThreadCommand,
   ForkThreadPorts,
+  RunnerJson,
   RunnerUnavailableReason,
   ThreadRegistration,
 } from './ports.js';
@@ -38,7 +39,7 @@ export type ForkThreadFailure =
 
 export interface ForkThreadSuccess {
   /** The runner's full response body, forwarded to the client unchanged. */
-  readonly thread: unknown;
+  readonly thread: RunnerJson;
   /** Id of the new thread (top-level or nested per variant), if any. */
   readonly threadId?: ThreadId;
   /** The actor's runner the fork ran on. */

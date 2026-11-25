@@ -31,6 +31,7 @@ import {
   isInside,
   readPackageJson,
   removeExtensionDir,
+  type ExtensionPackageJson,
   type InstallResult,
   type KindHandler,
 } from '../extensions/index.js';
@@ -80,7 +81,7 @@ export interface ProviderSpawnRef {
 export function getActiveProviderSpawnRefs(): ProviderSpawnRef[] {
   const refs: ProviderSpawnRef[] = [];
   for (const id of getActiveBuiltinProviders()) {
-    const m = ACP_MANIFESTS[id as keyof typeof ACP_MANIFESTS];
+    const m = ACP_MANIFESTS[id];
     if (m) refs.push({ id, spawn: m.spawn });
   }
   for (const m of runnerManifests.values()) {
@@ -145,7 +146,7 @@ function isNonEmptyString(value: unknown): value is string {
  */
 function parseProviderExtensionDir(dir: string, dirName: string): DirParse {
   const pkgDir = join(dir, dirName);
-  let pkg: Record<string, any> | null;
+  let pkg: ExtensionPackageJson | null;
   try {
     if (!statSync(pkgDir).isDirectory()) return null;
     pkg = readPackageJson(pkgDir);
@@ -188,7 +189,7 @@ function makeExternalProcessClass(manifest: ProviderManifest): ProcessConstructo
     constructor(opts: AgentProcessOptions) {
       super(opts, manifest);
     }
-  } as ProcessConstructor;
+  };
 }
 
 /**

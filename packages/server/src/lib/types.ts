@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 /**
  * Known user roles. Any role not in this set is coerced to `'user'` by the
  * auth middleware so that a value leaking in from an untrusted source cannot
@@ -6,14 +8,11 @@
 const USER_ROLES = ['admin', 'user'] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 
-function isUserRole(value: string): value is UserRole {
-  return USER_ROLES.some((role) => role === value);
-}
-
-/** Narrow an untrusted value to a known UserRole, defaulting to 'user'. */
-export function normalizeUserRole(raw: unknown): UserRole {
-  return typeof raw === 'string' && isUserRole(raw) ? raw : 'user';
-}
+/**
+ * Parses an untrusted role (a session's, a DB row's) to a known UserRole:
+ * anything else, a string outside the set included, parses as 'user'.
+ */
+export const userRoleSchema = z.enum(USER_ROLES).catch('user');
 
 /** Hono environment type for context variables set by auth middleware. */
 export type ServerEnv = {

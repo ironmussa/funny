@@ -58,7 +58,7 @@ async function runWrite(
   layer: DataLayer,
 ): Promise<Result<void, DomainError>> {
   const data = getThreadsData(layer);
-  const fields = Object.assign({}, ...steps.map((s) => s.fields)) as Partial<Thread>;
+  const fields: Partial<Thread> = Object.assign({}, ...steps.map((s) => s.fields));
 
   const tx = data.collection.has(threadId)
     ? createTransaction<Thread>({ autoCommit: false, mutationFn: async () => {} })

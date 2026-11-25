@@ -1,3 +1,5 @@
+import type { RealtimeEffect } from '@funny/client-core';
+
 import { readThreadRow } from '@/data/threads/read';
 import { showAgentNotification } from '@/hooks/use-notifications';
 import { getThreadRoute, isScratch } from '@/lib/thread-variant';
@@ -45,8 +47,11 @@ function buildNotificationTitle(info: { title?: string; branch?: string }): stri
   return parts.join(' — ');
 }
 
-export function maybeNotifyAgentResult(threadId: string, data: any): void {
-  const status = data.status as string | undefined;
+export function maybeNotifyAgentResult(
+  threadId: string,
+  data: Extract<RealtimeEffect, { type: 'agent-result' }>,
+): void {
+  const status = data.status;
   const info = findThread(threadId);
   const title = buildNotificationTitle(info);
   const onClick = () => {

@@ -59,7 +59,7 @@ export interface StagedUpload {
 
 /** Remove the user's staged entries older than STAGING_TTL_MS. Best-effort. */
 async function pruneExpired(root: string): Promise<void> {
-  const entries = await readdir(root).catch(() => [] as string[]);
+  const entries = await readdir(root).catch((): string[] => []);
   const cutoff = Date.now() - STAGING_TTL_MS;
   await Promise.all(
     entries.map(async (entry) => {
@@ -109,7 +109,7 @@ export function stageUpload(params: StageUploadParams): ResultAsync<StagedUpload
 async function stagedFileOf(root: string, stagedId: string): Promise<string | null> {
   // Refuse anything but a `randomUUID()` before touching disk.
   if (!STAGED_ID_RE.test(stagedId)) return null;
-  const files = await readdir(join(root, stagedId)).catch(() => [] as string[]);
+  const files = await readdir(join(root, stagedId)).catch((): string[] => []);
   return files.length === 1 ? files[0] : null;
 }
 

@@ -21,7 +21,6 @@ import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { annotationsToMarkdown } from '@/lib/browser-panel-markdown';
 import { browserSessionClient } from '@/lib/browser-session-client';
-import { cn } from '@/lib/utils';
 import { useBrowserPanelStore, type Tool } from '@/stores/browser-panel-store';
 
 import { HistoryPopover } from './HistoryPopover';
@@ -76,7 +75,7 @@ export function ToolToolbar() {
       return;
     }
     try {
-      const result = (await browserSessionClient.screenshot(sessionId)) as string;
+      const result = await browserSessionClient.screenshot(sessionId);
       if (!isNonEmptyString(result)) {
         toast.error('Empty screenshot response');
         return;
@@ -86,8 +85,7 @@ export function ToolToolbar() {
       for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
       const blob = new Blob([bytes], { type: 'image/png' });
       // ClipboardItem requires a Promise<Blob> in some browsers, plain Blob in others.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const ClipboardItemCtor = (window as any).ClipboardItem;
+      const ClipboardItemCtor = window.ClipboardItem;
       if (ClipboardItemCtor && navigator.clipboard && 'write' in navigator.clipboard) {
         await navigator.clipboard.write([new ClipboardItemCtor({ 'image/png': blob })]);
         toast.success('Viewport copied to clipboard');
@@ -119,13 +117,12 @@ export function ToolToolbar() {
           <Tooltip key={id}>
             <TooltipTrigger asChild>
               <Button
-                variant={active ? 'secondary' : 'ghost'}
+                variant={active ? 'selected' : 'muted'}
                 size="icon-sm"
                 tabIndex={-1}
                 data-testid={`browser-panel-tool-${id}`}
                 aria-pressed={active}
                 onClick={() => setTool(id)}
-                className={cn('text-muted-foreground', active && 'text-foreground')}
               >
                 <Icon className="icon-base" />
               </Button>
@@ -192,14 +189,13 @@ export function ToolToolbar() {
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
-            variant={showTestIds ? 'secondary' : 'ghost'}
+            variant={showTestIds ? 'selected' : 'muted'}
             size="icon-sm"
             tabIndex={-1}
             data-testid="browser-panel-show-testids"
             aria-pressed={showTestIds}
             disabled={!domReady}
             onClick={toggleShowTestIds}
-            className={cn('text-muted-foreground', showTestIds && 'text-foreground')}
           >
             <Tags className="icon-base" />
           </Button>
@@ -230,14 +226,13 @@ export function ToolToolbar() {
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
-            variant={animationsPaused ? 'secondary' : 'ghost'}
+            variant={animationsPaused ? 'selected' : 'muted'}
             size="icon-sm"
             tabIndex={-1}
             data-testid="browser-panel-pause-anims"
             aria-pressed={animationsPaused}
             disabled={!domReady}
             onClick={toggleAnimationsPaused}
-            className={cn('text-muted-foreground', animationsPaused && 'text-foreground')}
           >
             <PauseIcon className="icon-base" />
           </Button>
@@ -254,14 +249,13 @@ export function ToolToolbar() {
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
-            variant={inspectActive ? 'secondary' : 'ghost'}
+            variant={inspectActive ? 'selected' : 'muted'}
             size="icon-sm"
             tabIndex={-1}
             data-testid="browser-panel-inspect-mode"
             aria-pressed={inspectActive}
             disabled={!domReady}
             onClick={toggleInspectActive}
-            className={cn('text-muted-foreground', inspectActive && 'text-foreground')}
           >
             <ScanEye className="icon-base" />
           </Button>

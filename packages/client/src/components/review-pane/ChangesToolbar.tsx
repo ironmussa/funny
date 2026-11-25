@@ -90,24 +90,180 @@ function RefreshButton({ onRefresh, loading }: { onRefresh: () => void; loading:
   );
 }
 
-export function ChangesToolbar({
-  refresh,
-  loading,
-  handlePull,
-  handleFetchOrigin,
-  pullInProgress,
-  fetchInProgress,
-  handlePushOnly,
-  pushInProgress,
+type PublishOrPushProps = Pick<
+  ChangesToolbarProps,
+  'remoteUrl' | 'setPublishDialogOpen' | 'unpushedCommitCount' | 'handlePushOnly' | 'pushInProgress'
+>;
+
+function PublishOrPushButton({
   remoteUrl,
   setPublishDialogOpen,
   unpushedCommitCount,
-  threadBranch,
-  baseBranch,
-  isOnDifferentBranch,
+  handlePushOnly,
+  pushInProgress,
+}: PublishOrPushProps) {
+  const { t } = useTranslation();
+  if (remoteUrl !== null) {
+    return (
+      <PushButton
+        onPush={handlePushOnly}
+        pushInProgress={pushInProgress}
+        unpushedCommitCount={unpushedCommitCount}
+        testIdPrefix="review"
+      />
+    );
+  }
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="muted"
+          size="icon-sm"
+          onClick={() => setPublishDialogOpen(true)}
+          className="relative"
+          data-testid="review-publish-toolbar"
+        >
+          <Upload className="icon-base" />
+          {unpushedCommitCount > 0 && <CountBadge count={unpushedCommitCount} />}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="top">
+        {unpushedCommitCount > 0
+          ? t('review.publishWithCommits', {
+              count: unpushedCommitCount,
+              defaultValue: `Publish repository (${unpushedCommitCount} commit(s) to push)`,
+            })
+          : t('review.publishRepo', 'Publish repository')}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+type MergeButtonProps = Pick<
+  ChangesToolbarProps,
+  'openMergeDialog' | 'mergeInProgress' | 'baseBranch'
+> & { hasChanges: boolean };
+
+function MergeButton({
   openMergeDialog,
   mergeInProgress,
+  baseBranch,
+  hasChanges,
+}: MergeButtonProps) {
+  const { t } = useTranslation();
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="muted"
+          size="icon-sm"
+          onClick={openMergeDialog}
+          disabled={mergeInProgress || hasChanges}
+          data-testid="review-merge-toolbar"
+        >
+          <GitMerge className={cn('icon-base', mergeInProgress && 'animate-pulse')} />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="top">
+        {hasChanges
+          ? t('review.commitFirst', 'Commit changes before merging')
+          : t('review.mergeIntoBranch', {
+              target: baseBranch || 'base',
+              defaultValue: `Merge into branch`,
+            })}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+type PullRequestButtonProps = Pick<
+  ChangesToolbarProps,
+  'gitStatus' | 'setPrDialog' | 'threadBranch' | 'baseBranch' | 'isAgentRunning'
+>;
+
+function PullRequestButton({
+  gitStatus,
   setPrDialog,
+  threadBranch,
+  baseBranch,
+  isAgentRunning,
+}: PullRequestButtonProps) {
+  const { t } = useTranslation();
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        {gitStatus?.prNumber ? (
+          (() => {
+            const prState = gitStatus.prState ?? 'OPEN';
+            const PrIcon =
+              // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
+              prState === 'MERGED'
+                ? GitMerge
+                : prState === 'CLOSED'
+                  ? GitPullRequestClosed
+                  : GitPullRequest;
+            const prIconColor =
+              // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
+              prState === 'MERGED'
+                ? 'text-status-violet'
+                : prState === 'CLOSED'
+                  ? 'text-status-error'
+                  : 'text-status-success';
+            return (
+              <Button
+                variant="muted"
+                size="icon-sm"
+                onClick={() => window.open(gitStatus.prUrl, '_blank', 'noopener,noreferrer')}
+                data-testid="review-view-pr-toolbar"
+              >
+                <PrIcon className={`icon-base ${prIconColor}`} />
+              </Button>
+            );
+          })()
+        ) : (
+          <Button
+            variant="muted"
+            size="icon-sm"
+            onClick={() => setPrDialog({ title: threadBranch || '', body: '' })}
+            disabled={!!isAgentRunning}
+            data-testid="review-create-pr-toolbar"
+          >
+            <GitPullRequest className="icon-base" />
+          </Button>
+        )}
+      </TooltipTrigger>
+      <TooltipContent side="top">
+        {gitStatus?.prNumber
+          ? t('review.viewPR', {
+              number: gitStatus.prNumber,
+              defaultValue: `View PR #${gitStatus.prNumber}`,
+            })
+          : isAgentRunning
+            ? t('review.agentRunningTooltip')
+            : t('review.createPRTooltip', {
+                branch: threadBranch,
+                target: baseBranch || 'base',
+              })}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+type SelectionActionsProps = Pick<
+  ChangesToolbarProps,
+  | 'summaries'
+  | 'checkedFiles'
+  | 'handleStageSelected'
+  | 'handleUnstageAll'
+  | 'handleStashSelected'
+  | 'handleDiscardAll'
+  | 'handleIgnoreFiles'
+  | 'actionInProgress'
+  | 'stashInProgress'
+  | 'isAgentRunning'
+>;
+
+function SelectionActions({
   summaries,
   checkedFiles,
   handleStageSelected,
@@ -117,149 +273,11 @@ export function ChangesToolbar({
   handleIgnoreFiles,
   actionInProgress,
   stashInProgress,
-  gitStatus,
   isAgentRunning,
-  readOnly,
-}: ChangesToolbarProps) {
+}: SelectionActionsProps) {
   const { t } = useTranslation();
-
-  // Read-only viewer (steer sharee): collapse to just Refresh — every other
-  // control here is a git write, which is owner-only server-side.
-  if (readOnly) {
-    return (
-      <div className="border-sidebar-border flex items-center gap-1 border-b px-2 py-1">
-        <RefreshButton onRefresh={refresh} loading={loading} />
-        <ToolbarCount
-          label={t('review.toolbarCount.files', { count: summaries.length })}
-          testId="review-count"
-        />
-      </div>
-    );
-  }
-
   return (
-    <div className="border-sidebar-border flex items-center gap-1 border-b px-2 py-1">
-      <RefreshButton onRefresh={refresh} loading={loading} />
-      <PullFetchButtons
-        onPull={handlePull}
-        onFetch={handleFetchOrigin}
-        pullInProgress={pullInProgress}
-        fetchInProgress={fetchInProgress}
-        unpulledCommitCount={gitStatus?.unpulledCommitCount ?? 0}
-        testIdPrefix="review"
-      />
-      {remoteUrl === null ? (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="muted"
-              size="icon-sm"
-              onClick={() => setPublishDialogOpen(true)}
-              className="relative"
-              data-testid="review-publish-toolbar"
-            >
-              <Upload className="icon-base" />
-              {unpushedCommitCount > 0 && <CountBadge count={unpushedCommitCount} />}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top">
-            {unpushedCommitCount > 0
-              ? t('review.publishWithCommits', {
-                  count: unpushedCommitCount,
-                  defaultValue: `Publish repository (${unpushedCommitCount} commit(s) to push)`,
-                })
-              : t('review.publishRepo', 'Publish repository')}
-          </TooltipContent>
-        </Tooltip>
-      ) : (
-        <PushButton
-          onPush={handlePushOnly}
-          pushInProgress={pushInProgress}
-          unpushedCommitCount={unpushedCommitCount}
-          testIdPrefix="review"
-        />
-      )}
-      {!!threadBranch && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="muted"
-              size="icon-sm"
-              onClick={openMergeDialog}
-              disabled={mergeInProgress || summaries.length > 0}
-              data-testid="review-merge-toolbar"
-            >
-              <GitMerge className={cn('icon-base', mergeInProgress && 'animate-pulse')} />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top">
-            {summaries.length > 0
-              ? t('review.commitFirst', 'Commit changes before merging')
-              : t('review.mergeIntoBranch', {
-                  target: baseBranch || 'base',
-                  defaultValue: `Merge into branch`,
-                })}
-          </TooltipContent>
-        </Tooltip>
-      )}
-      {isOnDifferentBranch && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            {gitStatus?.prNumber ? (
-              (() => {
-                const prState = gitStatus.prState ?? 'OPEN';
-                const PrIcon =
-                  // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
-                  prState === 'MERGED'
-                    ? GitMerge
-                    : prState === 'CLOSED'
-                      ? GitPullRequestClosed
-                      : GitPullRequest;
-                const prIconColor =
-                  // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
-                  prState === 'MERGED'
-                    ? 'text-status-violet'
-                    : prState === 'CLOSED'
-                      ? 'text-status-error'
-                      : 'text-status-success';
-                return (
-                  <Button
-                    variant="muted"
-                    size="icon-sm"
-                    onClick={() => window.open(gitStatus.prUrl, '_blank', 'noopener,noreferrer')}
-                    data-testid="review-view-pr-toolbar"
-                  >
-                    <PrIcon className={`icon-base ${prIconColor}`} />
-                  </Button>
-                );
-              })()
-            ) : (
-              <Button
-                variant="muted"
-                size="icon-sm"
-                onClick={() => setPrDialog({ title: threadBranch || '', body: '' })}
-                disabled={!!isAgentRunning}
-                data-testid="review-create-pr-toolbar"
-              >
-                <GitPullRequest className="icon-base" />
-              </Button>
-            )}
-          </TooltipTrigger>
-          <TooltipContent side="top">
-            {gitStatus?.prNumber
-              ? t('review.viewPR', {
-                  number: gitStatus.prNumber,
-                  defaultValue: `View PR #${gitStatus.prNumber}`,
-                })
-              : isAgentRunning
-                ? t('review.agentRunningTooltip')
-                : t('review.createPRTooltip', {
-                    branch: threadBranch,
-                    target: baseBranch || 'base',
-                  })}
-          </TooltipContent>
-        </Tooltip>
-      )}
+    <>
       {summaries.length > 0 && (
         <Tooltip>
           <TooltipTrigger asChild>
@@ -364,6 +382,104 @@ export function ChangesToolbar({
           </TooltipContent>
         </Tooltip>
       )}
+    </>
+  );
+}
+
+export function ChangesToolbar({
+  refresh,
+  loading,
+  handlePull,
+  handleFetchOrigin,
+  pullInProgress,
+  fetchInProgress,
+  handlePushOnly,
+  pushInProgress,
+  remoteUrl,
+  setPublishDialogOpen,
+  unpushedCommitCount,
+  threadBranch,
+  baseBranch,
+  isOnDifferentBranch,
+  openMergeDialog,
+  mergeInProgress,
+  setPrDialog,
+  summaries,
+  checkedFiles,
+  handleStageSelected,
+  handleUnstageAll,
+  handleStashSelected,
+  handleDiscardAll,
+  handleIgnoreFiles,
+  actionInProgress,
+  stashInProgress,
+  gitStatus,
+  isAgentRunning,
+  readOnly,
+}: ChangesToolbarProps) {
+  const { t } = useTranslation();
+
+  // Read-only viewer (steer sharee): collapse to just Refresh — every other
+  // control here is a git write, which is owner-only server-side.
+  if (readOnly) {
+    return (
+      <div className="border-sidebar-border flex items-center gap-1 border-b px-2 py-1">
+        <RefreshButton onRefresh={refresh} loading={loading} />
+        <ToolbarCount
+          label={t('review.toolbarCount.files', { count: summaries.length })}
+          testId="review-count"
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="border-sidebar-border flex items-center gap-1 border-b px-2 py-1">
+      <RefreshButton onRefresh={refresh} loading={loading} />
+      <PullFetchButtons
+        onPull={handlePull}
+        onFetch={handleFetchOrigin}
+        pullInProgress={pullInProgress}
+        fetchInProgress={fetchInProgress}
+        unpulledCommitCount={gitStatus?.unpulledCommitCount ?? 0}
+        testIdPrefix="review"
+      />
+      <PublishOrPushButton
+        remoteUrl={remoteUrl}
+        setPublishDialogOpen={setPublishDialogOpen}
+        unpushedCommitCount={unpushedCommitCount}
+        handlePushOnly={handlePushOnly}
+        pushInProgress={pushInProgress}
+      />
+      {!!threadBranch && (
+        <MergeButton
+          openMergeDialog={openMergeDialog}
+          mergeInProgress={mergeInProgress}
+          baseBranch={baseBranch}
+          hasChanges={summaries.length > 0}
+        />
+      )}
+      {isOnDifferentBranch && (
+        <PullRequestButton
+          gitStatus={gitStatus}
+          setPrDialog={setPrDialog}
+          threadBranch={threadBranch}
+          baseBranch={baseBranch}
+          isAgentRunning={isAgentRunning}
+        />
+      )}
+      <SelectionActions
+        summaries={summaries}
+        checkedFiles={checkedFiles}
+        handleStageSelected={handleStageSelected}
+        handleUnstageAll={handleUnstageAll}
+        handleStashSelected={handleStashSelected}
+        handleDiscardAll={handleDiscardAll}
+        handleIgnoreFiles={handleIgnoreFiles}
+        actionInProgress={actionInProgress}
+        stashInProgress={stashInProgress}
+        isAgentRunning={isAgentRunning}
+      />
       <ToolbarCount
         label={t('review.toolbarCount.files', { count: summaries.length })}
         testId="review-count"

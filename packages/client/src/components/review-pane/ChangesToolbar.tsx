@@ -11,6 +11,7 @@ import {
   Undo2,
   Upload,
 } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { PullFetchButtons } from '@/components/pull-fetch-buttons';
@@ -263,11 +264,105 @@ type SelectionActionsProps = Pick<
   | 'isAgentRunning'
 >;
 
-function SelectionActions({
+type TranslateFn = ReturnType<typeof useTranslation>['t'];
+
+/** "Agent running" while the agent works, else the selected/all label. */
+function selectionTooltip(
+  t: TranslateFn,
+  isAgentRunning: boolean | undefined,
+  hasChecked: boolean,
+  selected: [key: string, defaultValue: string],
+  all: [key: string, defaultValue: string],
+): string {
+  if (isAgentRunning) return t('review.agentRunningTooltip');
+  const [key, defaultValue] = hasChecked ? selected : all;
+  return t(key, { defaultValue });
+}
+
+interface SelectionActionButtonProps {
+  testId: string;
+  onClick: () => void;
+  disabled: boolean;
+  icon: ReactNode;
+  tooltip: ReactNode;
+}
+
+function SelectionActionButton({
+  testId,
+  onClick,
+  disabled,
+  icon,
+  tooltip,
+}: SelectionActionButtonProps) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="muted"
+          size="icon-sm"
+          onClick={onClick}
+          disabled={disabled}
+          data-testid={testId}
+        >
+          {icon}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="top">{tooltip}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+function StagingActions({
   summaries,
   checkedFiles,
   handleStageSelected,
   handleUnstageAll,
+  actionInProgress,
+  isAgentRunning,
+}: SelectionActionsProps) {
+  const { t } = useTranslation();
+  const hasFiles = summaries.length > 0;
+  const hasChecked = checkedFiles.size > 0;
+  const busy = !!actionInProgress || !!isAgentRunning;
+  return (
+    <>
+      {hasFiles && (
+        <SelectionActionButton
+          testId="review-stage-selected"
+          onClick={handleStageSelected}
+          disabled={busy}
+          icon={<Plus className="icon-base" />}
+          tooltip={selectionTooltip(
+            t,
+            isAgentRunning,
+            hasChecked,
+            ['review.stageSelected', 'Stage selected'],
+            ['review.stageAll', 'Stage all'],
+          )}
+        />
+      )}
+      {summaries.some((f) => f.staged) && (
+        <SelectionActionButton
+          testId="review-unstage-selected"
+          onClick={handleUnstageAll}
+          disabled={busy}
+          icon={<Minus className="icon-base" />}
+          tooltip={selectionTooltip(
+            t,
+            isAgentRunning,
+            hasChecked,
+            ['review.unstageSelected', 'Unstage selected'],
+            ['review.unstageAll', 'Unstage all'],
+          )}
+        />
+      )}
+    </>
+  );
+}
+
+function FileActions({
+  summaries,
+  checkedFiles,
   handleStashSelected,
   handleDiscardAll,
   handleIgnoreFiles,
@@ -276,112 +371,57 @@ function SelectionActions({
   isAgentRunning,
 }: SelectionActionsProps) {
   const { t } = useTranslation();
+  const hasFiles = summaries.length > 0;
+  const hasChecked = checkedFiles.size > 0;
+  const busy = !!actionInProgress || !!isAgentRunning;
   return (
     <>
-      {summaries.length > 0 && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="muted"
-              size="icon-sm"
-              onClick={handleStageSelected}
-              disabled={!!actionInProgress || !!isAgentRunning}
-              data-testid="review-stage-selected"
-            >
-              <Plus className="icon-base" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top">
-            {isAgentRunning
-              ? t('review.agentRunningTooltip')
-              : checkedFiles.size > 0
-                ? t('review.stageSelected', { defaultValue: 'Stage selected' })
-                : t('review.stageAll', { defaultValue: 'Stage all' })}
-          </TooltipContent>
-        </Tooltip>
+      {hasFiles && (
+        <SelectionActionButton
+          testId="review-stash-selected"
+          onClick={handleStashSelected}
+          disabled={busy || stashInProgress}
+          icon={<Archive className={cn('icon-base', stashInProgress && 'animate-pulse')} />}
+          tooltip={selectionTooltip(
+            t,
+            isAgentRunning,
+            hasChecked,
+            ['review.stashSelected', 'Stash selected'],
+            ['review.stashAll', 'Stash all'],
+          )}
+        />
       )}
-      {summaries.some((f) => f.staged) && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="muted"
-              size="icon-sm"
-              onClick={handleUnstageAll}
-              disabled={!!actionInProgress || !!isAgentRunning}
-              data-testid="review-unstage-selected"
-            >
-              <Minus className="icon-base" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top">
-            {isAgentRunning
-              ? t('review.agentRunningTooltip')
-              : checkedFiles.size > 0
-                ? t('review.unstageSelected', { defaultValue: 'Unstage selected' })
-                : t('review.unstageAll', { defaultValue: 'Unstage all' })}
-          </TooltipContent>
-        </Tooltip>
+      {hasFiles && (
+        <SelectionActionButton
+          testId="review-discard-all"
+          onClick={handleDiscardAll}
+          disabled={busy}
+          icon={<Undo2 className="icon-base" />}
+          tooltip={
+            isAgentRunning ? t('review.agentRunningTooltip') : t('review.discard', 'Discard')
+          }
+        />
       )}
-      {summaries.length > 0 && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="muted"
-              size="icon-sm"
-              onClick={handleStashSelected}
-              disabled={!!actionInProgress || !!isAgentRunning || stashInProgress}
-              data-testid="review-stash-selected"
-            >
-              <Archive className={cn('icon-base', stashInProgress && 'animate-pulse')} />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top">
-            {isAgentRunning
-              ? t('review.agentRunningTooltip')
-              : checkedFiles.size > 0
-                ? t('review.stashSelected', { defaultValue: 'Stash selected' })
-                : t('review.stashAll', { defaultValue: 'Stash all' })}
-          </TooltipContent>
-        </Tooltip>
+      {hasFiles && (
+        <SelectionActionButton
+          testId="review-ignore-files"
+          onClick={handleIgnoreFiles}
+          disabled={!!actionInProgress}
+          icon={<EyeOff className="icon-base" />}
+          tooltip={
+            hasChecked ? `Add ${checkedFiles.size} file(s) to .gitignore` : 'Add all to .gitignore'
+          }
+        />
       )}
-      {summaries.length > 0 && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="muted"
-              size="icon-sm"
-              onClick={handleDiscardAll}
-              disabled={!!actionInProgress || !!isAgentRunning}
-              data-testid="review-discard-all"
-            >
-              <Undo2 className="icon-base" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top">
-            {isAgentRunning ? t('review.agentRunningTooltip') : t('review.discard', 'Discard')}
-          </TooltipContent>
-        </Tooltip>
-      )}
-      {summaries.length > 0 && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="muted"
-              size="icon-sm"
-              onClick={handleIgnoreFiles}
-              disabled={!!actionInProgress}
-              data-testid="review-ignore-files"
-            >
-              <EyeOff className="icon-base" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top">
-            {checkedFiles.size > 0
-              ? `Add ${checkedFiles.size} file(s) to .gitignore`
-              : 'Add all to .gitignore'}
-          </TooltipContent>
-        </Tooltip>
-      )}
+    </>
+  );
+}
+
+function SelectionActions(props: SelectionActionsProps) {
+  return (
+    <>
+      <StagingActions {...props} />
+      <FileActions {...props} />
     </>
   );
 }

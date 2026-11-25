@@ -433,7 +433,8 @@ reads the role's prose as a decision:
   change: #484 (`no-unknown-parameters`) narrowed a request schema, which its review caught. With
   the class, `classifyRisk` sets aside the size reason and the contract's risk hints (kept in the
   risk's `waived`), provided `lintCleanupRefusals` finds, in the diff alone, no added suppression
-  (`eslint-disable`, `oxlint-disable`, `@ts-expect-error`, …), no change to a lint or type-check
+  (`eslint-disable`, `oxlint-disable`, `@ts-expect-error`, …; one removed with the same text, a
+  suppression moved by a file split, pays for one added), no change to a lint or type-check
   configuration file, and no code file GitHub gave no patch for. Otherwise nothing is waived and
   the reason says why. Weakened tests and sensitive paths hold whatever the class. The check shows
   the warnings were not hidden, not that the change does nothing else: tests, review and proof

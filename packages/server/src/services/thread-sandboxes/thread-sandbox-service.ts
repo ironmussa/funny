@@ -108,6 +108,50 @@ export interface ProvisionInput {
 /** Absolute path made only of characters that need no shell quoting beyond '…'. */
 const SAFE_PATH = /^\/[A-Za-z0-9._/@+-]+$/;
 
+/** Run a setup command on the machine; a non-zero exit fails provisioning. */
+const exec = (provider: SandboxProvider, handle: SandboxHandle, command: string, what: string) =>
+  Effect.flatMap(
+    providerCall(() => provider.exec(handle, command, { timeoutMs: 600_000 })),
+    (result) =>
+      result.exitCode === 0
+        ? Effect.void
+        : Effect.fail<ProvisionError>({
+            kind: 'sandbox',
+            message: `${what} failed (exit ${result.exitCode}): ${result.stderr.slice(-500)}`,
+            cause: 'provider',
+          }),
+  );
+
+/** Poll the provider until the machine is running. */
+const waitSandboxRunning = (
+  deps: Pick<ThreadSandboxDeps, 'readyTimeoutMs' | 'sleep'>,
+  pollMs: number,
+  provider: SandboxProvider,
+  handle: SandboxHandle,
+) =>
+  fromResult((signal) =>
+    pollUntil(
+      () =>
+        provider.status(handle).andThen((s) => {
+          if (s.state === 'running') return okAsync<true | null, SandboxError>(true);
+          if (s.state === 'failed' || s.state === 'lost') {
+            return errAsync<true | null, SandboxError>({
+              kind: 'provider',
+              message: `sandbox ${s.state}: ${s.detail ?? s.providerState}`,
+            });
+          }
+          return okAsync<true | null, SandboxError>(null);
+        }),
+      {
+        what: 'sandbox start',
+        timeoutMs: deps.readyTimeoutMs ?? 5 * 60_000,
+        intervalMs: pollMs,
+        signal,
+        sleep: deps.sleep,
+      },
+    ).mapErr(sandboxError),
+  );
+
 export function createThreadSandboxService(deps: ThreadSandboxDeps) {
   const control = createThreadSandboxControl(deps);
   const ops = sandboxOps(deps);
@@ -117,43 +161,8 @@ export function createThreadSandboxService(deps: ThreadSandboxDeps) {
   const releaseMachine = (row: ThreadSandboxRow) =>
     Effect.ignore(fromResult(() => control.release(row.threadId)));
 
-  const exec = (provider: SandboxProvider, handle: SandboxHandle, command: string, what: string) =>
-    Effect.flatMap(
-      providerCall(() => provider.exec(handle, command, { timeoutMs: 600_000 })),
-      (result) =>
-        result.exitCode === 0
-          ? Effect.void
-          : Effect.fail<ProvisionError>({
-              kind: 'sandbox',
-              message: `${what} failed (exit ${result.exitCode}): ${result.stderr.slice(-500)}`,
-              cause: 'provider',
-            }),
-    );
-
-  /** Poll the provider until the machine is running. */
   const waitRunning = (provider: SandboxProvider, handle: SandboxHandle) =>
-    fromResult((signal) =>
-      pollUntil(
-        () =>
-          provider.status(handle).andThen((s) => {
-            if (s.state === 'running') return okAsync<true | null, SandboxError>(true);
-            if (s.state === 'failed' || s.state === 'lost') {
-              return errAsync<true | null, SandboxError>({
-                kind: 'provider',
-                message: `sandbox ${s.state}: ${s.detail ?? s.providerState}`,
-              });
-            }
-            return okAsync<true | null, SandboxError>(null);
-          }),
-        {
-          what: 'sandbox start',
-          timeoutMs: deps.readyTimeoutMs ?? 5 * 60_000,
-          intervalMs: pollMs,
-          signal,
-          sleep: deps.sleep,
-        },
-      ).mapErr(sandboxError),
-    );
+    waitSandboxRunning(deps, pollMs, provider, handle);
 
   /**
    * Prepare the project's parent directory (no secrets, via the provider) and

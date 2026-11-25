@@ -241,11 +241,12 @@ describe('factoryRunGateChips', () => {
     });
   });
 
-  test('a proof carried to the head commit is current', () => {
+  test('a review and proof that passed for the head commit have no chip', () => {
     const chips = factoryRunGateChips(
       t,
       buildFactoryRun({
         risk: { headSha: 'head', level: 'low', reasons: [] },
+        reviews: [review('head', 'pass')],
         regressionProof: {
           headSha: 'head',
           carriedFrom: 'older',
@@ -254,17 +255,43 @@ describe('factoryRunGateChips', () => {
         },
       }),
     );
-    expect(chips.find((c) => c.id === 'proof')).toMatchObject({ tone: 'pass', stale: false });
+    expect(chips.map((c) => c.id)).toEqual(['risk']);
   });
 
-  test('CI shows its rounds and what went wrong', () => {
+  test('a failed review or proof keeps its chip', () => {
+    const chips = factoryRunGateChips(
+      t,
+      buildFactoryRun({
+        risk: { headSha: 'head', level: 'low', reasons: [] },
+        reviews: [review('head', 'fail')],
+        regressionProof: { headSha: 'head', verdict: 'fail', ranAt: hoursAgo(1) },
+      }),
+    );
+    expect(chips.map((c) => [c.id, c.tone])).toEqual([
+      ['risk', 'pass'],
+      ['review', 'fail'],
+      ['proof', 'fail'],
+    ]);
+  });
+
+  test('a proof that passed for an older commit has no chip either', () => {
+    const chips = factoryRunGateChips(
+      t,
+      buildFactoryRun({
+        risk: { headSha: 'head', level: 'low', reasons: [] },
+        regressionProof: { headSha: 'older', verdict: 'pass', ranAt: hoursAgo(1) },
+      }),
+    );
+    expect(chips.map((c) => c.id)).toEqual(['risk']);
+  });
+
+  test('CI rounds that are over have no chip; running CI says which round', () => {
     const run = buildFactoryRun({ state: 'reviewing' });
     run.metrics = { ...run.metrics, ciRounds: 3, ciRed: 1, conflicts: 1 };
-    expect(factoryRunGateChips(t, run).find((c) => c.id === 'ci')).toMatchObject({
-      tone: 'warn',
-      label: 'CI ×3',
-      detail: '1 red · 1 conflicts',
-    });
+    expect(factoryRunGateChips(t, run).find((c) => c.id === 'ci')).toBeUndefined();
+    expect(
+      factoryRunGateChips(t, { ...run, state: 'waiting_ci' }).find((c) => c.id === 'ci'),
+    ).toMatchObject({ label: 'CI running', detail: 'Round 4 · 1 red · 1 conflicts' });
   });
 });
 

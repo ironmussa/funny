@@ -1,7 +1,10 @@
 /**
  * The quality gates a run has a result for, as chips on its board card
  * (openspec factory-pipeline-board): risk, the latest review, the regression
- * proof and CI. A gate the run has not reached has no chip.
+ * proof and CI. A gate the run has not reached has no chip, nor has a gate
+ * whose result needs no look: a passed review of the head commit, a passed or
+ * skipped proof (of any commit: the detail panel says which), and CI rounds
+ * that are over (their history is in the detail panel; only running CI shows).
  */
 import type { TFunction } from 'i18next';
 
@@ -80,34 +83,47 @@ function proofChip(
   };
 }
 
+/** CI shows only while it runs; how many rounds it took is in the detail panel. */
 function ciChip(t: TFunction, run: GateRun): FactoryGateChip | null {
+  if (run.state !== 'waiting_ci') return null;
   const { ciRounds, ciRed, conflicts } = run.metrics;
-  const running = run.state === 'waiting_ci';
-  if (ciRounds === 0 && !running) return null;
-  const troubled = ciRed + conflicts > 0;
   const chip: FactoryGateChip = {
     id: 'ci',
-    tone: troubled ? 'warn' : 'neutral',
-    label: running
-      ? t('factoryBoard.ci.running', 'CI running')
-      : t('factoryBoard.ci.rounds', 'CI ×{{count}}', { count: ciRounds }),
+    tone: 'neutral',
+    label: t('factoryBoard.ci.running', 'CI running'),
     stale: false,
   };
-  if (troubled) {
-    chip.detail = t('factoryBoard.ci.detail', '{{red}} red · {{conflicts}} conflicts', {
-      red: ciRed,
-      conflicts,
-    });
+  if (ciRounds > 0) {
+    chip.detail = t(
+      'factoryBoard.ci.roundsDetail',
+      'Round {{round}} · {{red}} red · {{conflicts}} conflicts',
+      {
+        round: ciRounds + 1,
+        red: ciRed,
+        conflicts,
+      },
+    );
   }
   return chip;
+}
+
+/** A review chip only says something when it failed or is for an older commit. */
+function reviewWorthShowing(chip: FactoryGateChip | null): FactoryGateChip | null {
+  if (!chip || chip.stale) return chip;
+  return chip.tone === 'fail' ? chip : null;
+}
+
+/** A proof chip only says something when it failed. */
+function proofWorthShowing(chip: FactoryGateChip | null): FactoryGateChip | null {
+  return chip?.tone === 'fail' ? chip : null;
 }
 
 export function factoryRunGateChips(t: TFunction, run: GateRun): FactoryGateChip[] {
   const head = headOf(run);
   const chips = [
     run.risk ? riskChip(t, run.risk) : null,
-    reviewChip(t, run, head),
-    run.regressionProof ? proofChip(t, run.regressionProof, head) : null,
+    reviewWorthShowing(reviewChip(t, run, head)),
+    proofWorthShowing(run.regressionProof ? proofChip(t, run.regressionProof, head) : null),
     ciChip(t, run),
   ];
   return chips.filter((chip) => chip !== null);

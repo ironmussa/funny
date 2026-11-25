@@ -14,7 +14,7 @@
  * produce a bounded input.
  */
 
-import { parseStoredJson } from '@funny/shared/json-validation';
+import { parseStoredJson, type JsonValue } from '@funny/shared/json-validation';
 import { z } from 'zod';
 
 /** A tool call as stored (`tool_calls` row): input and output are raw strings. */
@@ -86,13 +86,13 @@ function clip(text: string, max: number): string {
 }
 
 /** A stored tool input: its JSON value, or the raw text when it is not JSON. */
-function parseInput(raw: string): unknown {
-  const parsed = parseStoredJson(z.unknown(), raw, 'tool call input');
+function parseInput(raw: string): JsonValue {
+  const parsed = parseStoredJson(z.json(), raw, 'tool call input');
   return parsed.ok ? parsed.value : raw;
 }
 
 /** The pending question's text, from an `AskUserQuestion` input. */
-function questionText(input: unknown): string | null {
+function questionText(input: JsonValue): string | null {
   if (!input || typeof input !== 'object') return null;
   const questions = (input as { questions?: unknown }).questions;
   if (Array.isArray(questions)) {

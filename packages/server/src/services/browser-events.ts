@@ -95,7 +95,22 @@ function jsonObject(value: JsonObject | BrowserEvent): JsonObject {
     : { value: normalized };
 }
 
-function jsonValue(value: unknown, seen: WeakSet<object>): JsonValue {
+/**
+ * What a browser-session result or event may hold on its way to the legacy JSON
+ * wire: JSON itself, plus the values JSON cannot hold, which `jsonValue` turns
+ * into JSON (a bigint into text, `undefined` / a function / a symbol into null).
+ */
+type WireInput =
+  | JsonValue
+  | BrowserEvent
+  | bigint
+  | undefined
+  | symbol
+  | ((...args: never[]) => void)
+  | readonly WireInput[]
+  | { readonly [key: string]: WireInput };
+
+function jsonValue(value: WireInput, seen: WeakSet<object>): JsonValue {
   if (value === null || typeof value === 'string' || typeof value === 'boolean') return value;
   if (typeof value === 'number') return Number.isFinite(value) ? value : String(value);
   if (typeof value === 'bigint') return value.toString();

@@ -24,6 +24,7 @@ import {
   mcpResultPreview,
   mcpToolTitle,
   parseMcpResult,
+  type JsonValue,
   type McpResult,
   type McpResultPart,
   type McpToolName,
@@ -406,7 +407,8 @@ function ResultPart({ part, isError }: { part: McpResultPart; isError: boolean }
   );
 }
 
-function prettyJson(text: string): unknown {
+/** The output as parsed JSON, so it is shown highlighted; the text itself when it is not JSON. */
+function prettyJson(text: string): JsonValue {
   try {
     return JSON.parse(text);
   } catch {

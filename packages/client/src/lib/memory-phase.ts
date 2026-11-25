@@ -18,7 +18,7 @@ export type MemoryPhase =
   | 'terminal-close';
 
 interface MemoryProfilerHandle {
-  mark?: (label: string) => unknown;
+  mark?: (label: string) => void;
   status?: () => { running: boolean };
 }
 

@@ -144,6 +144,7 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
     const tables = [
       // No foreign key to a project: nothing else removes its rows.
       'factory_incidents',
+      'factory_approval_requests',
       'factory_batch_attempts',
       'factory_batches',
       'project_runner_grants',

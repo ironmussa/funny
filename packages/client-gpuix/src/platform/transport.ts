@@ -100,7 +100,7 @@ export class NativeCookieJar {
   }
 }
 
-function responseHeaders(headers: NativeHeaders): Record<string, string> {
+function responseHeaders(headers: NativeHeaders) {
   const result: Record<string, string> = {};
   headers.forEach((value, key) => {
     result[key] = value;

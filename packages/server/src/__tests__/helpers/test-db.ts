@@ -367,6 +367,7 @@ export function createTestDb() {
       auto_merge TEXT NOT NULL DEFAULT 'low_risk',
       sensitive_paths TEXT,
       max_low_risk_lines INTEGER,
+      approval_adjust_max_lines INTEGER,
       size_ignored_paths TEXT,
       stage_limits TEXT,
       batch_size INTEGER,
@@ -470,6 +471,25 @@ export function createTestDb() {
     CREATE UNIQUE INDEX IF NOT EXISTS factory_incidents_one_open
     ON factory_incidents (repo, base_branch)
     WHERE state <> 'closed'
+  `);
+  testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS factory_approval_requests (
+      id TEXT PRIMARY KEY,
+      run_id TEXT NOT NULL,
+      factory_id TEXT NOT NULL,
+      project_id TEXT NOT NULL,
+      thread_id TEXT NOT NULL,
+      sha TEXT NOT NULL,
+      state TEXT NOT NULL DEFAULT 'pending',
+      created_at TEXT NOT NULL,
+      resolved_at TEXT,
+      resolved_by TEXT
+    )
+  `);
+  testDb.run(sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS factory_approval_requests_one_pending
+    ON factory_approval_requests (run_id)
+    WHERE state = 'pending'
   `);
   testDb.run(sql`
     CREATE TABLE IF NOT EXISTS factory_batches (

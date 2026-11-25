@@ -71,6 +71,7 @@ mock.module('@/data/factory/hooks', () => ({
 }));
 mock.module('@/data/factory/actions', () => ({
   sendIssuesToFactory: (...args: unknown[]) => factory.send(...args),
+  approveFactoryMerge: () => okAsync(null),
   controlFactoryRun: (...args: unknown[]) => factory.control(...args),
   retryFactorySettings: (...args: unknown[]) => factory.retry(...args),
 }));
@@ -299,6 +300,7 @@ const factorySettings = (over: Partial<FactorySettings> = {}): FactorySettings =
   autoMerge: 'low_risk',
   sensitivePaths: [],
   maxLowRiskLines: 400,
+  approvalAdjustMaxLines: 0,
   sizeIgnoredPaths: [],
   stageLimits: {},
   stepOverrides: {},

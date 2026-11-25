@@ -734,6 +734,8 @@
     "projectFactorySensitivePathsDesc": "Globs separados por comas. Un cambio que toca una es de riesgo alto, además de .github/, migraciones y auth/",
     "projectFactoryMaxLowRiskLines": "Tamaño de un cambio de riesgo bajo",
     "projectFactoryMaxLowRiskLinesDesc": "Un cambio con más líneas cambiadas que esto es de riesgo alto. No cuentan pruebas, Markdown, traducciones, stories, snapshots ni lockfiles",
+    "projectFactoryApprovalAdjust": "Ajuste que sigue una aprobación",
+    "projectFactoryApprovalAdjustDesc": "Después de aprobar un cambio de riesgo alto, la fábrica puede fusionar un commit posterior que difiera de él como mucho en estas líneas, solo en archivos que aprobaste y sin motivos de riesgo nuevos. Fusiona entonces líneas que ninguna persona leyó; la revisión debe pasar igualmente. 0: solo el mismo cambio",
     "projectFactorySizeIgnoredPaths": "No cuentan en el tamaño",
     "projectFactorySizeIgnoredPathsDesc": "Globs separados por comas. Sus líneas no cuentan para el tamaño de un cambio. Las rutas sensibles siguen aplicándose a ellos",
     "projectFactoryStageLimits": "Corridas por paso",
@@ -1655,6 +1657,9 @@
     }
   },
   "errors": {
+    "factoryApprove": {
+      "CONFLICT": "Este cambio se actualizó después de que lo abriste. No se aprobó nada: revisa el commit nuevo."
+    },
     "generic": {
       "NOT_FOUND": "No se encontró el recurso solicitado.",
       "BAD_REQUEST": "No se pudo procesar la solicitud. Revisa los datos ingresados.",
@@ -1906,7 +1911,25 @@
     },
     "approveMerge": "Aprobar y hacer merge",
     "approveMergeTitle": "¿Hacer merge de este cambio de riesgo alto?",
-    "approveMergeBody": "El factory hará merge del commit {{sha}} del issue #{{issue}} si sus checks, su review y su prueba de regresión siguen pasando. Un commit nuevo en la rama necesita una nueva aprobación."
+    "approveMergeBody": "El factory hará merge del commit {{sha}} del issue #{{issue}} si sus checks, su review y su prueba de regresión siguen pasando. Un commit nuevo en la rama necesita una nueva aprobación.",
+    "approvalRequest": {
+      "title": "Se necesita tu aprobación para fusionar #{{issue}}",
+      "titleNoIssue": "Se necesita tu aprobación para fusionar esta ejecución",
+      "approvedTitle": "Aprobaste fusionar #{{issue}}",
+      "declinedTitle": "Rechazaste aprobar #{{issue}}",
+      "expiredTitle": "La solicitud para aprobar #{{issue}} expiró",
+      "asked": "Lo pidió el agente de este hilo. Nada queda aprobado hasta que lo apruebes.",
+      "highRisk": "Riesgo alto",
+      "commit": "commit",
+      "size": "{{count}} líneas cambiadas",
+      "reasons": "Por qué la fábrica lo retiene",
+      "decline": "Rechazar",
+      "loading": "Leyendo la ejecución…",
+      "stale": "El pull request cambió después de que el agente lo pidió, así que esta solicitud ya no aplica.",
+      "declinedNote": "No se aprobó nada. La ejecución sigue retenida.",
+      "runNow": "La ejecución ahora:",
+      "boardMarker": "Un agente pidió tu aprobación"
+    }
   },
   "projectSecrets": {
     "title": "Secretos",
@@ -2089,6 +2112,10 @@
     }
   },
   "factoryRunDetail": {
+    "approvalAdjustment": "{{lines}} líneas difieren en {{files}} archivos",
+    "approvalMovedTo": "trasladado a",
+    "approvalSameChange": "mismo cambio",
+    "approvedAt": "Merge aprobado en",
     "carriedFrom": "desde {{sha}}",
     "ci": "{{rounds}} rondas de CI · {{red}} en rojo · {{conflicts}} conflictos · {{fixes}} arreglos del agente",
     "flow": "Flujo",

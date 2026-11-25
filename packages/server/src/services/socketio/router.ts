@@ -2,6 +2,7 @@ import {
   parseSocketPayload,
   socketObjectPayloadSchema,
   type SocketObjectPayload,
+  type SocketIoArgument,
 } from '@funny/shared/socket-events';
 import type { Socket } from 'socket.io';
 import type { z, ZodTypeAny } from 'zod';
@@ -42,7 +43,7 @@ export function registerSocketHandlersWithSchema<TSchema extends ZodTypeAny>(
 ): void {
   const middleware = spec.middleware ?? [];
   for (const eventName of spec.events) {
-    socket.on(eventName, async (data: unknown) => {
+    socket.on(eventName, async (data: SocketIoArgument) => {
       const ctx: SocketHandlerContext = { socket, eventName };
       for (const mw of middleware) {
         if (!(await mw(ctx, data))) return;
@@ -71,7 +72,7 @@ export function registerSocketRpc<
     ) => void | Promise<void>;
   },
 ): void {
-  socket.on(eventName, async (data: unknown, ack?: (response: TResponse) => void) => {
+  socket.on(eventName, async (data: SocketIoArgument, ack?: (response: TResponse) => void) => {
     const schema = (spec.payloadSchema ?? socketObjectPayloadSchema) as TSchema;
     const payload = parseSocketPayload(schema, data);
     const requestId =

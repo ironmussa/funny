@@ -17,7 +17,18 @@ const MAX_LINES = 1500;
 // but the goal is to drive these down toward MAX_LINES.
 //
 // DO NOT add new entries without a decomposition plan in the PR description.
-const WAIVERS: Record<string, { current: number; target: number; note: string }> = {
+interface Waiver {
+  current: number;
+  target: number;
+  note: string;
+}
+
+/** Repository-relative file path → its waiver. */
+interface Waivers {
+  readonly [file: string]: Waiver;
+}
+
+const WAIVERS: Waivers = {
   'packages/client/src/components/ReviewPane.tsx': {
     current: 3500,
     target: 800,

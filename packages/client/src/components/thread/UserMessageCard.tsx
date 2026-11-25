@@ -282,22 +282,13 @@ function UserMessageContent({
           // Apply the collapsed height before overflow measurement. Previously
           // the full prompt could paint as the LCP, then shrink after the
           // layout effect discovered it overflowed, shifting the whole thread.
-          !expanded && 'overflow-hidden',
+          // max-h-12 = COLLAPSED_MAX_H (48px).
+          !expanded && 'max-h-12 overflow-hidden',
+          !expanded &&
+            isOverflowing &&
+            '[-webkit-mask-image:linear-gradient(to_bottom,black_55%,transparent)] [mask-image:linear-gradient(to_bottom,black_55%,transparent)]',
           expanded && 'max-h-[40vh] overflow-y-auto',
         )}
-        style={
-          !expanded
-            ? {
-                maxHeight: COLLAPSED_MAX_H,
-                WebkitMaskImage: isOverflowing
-                  ? 'linear-gradient(to bottom, black 55%, transparent)'
-                  : undefined,
-                maskImage: isOverflowing
-                  ? 'linear-gradient(to bottom, black 55%, transparent)'
-                  : undefined,
-              }
-            : undefined
-        }
       >
         {inlineNodes}
       </pre>

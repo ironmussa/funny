@@ -99,11 +99,8 @@ export function GraphCommitList({
   );
   return (
     <div
-      style={{
-        height: totalSize,
-        width: '100%',
-        position: 'relative',
-      }}
+      style={{ '--graph-list-height': `${totalSize}px` }}
+      className="relative h-[var(--graph-list-height)] w-full"
     >
       <RebaseCopyLinksOverlay
         renderedRange={renderedRangeOf(virtualItems)}
@@ -121,14 +118,10 @@ export function GraphCommitList({
             <div
               key="__sentinel__"
               style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                width: '100%',
-                height: baseRowH,
-                transform: `translateY(${virtualRow.start}px)`,
+                '--graph-sentinel-height': `${baseRowH}px`,
+                '--graph-sentinel-top': `${virtualRow.start}px`,
               }}
-              className="flex items-center justify-center"
+              className="absolute top-0 left-0 flex h-[var(--graph-sentinel-height)] w-full [transform:translateY(var(--graph-sentinel-top))] items-center justify-center"
             >
               <LoadingState
                 fill={false}

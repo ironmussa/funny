@@ -1,10 +1,14 @@
-import { afterEach, describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, test, setDefaultTimeout } from 'bun:test';
 
 import { act, fireEvent, render, screen } from '@testing-library/react';
 
 import { AgentPointer } from '@/components/browser-panel/AgentPointer';
 import { dispatchBrowserSessionEvent } from '@/hooks/dispatch-browser-session-events';
 import { useBrowserPointerStore } from '@/stores/browser-pointer-store';
+
+// The proof and pre-push run these files together under `bun test --parallel`; on a
+// loaded machine a first render (cold module load) ran well past the 5 s default.
+setDefaultTimeout(60_000);
 
 const viewport = { width: 1000, height: 500 };
 
@@ -28,8 +32,12 @@ describe('AgentPointer', () => {
       }),
     );
     const pointer = await screen.findByTestId('browser-agent-pointer');
-    expect(pointer.style.left).toBe('25%');
-    expect(pointer.style.top).toBe('80%');
+    expect(pointer.style.getPropertyValue('--agent-pointer-left')).toBe('25%');
+    expect(pointer.style.getPropertyValue('--agent-pointer-top')).toBe('80%');
+    expect(pointer).toHaveClass(
+      'left-[var(--agent-pointer-left)]',
+      'top-[var(--agent-pointer-top)]',
+    );
     expect(pointer).toHaveAttribute('data-pointer-kind', 'click');
   });
 

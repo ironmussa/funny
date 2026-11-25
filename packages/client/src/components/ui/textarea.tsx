@@ -11,6 +11,10 @@ const textareaVariants = cva(
         default: 'min-h-[80px] px-3 py-2 text-base',
         xs: 'min-h-[60px] px-2 py-1 text-xs',
         sm: 'min-h-[70px] px-3 py-1.5 text-sm',
+        // Text that follows the prose font size setting: the caller sets
+        // --textarea-font-size and --textarea-line-height (PROSE_*_PX scales).
+        prose:
+          'min-h-[80px] px-3 py-2 text-[length:var(--textarea-font-size)] leading-[var(--textarea-line-height)]',
       },
     },
     defaultVariants: {

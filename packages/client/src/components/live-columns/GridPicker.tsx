@@ -36,8 +36,8 @@ export function GridPicker({ cols, rows, onChange }: Props) {
       </PopoverTrigger>
       <PopoverContent className="w-auto p-3" align="start" sideOffset={4}>
         <div
-          className="grid gap-1"
-          style={{ gridTemplateColumns: `repeat(${MAX_GRID_COLS}, 1fr)` }}
+          className="grid grid-cols-[repeat(var(--grid-picker-columns),1fr)] gap-1"
+          style={{ '--grid-picker-columns': MAX_GRID_COLS }}
           onMouseLeave={() => {
             setHoverCol(0);
             setHoverRow(0);

@@ -44,20 +44,26 @@ export function GraphWipRow({
     <button
       type="button"
       onClick={() => setReviewSubTab('changes')}
-      style={{ height: rowHeight }}
-      className="hover:bg-accent/50 flex w-full shrink-0 cursor-pointer items-center gap-2 overflow-hidden pr-2 pl-3 text-left transition-colors"
+      style={{ '--graph-wip-row-height': `${rowHeight}px` }}
+      className="hover:bg-accent/50 flex h-[var(--graph-wip-row-height)] w-full shrink-0 cursor-pointer items-center gap-2 overflow-hidden pr-2 pl-3 text-left transition-colors"
       data-testid="graph-wip-row"
     >
       <div
-        style={{ width: graphViewportWidth }}
-        className="shrink-0 self-stretch overflow-hidden"
+        style={{ '--graph-wip-viewport-width': `${graphViewportWidth}px` }}
+        className="w-[var(--graph-wip-viewport-width)] shrink-0 self-stretch overflow-hidden"
         onWheel={onGraphGutterWheel}
       >
-        <div style={{ width: gutterWidth, transform: `translateX(-${graphScrollLeft}px)` }}>
+        <div
+          className="w-[var(--graph-wip-gutter-width)] [transform:translateX(var(--graph-wip-scroll-left))]"
+          style={{
+            '--graph-wip-gutter-width': `${gutterWidth}px`,
+            '--graph-wip-scroll-left': `-${graphScrollLeft}px`,
+          }}
+        >
           <svg
             width={gutterWidth}
             height={rowHeight}
-            style={{ width: gutterWidth, height: rowHeight, overflow: 'visible' }}
+            className="h-[var(--graph-wip-row-height)] w-[var(--graph-wip-gutter-width)] overflow-visible"
             aria-hidden="true"
           >
             {/* Dashed connector heading down toward the HEAD commit below. */}

@@ -124,7 +124,7 @@ export function useMessageStreamScroll({
     const hasOverflow = viewport.scrollHeight > viewport.clientHeight + 10;
     const shouldShow = hasOverflow && !isAtBottom && !scrollingToBottomRef.current;
     if (scrollDownRef.current) {
-      scrollDownRef.current.style.display = shouldShow ? '' : 'none';
+      scrollDownRef.current.style.display = shouldShow ? 'block' : 'none';
     }
   }, []);
 

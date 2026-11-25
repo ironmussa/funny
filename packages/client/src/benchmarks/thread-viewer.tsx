@@ -294,7 +294,7 @@ function ThreadViewerFixture() {
         <div
           ref={scrollRef}
           id="thread-profile-viewport"
-          style={{ height: '720px', overflow: 'auto', border: '1px solid currentColor' }}
+          className="h-[720px] overflow-auto border border-solid border-current"
         >
           <div data-testid="benchmark-input-state">Input state revision {inputRevision}</div>
           {list}

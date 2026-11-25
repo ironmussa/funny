@@ -99,8 +99,8 @@ function HighlightedFileContent({ content, filePath }: { content: string; filePa
         <div key={line.key} className="flex">
           {line.num ? (
             <span
-              className="text-muted-foreground/60 mr-3 shrink-0 text-right select-none"
-              style={{ width: numWidth }}
+              className="text-muted-foreground/60 mr-3 w-[var(--read-file-line-number-width)] shrink-0 text-right select-none"
+              style={{ '--read-file-line-number-width': numWidth }}
             >
               {line.num}
             </span>

@@ -3,7 +3,7 @@ import {
   dropTargetForElements,
 } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import type { Project, Thread } from '@funny/shared';
-import { AlertTriangle, ChevronRight, Folder } from 'lucide-react';
+import { AlertTriangle, ChevronRight, FolderIcon } from 'lucide-react';
 import { useState, useRef, useEffect, memo, useCallback, useMemo, type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -337,14 +337,19 @@ export const ProjectItem = memo(function ProjectItem({
           )}
         >
           <CollapsibleTrigger
-            data-testid={`project-toggle-${project.id}`}
-            className="hover:bg-accent/80 -ml-0.5 shrink-0 rounded p-0.5"
+            asChild
             onClick={(e) => {
               e.stopPropagation();
               onToggle(project.id);
             }}
           >
-            <ChevronRight className={cn('icon-sm', isExpanded && 'rotate-90')} />
+            <button
+              type="button"
+              data-testid={`project-toggle-${project.id}`}
+              className="hover:bg-accent/80 -ml-0.5 shrink-0 rounded p-0.5"
+            >
+              <ChevronRight className={cn('icon-sm', isExpanded && 'rotate-90')} />
+            </button>
           </CollapsibleTrigger>
           <button
             type="button"
@@ -352,7 +357,7 @@ export const ProjectItem = memo(function ProjectItem({
             className="ml-1.5 flex min-w-0 flex-1 items-center gap-1.5 text-left"
             onClick={() => onSelectProject(project.id)}
           >
-            <Folder className="icon-sm text-muted-foreground shrink-0" />
+            <FolderIcon className="icon-sm text-muted-foreground shrink-0" />
             <span className="truncate text-sm font-medium">{project.name}</span>
           </button>
           {project.needsSetup && (
@@ -394,7 +399,7 @@ export const ProjectItem = memo(function ProjectItem({
             >
               {Array.from({ length: 3 }).map((_, i) => (
                 <div key={i} className="flex items-center gap-1.5 py-1">
-                  <Skeleton className="size-3.5 rounded-full" />
+                  <Skeleton corners="circle" className="size-3.5" />
                   <Skeleton className="h-3" style={{ width: `${55 + ((i * 23) % 30)}%` }} />
                 </div>
               ))}

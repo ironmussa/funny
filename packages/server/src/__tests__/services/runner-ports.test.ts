@@ -32,13 +32,15 @@ describe('runner capability port contracts', () => {
   test('terminal ports scope dispatch and session lists by runner and user', async () => {
     const port = new FakeRunnerTerminalPort();
     port.available.add('runner-1');
-    port.sessions.set('runner-1\0user-1', [{ ptyId: 'pty-1' }]);
+    port.sessions.set('runner-1\0user-1', [{ ptyId: 'pty-1', cwd: '/repo' }]);
     await port.dispatch('runner-1', 'user-1', {
       type: 'pty:write',
       data: { id: 'pty-1', data: 'pwd\n' },
     });
     expect(port.events).toHaveLength(1);
-    expect(await port.listSessions('runner-1', 'user-1')).toEqual([{ ptyId: 'pty-1' }]);
+    expect(await port.listSessions('runner-1', 'user-1')).toEqual([
+      { ptyId: 'pty-1', cwd: '/repo' },
+    ]);
     expect(await port.listSessions('runner-1', 'user-2')).toEqual([]);
   });
 

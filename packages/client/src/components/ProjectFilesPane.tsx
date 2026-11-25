@@ -53,6 +53,11 @@ function saveCollapsed(basePath: string | undefined, set: Set<string>): void {
   } catch {}
 }
 
+/** True for a string value. */
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 export function ProjectFilesPane() {
   const { t } = useTranslation();
   const designViewDesignId = useUIStore((s) => s.designViewDesignId);
@@ -87,7 +92,7 @@ export function ProjectFilesPane() {
     api.browseFiles(basePath, undefined, MAX_FILES).then((result) => {
       if (requestId !== requestIdRef.current) return;
       if (result.isOk()) {
-        const normalized = result.value.files.map((f) => (typeof f === 'string' ? f : f.path));
+        const normalized = result.value.files.map((f) => (isString(f) ? f : f.path));
         setFiles(normalized);
         setTruncated(result.value.truncated);
       } else {

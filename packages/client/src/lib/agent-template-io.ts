@@ -28,7 +28,12 @@ export function exportTemplate(template: AgentTemplate): void {
     },
   };
 
-  // JSON.stringify leaves out the fields whose value is undefined.
+  // Strip undefined values
+  for (const [k, v] of Object.entries(payload.template)) {
+    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- stripping undefined keys before serialization
+    if (v === undefined) delete (payload.template as unknown as Record<string, unknown>)[k];
+  }
+
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -36,6 +41,14 @@ export function exportTemplate(template: AgentTemplate): void {
   a.download = `${template.name.replace(/[^a-zA-Z0-9_-]/g, '_')}.agent-template.json`;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+function isObject(value: unknown): value is object {
+  return typeof value === 'object';
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
 }
 
 /** Parse and validate an imported JSON file. Returns the template data or an error string. */
@@ -47,21 +60,17 @@ export function parseTemplateFromJson(json: string): CreateAgentTemplateRequest 
     return 'Invalid JSON file';
   }
 
-  if (!parsed || typeof parsed !== 'object') return 'Invalid template file format';
+  if (!parsed || !isObject(parsed)) return 'Invalid template file format';
 
-  if (!('version' in parsed) || parsed.version !== 1) return 'Unsupported template version';
-  if (!('template' in parsed) || !parsed.template || typeof parsed.template !== 'object') {
-    return 'Missing template data';
-  }
+  const file = parsed as Record<string, unknown>;
+  if (file.version !== 1) return 'Unsupported template version';
+  if (!file.template || !isObject(file.template)) return 'Missing template data';
 
-  const tpl = parsed.template;
-  if (!('name' in tpl) || !tpl.name || typeof tpl.name !== 'string') {
-    return 'Template must have a name';
-  }
+  const tpl = file.template as Record<string, unknown>;
+  if (!tpl.name || !isString(tpl.name)) return 'Template must have a name';
 
-  // SAFETY: only the name is checked here; the other fields are passed on as the file
-  // has them and the server validates the whole template when it is created.
-  return tpl as CreateAgentTemplateRequest;
+  // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- validated shape from parsed JSON
+  return tpl as unknown as CreateAgentTemplateRequest;
 }
 
 /** Trigger a file input dialog and read the selected JSON file. */

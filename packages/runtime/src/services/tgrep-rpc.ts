@@ -1,54 +1,72 @@
 import { createConnection } from 'node:net';
 
 import { waitFor } from '@funny/shared/async';
-import { parseStoredJson } from '@funny/shared/json-validation';
+import { parseStoredJson, type JsonValue } from '@funny/shared/json-validation';
 import { z } from 'zod';
 
 const envelopeSchema = z.object({
   jsonrpc: z.literal('2.0'),
   id: z.literal(1),
-  result: z.unknown().optional(),
+  result: z.json().optional(),
   error: z.unknown().optional(),
 });
 
+/** Params of tgrep's `search` method. */
+export interface TgrepSearchParams {
+  pattern: string;
+  fixed_string: boolean;
+  case_insensitive: boolean;
+  word_boundary: boolean;
+  glob: string[];
+  max_count: number;
+  detail: boolean;
+  positions: boolean;
+}
+
+/** tgrep's JSON-RPC methods and their params (`status` takes none). */
+export interface TgrepRpcParams {
+  search: TgrepSearchParams;
+  status: Record<string, never>;
+}
+
 /** One bounded, cancellable request to an owned local tgrep process. */
-export function tgrepRpc(
+export function tgrepRpc<M extends keyof TgrepRpcParams>(
   port: number,
-  method: string,
-  params: Record<string, unknown>,
+  method: M,
+  params: TgrepRpcParams[M],
   signal: AbortSignal,
   limits = { timeoutMs: 10_000, maxBytes: 8 * 1_048_576 },
-): Promise<unknown> {
-  return waitFor(
+): Promise<JsonValue> {
+  return waitFor<JsonValue>(
     (resolve, reject) => {
       const socket = createConnection({ host: '127.0.0.1', port });
       const chunks: Buffer[] = [];
       let bytes = 0;
       let settled = false;
-      const finish = (error?: Error, value?: unknown) => {
+      const finish = (outcome: { error: Error } | { value: JsonValue }) => {
         if (settled) return;
         settled = true;
         socket.destroy();
-        if (error) reject(error);
-        else resolve(value);
+        if ('error' in outcome) reject(outcome.error);
+        else resolve(outcome.value);
       };
-      socket.on('error', () => finish(new Error('transport')));
-      socket.on('close', () => finish(new Error('closed')));
+      socket.on('error', () => finish({ error: new Error('transport') }));
+      socket.on('close', () => finish({ error: new Error('closed') }));
       socket.on('connect', () => {
         socket.write(`${JSON.stringify({ jsonrpc: '2.0', id: 1, method, params })}\n`);
       });
       socket.on('data', (chunk: Buffer) => {
         bytes += chunk.length;
-        if (bytes > limits.maxBytes) return finish(new Error('reply-limit'));
+        if (bytes > limits.maxBytes) return finish({ error: new Error('reply-limit') });
         const newline = chunk.indexOf(10);
         chunks.push(newline < 0 ? chunk : chunk.subarray(0, newline));
         if (newline < 0) return;
         const parsed = parseStoredJson(envelopeSchema, Buffer.concat(chunks).toString('utf8'));
         if (!parsed.ok || parsed.value.error !== undefined || parsed.value.result === undefined) {
-          finish(new Error('protocol'));
+          finish({ error: new Error('protocol') });
           return;
         }
-        finish(undefined, parsed.value.result);
+        finish({ value: parsed.value.result });
       });
       return () => {
         settled = true;

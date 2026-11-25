@@ -181,7 +181,6 @@ export function OrganizationManagement() {
                   }
                 }}
                 placeholder="My Organization"
-                className="text-sm"
                 data-testid="org-create-name"
               />
             </div>

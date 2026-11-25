@@ -30,8 +30,13 @@ export function hasAssistantContentAfterLastUser(
     .some((message) => message.role === 'assistant' && !!message.content?.trim());
 }
 
+/** True for a string value. */
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 export function resultTextToAssistantMessage(data: any): string | null {
-  if (typeof data?.result !== 'string') return null;
+  if (!isString(data?.result)) return null;
   const result = data.result.trim();
   return result.length > 0 ? result : null;
 }
@@ -88,17 +93,20 @@ export function trailingAssistantScaffoldStart(
   return index;
 }
 
-export function buildDequeuedUserMessage(
-  threadId: string,
-  dequeuedMsg: DequeuedMessageBuffer,
-): {
+/** The synthetic user message shown for a dequeued follow-up. */
+interface DequeuedUserMessage {
   id: string;
   threadId: string;
   role: MessageRole;
   content: string;
   images?: ImageAttachment[];
   timestamp: string;
-} {
+}
+
+export function buildDequeuedUserMessage(
+  threadId: string,
+  dequeuedMsg: DequeuedMessageBuffer,
+): DequeuedUserMessage {
   return {
     id: `${DEQUEUED_MESSAGE_ID_PREFIX}${crypto.randomUUID()}`,
     threadId,

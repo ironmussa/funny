@@ -3,7 +3,11 @@ import type { ThreadEvent } from '@funny/shared';
 import { isTodoToolName } from '@/components/tool-cards/utils';
 import type { CompactionEvent } from '@/stores/thread-store';
 
-import { isTrailingFactoryCard, type FactoryTimelineCard } from './factory-timeline';
+import {
+  factoryCardKey,
+  isTrailingFactoryCard,
+  type FactoryTimelineCard,
+} from './factory-timeline';
 import { isGitTimelineEventType } from './git-timeline-events';
 
 export type ToolItem =
@@ -14,6 +18,10 @@ export type ToolItem =
 const NO_GROUP = new Set(['AskUserQuestion', 'ExitPlanMode']);
 
 /** Group consecutive tool calls with the same name into toolcall-group items. */
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 export function groupConsecutiveToolCalls(items: { tc: any }[]): ToolItem[] {
   const grouped: ToolItem[] = [];
   for (const item of items) {
@@ -74,6 +82,12 @@ function messageTimeRange(messages: any[]): { min: string; max: string } | null 
   return min ? { min, max } : null;
 }
 
+/** The thread and compaction events that fall inside the loaded message window. */
+interface WindowEvents {
+  threadEvents?: ThreadEvent[];
+  compactionEvents?: CompactionEvent[];
+}
+
 /**
  * Keep only the events whose timestamp falls inside the loaded message window.
  * With the full history loaded every event is kept.
@@ -83,7 +97,7 @@ export function clipEventsToMessageWindow(
   threadEvents: ThreadEvent[] | undefined,
   compactionEvents: CompactionEvent[] | undefined,
   bounds: MessageWindowBounds | undefined,
-): { threadEvents?: ThreadEvent[]; compactionEvents?: CompactionEvent[] } {
+): WindowEvents {
   if (!bounds?.hasOlder && !bounds?.hasNewer) return { threadEvents, compactionEvents };
   const range = messageTimeRange(messages);
   // Nothing to anchor the events to yet — show none until messages load.
@@ -143,7 +157,7 @@ export function getItemKey(item: RenderItem): string {
   if (item.type === 'thread-event') return item.event.id;
   if (item.type === 'compaction-event') return `compact-${item.event.timestamp}`;
   if (item.type === 'workflow-event-group') return `workflow-${item.events[0]?.id}`;
-  if (item.type === 'factory-card') return `factory-${item.card.kind}`;
+  if (item.type === 'factory-card') return `factory-${factoryCardKey(item.card)}`;
   return '';
 }
 
@@ -232,9 +246,9 @@ function isPlanFilePath(fp: string): boolean {
 /** Return the content written by a Write tool call when it targets a plan file. */
 function extractWrittenPlanContent(tc: any): string | undefined {
   try {
-    const inp = typeof tc.input === 'string' ? JSON.parse(tc.input) : tc.input;
-    const fp: string = inp?.file_path || '';
-    if (isPlanFilePath(fp) && typeof inp?.content === 'string') return inp.content;
+    const inp = isString(tc.input) ? JSON.parse(tc.input) : tc.input;
+    const fp = (inp?.file_path || '') as string;
+    if (isPlanFilePath(fp) && isString(inp?.content)) return inp.content;
   } catch {
     /* ignore parse errors */
   }
@@ -437,7 +451,7 @@ function withoutPendingStop(events: ThreadEvent[], threadStatus?: string): Threa
 function isStoppedOutcome(e: ThreadEvent): boolean {
   if (e.type !== 'turn_outcome') return false;
   try {
-    const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+    const data = isString(e.data) ? JSON.parse(e.data) : (e.data as any);
     return data?.status === 'stopped';
   } catch {
     return false;
@@ -536,14 +550,19 @@ export function buildGroupedRenderItems(
   return merged;
 }
 
+/** Event data arrives either as JSON text or already parsed. */
+function isEventDataText(data: string | Record<string, unknown>): data is string {
+  return typeof data === 'string';
+}
+
 /** Parse event data string or object */
 function parseEventDataCompat(data: string | Record<string, unknown>): Record<string, any> {
-  if (typeof data === 'string') {
+  if (isEventDataText(data)) {
     try {
       return JSON.parse(data);
     } catch {
       return {};
     }
   }
-  return data;
+  return data as Record<string, any>;
 }

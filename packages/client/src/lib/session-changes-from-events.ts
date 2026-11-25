@@ -7,6 +7,10 @@ export interface SessionChanges {
   createdAt: string;
 }
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 /**
  * Build the per-session changed-files map the in-chat summary renders from,
  * keyed by the session's user-message id, out of persisted
@@ -31,7 +35,7 @@ export function sessionChangesFromEvents(
     if (e.type !== 'changed_files_summary') continue;
     let parsed: ChangedFilesSummaryEventData | null = null;
     try {
-      parsed = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+      parsed = isString(e.data) ? JSON.parse(e.data) : (e.data as any);
     } catch {
       parsed = null;
     }

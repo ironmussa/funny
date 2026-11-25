@@ -20,6 +20,11 @@ interface PinToolProps {
   isActive: boolean;
 }
 
+/** The runner answers `inspect-at` with the element's DOM info as an object, or nothing. */
+function isAnnotationDomInfo(value: unknown): value is AnnotationDomInfo {
+  return typeof value === 'object' && value !== null;
+}
+
 /**
  * Pin tool. Always renders existing pin markers (so they remain visible when
  * the user switches tools). Click-to-add behavior is gated by `isActive`.
@@ -36,16 +41,14 @@ export function PinTool({ overlayRef, canvasRef, isActive }: PinToolProps) {
 
   const pins = annotations
     .map((a, i) => ({ a, index: i + 1 }))
-    .filter(
-      (
-        entry,
-      ): entry is { a: Extract<(typeof annotations)[number], { kind: 'pin' }>; index: number } =>
-        entry.a.kind === 'pin',
-    );
+    .filter(({ a }) => a.kind === 'pin') as Array<{
+    a: Extract<(typeof annotations)[number], { kind: 'pin' }>;
+    index: number;
+  }>;
 
   const handleAddPin = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!isActive) return;
-    if (e.target instanceof HTMLElement && e.target.dataset.pinMarker === 'true') return;
+    if ((e.target as HTMLElement).dataset.pinMarker === 'true') return;
     const overlayRect = overlayRef.current?.getBoundingClientRect();
     const canvasRect = canvasRef.current?.getBoundingClientRect();
     if (!overlayRect || !canvasRect || canvasRect.width === 0 || canvasRect.height === 0) return;
@@ -65,10 +68,8 @@ export function PinTool({ overlayRef, canvasRef, isActive }: PinToolProps) {
     browserSessionClient
       .inspectAt(sessionId, viewportX, viewportY)
       .then((dom) => {
-        if (dom && typeof dom === 'object') {
-          // SAFETY: inspect-at evaluates window.__funnyElementInfo (extractElementInfo in
-          // @funny/shared/dom/extract), which returns an AnnotationDomInfo or null; null was ruled out above.
-          updateAnnotationDom(id, dom as AnnotationDomInfo);
+        if (isAnnotationDomInfo(dom)) {
+          updateAnnotationDom(id, dom);
         }
       })
       .catch((err) => {

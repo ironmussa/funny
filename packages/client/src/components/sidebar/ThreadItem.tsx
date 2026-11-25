@@ -160,8 +160,9 @@ function ThreadItemActions({
 
   return (
     <HoverTimeMenu
-      time={displayTime}
-      timeClassName="text-muted-foreground h-4 text-xs leading-4"
+      time={
+        <span className="text-muted-foreground block h-4 text-xs leading-4">{displayTime}</span>
+      }
       open={openDropdown}
       group="thread"
       className="min-w-10"

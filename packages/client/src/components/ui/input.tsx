@@ -21,10 +21,16 @@ const inputVariants = cva(
         true: 'font-mono',
         false: '',
       },
+      // Room on the left for a search (or other) icon drawn over the field.
+      inset: {
+        none: '',
+        icon: 'pl-8',
+      },
     },
     defaultVariants: {
       size: 'sm',
       mono: false,
+      inset: 'none',
     },
   },
 );
@@ -34,6 +40,7 @@ function Input({
   type,
   size,
   mono,
+  inset,
   ref,
   ...props
 }: Omit<React.ComponentProps<'input'>, 'size'> &
@@ -41,7 +48,7 @@ function Input({
   return (
     <input
       type={type}
-      className={cn(inputVariants({ size, mono }), className)}
+      className={cn(inputVariants({ size, mono, inset }), className)}
       ref={ref}
       {...props}
     />

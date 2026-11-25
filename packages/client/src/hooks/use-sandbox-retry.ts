@@ -10,13 +10,19 @@ import { useSettingsStore } from '@/stores/settings-store';
 
 const log = createClientLogger('sandbox-retry');
 
+/** The retry submit handler, and whether a retry is in flight. */
+interface SandboxRetry {
+  retry: SubmitFn;
+  retrying: boolean;
+}
+
 /**
  * Submit handler for a sandbox thread whose setup failed: the message the user
  * writes retries the sandbox (the server provisions a new one and starts the
  * agent with the initial prompt plus this message). The thread's status moves
  * back to `setting_up` through the server's `thread:updated` event.
  */
-export function useSandboxRetry(threadId: string): { retry: SubmitFn; retrying: boolean } {
+export function useSandboxRetry(threadId: string): SandboxRetry {
   const [retrying, setRetrying] = useState(false);
   const inFlightRef = useRef(false);
 

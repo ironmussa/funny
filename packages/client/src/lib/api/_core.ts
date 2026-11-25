@@ -21,7 +21,7 @@ export type PullStrategy = 'ff-only' | 'merge' | 'rebase';
 const endpointPolicy = createEndpointPolicy(clientComposition.platform.transport.environment);
 const log = createClientLogger('api');
 
-export function validateContainerUrl(raw: unknown): string | null {
+export function validateContainerUrl(raw: string): string | null {
   return validateRemoteOrigin(raw, endpointPolicy.remoteOriginAllowlist);
 }
 
@@ -72,11 +72,15 @@ function headersFromInit(headers: HeadersInit | undefined): Record<string, strin
   return result;
 }
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 export function request<T>(path: string, init?: RequestInit): ResultAsync<T, DomainError> {
   const promise = apiClient.request<T>(path, {
     method: init?.method,
     headers: headersFromInit(init?.headers),
-    body: typeof init?.body === 'string' ? init.body : undefined,
+    body: isString(init?.body) ? init.body : undefined,
     cancellation: cancellationFromSignal(init?.signal),
   });
   // SAFETY: apiClient.request only rejects with ApiClientError objects (every

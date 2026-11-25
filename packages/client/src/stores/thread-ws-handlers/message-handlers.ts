@@ -178,7 +178,7 @@ export function handleWSToolCall(
   // Sidebar snippet: what the agent is doing right now.
   useThreadActiveToolStore
     .getState()
-    .setActive(threadId, { name: data.name, input: parseToolInput(data.input) });
+    .setActive(threadId, { name: data.name, input: parseToolInput(data) });
 
   // Drop the cached snapshot so the next selectThread() refetches and includes
   // this tool call. Runs unconditionally so the active thread's cache stays in

@@ -128,10 +128,7 @@ export function WriteFileCard({
         )}
       </div>
       {expanded && content != null && (
-        <ToolContentArea
-          className="border-border/40 border-t"
-          viewportProps={{ className: 'max-h-[50vh] scroll-fade-none' }}
-        >
+        <ToolContentArea viewportProps={{ className: 'max-h-[50vh] scroll-fade-none' }}>
           <div className="border-border/30 bg-background sticky top-0 z-10 flex items-center justify-between gap-2 border-b px-3 py-1 backdrop-blur-xs">
             <span className="text-muted-foreground truncate text-xs font-medium">{fileName}</span>
             <div className="flex shrink-0 items-center gap-1">

@@ -1,4 +1,4 @@
-import { create } from 'zustand';
+import { create, type StoreApi } from 'zustand';
 
 import { readProject } from '@/data/projects/read';
 
@@ -202,553 +202,608 @@ interface UIState {
   claimRecapHint: (openKey: string) => void;
 }
 
-export const useUIStore = create<UIState>((set) => ({
-  reviewPaneOpen: (() => {
-    try {
-      const stored = localStorage.getItem(RIGHT_PANE_OPEN_KEY);
-      if (stored !== null) return stored === 'true';
-      return true;
-    } catch {
-      return true;
-    }
-  })(),
-  rightPaneTab: ((): RightPaneTab => {
-    try {
-      const stored = localStorage.getItem(RIGHT_PANE_TAB_KEY);
-      const tabs: RightPaneTab[] = ['review', 'activity', 'files', 'comments'];
-      return tabs.find((tab) => tab === stored) ?? 'activity';
-    } catch {
-      return 'activity';
-    }
-  })(),
-  reviewPaneWidth: (() => {
-    try {
-      const stored = localStorage.getItem(REVIEW_PANE_WIDTH_KEY);
-      return stored ? Number(stored) : DEFAULT_REVIEW_PANE_WIDTH;
-    } catch {
-      return DEFAULT_REVIEW_PANE_WIDTH;
-    }
-  })(),
-  reviewPaneResizing: false,
-  settingsOpen: false,
-  activeSettingsPage: null,
-  settingsReturnPath: null,
-  newThreadProjectId: null,
-  newThreadIdleOnly: false,
-  newThreadBaseBranch: null,
-  newThreadIsScratch: false,
-  newThreadComposeId: 0,
-  allThreadsProjectId: null,
-  automationInboxOpen: false,
-  addProjectOpen: false,
-  analyticsOpen: false,
-  liveColumnsOpen: false,
-  gridSelectedThreadId: (() => {
-    try {
-      const stored = localStorage.getItem(GRID_SELECTED_THREAD_KEY);
-      return stored && stored.length > 0 ? stored : null;
-    } catch {
-      return null;
-    }
-  })(),
-  testRunnerOpen: false,
-  designViewProjectId: null,
-  designViewDesignId: null,
-  activeDesignId: null,
-  designsListProjectId: null,
-  generalSettingsOpen: false,
-  activePreferencesPage: null,
-  timelineVisible: (() => {
-    try {
-      const stored = localStorage.getItem(TIMELINE_VISIBLE_KEY);
-      return stored !== null ? stored === 'true' : false;
-    } catch {
-      return false;
-    }
-  })(),
-  reviewSubTab: ((): ReviewSubTab => {
-    try {
-      const stored = localStorage.getItem(REVIEW_SUB_TAB_KEY);
-      const match = VALID_REVIEW_SUB_TABS.find((tab) => tab === stored);
-      if (match) return match;
-    } catch {}
-    return 'changes';
-  })(),
-  kanbanContext: null,
-  pendingThreadSearch: null,
-  newThreadIssueContext: null,
-  composePrefillPrompt: null,
-  commandPaletteOpen: false,
-  fileSearchOpen: false,
-  textSearchOpen: false,
-  textSearchState: {
-    query: '',
-    caseSensitive: false,
-    wholeWord: false,
-    regex: false,
-    include: '',
-    exclude: '',
-  },
-  keyboardShortcutsOpen: false,
-  shareDialogOpen: false,
-  setShareDialogOpen: (open) => set({ shareDialogOpen: open }),
-  toggleShareDialog: () => set((s) => ({ shareDialogOpen: !s.shareDialogOpen })),
-  setCommandPaletteOpen: (open) =>
-    set(
-      open
-        ? {
-            commandPaletteOpen: true,
-            fileSearchOpen: false,
-            textSearchOpen: false,
-            keyboardShortcutsOpen: false,
-          }
-        : { commandPaletteOpen: false },
-    ),
-  setFileSearchOpen: (open) =>
-    set(
-      open
-        ? {
-            fileSearchOpen: true,
-            commandPaletteOpen: false,
-            textSearchOpen: false,
-            keyboardShortcutsOpen: false,
-          }
-        : { fileSearchOpen: false },
-    ),
-  setTextSearchOpen: (open) =>
-    set(
-      open
-        ? {
-            textSearchOpen: true,
-            commandPaletteOpen: false,
-            fileSearchOpen: false,
-            keyboardShortcutsOpen: false,
-          }
-        : { textSearchOpen: false },
-    ),
-  setTextSearchState: (patch) =>
-    set((s) => ({ textSearchState: { ...s.textSearchState, ...patch } })),
-  setKeyboardShortcutsOpen: (open) =>
-    set(
-      open
-        ? {
-            keyboardShortcutsOpen: true,
-            commandPaletteOpen: false,
-            fileSearchOpen: false,
-            textSearchOpen: false,
-          }
-        : { keyboardShortcutsOpen: false },
-    ),
-  toggleCommandPalette: () =>
-    set((s) =>
-      s.commandPaletteOpen
-        ? { commandPaletteOpen: false }
-        : {
-            commandPaletteOpen: true,
-            fileSearchOpen: false,
-            textSearchOpen: false,
-            keyboardShortcutsOpen: false,
-          },
-    ),
-  toggleFileSearch: () =>
-    set((s) =>
-      s.fileSearchOpen
-        ? { fileSearchOpen: false }
-        : {
-            fileSearchOpen: true,
-            commandPaletteOpen: false,
-            textSearchOpen: false,
-            keyboardShortcutsOpen: false,
-          },
-    ),
-  toggleTextSearch: () =>
-    set((s) =>
-      s.textSearchOpen
-        ? { textSearchOpen: false }
-        : {
-            textSearchOpen: true,
-            commandPaletteOpen: false,
-            fileSearchOpen: false,
-            keyboardShortcutsOpen: false,
-          },
-    ),
-  toggleKeyboardShortcuts: () =>
-    set((s) =>
-      s.keyboardShortcutsOpen
-        ? { keyboardShortcutsOpen: false }
-        : {
-            keyboardShortcutsOpen: true,
-            commandPaletteOpen: false,
-            fileSearchOpen: false,
-            textSearchOpen: false,
-          },
-    ),
-  setReviewSubTab: (tab) => {
-    try {
-      localStorage.setItem(REVIEW_SUB_TAB_KEY, tab);
-    } catch {}
-    set({ reviewSubTab: tab });
-  },
-  setReviewPaneOpen: (open) => {
-    persistRightPane(open, open ? 'review' : undefined);
-    set(open ? { reviewPaneOpen: true, rightPaneTab: 'review' } : { reviewPaneOpen: false });
-  },
-  setTestRunnerOpen: (open) => {
-    if (open) {
-      clearSelectedThread();
-      persistRightPane(false);
-    }
-    set(
-      open
-        ? {
-            testRunnerOpen: true,
-            reviewPaneOpen: false,
-            settingsOpen: false,
-            activeSettingsPage: null,
-            allThreadsProjectId: null,
-            addProjectOpen: false,
-            automationInboxOpen: false,
-            analyticsOpen: false,
-            liveColumnsOpen: false,
-            generalSettingsOpen: false,
-          }
-        : { testRunnerOpen: false },
-    );
-  },
-  setActivityPaneOpen: (open) => {
-    persistRightPane(open, open ? 'activity' : undefined);
-    set(open ? { reviewPaneOpen: true, rightPaneTab: 'activity' } : { reviewPaneOpen: false });
-  },
-  setFilesPaneOpen: (open) => {
-    persistRightPane(open, open ? 'files' : undefined);
-    set(open ? { reviewPaneOpen: true, rightPaneTab: 'files' } : { reviewPaneOpen: false });
-  },
-  setCommentsPaneOpen: (open) => {
-    persistRightPane(open, open ? 'comments' : undefined);
-    set(open ? { reviewPaneOpen: true, rightPaneTab: 'comments' } : { reviewPaneOpen: false });
-  },
-  setRightPaneTab: (tab) => {
-    persistRightPane(true, tab);
-    set({ rightPaneTab: tab, reviewPaneOpen: true });
-  },
-  setReviewPaneWidth: (width) => {
-    const clamped = Math.max(MIN_REVIEW_PANE_WIDTH, Math.min(MAX_REVIEW_PANE_WIDTH, width));
-    try {
-      localStorage.setItem(REVIEW_PANE_WIDTH_KEY, String(clamped));
-    } catch {}
-    set({ reviewPaneWidth: clamped });
-  },
-  setReviewPaneResizing: (resizing) => set({ reviewPaneResizing: resizing }),
-  setSettingsOpen: (open) =>
-    set(
-      open
-        ? {
-            settingsOpen: true,
-            generalSettingsOpen: false,
-            activePreferencesPage: null,
-            automationInboxOpen: false,
-            addProjectOpen: false,
-            testRunnerOpen: false,
-          }
-        : { settingsOpen: false, activeSettingsPage: null, settingsReturnPath: null },
-    ),
-  setActiveSettingsPage: (page) => set({ activeSettingsPage: page }),
-  setSettingsReturnPath: (path) => set({ settingsReturnPath: path }),
-  setGeneralSettingsOpen: (open) => {
-    if (open) {
-      persistRightPane(false);
-    }
-    set(
-      open
-        ? {
-            generalSettingsOpen: true,
-            settingsOpen: false,
-            activeSettingsPage: null,
-            reviewPaneOpen: false,
-            automationInboxOpen: false,
-            addProjectOpen: false,
-            allThreadsProjectId: null,
-            analyticsOpen: false,
-            liveColumnsOpen: false,
-            testRunnerOpen: false,
-          }
-        : { generalSettingsOpen: false, activePreferencesPage: null, settingsReturnPath: null },
-    );
-  },
-  setActivePreferencesPage: (page) => set({ activePreferencesPage: page }),
-  setAutomationInboxOpen: (open) => {
-    if (open) {
-      clearSelectedThread();
-      persistRightPane(false);
-    }
-    set(
-      open
-        ? {
-            automationInboxOpen: true,
-            reviewPaneOpen: false,
-            settingsOpen: false,
-            activeSettingsPage: null,
-            allThreadsProjectId: null,
-            addProjectOpen: false,
-            testRunnerOpen: false,
-          }
-        : { automationInboxOpen: false },
-    );
-  },
+type SetUIState = StoreApi<UIState>['setState'];
 
-  setAddProjectOpen: (open) => {
-    if (open) {
-      clearSelectedThread();
-      set({
-        addProjectOpen: true,
-        settingsOpen: false,
-        automationInboxOpen: false,
+/** Initial UI state, with the persisted panes read from localStorage. */
+function readInitialUIState() {
+  return {
+    reviewPaneOpen: (() => {
+      try {
+        const stored = localStorage.getItem(RIGHT_PANE_OPEN_KEY);
+        if (stored !== null) return stored === 'true';
+        return true;
+      } catch {
+        return true;
+      }
+    })(),
+    rightPaneTab: (() => {
+      try {
+        const stored = localStorage.getItem(RIGHT_PANE_TAB_KEY);
+        if (stored && ['review', 'activity', 'files', 'comments'].includes(stored)) {
+          return stored as RightPaneTab;
+        }
+        return 'activity' as RightPaneTab;
+      } catch {
+        return 'activity' as RightPaneTab;
+      }
+    })(),
+    reviewPaneWidth: (() => {
+      try {
+        const stored = localStorage.getItem(REVIEW_PANE_WIDTH_KEY);
+        return stored ? Number(stored) : DEFAULT_REVIEW_PANE_WIDTH;
+      } catch {
+        return DEFAULT_REVIEW_PANE_WIDTH;
+      }
+    })(),
+    reviewPaneResizing: false,
+    settingsOpen: false,
+    activeSettingsPage: null,
+    settingsReturnPath: null,
+    newThreadProjectId: null,
+    newThreadIdleOnly: false,
+    newThreadBaseBranch: null,
+    newThreadIsScratch: false,
+    newThreadComposeId: 0,
+    allThreadsProjectId: null,
+    automationInboxOpen: false,
+    addProjectOpen: false,
+    analyticsOpen: false,
+    liveColumnsOpen: false,
+    gridSelectedThreadId: (() => {
+      try {
+        const stored = localStorage.getItem(GRID_SELECTED_THREAD_KEY);
+        return stored && stored.length > 0 ? stored : null;
+      } catch {
+        return null;
+      }
+    })(),
+    testRunnerOpen: false,
+    designViewProjectId: null,
+    designViewDesignId: null,
+    activeDesignId: null,
+    designsListProjectId: null,
+    generalSettingsOpen: false,
+    activePreferencesPage: null,
+    timelineVisible: (() => {
+      try {
+        const stored = localStorage.getItem(TIMELINE_VISIBLE_KEY);
+        return stored !== null ? stored === 'true' : false;
+      } catch {
+        return false;
+      }
+    })(),
+    reviewSubTab: (() => {
+      try {
+        const stored = localStorage.getItem(REVIEW_SUB_TAB_KEY);
+        if (stored && VALID_REVIEW_SUB_TABS.includes(stored as ReviewSubTab)) {
+          return stored as ReviewSubTab;
+        }
+      } catch {}
+      return 'changes' as ReviewSubTab;
+    })(),
+    kanbanContext: null,
+    pendingThreadSearch: null,
+    newThreadIssueContext: null,
+    composePrefillPrompt: null,
+    commandPaletteOpen: false,
+    fileSearchOpen: false,
+    textSearchOpen: false,
+    textSearchState: {
+      query: '',
+      caseSensitive: false,
+      wholeWord: false,
+      regex: false,
+      include: '',
+      exclude: '',
+    },
+    keyboardShortcutsOpen: false,
+    shareDialogOpen: false,
+  } satisfies Partial<UIState>;
+}
+
+/** Share dialog and the mutually exclusive search / palette overlays. */
+function overlayActions(set: SetUIState) {
+  return {
+    setShareDialogOpen: (open) => set({ shareDialogOpen: open }),
+    toggleShareDialog: () => set((s) => ({ shareDialogOpen: !s.shareDialogOpen })),
+    setCommandPaletteOpen: (open) =>
+      set(
+        open
+          ? {
+              commandPaletteOpen: true,
+              fileSearchOpen: false,
+              textSearchOpen: false,
+              keyboardShortcutsOpen: false,
+            }
+          : { commandPaletteOpen: false },
+      ),
+    setFileSearchOpen: (open) =>
+      set(
+        open
+          ? {
+              fileSearchOpen: true,
+              commandPaletteOpen: false,
+              textSearchOpen: false,
+              keyboardShortcutsOpen: false,
+            }
+          : { fileSearchOpen: false },
+      ),
+    setTextSearchOpen: (open) =>
+      set(
+        open
+          ? {
+              textSearchOpen: true,
+              commandPaletteOpen: false,
+              fileSearchOpen: false,
+              keyboardShortcutsOpen: false,
+            }
+          : { textSearchOpen: false },
+      ),
+    setTextSearchState: (patch) =>
+      set((s) => ({ textSearchState: { ...s.textSearchState, ...patch } })),
+    setKeyboardShortcutsOpen: (open) =>
+      set(
+        open
+          ? {
+              keyboardShortcutsOpen: true,
+              commandPaletteOpen: false,
+              fileSearchOpen: false,
+              textSearchOpen: false,
+            }
+          : { keyboardShortcutsOpen: false },
+      ),
+    toggleCommandPalette: () =>
+      set((s) =>
+        s.commandPaletteOpen
+          ? { commandPaletteOpen: false }
+          : {
+              commandPaletteOpen: true,
+              fileSearchOpen: false,
+              textSearchOpen: false,
+              keyboardShortcutsOpen: false,
+            },
+      ),
+    toggleFileSearch: () =>
+      set((s) =>
+        s.fileSearchOpen
+          ? { fileSearchOpen: false }
+          : {
+              fileSearchOpen: true,
+              commandPaletteOpen: false,
+              textSearchOpen: false,
+              keyboardShortcutsOpen: false,
+            },
+      ),
+    toggleTextSearch: () =>
+      set((s) =>
+        s.textSearchOpen
+          ? { textSearchOpen: false }
+          : {
+              textSearchOpen: true,
+              commandPaletteOpen: false,
+              fileSearchOpen: false,
+              keyboardShortcutsOpen: false,
+            },
+      ),
+    toggleKeyboardShortcuts: () =>
+      set((s) =>
+        s.keyboardShortcutsOpen
+          ? { keyboardShortcutsOpen: false }
+          : {
+              keyboardShortcutsOpen: true,
+              commandPaletteOpen: false,
+              fileSearchOpen: false,
+              textSearchOpen: false,
+            },
+      ),
+  } satisfies Partial<UIState>;
+}
+
+/** Right pane (review / activity / files / comments) and its persisted layout. */
+function rightPaneActions(set: SetUIState) {
+  return {
+    setReviewSubTab: (tab) => {
+      try {
+        localStorage.setItem(REVIEW_SUB_TAB_KEY, tab);
+      } catch {}
+      set({ reviewSubTab: tab });
+    },
+    setReviewPaneOpen: (open) => {
+      persistRightPane(open, open ? 'review' : undefined);
+      set(
+        open
+          ? { reviewPaneOpen: true, rightPaneTab: 'review' as RightPaneTab }
+          : { reviewPaneOpen: false },
+      );
+    },
+    setTestRunnerOpen: (open) => {
+      if (open) {
+        clearSelectedThread();
+        persistRightPane(false);
+      }
+      set(
+        open
+          ? {
+              testRunnerOpen: true,
+              reviewPaneOpen: false,
+              settingsOpen: false,
+              activeSettingsPage: null,
+              allThreadsProjectId: null,
+              addProjectOpen: false,
+              automationInboxOpen: false,
+              analyticsOpen: false,
+              liveColumnsOpen: false,
+              generalSettingsOpen: false,
+            }
+          : { testRunnerOpen: false },
+      );
+    },
+    setActivityPaneOpen: (open) => {
+      persistRightPane(open, open ? 'activity' : undefined);
+      set(
+        open
+          ? { reviewPaneOpen: true, rightPaneTab: 'activity' as RightPaneTab }
+          : { reviewPaneOpen: false },
+      );
+    },
+    setFilesPaneOpen: (open) => {
+      persistRightPane(open, open ? 'files' : undefined);
+      set(
+        open
+          ? { reviewPaneOpen: true, rightPaneTab: 'files' as RightPaneTab }
+          : { reviewPaneOpen: false },
+      );
+    },
+    setCommentsPaneOpen: (open) => {
+      persistRightPane(open, open ? 'comments' : undefined);
+      set(
+        open
+          ? { reviewPaneOpen: true, rightPaneTab: 'comments' as RightPaneTab }
+          : { reviewPaneOpen: false },
+      );
+    },
+    setRightPaneTab: (tab) => {
+      persistRightPane(true, tab);
+      set({ rightPaneTab: tab, reviewPaneOpen: true });
+    },
+    setReviewPaneWidth: (width) => {
+      const clamped = Math.max(MIN_REVIEW_PANE_WIDTH, Math.min(MAX_REVIEW_PANE_WIDTH, width));
+      try {
+        localStorage.setItem(REVIEW_PANE_WIDTH_KEY, String(clamped));
+      } catch {}
+      set({ reviewPaneWidth: clamped });
+    },
+    setReviewPaneResizing: (resizing) => set({ reviewPaneResizing: resizing }),
+  } satisfies Partial<UIState>;
+}
+
+/** Full-page views: settings, automations, new thread compose, search, analytics. */
+function navigationActions(set: SetUIState) {
+  return {
+    setSettingsOpen: (open) =>
+      set(
+        open
+          ? {
+              settingsOpen: true,
+              generalSettingsOpen: false,
+              activePreferencesPage: null,
+              automationInboxOpen: false,
+              addProjectOpen: false,
+              testRunnerOpen: false,
+            }
+          : { settingsOpen: false, activeSettingsPage: null, settingsReturnPath: null },
+      ),
+    setActiveSettingsPage: (page) => set({ activeSettingsPage: page }),
+    setSettingsReturnPath: (path) => set({ settingsReturnPath: path }),
+    setGeneralSettingsOpen: (open) => {
+      if (open) {
+        persistRightPane(false);
+      }
+      set(
+        open
+          ? {
+              generalSettingsOpen: true,
+              settingsOpen: false,
+              activeSettingsPage: null,
+              reviewPaneOpen: false,
+              automationInboxOpen: false,
+              addProjectOpen: false,
+              allThreadsProjectId: null,
+              analyticsOpen: false,
+              liveColumnsOpen: false,
+              testRunnerOpen: false,
+            }
+          : { generalSettingsOpen: false, activePreferencesPage: null, settingsReturnPath: null },
+      );
+    },
+    setActivePreferencesPage: (page) => set({ activePreferencesPage: page }),
+    setAutomationInboxOpen: (open) => {
+      if (open) {
+        clearSelectedThread();
+        persistRightPane(false);
+      }
+      set(
+        open
+          ? {
+              automationInboxOpen: true,
+              reviewPaneOpen: false,
+              settingsOpen: false,
+              activeSettingsPage: null,
+              allThreadsProjectId: null,
+              addProjectOpen: false,
+              testRunnerOpen: false,
+            }
+          : { automationInboxOpen: false },
+      );
+    },
+
+    setAddProjectOpen: (open) => {
+      if (open) {
+        clearSelectedThread();
+        set({
+          addProjectOpen: true,
+          settingsOpen: false,
+          automationInboxOpen: false,
+          allThreadsProjectId: null,
+          newThreadProjectId: null,
+          newThreadBaseBranch: null,
+          testRunnerOpen: false,
+        });
+      } else {
+        set({ addProjectOpen: false });
+      }
+    },
+
+    startNewThread: (projectId: string, idleOnly?: boolean, baseBranch?: string | null) => {
+      // Block thread creation on shared projects that haven't been set up yet
+      const project = readProject(projectId);
+      if (project?.needsSetup) return;
+
+      // Set the compose flag BEFORE clearing thread selection — the invariant
+      // guard subscribes to thread-store changes and would otherwise re-select
+      // the previous thread (from a stale URL) before the flag is visible to it.
+      set((s) => ({
+        newThreadComposeId: s.newThreadComposeId + 1,
+        newThreadProjectId: projectId,
+        newThreadIdleOnly: idleOnly ?? false,
+        newThreadBaseBranch: baseBranch ?? null,
+        newThreadIsScratch: false,
         allThreadsProjectId: null,
+        automationInboxOpen: false,
+        addProjectOpen: false,
+        reviewPaneOpen: false,
+        testRunnerOpen: false,
+      }));
+      clearSelectedThread();
+      useProjectStore.getState().selectProject(projectId);
+      persistRightPane(false);
+    },
+
+    startNewScratchThread: () => {
+      // Set the compose flag BEFORE clearing thread selection — see note in
+      // startNewThread above for why order matters.
+      set((s) => ({
+        newThreadComposeId: s.newThreadComposeId + 1,
+        newThreadProjectId: null,
+        newThreadIdleOnly: false,
+        newThreadBaseBranch: null,
+        newThreadIsScratch: true,
+        allThreadsProjectId: null,
+        automationInboxOpen: false,
+        addProjectOpen: false,
+        reviewPaneOpen: false,
+        testRunnerOpen: false,
+      }));
+      clearSelectedThread();
+      useProjectStore.getState().selectProject(null);
+      persistRightPane(false);
+    },
+
+    cancelNewThread: () => {
+      set({
+        newThreadProjectId: null,
+        newThreadIdleOnly: false,
+        newThreadBaseBranch: null,
+        newThreadIsScratch: false,
+        newThreadIssueContext: null,
+      });
+    },
+
+    closeAllThreads: () => {
+      set({ allThreadsProjectId: null });
+    },
+
+    showGlobalSearch: () => {
+      clearSelectedThread();
+      persistRightPane(false);
+      set({
+        allThreadsProjectId: '__all__',
         newThreadProjectId: null,
         newThreadBaseBranch: null,
+        automationInboxOpen: false,
+        addProjectOpen: false,
+        settingsOpen: false,
+        analyticsOpen: false,
+        liveColumnsOpen: false,
+        reviewPaneOpen: false,
         testRunnerOpen: false,
       });
-    } else {
-      set({ addProjectOpen: false });
-    }
-  },
+    },
 
-  startNewThread: (projectId: string, idleOnly?: boolean, baseBranch?: string | null) => {
-    // Block thread creation on shared projects that haven't been set up yet
-    const project = readProject(projectId);
-    if (project?.needsSetup) return;
+    setAnalyticsOpen: (open) => {
+      if (open) {
+        clearSelectedThread();
+        persistRightPane(false);
+      }
+      set(
+        open
+          ? {
+              analyticsOpen: true,
+              reviewPaneOpen: false,
+              settingsOpen: false,
+              activeSettingsPage: null,
+              allThreadsProjectId: null,
+              addProjectOpen: false,
+              automationInboxOpen: false,
+              liveColumnsOpen: false,
+              testRunnerOpen: false,
+            }
+          : { analyticsOpen: false },
+      );
+    },
 
-    // Set the compose flag BEFORE clearing thread selection — the invariant
-    // guard subscribes to thread-store changes and would otherwise re-select
-    // the previous thread (from a stale URL) before the flag is visible to it.
-    set((s) => ({
-      newThreadComposeId: s.newThreadComposeId + 1,
-      newThreadProjectId: projectId,
-      newThreadIdleOnly: idleOnly ?? false,
-      newThreadBaseBranch: baseBranch ?? null,
-      newThreadIsScratch: false,
-      allThreadsProjectId: null,
-      automationInboxOpen: false,
-      addProjectOpen: false,
-      reviewPaneOpen: false,
-      testRunnerOpen: false,
-    }));
-    clearSelectedThread();
-    useProjectStore.getState().selectProject(projectId);
-    persistRightPane(false);
-  },
+    setLiveColumnsOpen: (open) => {
+      if (open) {
+        clearSelectedThread();
+        persistRightPane(false);
+      }
+      set(
+        open
+          ? {
+              liveColumnsOpen: true,
+              reviewPaneOpen: false,
+              settingsOpen: false,
+              activeSettingsPage: null,
+              allThreadsProjectId: null,
+              addProjectOpen: false,
+              automationInboxOpen: false,
+              analyticsOpen: false,
+              testRunnerOpen: false,
+            }
+          : { liveColumnsOpen: false },
+      );
+    },
+  } satisfies Partial<UIState>;
+}
 
-  startNewScratchThread: () => {
-    // Set the compose flag BEFORE clearing thread selection — see note in
-    // startNewThread above for why order matters.
-    set((s) => ({
-      newThreadComposeId: s.newThreadComposeId + 1,
-      newThreadProjectId: null,
-      newThreadIdleOnly: false,
-      newThreadBaseBranch: null,
-      newThreadIsScratch: true,
-      allThreadsProjectId: null,
-      automationInboxOpen: false,
-      addProjectOpen: false,
-      reviewPaneOpen: false,
-      testRunnerOpen: false,
-    }));
-    clearSelectedThread();
-    useProjectStore.getState().selectProject(null);
-    persistRightPane(false);
-  },
+/** Designs, timeline, grid selection, kanban handoff, compose prefill and recaps. */
+function designAndMiscActions(set: SetUIState) {
+  return {
+    setDesignView: (projectId, designId) => {
+      set({
+        designViewProjectId: projectId,
+        designViewDesignId: designId,
+        activeDesignId: designId,
+        settingsOpen: false,
+        activeSettingsPage: null,
+        generalSettingsOpen: false,
+        activePreferencesPage: null,
+        allThreadsProjectId: null,
+        addProjectOpen: false,
+        automationInboxOpen: false,
+        analyticsOpen: false,
+        liveColumnsOpen: false,
+        testRunnerOpen: false,
+      });
+    },
 
-  cancelNewThread: () => {
-    set({
-      newThreadProjectId: null,
-      newThreadIdleOnly: false,
-      newThreadBaseBranch: null,
-      newThreadIsScratch: false,
-      newThreadIssueContext: null,
-    });
-  },
+    closeDesignView: () => {
+      set({ designViewProjectId: null, designViewDesignId: null, activeDesignId: null });
+    },
 
-  closeAllThreads: () => {
-    set({ allThreadsProjectId: null });
-  },
+    setActiveDesignId: (designId) => set({ activeDesignId: designId }),
 
-  showGlobalSearch: () => {
-    clearSelectedThread();
-    persistRightPane(false);
-    set({
-      allThreadsProjectId: '__all__',
-      newThreadProjectId: null,
-      newThreadBaseBranch: null,
-      automationInboxOpen: false,
-      addProjectOpen: false,
-      settingsOpen: false,
-      analyticsOpen: false,
-      liveColumnsOpen: false,
-      reviewPaneOpen: false,
-      testRunnerOpen: false,
-    });
-  },
-
-  setAnalyticsOpen: (open) => {
-    if (open) {
+    setDesignsListOpen: (projectId) => {
       clearSelectedThread();
       persistRightPane(false);
-    }
-    set(
-      open
-        ? {
-            analyticsOpen: true,
-            reviewPaneOpen: false,
-            settingsOpen: false,
-            activeSettingsPage: null,
-            allThreadsProjectId: null,
-            addProjectOpen: false,
-            automationInboxOpen: false,
-            liveColumnsOpen: false,
-            testRunnerOpen: false,
-          }
-        : { analyticsOpen: false },
-    );
-  },
+      set({
+        designsListProjectId: projectId,
+        designViewProjectId: null,
+        designViewDesignId: null,
+        activeDesignId: null,
+        reviewPaneOpen: false,
+        settingsOpen: false,
+        activeSettingsPage: null,
+        generalSettingsOpen: false,
+        activePreferencesPage: null,
+        allThreadsProjectId: null,
+        addProjectOpen: false,
+        automationInboxOpen: false,
+        analyticsOpen: false,
+        liveColumnsOpen: false,
+        testRunnerOpen: false,
+      });
+    },
 
-  setLiveColumnsOpen: (open) => {
-    if (open) {
-      clearSelectedThread();
-      persistRightPane(false);
-    }
-    set(
-      open
-        ? {
-            liveColumnsOpen: true,
-            reviewPaneOpen: false,
-            settingsOpen: false,
-            activeSettingsPage: null,
-            allThreadsProjectId: null,
-            addProjectOpen: false,
-            automationInboxOpen: false,
-            analyticsOpen: false,
-            testRunnerOpen: false,
-          }
-        : { liveColumnsOpen: false },
-    );
-  },
+    closeDesignsList: () => {
+      set({ designsListProjectId: null });
+    },
 
-  setDesignView: (projectId, designId) => {
-    set({
-      designViewProjectId: projectId,
-      designViewDesignId: designId,
-      activeDesignId: designId,
-      settingsOpen: false,
-      activeSettingsPage: null,
-      generalSettingsOpen: false,
-      activePreferencesPage: null,
-      allThreadsProjectId: null,
-      addProjectOpen: false,
-      automationInboxOpen: false,
-      analyticsOpen: false,
-      liveColumnsOpen: false,
-      testRunnerOpen: false,
-    });
-  },
+    setTimelineVisible: (visible) => {
+      try {
+        localStorage.setItem(TIMELINE_VISIBLE_KEY, String(visible));
+      } catch {}
+      set({ timelineVisible: visible });
+    },
+    setGridSelectedThreadId: (threadId) => {
+      try {
+        if (threadId) {
+          localStorage.setItem(GRID_SELECTED_THREAD_KEY, threadId);
+        } else {
+          localStorage.removeItem(GRID_SELECTED_THREAD_KEY);
+        }
+      } catch {}
+      set({ gridSelectedThreadId: threadId });
+    },
+    setKanbanContext: (context) =>
+      set(() => {
+        // Card-click handoff: every list/board result click routes through here
+        // with the active search + target thread. Derive the in-thread search
+        // seed so the thread view can reopen the query with highlights. A
+        // thread click without a search clears any stale seed.
+        if (context?.threadId) {
+          const query = context.search?.trim();
+          return {
+            kanbanContext: context,
+            pendingThreadSearch: query
+              ? {
+                  threadId: context.threadId,
+                  query,
+                  caseSensitive: context.caseSensitive ?? false,
+                }
+              : null,
+          };
+        }
+        return { kanbanContext: context };
+      }),
 
-  closeDesignView: () => {
-    set({ designViewProjectId: null, designViewDesignId: null, activeDesignId: null });
-  },
+    setPendingThreadSearch: (pending) => set({ pendingThreadSearch: pending }),
 
-  setActiveDesignId: (designId) => set({ activeDesignId: designId }),
+    startNewThreadFromIssue: (projectId, issueContext) => {
+      // Reuse startNewThread logic but also set the issue context
+      const { startNewThread } = useUIStore.getState();
+      set({ newThreadIssueContext: issueContext });
+      startNewThread(projectId);
+    },
 
-  setDesignsListOpen: (projectId) => {
-    clearSelectedThread();
-    persistRightPane(false);
-    set({
-      designsListProjectId: projectId,
-      designViewProjectId: null,
-      designViewDesignId: null,
-      activeDesignId: null,
-      reviewPaneOpen: false,
-      settingsOpen: false,
-      activeSettingsPage: null,
-      generalSettingsOpen: false,
-      activePreferencesPage: null,
-      allThreadsProjectId: null,
-      addProjectOpen: false,
-      automationInboxOpen: false,
-      analyticsOpen: false,
-      liveColumnsOpen: false,
-      testRunnerOpen: false,
-    });
-  },
+    clearIssueContext: () => set({ newThreadIssueContext: null }),
 
-  closeDesignsList: () => {
-    set({ designsListProjectId: null });
-  },
+    setComposePrefillPrompt: (prompt) => set({ composePrefillPrompt: prompt }),
 
-  setTimelineVisible: (visible) => {
-    try {
-      localStorage.setItem(TIMELINE_VISIBLE_KEY, String(visible));
-    } catch {}
-    set({ timelineVisible: visible });
-  },
-  setGridSelectedThreadId: (threadId) => {
-    try {
-      if (threadId) {
-        localStorage.setItem(GRID_SELECTED_THREAD_KEY, threadId);
-      } else {
-        localStorage.removeItem(GRID_SELECTED_THREAD_KEY);
-      }
-    } catch {}
-    set({ gridSelectedThreadId: threadId });
-  },
-  setKanbanContext: (context) =>
-    set(() => {
-      // Card-click handoff: every list/board result click routes through here
-      // with the active search + target thread. Derive the in-thread search
-      // seed so the thread view can reopen the query with highlights. A
-      // thread click without a search clears any stale seed.
-      if (context?.threadId) {
-        const query = context.search?.trim();
-        return {
-          kanbanContext: context,
-          pendingThreadSearch: query
-            ? {
-                threadId: context.threadId,
-                query,
-                caseSensitive: context.caseSensitive ?? false,
-              }
-            : null,
-        };
-      }
-      return { kanbanContext: context };
-    }),
+    dismissedRecaps: {},
+    dismissRecap: (key) =>
+      set((s) =>
+        s.dismissedRecaps[key] ? s : { dismissedRecaps: { ...s.dismissedRecaps, [key]: true } },
+      ),
 
-  setPendingThreadSearch: (pending) => set({ pendingThreadSearch: pending }),
+    recapHintOpenKey: null,
+    claimRecapHint: (openKey) =>
+      set((s) => (s.recapHintOpenKey === null ? { recapHintOpenKey: openKey } : s)),
+  } satisfies Partial<UIState>;
+}
 
-  startNewThreadFromIssue: (projectId, issueContext) => {
-    // Reuse startNewThread logic but also set the issue context
-    const { startNewThread } = useUIStore.getState();
-    set({ newThreadIssueContext: issueContext });
-    startNewThread(projectId);
-  },
-
-  clearIssueContext: () => set({ newThreadIssueContext: null }),
-
-  setComposePrefillPrompt: (prompt) => set({ composePrefillPrompt: prompt }),
-
-  dismissedRecaps: {},
-  dismissRecap: (key) =>
-    set((s) =>
-      s.dismissedRecaps[key] ? s : { dismissedRecaps: { ...s.dismissedRecaps, [key]: true } },
-    ),
-
-  recapHintOpenKey: null,
-  claimRecapHint: (openKey) =>
-    set((s) => (s.recapHintOpenKey === null ? { recapHintOpenKey: openKey } : s)),
+export const useUIStore = create<UIState>((set) => ({
+  ...readInitialUIState(),
+  ...overlayActions(set),
+  ...rightPaneActions(set),
+  ...navigationActions(set),
+  ...designAndMiscActions(set),
 }));
 
 // Reset transient UI panes whenever a thread is selected.
 // Registered via the listener API to avoid a thread-store ↔ ui-store import cycle.
 setThreadSelectListener((threadId) => {
-  const uiPatch: Record<string, unknown> = {
+  const uiPatch: Partial<UIState> = {
     newThreadProjectId: null,
     newThreadBaseBranch: null,
     allThreadsProjectId: null,

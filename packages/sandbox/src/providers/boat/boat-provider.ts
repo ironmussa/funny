@@ -57,8 +57,13 @@ const boatCapabilities: SandboxCapabilities = {
   preStopHook: 'native',
 };
 
+/** A provider's state name → its normalized state. */
+interface ProviderStates {
+  readonly [providerState: string]: NormalizedSandboxState;
+}
+
 /** Boat API states → normalized states. */
-const STATE_MAP: Record<string, NormalizedSandboxState> = {
+const STATE_MAP: ProviderStates = {
   provisioning: 'provisioning',
   provisioned: 'provisioning',
   cloning: 'provisioning',

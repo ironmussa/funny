@@ -12,7 +12,8 @@ import {
 } from './message-stream-scroll-utils';
 import type { MessageStreamProps } from './message-stream-types';
 
-type ApplyThreadScrollPosition = (viewport: HTMLDivElement, threadId: string) => unknown;
+/** Restores a thread's saved scroll position; the effects ignore the outcome it reports. */
+type ApplyThreadScrollPosition = (viewport: HTMLDivElement, threadId: string) => void;
 type ViewportCallback = (viewport: HTMLDivElement) => void;
 
 export function useThreadSwitchSettle() {

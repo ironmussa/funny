@@ -68,6 +68,11 @@ function resolvePRState(pr: PRCompactIdentityPR, fallbackState: PRCompactState):
   return fallbackState;
 }
 
+/** True for a number value. */
+function isNumber(value: unknown): value is number {
+  return typeof value === 'number';
+}
+
 export function PRCompactIdentity({
   pr,
   fallbackState = 'OPEN',
@@ -108,9 +113,7 @@ export function PRCompactIdentity({
   const hasMeta = !!pr.updated_at || !!lastCommitAuthor || (showDraftBadge && !!pr.draft);
   const effectiveStats =
     stats ??
-    (typeof pr.additions === 'number' &&
-    typeof pr.deletions === 'number' &&
-    typeof pr.changed_files === 'number'
+    (isNumber(pr.additions) && isNumber(pr.deletions) && isNumber(pr.changed_files)
       ? {
           additions: pr.additions,
           deletions: pr.deletions,

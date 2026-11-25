@@ -9,6 +9,7 @@
  * before dispatching here — see `handleDataMessageWithAck` in data-handler.ts.
  */
 
+import type { JsonObject } from '@bufbuild/protobuf';
 import { errorMessage } from '@funny/shared/errors';
 import type { JobPatch, WatcherPatch } from '@funny/shared/repositories';
 import { and, eq, or } from 'drizzle-orm';
@@ -53,9 +54,10 @@ function stripRunnerImmutableThreadFields(
   runnerUserId: string | null,
   threadId: string,
   updates: unknown,
-): Record<string, unknown> {
+): JsonObject {
   if (!updates || typeof updates !== 'object' || Array.isArray(updates)) return {};
-  const allowed: Record<string, unknown> = {};
+  // The updates arrive as the decoded `Struct` of an `UpdateThread` operation.
+  const allowed: JsonObject = {};
   const refused: string[] = [];
   for (const [key, value] of Object.entries(updates)) {
     if (RUNNER_IMMUTABLE_THREAD_FIELDS.has(key)) refused.push(key);
@@ -89,6 +91,11 @@ interface DataMessageContext {
 
 type DataMessageHandler = (ctx: DataMessageContext) => Promise<any>;
 
+/** `data:*` message type → the executor that answers it. */
+interface DataMessageHandlers {
+  readonly [type: string]: DataMessageHandler;
+}
+
 // Statuses that end a run. Only these are re-broadcast from the persistence
 // path: 'waiting' must NOT be, because the client's status handler would apply
 // it without the waitingReason/permissionRequest payload that only the live
@@ -111,6 +118,8 @@ function notifyTerminalStatusPersisted(
   threadId: unknown,
   updates: unknown,
 ): void {
+  // SAFETY: `?.status` is defined for any value (a primitive yields undefined) and status
+  // stays unknown until the typeof check below.
   const status = (updates as { status?: unknown } | null)?.status;
   if (!runnerUserId || typeof threadId !== 'string') return;
   if (typeof status !== 'string' || !TERMINAL_THREAD_STATUSES.has(status)) return;
@@ -185,33 +194,40 @@ async function findAgentTemplateForRunner(ownerId: string, templateId: unknown):
 
 // ── Watcher / job patch allow-lists ──────────────────────────────
 
+/** A runner-sent patch's own fields (the decoded `Struct` of a watcher / job update). */
+type PatchFields = ReadonlyMap<string, unknown>;
+
+const ownFields = (raw: unknown): PatchFields =>
+  new Map(raw && typeof raw === 'object' ? Object.entries(raw) : []);
+
 /** Keep `patch[key]` when it passes `ok`; drop it otherwise. */
-function copyIf<T>(
-  out: Record<string, unknown>,
-  patch: Record<string, unknown>,
-  key: string,
+function copyIf<K extends string, T>(
+  out: Partial<Record<K, T>>,
+  patch: PatchFields,
+  key: K,
   ok: (v: unknown) => v is T,
 ): void {
-  if (Object.hasOwn(patch, key) && ok(patch[key])) out[key] = patch[key];
+  const value = patch.get(key);
+  if (patch.has(key) && ok(value)) out[key] = value;
 }
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const isNumOrNull = (v: unknown): v is number | null => v === null || isNum(v);
 const isStr = (v: unknown): v is string => typeof v === 'string';
-const asRecord = (v: unknown): Record<string, unknown> =>
-  v && typeof v === 'object' ? (v as Record<string, unknown>) : {};
 
 /**
  * Fields a runner may change on its own watcher — never owner, thread, key,
  * or caps. Values are type-checked; anything else is dropped.
  */
 function pickWatcherPatch(raw: unknown): WatcherPatch {
-  const patch = asRecord(raw);
-  const out: Record<string, unknown> = {};
+  const patch = ownFields(raw);
+  const out: Partial<Record<keyof WatcherPatch, string | number>> = {};
   copyIf(out, patch, 'nextWakeAt', isNum);
   copyIf(out, patch, 'lastDelayMs', isNum);
   copyIf(out, patch, 'wakeCount', isNum);
   copyIf(out, patch, 'status', isStr);
   copyIf(out, patch, 'updatedAt', isStr);
+  // SAFETY: the numeric fields passed `isNum`; `status` is any string the
+  // runner sent, stored unchecked as it always was.
   return out as WatcherPatch;
 }
 
@@ -222,12 +238,14 @@ function pickWatcherPatch(raw: unknown): WatcherPatch {
  * ownership guard already restricts updates to the runner user's own jobs.
  */
 function pickJobPatch(raw: unknown): JobPatch {
-  const patch = asRecord(raw);
-  const out: Record<string, unknown> = {};
+  const patch = ownFields(raw);
+  const out: Partial<Record<keyof JobPatch, string | number | null>> = {};
   copyIf(out, patch, 'pid', isNumOrNull);
   copyIf(out, patch, 'status', isStr);
   copyIf(out, patch, 'exitCode', isNumOrNull);
   copyIf(out, patch, 'updatedAt', isStr);
+  // SAFETY: `pid` / `exitCode` passed `isNumOrNull`; `status` is any string the
+  // runner sent, stored unchecked as it always was.
   return out as JobPatch;
 }
 
@@ -239,7 +257,7 @@ function pickJobPatch(raw: unknown): JobPatch {
 const OWNER_SCOPED_LIST_FALLBACK = [] as const;
 
 /** Dispatch table: one executor per `data:*` message type. */
-const DATA_MESSAGE_HANDLERS: Readonly<Record<string, DataMessageHandler>> = {
+const DATA_MESSAGE_HANDLERS: DataMessageHandlers = {
   'data:insert_message': async ({ data }) => {
     const messageRepo = repos.messages();
     const messageId = await messageRepo.insertMessage(data.payload);
@@ -570,12 +588,12 @@ const DATA_MESSAGE_HANDLERS: Readonly<Record<string, DataMessageHandler>> = {
   'data:cancel_queued_message': async ({ data }) => {
     // The ownership guard already verified message → thread → runnerUserId.
     // Resolve threadId here so cancel can scope by (messageId, threadId).
-    const q = (await dbGet(
+    const q = await dbGet<{ threadId: string }>(
       db
         .select({ threadId: schema.messageQueue.threadId })
         .from(schema.messageQueue)
         .where(eq(schema.messageQueue.id, data.messageId)),
-    )) as { threadId: string } | undefined;
+    );
     if (!q)
       return {
         type: 'data:cancel_queued_message_response',
@@ -585,12 +603,12 @@ const DATA_MESSAGE_HANDLERS: Readonly<Record<string, DataMessageHandler>> = {
     return { type: 'data:cancel_queued_message_response', success };
   },
   'data:update_queued_message': async ({ data }) => {
-    const q = (await dbGet(
+    const q = await dbGet<{ threadId: string }>(
       db
         .select({ threadId: schema.messageQueue.threadId })
         .from(schema.messageQueue)
         .where(eq(schema.messageQueue.id, data.messageId)),
-    )) as { threadId: string } | undefined;
+    );
     if (!q) return { type: 'data:update_queued_message_response', updated: null };
     const updated = await messageQueueRepo.update(data.messageId, q.threadId, data.content);
     return { type: 'data:update_queued_message_response', updated };
@@ -667,6 +685,51 @@ const DATA_MESSAGE_HANDLERS: Readonly<Record<string, DataMessageHandler>> = {
             secretName: resolved.error.secretName,
           }),
         };
+  },
+  // The issue factory from a thread's agent (factory-agent-tools). The service
+  // takes the actor and the project from the thread's row and decides every
+  // refusal; a refusal is an answer the agent reads, not a transport error.
+  'data:factory_list_runs': async ({ runnerId, ownerId, data }) => {
+    const { factoryAgentTools } = await import('../trpc/ports/factory.js');
+    const listed = await factoryAgentTools.listRuns({
+      threadId: String(data.threadId),
+      runnerId,
+      runnerOwnerId: ownerId,
+    });
+    return listed.isOk()
+      ? { type: 'data:factory_list_runs_response', ...listed.value }
+      : {
+          type: 'data:factory_list_runs_response',
+          error: listed.error.kind,
+          message: listed.error.message,
+        };
+  },
+  'data:factory_control_run': async ({ runnerId, ownerId, data }) => {
+    const type = 'data:factory_control_run_response';
+    const action = data.action === 'retry' || data.action === 'stop' ? data.action : null;
+    if (!action) {
+      return { type, error: 'refused', message: 'The action must be retry or stop.' };
+    }
+    const { factoryAgentTools } = await import('../trpc/ports/factory.js');
+    const controlled = await factoryAgentTools.controlRun(
+      { threadId: String(data.threadId), runnerId, runnerOwnerId: ownerId },
+      action,
+      String(data.runId),
+    );
+    return controlled.isOk()
+      ? { type, run: controlled.value }
+      : { type, error: controlled.error.kind, message: controlled.error.message };
+  },
+  'data:factory_request_approval': async ({ runnerId, ownerId, data }) => {
+    const type = 'data:factory_request_approval_response';
+    const { factoryAgentTools } = await import('../trpc/ports/factory.js');
+    const asked = await factoryAgentTools.requestApproval(
+      { threadId: String(data.threadId), runnerId, runnerOwnerId: ownerId },
+      String(data.runId),
+    );
+    return asked.isOk()
+      ? { type, ...asked.value }
+      : { type, error: asked.error.kind, message: asked.error.message };
   },
   'data:get_minimax_api_key': async ({ ownerId }) => {
     const { getProviderKey } = await import('./profile-service.js');

@@ -11,6 +11,7 @@ import {
   createTerminalHandler,
   RunnerGrpcTerminalDispatcher,
 } from '../../services/grpc/terminal-handler.js';
+import type { BrowserEvent } from '../../services/runner-ports.js';
 
 function stub<T>(partial: unknown): T {
   // SAFETY: only for gRPC call doubles that provide the members the terminal handler uses.
@@ -45,7 +46,7 @@ function setup() {
   };
   const sessions = new RunnerGrpcSessionRegistry({ heartbeatTimeoutMs: 60_000 });
   const epoch = sessions.activate('runner-1', { invalidate: () => {} });
-  const relayed: Array<Record<string, unknown>> = [];
+  const relayed: BrowserEvent[] = [];
   const dispatcher = new RunnerGrpcTerminalDispatcher(config, sessions, (_userId, event) => {
     relayed.push(event);
   });

@@ -16,7 +16,7 @@
  * what an earlier step set.
  */
 
-import type { AgentProvider, EffortLevel, PermissionMode } from '@funny/shared';
+import type { EffortLevel, PermissionMode } from '@funny/shared';
 import {
   DEFAULT_PROVIDER,
   getDefaultModel,
@@ -91,7 +91,7 @@ const firstDefined = <T>(...values: Array<T | null | undefined>): T | undefined 
 
 /** The provider's default model; a provider outside the registry has none here. */
 function defaultModelOf(provider: string): string {
-  const known = provider in MODEL_REGISTRY ? (provider as AgentProvider) : DEFAULT_PROVIDER;
+  const known = provider in MODEL_REGISTRY ? provider : DEFAULT_PROVIDER;
   return getDefaultModel(known);
 }
 

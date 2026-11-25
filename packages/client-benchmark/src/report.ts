@@ -64,12 +64,20 @@ function summaries(result: BenchmarkResult): Map<string, MetricSummary> {
   return values;
 }
 
+function isNumber(value: unknown): value is number {
+  return typeof value === 'number';
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 function numberDiagnostic(
   diagnostics: BenchmarkResult['workloads'][number]['diagnostics'],
   key: string,
 ): number | null {
   const value = diagnostics[key];
-  return typeof value === 'number' ? value : null;
+  return isNumber(value) ? value : null;
 }
 
 function gpuixDrawDiagnostics(result: BenchmarkResult): GpuixDrawDiagnostic[] {
@@ -79,7 +87,7 @@ function gpuixDrawDiagnostics(result: BenchmarkResult): GpuixDrawDiagnostic[] {
     return [
       {
         workload: workload.name,
-        overlayMode: typeof overlayMode === 'string' ? overlayMode : null,
+        overlayMode: isString(overlayMode) ? overlayMode : null,
         currentMs: numberDiagnostic(workload.diagnostics, 'nativeDrawCurrentMs'),
         p90Ms: numberDiagnostic(workload.diagnostics, 'nativeDrawP90Ms'),
         p99Ms: numberDiagnostic(workload.diagnostics, 'nativeDrawP99Ms'),

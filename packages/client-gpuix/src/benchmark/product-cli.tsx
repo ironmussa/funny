@@ -213,7 +213,7 @@ function input(): void {
   });
 }
 
-function diagnostics(): Record<string, string | number | boolean | null> {
+function diagnostics() {
   const fixture = fixtures[state.fixtureKey];
   const counts = countProductRows(automationTree(), 900);
   return {
@@ -238,7 +238,7 @@ function diagnostics(): Record<string, string | number | boolean | null> {
     presentationAcknowledgementSupported: false,
     productShell: true,
     ...readNativeFrameDiagnostics(renderer),
-  };
+  } satisfies ProductWorkloadObservation['diagnostics'];
 }
 
 async function runWorkload(

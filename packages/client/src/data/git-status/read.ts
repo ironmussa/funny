@@ -22,10 +22,7 @@ export function withoutId<T extends WithId>(row: T): Omit<T, 'id'> {
   return rest;
 }
 
-function recordOf<T extends WithId, V>(
-  store: EntityStore<T>,
-  value: (row: T) => V,
-): Record<string, V> {
+function recordOf<T extends WithId, V>(store: EntityStore<T>, value: (row: T) => V) {
   const out: Record<string, V> = {};
   for (const row of store.collection.values()) out[row.id] = value(store.fromRow(row));
   return out;

@@ -41,11 +41,7 @@ function RoleBadge({ role }: { role: string }) {
     case 'member':
       return <Badge variant="success">{role}</Badge>;
     default:
-      return (
-        <Badge variant="secondary" className="bg-muted text-muted-foreground">
-          {role}
-        </Badge>
-      );
+      return <Badge variant="muted">{role}</Badge>;
   }
 }
 
@@ -170,7 +166,7 @@ export function ProjectCollaborators() {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search users by name, username or email…"
-              className="pl-8 text-sm"
+              inset="icon"
               data-testid="collaborators-search"
             />
           </div>

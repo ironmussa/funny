@@ -1,12 +1,11 @@
 import type { Project } from '@funny/shared';
 import { DEFAULT_PROVIDER } from '@funny/shared/models';
-import { CircleDot, NotebookPen } from 'lucide-react';
+import type { TFunction } from 'i18next';
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
-import { Button } from '@/components/ui/button';
 import { useProjects } from '@/data/projects/hooks';
 import { useProjectThreadMode } from '@/data/runner/hooks';
 import { useSaveBacklogOnLeave } from '@/hooks/use-save-backlog-on-leave';
@@ -16,7 +15,11 @@ import { api } from '@/lib/api';
 import { getThreadRoute } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 import { whilePending } from '@/lib/while-pending';
-import { buildWorkflowRunBody, parseWorkflowInvocation } from '@/lib/workflow-invocation';
+import {
+  buildWorkflowRunBody,
+  parseWorkflowInvocation,
+  type WorkflowInvocation,
+} from '@/lib/workflow-invocation';
 import { useProjectStore } from '@/stores/project-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useThreadStore } from '@/stores/thread-store';
@@ -24,9 +27,14 @@ import { useUIStore } from '@/stores/ui-store';
 
 import { AvailableMcpServers } from '../AvailableMcpServers';
 import { PromptInput } from '../PromptInput';
+import {
+  IssueContextBanner,
+  NewThreadCreatingView,
+  ScratchComposeView,
+} from './NewThreadComposeViews';
 import { NewThreadContextBar } from './NewThreadContextBar';
 import { SaveBacklogDialog } from './SaveBacklogDialog';
-import { ThreadPreparationView, type PreparationMessageMetadata } from './ThreadPreparationView';
+import { type PreparationMessageMetadata } from './ThreadPreparationView';
 
 /** Replicate server-side slugifyTitle for branch name preview. */
 function slugifyTitle(title: string, maxLength = 40): string {
@@ -112,20 +120,7 @@ export function NewThreadInput({
   const activeDesignId = useUIStore((s) => s.activeDesignId);
   const issueContext = useUIStore((s) => s.newThreadIssueContext);
   const clearIssueContext = useUIStore((s) => s.clearIssueContext);
-  const composePrefillPrompt = useUIStore((s) => s.composePrefillPrompt);
-  const setComposePrefillPrompt = useUIStore((s) => s.setComposePrefillPrompt);
-  // One-shot: capture the prefill at mount time, then clear it from the store
-  // so it doesn't bleed into the next compose. The captured value is what
-  // gets passed to PromptInput as initialPrompt.
-  // Captured once: the store entry is cleared right after mount.
-  const [initialPrefill] = useState(composePrefillPrompt);
-  const clearComposePrefill = useStableCallback(() => {
-    if (composePrefillPrompt !== null) setComposePrefillPrompt(null);
-  });
-  // Run once at mount; do NOT re-run when the store value flips back to null.
-  useEffect(() => {
-    clearComposePrefill();
-  }, [clearComposePrefill]);
+  const initialPrefill = useComposePrefill();
   const cancelNewThreadGlobal = useUIStore((s) => s.cancelNewThread);
   const cancelNewThread = onCancel ?? cancelNewThreadGlobal;
   const setReviewPaneOpen = useUIStore((s) => s.setReviewPaneOpen);
@@ -133,40 +128,19 @@ export function NewThreadInput({
   const toolPermissions = useSettingsStore((s) => s.toolPermissions);
 
   // ── Project path (for AvailableMcpServers) ──
-  const [mcpProvider, setMcpProvider] = useState(defaultProvider);
-
-  // Follow the default provider when it changes, without an extra effect pass.
-  const [seenDefaultProvider, setSeenDefaultProvider] = useState(defaultProvider);
-  if (seenDefaultProvider !== defaultProvider) {
-    setSeenDefaultProvider(defaultProvider);
-    setMcpProvider(defaultProvider);
-  }
+  const [mcpProvider, setMcpProvider] = useMcpProvider(defaultProvider);
 
   // ── Worktree preview ──
   const [previewBranch, setPreviewBranch] = useState<string | null>(null);
   const [isWorktreeMode, setIsWorktreeMode] = useWorktreePreview(defaultThreadMode);
 
   // ── Save-to-backlog guard ──
-  const hasContentRef = useRef(false);
-  const latestPromptTextRef = useRef('');
+  const { hasContentRef, latestPromptTextRef, handleContentChange } = useComposeContent(
+    project?.name,
+    setPreviewBranch,
+  );
   // Skip blocking when the user just submitted (created a thread successfully)
   const justSubmittedRef = useRef(false);
-
-  const handleContentChange = useCallback(
-    (hasContent: boolean, text: string) => {
-      hasContentRef.current = hasContent;
-      latestPromptTextRef.current = text;
-      // Update worktree preview branch name (mirrors server-side naming)
-      if (hasContent && text.trim()) {
-        const projectSlug = slugifyTitle(project?.name || 'project');
-        const titleSlug = slugifyTitle(text.slice(0, 200));
-        setPreviewBranch(`${projectSlug}/${titleSlug}-xxxxxx`);
-      } else {
-        setPreviewBranch(null);
-      }
-    },
-    [project?.name],
-  );
 
   const { blocker, savingBacklog, handleSaveToBacklog, handleDiscard, handleCancel } =
     useSaveBacklogOnLeave({
@@ -268,9 +242,6 @@ export function NewThreadInput({
       opts: Parameters<typeof createThreadFromHook>[1],
       images?: any[],
     ): Promise<boolean> => {
-      // SAFETY: PromptInput fills model, mode and effort from its model, permission
-      // and effort selectors, which only offer AgentModel, PermissionMode and
-      // EffortLevel values; SubmitOpts types them as plain strings.
       const metadata: PreparationMessageMetadata = {
         model: opts.model as PreparationMessageMetadata['model'],
         permissionMode: opts.mode as PreparationMessageMetadata['permissionMode'],
@@ -295,41 +266,20 @@ export function NewThreadInput({
         setRestoredPrompt(null);
         setSubmittedPrompt(prompt);
         submittedPromptRef.current = prompt;
-        return whilePending(setWorkflowSubmitting, async () => {
-          const workflowPrompt = invocation.prompt ?? `Run workflow ${invocation.workflowName}`;
-          // react-doctor-disable-line react-hooks-js/todo — pre-existing; React Compiler limitation
-          const createResult = await api.createIdleThread({
-            projectId: effectiveProjectId,
-            title: workflowPrompt.slice(0, 200),
-            // SAFETY: PromptInput's buildThreadOptions sets threadMode from a
-            // 'local' | 'worktree' value; SubmitOpts types it as a plain string.
-            mode: (opts.threadMode as 'local' | 'worktree') || defaultThreadMode,
-            baseBranch: opts.baseBranch,
-            prompt: workflowPrompt,
+        return whilePending(setWorkflowSubmitting, () =>
+          createWorkflowThread({
+            invocation,
+            prompt,
+            opts,
             images,
-            designId: activeDesignId || undefined,
-          });
-
-          if (createResult.isErr()) {
-            toast.error(createResult.error.message);
-            setRestoredPrompt(prompt);
-            return false;
-          }
-
-          const runResult = await api.runWorkflow(invocation.workflowName, {
-            threadId: createResult.value.id,
-            ...buildWorkflowRunBody(invocation, {
-              fileReferences: opts.fileReferences,
-              symbolReferences: opts.symbolReferences,
-            }),
-          });
-
-          if (runResult.isErr()) toast.error(runResult.error.message);
-          else toast.success(t('workflows.started', { defaultValue: 'Workflow started' }));
-
-          await handleThreadCreated(createResult.value.id, 'normal', createResult.value);
-          return true;
-        });
+            projectId: effectiveProjectId,
+            defaultThreadMode,
+            designId: activeDesignId,
+            t,
+            setRestoredPrompt,
+            onThreadCreated: handleThreadCreated,
+          }),
+        );
       }
 
       // Reset restored-prompt before the call so the field clears if it succeeds.
@@ -380,50 +330,23 @@ export function NewThreadInput({
 
   if (creating || requestPending || submitted || workflowSubmitting) {
     return (
-      <div className="flex min-h-0 flex-1 flex-col" data-testid="new-thread-creating">
-        <ThreadPreparationView
-          prompt={submittedPrompt}
-          metadata={submittedMetadata}
-          projectId={effectiveProjectId || undefined}
-        />
-      </div>
+      <NewThreadCreatingView
+        prompt={submittedPrompt}
+        metadata={submittedMetadata}
+        projectId={effectiveProjectId || undefined}
+      />
     );
   }
 
   if (newThreadIsScratch) {
-    // Scratch variant: no project/repo/branch picker, no worktree preview,
-    // no file/symbol references. Just a prompt + model/permission picker.
     // The handleCreate() branch above routes to api.createScratchThread().
     return (
-      <div
-        className="text-muted-foreground flex flex-1 items-center justify-center px-4"
-        data-testid="new-thread-scratch"
-      >
-        <div className="w-full max-w-3xl">
-          <div
-            className="text-muted-foreground mb-3 flex h-9 items-center gap-2 text-base"
-            data-testid="new-thread-context-bar"
-          >
-            <span className="flex h-9 shrink-0 items-center gap-1.5 px-2 py-1">
-              <NotebookPen className="size-5 shrink-0" data-testid="new-thread-scratch-icon" />
-              <span className="truncate font-medium" data-testid="new-thread-scratch-label">
-                {t('scratch.composeTitle', { defaultValue: 'New scratch thread' })}
-              </span>
-            </span>
-          </div>
-          <div data-testid="new-thread-scratch-prompt">
-            <PromptInput
-              key="scratch"
-              onSubmit={handleCreate}
-              loading={creating}
-              isNewThread
-              isScratch
-              onContentChange={handleContentChange}
-              initialPrompt={restoredPrompt ?? undefined}
-            />
-          </div>
-        </div>
-      </div>
+      <ScratchComposeView
+        onSubmit={handleCreate}
+        loading={creating}
+        onContentChange={handleContentChange}
+        initialPrompt={restoredPrompt ?? undefined}
+      />
     );
   }
 
@@ -442,24 +365,7 @@ export function NewThreadInput({
     <div className="text-muted-foreground flex flex-1 items-center justify-center px-4">
       <div className="w-full max-w-3xl">
         {issueContext && (
-          <div
-            className="border-status-success/20 bg-status-success/5 mb-1.5 flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs"
-            data-testid="issue-context-banner"
-          >
-            <CircleDot className="text-status-success size-3.5 shrink-0" />
-            <span className="text-muted-foreground truncate">
-              {t('issues.creatingFromIssue', { title: issueContext.title })}
-            </span>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-2xs ml-auto h-5 px-1"
-              onClick={clearIssueContext}
-              data-testid="issue-context-dismiss"
-            >
-              {t('common.dismiss')}
-            </Button>
-          </div>
+          <IssueContextBanner title={issueContext.title} onDismiss={clearIssueContext} />
         )}
         <PromptInput
           key={composePromptKey(effectiveProjectId, !!issueContext, initialPrefill)}
@@ -495,7 +401,7 @@ export function NewThreadInput({
 async function refreshCreatedProject(
   projectId: string | null | undefined,
   kind: 'idle' | 'normal',
-  load: (projectId: string) => Promise<unknown>,
+  load: (projectId: string) => Promise<void>,
 ) {
   if (!projectId) return;
   const refresh = load(projectId);
@@ -586,4 +492,123 @@ function composeProjectDefaults(project: Project | undefined) {
     projectPath: project?.path ?? '',
     defaultProvider: project?.defaultProvider ?? DEFAULT_PROVIDER,
   };
+}
+
+/**
+ * Tracks the prompt's content for the unsaved-prompt guard and updates the
+ * worktree preview branch name (mirrors server-side naming).
+ */
+function useComposeContent(
+  projectName: string | undefined,
+  setPreviewBranch: (branch: string | null) => void,
+) {
+  const hasContentRef = useRef(false);
+  const latestPromptTextRef = useRef('');
+  const handleContentChange = useCallback(
+    (hasContent: boolean, text: string) => {
+      hasContentRef.current = hasContent;
+      latestPromptTextRef.current = text;
+      // Update worktree preview branch name (mirrors server-side naming)
+      if (hasContent && text.trim()) {
+        const projectSlug = slugifyTitle(projectName || 'project');
+        const titleSlug = slugifyTitle(text.slice(0, 200));
+        setPreviewBranch(`${projectSlug}/${titleSlug}-xxxxxx`);
+      } else {
+        setPreviewBranch(null);
+      }
+    },
+    [projectName, setPreviewBranch],
+  );
+  return { hasContentRef, latestPromptTextRef, handleContentChange };
+}
+
+/**
+ * One-shot: capture the prefill at mount time, then clear it from the store
+ * so it doesn't bleed into the next compose. The captured value is what
+ * gets passed to PromptInput as initialPrompt.
+ */
+function useComposePrefill() {
+  const composePrefillPrompt = useUIStore((s) => s.composePrefillPrompt);
+  const setComposePrefillPrompt = useUIStore((s) => s.setComposePrefillPrompt);
+  // Captured once: the store entry is cleared right after mount.
+  const [initialPrefill] = useState(composePrefillPrompt);
+  const clearComposePrefill = useStableCallback(() => {
+    if (composePrefillPrompt !== null) setComposePrefillPrompt(null);
+  });
+  // Run once at mount; do NOT re-run when the store value flips back to null.
+  useEffect(() => {
+    clearComposePrefill();
+  }, [clearComposePrefill]);
+  return initialPrefill;
+}
+
+/** The provider whose MCP servers are listed; follows the project default when it changes. */
+function useMcpProvider(defaultProvider: string) {
+  const [mcpProvider, setMcpProvider] = useState(defaultProvider);
+
+  // Follow the default provider when it changes, without an extra effect pass.
+  const [seenDefaultProvider, setSeenDefaultProvider] = useState(defaultProvider);
+  if (seenDefaultProvider !== defaultProvider) {
+    setSeenDefaultProvider(defaultProvider);
+    setMcpProvider(defaultProvider);
+  }
+  return [mcpProvider, setMcpProvider] as const;
+}
+
+type CreateThreadOpts = Parameters<ReturnType<typeof useThreadCreation>['createThread']>[1];
+
+/** Creates an idle thread for a workflow invocation and starts the workflow on it. */
+async function createWorkflowThread({
+  invocation,
+  prompt,
+  opts,
+  images,
+  projectId,
+  defaultThreadMode,
+  designId,
+  t,
+  setRestoredPrompt,
+  onThreadCreated,
+}: {
+  invocation: WorkflowInvocation;
+  prompt: string;
+  opts: CreateThreadOpts;
+  images: any[] | undefined;
+  projectId: string;
+  defaultThreadMode: 'local' | 'worktree';
+  designId: string | null | undefined;
+  t: TFunction;
+  setRestoredPrompt: (prompt: string | null) => void;
+  onThreadCreated: (threadId: string, kind: 'normal', thread: any) => Promise<void>;
+}): Promise<boolean> {
+  const workflowPrompt = invocation.prompt ?? `Run workflow ${invocation.workflowName}`;
+  const createResult = await api.createIdleThread({
+    projectId,
+    title: workflowPrompt.slice(0, 200),
+    mode: (opts.threadMode as 'local' | 'worktree') || defaultThreadMode,
+    baseBranch: opts.baseBranch,
+    prompt: workflowPrompt,
+    images,
+    designId: designId || undefined,
+  });
+
+  if (createResult.isErr()) {
+    toast.error(createResult.error.message);
+    setRestoredPrompt(prompt);
+    return false;
+  }
+
+  const runResult = await api.runWorkflow(invocation.workflowName, {
+    threadId: createResult.value.id,
+    ...buildWorkflowRunBody(invocation, {
+      fileReferences: opts.fileReferences,
+      symbolReferences: opts.symbolReferences,
+    }),
+  });
+
+  if (runResult.isErr()) toast.error(runResult.error.message);
+  else toast.success(t('workflows.started', { defaultValue: 'Workflow started' }));
+
+  await onThreadCreated(createResult.value.id, 'normal', createResult.value);
+  return true;
 }

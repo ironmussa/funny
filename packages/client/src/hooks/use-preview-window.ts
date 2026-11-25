@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 
-import { usePreviewStore } from '@/stores/preview-store';
+import { usePreviewStore, type PreviewTab } from '@/stores/preview-store';
 
 const isTauri = !!('__TAURI_INTERNALS__' in window && window.__TAURI_INTERNALS__);
 const isPreviewWindow = !!('__PREVIEW_MODE__' in window && window.__PREVIEW_MODE__);
@@ -10,7 +10,10 @@ async function tauriInvoke(cmd: string, args?: Record<string, unknown>) {
   return invoke(cmd, args);
 }
 
-async function tauriEmit(event: string, payload: unknown) {
+/** What the main window sends the preview window: a tab to add, or the command of a tab to change. */
+type PreviewWindowMessage = PreviewTab | { commandId: string };
+
+async function tauriEmit(event: string, payload: PreviewWindowMessage) {
   const { emit } = await import('@tauri-apps/api/event');
   return emit(event, payload);
 }

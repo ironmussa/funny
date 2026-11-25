@@ -23,31 +23,36 @@ import { useCommitProgressStore } from '@/stores/commit-progress-store';
 import { WorkflowEventCard } from './WorkflowEventCard';
 
 /** Labels for workflow actions */
-const ACTION_LABELS: Record<string, string> = {
-  commit: 'Commit',
-  amend: 'Amend',
-  'commit-push': 'Commit & Push',
-  'commit-pr': 'Commit & PR',
-  'commit-merge': 'Commit & Merge',
-  push: 'Push',
-  merge: 'Merge',
-  'create-pr': 'Create PR',
-};
+const ACTION_LABELS = new Map(
+  Object.entries({
+    commit: 'Commit',
+    amend: 'Amend',
+    'commit-push': 'Commit & Push',
+    'commit-pr': 'Commit & PR',
+    'commit-merge': 'Commit & Merge',
+    push: 'Push',
+    merge: 'Merge',
+    'create-pr': 'Create PR',
+  }),
+);
 
-/** Derive the workflow status from the events */
-function getWorkflowStatus(events: ThreadEvent[]): {
+/** A workflow's state as its events tell it. */
+interface WorkflowStatus {
   label: string;
   action: string;
   icon: typeof GitCommit;
   running: boolean;
   error?: string;
-} {
+}
+
+/** Derive the workflow status from the events */
+function getWorkflowStatus(events: ThreadEvent[]): WorkflowStatus {
   // Find the workflow:started event for the action label
   const startedEvent = events.find((e) => e.type === 'workflow:started');
   const completedEvent = events.find((e) => e.type === 'workflow:completed');
   const startData = startedEvent ? parseThreadEventData(startedEvent.data) : {};
   const action = startData.action || '';
-  const actionLabel = ACTION_LABELS[action] || action;
+  const actionLabel = ACTION_LABELS.get(action) || action;
 
   if (completedEvent) {
     const metadata = parseThreadEventData(completedEvent.data);
@@ -68,8 +73,14 @@ function getWorkflowStatus(events: ThreadEvent[]): {
   return { label: 'running', action: actionLabel, icon: GitCommit, running: true };
 }
 
+/** Progress of a workflow with no active entry in the store. */
+interface EmptyProgress {
+  stepLabel: null;
+  steps: GitProgressStep[];
+}
+
 /** Stable empty result — avoids creating new references on every selector call */
-const EMPTY_PROGRESS: { stepLabel: null; steps: GitProgressStep[] } = {
+const EMPTY_PROGRESS: EmptyProgress = {
   stepLabel: null,
   steps: [],
 };
@@ -139,21 +150,23 @@ function LiveStepRow({ step }: { step: GitProgressStep }) {
  * Map from progress step IDs to the event types they correspond to.
  * A completed step is "covered" if a persisted event of the mapped type exists.
  */
-const STEP_TO_EVENT_TYPES: Record<string, string[]> = {
-  unstage: ['git:unstage'],
-  stage: ['git:stage'],
-  hooks: ['workflow:hooks'],
-  commit: ['git:commit'],
-  review: ['workflow:review'],
-  fix: ['workflow:fix'],
-  push: ['git:push'],
-  pr: ['workflow:pr'],
-  merge: ['git:merge'],
-};
+const STEP_TO_EVENT_TYPES = new Map(
+  Object.entries({
+    unstage: ['git:unstage'],
+    stage: ['git:stage'],
+    hooks: ['workflow:hooks'],
+    commit: ['git:commit'],
+    review: ['workflow:review'],
+    fix: ['workflow:fix'],
+    push: ['git:push'],
+    pr: ['workflow:pr'],
+    merge: ['git:merge'],
+  }),
+);
 
 /** Check if a progress step is already represented by a persisted event */
 function isStepCoveredByEvent(stepId: string, eventTypes: Set<string>): boolean {
-  const mapped = STEP_TO_EVENT_TYPES[stepId];
+  const mapped = STEP_TO_EVENT_TYPES.get(stepId);
   if (!mapped) return false;
   return mapped.some((t) => eventTypes.has(t));
 }

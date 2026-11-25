@@ -124,6 +124,12 @@ const ACTIVITY_VISIBLE = new Set([
 /** How many threads the sidebar Activity section shows. */
 const ACTIVITY_LIMIT = 5;
 
+/** The Activity section's threads, and how many qualified before the limit. */
+interface ActivityThreads {
+  threads: Thread[];
+  totalCount: number;
+}
+
 /**
  * Sidebar Activity: threads that ran or are running, not archived and not
  * done. Running threads first, then most recent activity, so a long-running
@@ -132,7 +138,7 @@ const ACTIVITY_LIMIT = 5;
 export function selectActivityThreads(
   threads: readonly Thread[],
   limit = ACTIVITY_LIMIT,
-): { threads: Thread[]; totalCount: number } {
+): ActivityThreads {
   const seen = new Set<string>();
   const visible: Thread[] = [];
   for (const thread of threads) {

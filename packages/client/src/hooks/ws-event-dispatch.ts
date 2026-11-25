@@ -4,11 +4,6 @@ import {
   type RealtimeEffect,
   type RealtimeEvent,
 } from '@funny/client-core';
-import type {
-  GitRefsUpdatedChange,
-  WSGitRefsUpdatedData,
-  WSThreadDeletedData,
-} from '@funny/shared';
 import { isTerminalSessionUnavailable } from '@funny/shared/socket-events';
 import { startTransition } from 'react';
 import type { Socket } from 'socket.io-client';
@@ -20,55 +15,47 @@ import {
 } from '@/data/activities/apply-event';
 import { applyApprovalRequested, applyApprovalResolved } from '@/data/approvals/store';
 import { handleRunCompleted, handleRunStarted, handleRunUpdated } from '@/data/automations/events';
-import { applyJobEvent, applyWatcherEvent } from '@/data/background/loaders';
-import { applyCommentAdded, applyCommentDeleted } from '@/data/comments/store';
-import {
-  fetchForThread,
-  fetchProjectStatus,
-  fetchForProject,
-  applyGitStatusEvent,
-  markGitStatusStale,
-} from '@/data/git-status/actions';
-import { readGitStatusMaps } from '@/data/git-status/read';
-import { fetchProjectBranches } from '@/data/projects/branches';
-import { readThreadRow } from '@/data/threads/read';
 import { getThreadsData } from '@/data/threads/store';
-import { showAgentNotification } from '@/hooks/use-notifications';
 import { closePreviewForCommand } from '@/hooks/use-preview-window';
 import { validateContainerUrl } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
-import { notifyGitHistoryChanged } from '@/lib/git-history-invalidation';
+import type { BrowserSessionRealtimeEvent } from '@/lib/realtime/browser-session-v1-events';
 import { metric, startSpan } from '@/lib/telemetry';
-import { getThreadRoute, isScratch } from '@/lib/thread-variant';
-import { buildPath } from '@/lib/url';
 import { clientComposition } from '@/platform/client-composition';
 import { notifyActivityFailed } from '@/stores/activity-notifications';
 import { useCheckRunsStore } from '@/stores/check-runs-store';
 import { useProjectStore } from '@/stores/project-store';
 import { notifyPtySessionLost, useTerminalStore } from '@/stores/terminal-store';
-import * as threadMutations from '@/stores/thread-mutations';
-import { patchThreadRow } from '@/stores/thread-row-writes';
 import { useThreadStore } from '@/stores/thread-store';
-import {
-  getNavigate,
-  getProjectIdForThread,
-  getUrlThreadId,
-} from '@/stores/thread-store-internals';
-import { readActiveThreadView } from '@/stores/thread-view';
 import { handleWSAgentAccount } from '@/stores/thread-ws-handlers';
 
 import { dispatchBrowserSessionEvent } from './dispatch-browser-session-events';
 import { dispatchTestEvent } from './dispatch-test-events';
+import {
+  handleGitRefsUpdated,
+  handleGitStatus,
+  handleGitWorkflowProgress,
+} from './ws-event-dispatch-git-events';
+import { maybeNotifyAgentResult } from './ws-event-dispatch-notifications';
+import { notifyReviewDirty, type ThreadStoreState } from './ws-event-dispatch-shared';
+import {
+  handlePresenceJoin,
+  handleRunnerStatus,
+  handleShareRevoked,
+  handleThreadComment,
+  handleThreadCommentDeleted,
+  handleThreadCreated,
+  handleThreadDeleted,
+  handleThreadEvent,
+  handleThreadStageChanged,
+  handleThreadUpdated,
+  upsertJob,
+  upsertWatcher,
+  withPipelineStore,
+  withPresenceStore,
+} from './ws-event-dispatch-thread-events';
 
 const wsLog = createClientLogger('ws');
-
-/** Bump a thread's comment-count badge live (floored at 0). */
-function adjustCommentCount(threadId: string, delta: number): void {
-  patchThreadRow(threadId, (t) => ({
-    ...t,
-    commentCount: Math.max(0, (t.commentCount ?? 0) + delta),
-  }));
-}
 
 // ── Remote container WS connections ─────────────────────────────
 const remoteConnections = new Map<string, WebSocket>();
@@ -177,6 +164,11 @@ function scheduleFlush() {
   }
 }
 
+/** Every realtime event carries its fields as an object; the dispatcher only types it `unknown`. */
+function hasEventFields(data: unknown): data is BrowserSessionRealtimeEvent['data'] {
+  return typeof data === 'object' && data !== null;
+}
+
 /**
  * Dispatch a received event (from Socket.IO or raw WS) to the appropriate
  * store. The event object has { type, threadId, data } shape.
@@ -198,7 +190,7 @@ const actionPorts: RealtimeActionPorts = {
   // Browser sessions arrive only as browser.v1 (decoded in use-ws.ts), never
   // as Socket.IO events, so they skip the web event table.
   browserSession: (event) => {
-    dispatchBrowserSessionEvent(event.type, event.data);
+    if (hasEventFields(event.data)) dispatchBrowserSessionEvent(event.type, event.data);
   },
   infrastructure: applyThroughWebStore,
 };
@@ -260,7 +252,11 @@ function dispatchEvent(type: string, threadId: string, data: any): void {
 }
 
 /** Feed a transport-neutral event through the same state pipeline as legacy Socket.IO events. */
-export function dispatchRealtimeEvent(type: string, threadId: string, data: unknown): void {
+export function dispatchRealtimeEvent<EventData>(
+  type: string,
+  threadId: string,
+  data: EventData,
+): void {
   dispatchEvent(type, threadId, data);
 }
 
@@ -268,7 +264,6 @@ export function dispatchRealtimeEvent(type: string, threadId: string, data: unkn
 
 type WebEventType = (typeof ALL_EVENT_TYPES)[number];
 type WebEventHandler = (threadId: string, data: any, type: string) => void;
-type ThreadStoreState = ReturnType<typeof useThreadStore.getState>;
 
 function noop(): void {}
 
@@ -281,17 +276,6 @@ function inTransition(
       apply(useThreadStore.getState(), threadId, data);
     });
   };
-}
-
-function notifyReviewDirty(threadId: string): void {
-  import('@/stores/review-pane-store').then(({ useReviewPaneStore }) => {
-    useReviewPaneStore.getState().notifyDirty(threadId);
-  });
-}
-
-/** True when `threadId` is the thread the user is currently viewing. */
-function isViewingThread(store: ThreadStoreState, threadId: string): boolean {
-  return (getUrlThreadId() ?? store.selectedThreadId) === threadId;
 }
 
 interface PendingBatch {
@@ -491,201 +475,6 @@ function handleNativeGitBuild(_threadId: string, data: any, type: string): void 
   });
 }
 
-function upsertWatcher(_threadId: string, data: any): void {
-  if (data?.watcher) applyWatcherEvent(data.watcher);
-}
-
-function upsertJob(_threadId: string, data: any): void {
-  if (data?.job) applyJobEvent(data.job);
-}
-
-type PipelineStoreState = ReturnType<
-  (typeof import('@/stores/pipeline-store'))['usePipelineStore']['getState']
->;
-function withPipelineStore(apply: (store: PipelineStoreState) => void): void {
-  import('@/stores/pipeline-store').then(({ usePipelineStore }) => {
-    apply(usePipelineStore.getState());
-  });
-}
-
-type PresenceStoreState = ReturnType<
-  (typeof import('@/stores/presence-store'))['usePresenceStore']['getState']
->;
-function withPresenceStore(apply: (store: PresenceStoreState) => void): void {
-  import('@/stores/presence-store').then(({ usePresenceStore }) => {
-    apply(usePresenceStore.getState());
-  });
-}
-
-function handleThreadCreated(_threadId: string, data: any): void {
-  // Scratch threads have no project (projectId is '' / null). Calling
-  // loadThreadsForProject('') would fall through to api.listThreads()
-  // with no filter, leaking every user thread into threadsByProject['']
-  // and duplicating the sidebar Activity section. Scratch threads are
-  // handled separately via addScratchThread on the create path.
-  if (data.projectId) {
-    useThreadStore.getState().loadThreadsForProject(data.projectId);
-  }
-}
-
-function handleThreadComment(threadId: string, data: any): void {
-  // A new comment was posted — append it live for every current viewer and
-  // bump the header badge. See thread-sharing design D9.
-  if (data.comment) {
-    applyCommentAdded(data.comment);
-    adjustCommentCount(threadId, +1);
-  }
-}
-
-function handleThreadCommentDeleted(threadId: string, data: any): void {
-  if (data.commentId) {
-    applyCommentDeleted(data.commentId);
-    adjustCommentCount(threadId, -1);
-    return;
-  }
-  // Legacy payload without an id — fall back to a refetch.
-  const store = useThreadStore.getState();
-  if (isViewingThread(store, threadId)) {
-    store.refreshActiveThread();
-  }
-}
-
-function handleThreadStageChanged(threadId: string, data: any): void {
-  useThreadStore.getState().handleWSStageChanged(threadId, {
-    fromStage: data.fromStage ?? null,
-    toStage: data.toStage,
-    projectId: data.projectId,
-  });
-}
-
-/** A field that moves the thread; `null` counts (a removed worktree clears its path and branch). */
-const LOCATION_FIELDS = [
-  'branch',
-  'baseBranch',
-  'worktreePath',
-  'containerUrl',
-  'mergedAt',
-  'mode',
-];
-
-function hasLocationChange(data: any): boolean {
-  return LOCATION_FIELDS.some((field) => data[field] !== undefined);
-}
-
-function patchPermissionMode(threadId: string, permissionMode: any): void {
-  patchThreadRow(threadId, (thread) => ({ ...thread, permissionMode }));
-  // Payloads opened before their row exists (a very early event) keep their own copy.
-  useThreadStore.setState((state) =>
-    threadMutations.applyThreadDataPatch(state, threadId, (thread) => ({
-      ...thread,
-      permissionMode,
-    })),
-  );
-}
-
-function handleThreadUpdated(threadId: string, data: any): void {
-  const store = useThreadStore.getState();
-  if (data.resync && isViewingThread(store, threadId)) {
-    store.refreshActiveThread();
-  }
-  if (data.status) {
-    store.handleWSStatus(threadId, { status: data.status });
-  }
-  if (data.archived) {
-    store.refreshAllLoadedThreads();
-  }
-  if (hasLocationChange(data)) {
-    store.refreshAllLoadedThreads();
-    if (isViewingThread(store, threadId)) {
-      store.refreshActiveThread();
-    }
-  }
-  if (data.permissionMode) {
-    patchPermissionMode(threadId, data.permissionMode);
-  }
-}
-
-function handlePresenceJoin(threadId: string, data: any): void {
-  if (data.viewer) {
-    withPresenceStore((store) => store.upsertViewer(threadId, data.viewer));
-  }
-}
-
-function handleShareRevoked(threadId: string): void {
-  // The owner revoked our access — drop the thread + its presence.
-  withPresenceStore((store) => store.clearThread(threadId));
-  useThreadStore.getState().handleShareRevoked(threadId);
-}
-
-function handleThreadDeleted(
-  threadId: string,
-  data: Partial<WSThreadDeletedData> | undefined,
-): void {
-  // Deleted here, in another tab, or by another client (spec: thread deleted
-  // elsewhere): drop it from every list and leave its detail view if open.
-  const wasOpen = clientComposition.platform.navigation.current().pathname.includes(threadId);
-  withPresenceStore((store) => store.clearThread(threadId));
-  useThreadStore.getState().handleThreadDeleted(threadId);
-  if (!wasOpen) return;
-  const navigate = getNavigate();
-  const projectId = data?.projectId;
-  navigate?.(buildPath(projectId ? `/projects/${projectId}` : '/'));
-}
-
-function handleGitStatus(threadId: string, data: any): void {
-  // Fresh server state; also makes the matching request caches stale.
-  applyGitStatusEvent(data.statuses);
-  // PR-lookup updates don't touch the working tree — refetching the diff
-  // summary for them only repeats an expensive request.
-  if (!data.prOnly) notifyReviewDirty(threadId);
-}
-
-function handleGitRefsUpdated(threadId: string, data: WSGitRefsUpdatedData): void {
-  // A background recompute on the runtime found that a value it served stale
-  // has changed: refetch only the views named in `changed`.
-  const changed = data.changed;
-  if (changed && !changed.includes('status')) {
-    refetchChangedGitViews(threadId, data.projectId, changed);
-    return;
-  }
-  refetchGitStatusAfterRefsMoved(data.projectId);
-}
-
-function refetchChangedGitViews(
-  threadId: string,
-  projectId: string,
-  changed: readonly GitRefsUpdatedChange[],
-): void {
-  // Thread-mode panes key on the thread id, project-mode panes on the project id.
-  if (changed.includes('diff')) notifyReviewDirty(threadId || projectId);
-  if (changed.includes('branches')) void fetchProjectBranches(projectId, { force: true });
-  if (changed.includes('history')) notifyGitHistoryChanged(threadId || projectId);
-}
-
-function refetchGitStatusAfterRefsMoved(projectId: string): void {
-  // A background `git fetch` advanced the remote-tracking refs (origin may
-  // have new commits). Re-fetch status through the normal — now cache-fresh
-  // — path so the incoming-commit count surfaces without a second manual
-  // refresh. The store's staleness guard keeps a late stale response from
-  // overwriting this fresh one.
-  //
-  // Refresh the bulk slice for the project that emitted the event. The
-  // thread/project-mode slices are only relevant when that same project is
-  // active; refreshing them for unrelated repositories created a second
-  // startup wave and repeatedly recomputed the same active-thread status.
-  // Mark the project's status stale so the bulk sidebar refetch isn't served from cache.
-  markGitStatusStale([projectId]);
-  const activeThreadId = getUrlThreadId() ?? useThreadStore.getState().selectedThreadId;
-  const activeThreadProjectId = activeThreadId ? getProjectIdForThread(activeThreadId) : undefined;
-  if (activeThreadId && activeThreadProjectId === projectId) {
-    void fetchForThread(activeThreadId, true); // thread-mode pane
-  }
-  if (useProjectStore.getState().selectedProjectId === projectId) {
-    void fetchProjectStatus(projectId, true); // project-mode pane slice
-  }
-  void fetchForProject(projectId); // sidebar bulk badges
-}
-
 const testEventHandler: WebEventHandler = (_threadId, data, type) => {
   dispatchTestEvent(type, data);
 };
@@ -830,200 +619,6 @@ function isWebEventType(type: string): type is WebEventType {
 function applyWebEvent(type: string, threadId: string, data: any): void {
   if (!isWebEventType(type)) return;
   WEB_EVENT_HANDLERS[type](threadId, data, type);
-}
-
-function findThread(threadId: string): {
-  title?: string;
-  branch?: string;
-  projectId?: string;
-  isScratch?: boolean;
-} {
-  const active = readActiveThreadView(useThreadStore.getState());
-  if (active?.id === threadId) {
-    return {
-      title: active.title,
-      branch: active.branch,
-      projectId: active.projectId,
-      isScratch: active.isScratch,
-    };
-  }
-  const t = readThreadRow(threadId);
-  if (t) {
-    return {
-      title: t.title,
-      branch: t.branch,
-      projectId: t.projectId,
-      isScratch: !!t.isScratch,
-    };
-  }
-  return {};
-}
-
-function buildNotificationTitle(info: { title?: string; branch?: string }): string {
-  const parts = ['funny'];
-  if (info.branch) parts.push(info.branch);
-  if (info.title) parts.push(info.title);
-  return parts.join(' — ');
-}
-
-function maybeNotifyAgentResult(
-  threadId: string,
-  data: Extract<RealtimeEffect, { type: 'agent-result' }>,
-): void {
-  const status = data.status;
-  const info = findThread(threadId);
-  const title = buildNotificationTitle(info);
-  const onClick = () => {
-    const navigate = getNavigate();
-    if (!navigate) return;
-    if (!isScratch(info) && !info.projectId) return;
-    navigate(
-      buildPath(
-        getThreadRoute({
-          id: threadId,
-          projectId: info.projectId ?? '',
-          isScratch: info.isScratch,
-        }),
-      ),
-    );
-  };
-  if (status === 'completed') {
-    showAgentNotification(title, 'Agent finished', {
-      tag: `agent-result-${threadId}`,
-      skipIfViewingThreadId: threadId,
-      url: buildPath(
-        getThreadRoute({
-          id: threadId,
-          projectId: info.projectId ?? '',
-          isScratch: info.isScratch,
-        }),
-      ),
-      onClick,
-    });
-  } else if (status === 'failed' || status === 'error') {
-    const reason = data.errorReason ? ` — ${data.errorReason}` : '';
-    showAgentNotification(title, `Agent failed${reason}`, {
-      tag: `agent-result-${threadId}`,
-      skipIfViewingThreadId: threadId,
-      url: buildPath(
-        getThreadRoute({
-          id: threadId,
-          projectId: info.projectId ?? '',
-          isScratch: info.isScratch,
-        }),
-      ),
-      onClick,
-    });
-  }
-}
-
-/** Delay before a completed workflow's progress entry is closed, keyed by thread. */
-const COMPLETED_WORKFLOW_CLOSE_MS = 1500;
-const pendingWorkflowCloses = new Map<string, ReturnType<typeof setTimeout>>();
-
-function cancelPendingWorkflowClose(threadId: string) {
-  const timer = pendingWorkflowCloses.get(threadId);
-  if (timer === undefined) return;
-  clearTimeout(timer);
-  pendingWorkflowCloses.delete(threadId);
-}
-
-function handleGitWorkflowProgress(threadId: string, data: any) {
-  import('@/stores/commit-progress-store').then(({ useCommitProgressStore }) => {
-    const store = useCommitProgressStore.getState();
-    const { status: wfStatus, title, action, steps, workflowId } = data;
-    const current = store.activeCommits[threadId]?.workflowId;
-    if (workflowId && current && current !== workflowId) {
-      if (pendingWorkflowCloses.has(threadId)) {
-        // The entry is a finished run kept on screen for its close delay; this
-        // event is a newer run's (one that failed during setup sends `failed`
-        // without `started`). End the finished one now and handle this one.
-        cancelPendingWorkflowClose(threadId);
-        store.finishCommit(threadId, current);
-      } else if (wfStatus !== 'started') {
-        // An event of an earlier run (another one has started since): it must
-        // not touch the current run's steps, its close timer, or open a
-        // failure modal.
-        return;
-      }
-    }
-
-    if (wfStatus === 'started') {
-      // A restart within the close delay must not be closed by the previous run's timer.
-      cancelPendingWorkflowClose(threadId);
-      store.startCommit(threadId, title, steps, action, workflowId);
-    } else if (wfStatus === 'step_update') {
-      store.replaceSteps(threadId, steps, workflowId);
-    } else if (wfStatus === 'completed') {
-      store.replaceSteps(threadId, steps, workflowId);
-      cancelPendingWorkflowClose(threadId);
-      const timer = setTimeout(() => {
-        pendingWorkflowCloses.delete(threadId);
-        store.finishCommit(threadId, workflowId, action);
-      }, COMPLETED_WORKFLOW_CLOSE_MS);
-      pendingWorkflowCloses.set(threadId, timer);
-    } else if (wfStatus === 'failed') {
-      cancelPendingWorkflowClose(threadId);
-      store.replaceSteps(threadId, steps, workflowId);
-      store.setFailedWorkflow({
-        title: title || 'Git operation failed',
-        steps: steps ?? [],
-        action: action ?? '',
-      });
-      store.finishCommit(threadId, workflowId, action);
-    }
-  });
-
-  if (data.status === 'completed' || data.status === 'failed') {
-    import('@/stores/review-pane-store').then(({ useReviewPaneStore }) => {
-      useReviewPaneStore.getState().notifyDirty(threadId);
-    });
-  }
-  if (
-    data.status === 'completed' &&
-    (data.action === 'push' ||
-      data.action === 'create-pr' ||
-      data.action === 'commit-pr' ||
-      data.action === 'commit-merge')
-  ) {
-    import('@/data/pull-requests/queries').then(({ invalidatePR }) => {
-      const activeThread = readActiveThreadView(useThreadStore.getState());
-      if (activeThread) {
-        const gitStatus = readGitStatusMaps();
-        const bk =
-          gitStatus.threadToBranchKey[activeThread.id] ??
-          `${activeThread.projectId}:${activeThread.branch ?? ''}`;
-        const prNum = gitStatus.statusByBranch[bk]?.prNumber;
-        if (prNum) {
-          invalidatePR(activeThread.projectId, prNum);
-        }
-      }
-    });
-  }
-}
-
-function handleThreadEvent(threadId: string, data: any) {
-  startTransition(() => {
-    const active = useThreadStore.getState().activeThread;
-    if (active && active.id === threadId) {
-      const existing = active.threadEvents ?? [];
-      if (data.event?.id && existing.some((e: any) => e.id === data.event.id)) return;
-      useThreadStore.setState({
-        activeThread: {
-          ...active,
-          threadEvents: [...existing, data.event],
-        },
-      });
-    }
-  });
-}
-
-function handleRunnerStatus(data: any) {
-  const status = data?.status;
-  if (status !== 'online' && status !== 'offline') return;
-  import('@/stores/runner-status-store').then(({ useRunnerStatusStore }) => {
-    useRunnerStatusStore.getState().setStatus(status);
-  });
 }
 
 // ── Raw WS message handler (for remote containers) ──────────────

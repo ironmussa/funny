@@ -2,6 +2,7 @@ import type {
   TestActionBoundingBox,
   TestNetworkEntry,
   WSTestConsoleData,
+  WSTestActionData,
   WSTestErrorData,
 } from '@funny/shared';
 import {
@@ -101,6 +102,76 @@ function drawFrameOnCanvas(
   img.src = `data:image/jpeg;base64,${frameData}`;
 }
 
+/** Draws live frames on the canvas, or the frame of the hovered/selected action. */
+function useBrowserCanvasFrames(
+  activeIndex: number,
+  actions: WSTestActionData[],
+  frameHistory: Array<{ data: string; timestamp: number }>,
+) {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // Listen for live frame events — only render if not viewing historical
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const handleFrame = () => {
+      // Skip live frame rendering when viewing a historical action
+      const store = useTestStore.getState();
+      const idx =
+        store.hoveredActionIndex >= 0 ? store.hoveredActionIndex : store.selectedActionIndex;
+      if (idx >= 0) return;
+
+      if (!latestFrameData) return;
+
+      const img = new Image();
+      img.onload = () => {
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0);
+        store.setStreaming(true);
+      };
+      img.src = `data:image/jpeg;base64,${latestFrameData}`;
+    };
+
+    window.addEventListener('test:frame', handleFrame);
+    return () => window.removeEventListener('test:frame', handleFrame);
+  }, []);
+
+  // When hovering/selecting an action, show the historical frame + highlight
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || activeIndex < 0) return;
+
+    const action = actions[activeIndex];
+    if (!action) return;
+
+    // Find the nearest frame by timestamp
+    const targetTs = action.frameTimestamp ?? action.startTime / 1000;
+    const frame = findNearestFrame(frameHistory, targetTs);
+
+    if (frame) {
+      drawFrameOnCanvas(canvas, frame.data, action.boundingBox);
+    } else if (latestFrameData && action.boundingBox) {
+      // No historical frame — draw overlay on current frame
+      drawFrameOnCanvas(canvas, latestFrameData, action.boundingBox);
+    }
+  }, [activeIndex, actions, frameHistory]);
+
+  // When deselecting (going back to live), redraw the latest live frame
+  useEffect(() => {
+    if (activeIndex >= 0) return; // still viewing historical
+    const canvas = canvasRef.current;
+    if (!canvas || !latestFrameData) return;
+    drawFrameOnCanvas(canvas, latestFrameData);
+  }, [activeIndex]);
+
+  return canvasRef;
+}
+
 interface OutputLine {
   line: string;
   stream: 'stdout' | 'stderr';
@@ -130,7 +201,6 @@ export function BrowserPreview({
   projectPath,
   onStop,
 }: BrowserPreviewProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
   const [zoom, setZoom] = useState(1);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const browserContainerRef = useRef<HTMLDivElement>(null);
@@ -196,64 +266,7 @@ export function BrowserPreview({
     return () => document.removeEventListener('fullscreenchange', handler);
   }, []);
 
-  // Listen for live frame events — only render if not viewing historical
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const handleFrame = () => {
-      // Skip live frame rendering when viewing a historical action
-      const store = useTestStore.getState();
-      const idx =
-        store.hoveredActionIndex >= 0 ? store.hoveredActionIndex : store.selectedActionIndex;
-      if (idx >= 0) return;
-
-      if (!latestFrameData) return;
-
-      const img = new Image();
-      img.onload = () => {
-        canvas.width = img.width;
-        canvas.height = img.height;
-        ctx.drawImage(img, 0, 0);
-        store.setStreaming(true);
-      };
-      img.src = `data:image/jpeg;base64,${latestFrameData}`;
-    };
-
-    window.addEventListener('test:frame', handleFrame);
-    return () => window.removeEventListener('test:frame', handleFrame);
-  }, []);
-
-  // When hovering/selecting an action, show the historical frame + highlight
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || activeIndex < 0) return;
-
-    const action = actions[activeIndex];
-    if (!action) return;
-
-    // Find the nearest frame by timestamp
-    const targetTs = action.frameTimestamp ?? action.startTime / 1000;
-    const frame = findNearestFrame(frameHistory, targetTs);
-
-    if (frame) {
-      drawFrameOnCanvas(canvas, frame.data, action.boundingBox);
-    } else if (latestFrameData && action.boundingBox) {
-      // No historical frame — draw overlay on current frame
-      drawFrameOnCanvas(canvas, latestFrameData, action.boundingBox);
-    }
-  }, [activeIndex, actions, frameHistory]);
-
-  // When deselecting (going back to live), redraw the latest live frame
-  useEffect(() => {
-    if (activeIndex >= 0) return; // still viewing historical
-    const canvas = canvasRef.current;
-    if (!canvas || !latestFrameData) return;
-    drawFrameOnCanvas(canvas, latestFrameData);
-  }, [activeIndex]);
+  const canvasRef = useBrowserCanvasFrames(activeIndex, actions, frameHistory);
 
   return (
     <div ref={browserContainerRef} className="flex h-full flex-col overflow-hidden">

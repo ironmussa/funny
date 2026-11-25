@@ -21,7 +21,7 @@ function setup() {
     sandboxThreadId: 'th-1',
   }).dispatched();
   const terminals = new FakeRunnerTerminalPort();
-  terminals.sessions.set(`${SANDBOX_RUNNER}\0${USER}`, [{ ptyId: 'pty-sandbox' }]);
+  terminals.sessions.set(`${SANDBOX_RUNNER}\0${USER}`, [{ ptyId: 'pty-sandbox', cwd: '/sandbox' }]);
   const access = fakeRunnerAccess({
     runnerFor: () => SANDBOX_RUNNER,
     owners: { [SANDBOX_RUNNER]: USER },
@@ -33,7 +33,7 @@ describe('withRoutedTerminalSessions', () => {
   test('adds the sessions of an available routed runner', async () => {
     const { terminals, access } = setup();
     terminals.available.add(SANDBOX_RUNNER);
-    const merged = await withRoutedTerminalSessions([{ ptyId: 'pty-local' }], USER, {
+    const merged = await withRoutedTerminalSessions([{ ptyId: 'pty-local', cwd: '/repo' }], USER, {
       access,
       terminals,
     });
@@ -42,7 +42,7 @@ describe('withRoutedTerminalSessions', () => {
 
   test('adds nothing from a routed runner whose terminal channel is unavailable', async () => {
     const { terminals, access } = setup();
-    const merged = await withRoutedTerminalSessions([{ ptyId: 'pty-local' }], USER, {
+    const merged = await withRoutedTerminalSessions([{ ptyId: 'pty-local', cwd: '/repo' }], USER, {
       access,
       terminals,
     });

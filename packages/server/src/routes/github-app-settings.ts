@@ -72,12 +72,12 @@ async function convertManifest(
       headers: { accept: 'application/vnd.github+json', 'user-agent': 'funny' },
     });
     if (!res.ok) throw new Error(`GitHub answered ${res.status}`);
-    const body = (await res.json()) as {
+    const body: {
       id?: number;
       slug?: string;
       pem?: string;
       owner?: { login?: string };
-    };
+    } = await res.json();
     if (!body.id || !body.slug || !body.pem || !body.owner?.login) return null;
     return {
       appId: String(body.id),

@@ -145,29 +145,31 @@ export function ApiTokensSettings() {
         {created && (
           <Alert data-testid="settings-api-tokens-created">
             <AlertTriangle className="icon-base" />
-            <AlertDescription className="space-y-2 text-xs">
-              <p>{t('apiTokens.shownOnce')}</p>
-              <div className="flex items-center gap-2">
-                <code
-                  className="bg-muted min-w-0 flex-1 rounded px-2 py-1 font-mono break-all"
-                  data-testid="settings-api-tokens-created-value"
+            <AlertDescription>
+              <div className="space-y-2 text-xs">
+                <p>{t('apiTokens.shownOnce')}</p>
+                <div className="flex items-center gap-2">
+                  <code
+                    className="bg-muted min-w-0 flex-1 rounded px-2 py-1 font-mono break-all"
+                    data-testid="settings-api-tokens-created-value"
+                  >
+                    {created}
+                  </code>
+                  <CopyButton
+                    value={created}
+                    label={t('apiTokens.copy')}
+                    data-testid="settings-api-tokens-copy"
+                  />
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setCreated(null)}
+                  data-testid="settings-api-tokens-dismiss"
                 >
-                  {created}
-                </code>
-                <CopyButton
-                  value={created}
-                  label={t('apiTokens.copy')}
-                  data-testid="settings-api-tokens-copy"
-                />
+                  {t('apiTokens.dismiss')}
+                </Button>
               </div>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setCreated(null)}
-                data-testid="settings-api-tokens-dismiss"
-              >
-                {t('apiTokens.dismiss')}
-              </Button>
             </AlertDescription>
           </Alert>
         )}

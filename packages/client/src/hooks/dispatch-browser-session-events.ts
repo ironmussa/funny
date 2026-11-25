@@ -17,9 +17,13 @@ import {
   type WSBrowserSessionPointerData,
 } from '@funny/shared';
 
-import { resolveBrowserSessionRequest } from '@/lib/browser-session-client';
+import {
+  resolveBrowserSessionRequest,
+  type BrowserSessionResult,
+} from '@/lib/browser-session-client';
 import { ingestBrowserSessionFrame } from '@/lib/browser-session-frames';
 import { createClientLogger } from '@/lib/client-logger';
+import type { BrowserSessionRealtimeEvent } from '@/lib/realtime/browser-session-v1-events';
 import { useBrowserLiveThreadsStore } from '@/stores/browser-live-threads-store';
 import { forgetOwnCloses, takeOwnClose, useBrowserPanelStore } from '@/stores/browser-panel-store';
 import { useBrowserPointerStore } from '@/stores/browser-pointer-store';
@@ -67,6 +71,10 @@ type BrowserSessionClosedData = {
   closeId?: string;
 };
 
+function isBoolean(value: unknown): value is boolean {
+  return typeof value === 'boolean';
+}
+
 function handleReady(d: BrowserSessionReadyData): void {
   // The browser.v1 `ready` carries no threadId: read it from the session id,
   // as `closed` does, or the sidebar globe never shows after a reload.
@@ -76,7 +84,7 @@ function handleReady(d: BrowserSessionReadyData): void {
   if (store.sessionId !== d.sessionId) return;
   store.setSessionStatus('ready', null);
   if (d.viewport) store.setSessionViewport(d.sessionId, d.viewport.width, d.viewport.height);
-  if (typeof d.audioMuted === 'boolean') store.setSessionAudio(d.sessionId, d.audioMuted);
+  if (isBoolean(d.audioMuted)) store.setSessionAudio(d.sessionId, d.audioMuted);
   // Attaching to an existing session: show the page it is on.
   if (d.url) followSessionUrl(d.sessionId, d.url);
 }
@@ -101,61 +109,68 @@ function handleClosed(d: BrowserSessionClosedData): void {
 }
 
 /** One handler per inbound browser-session event type. */
-const BROWSER_SESSION_HANDLERS: Record<string, (data: any) => void> = {
-  'browser-session:frame': (d: { sessionId: string; data: string }) =>
-    ingestBrowserSessionFrame(d.sessionId, d.data),
+const BROWSER_SESSION_HANDLERS = new Map<string, (data: any) => void>(
+  Object.entries({
+    'browser-session:frame': (d: { sessionId: string; data: string }) =>
+      ingestBrowserSessionFrame(d.sessionId, d.data),
 
-  'browser-session:ready': handleReady,
+    'browser-session:ready': handleReady,
 
-  'browser-session:agent-opened': (d: { sessionId: string; threadId: string; url: string }) => {
-    useBrowserLiveThreadsStore.getState().markOpen(d.threadId);
-    useBrowserPanelStore.getState().handleAgentOpened(d.sessionId, d.threadId, getUrlThreadId());
-  },
+    'browser-session:agent-opened': (d: { sessionId: string; threadId: string; url: string }) => {
+      useBrowserLiveThreadsStore.getState().markOpen(d.threadId);
+      useBrowserPanelStore.getState().handleAgentOpened(d.sessionId, d.threadId, getUrlThreadId());
+    },
 
-  'browser-session:controller': (d: { sessionId: string; controller: 'agent' | 'user' }) =>
-    useBrowserPanelStore.getState().setSessionController(d.sessionId, d.controller),
+    'browser-session:controller': (d: { sessionId: string; controller: 'agent' | 'user' }) =>
+      useBrowserPanelStore.getState().setSessionController(d.sessionId, d.controller),
 
-  'browser-session:dialog': (d: {
-    sessionId: string;
-    dialog: { type: string; message: string; defaultValue?: string } | null;
-  }) => useBrowserPanelStore.getState().setSessionDialog(d.sessionId, d.dialog),
+    'browser-session:dialog': (d: {
+      sessionId: string;
+      dialog: { type: string; message: string; defaultValue?: string } | null;
+    }) => useBrowserPanelStore.getState().setSessionDialog(d.sessionId, d.dialog),
 
-  'browser-session:viewport': (d: { sessionId: string; width: number; height: number }) =>
-    useBrowserPanelStore.getState().setSessionViewport(d.sessionId, d.width, d.height),
+    'browser-session:viewport': (d: { sessionId: string; width: number; height: number }) =>
+      useBrowserPanelStore.getState().setSessionViewport(d.sessionId, d.width, d.height),
 
-  'browser-session:pointer': (d: WSBrowserSessionPointerData) =>
-    useBrowserPointerStore.getState().setPointer(d.sessionId, { x: d.x, y: d.y, kind: d.kind }),
+    'browser-session:pointer': (d: WSBrowserSessionPointerData) =>
+      useBrowserPointerStore.getState().setPointer(d.sessionId, { x: d.x, y: d.y, kind: d.kind }),
 
-  'browser-session:agent-action': ({
-    sessionId,
-    threadId: _threadId,
-    ...action
-  }: WSBrowserSessionAgentActionData) =>
-    useBrowserPointerStore.getState().setAction(sessionId, action),
+    'browser-session:agent-action': ({
+      sessionId,
+      threadId: _threadId,
+      ...action
+    }: WSBrowserSessionAgentActionData) =>
+      useBrowserPointerStore.getState().setAction(sessionId, action),
 
-  'browser-session:audio': (d: WSBrowserSessionAudioData) =>
-    useBrowserPanelStore.getState().setSessionAudio(d.sessionId, d.muted),
+    'browser-session:audio': (d: WSBrowserSessionAudioData) =>
+      useBrowserPanelStore.getState().setSessionAudio(d.sessionId, d.muted),
 
-  'browser-session:navigated': (d: WSBrowserSessionNavigatedData) =>
-    followSessionUrl(d.sessionId, d.url),
+    'browser-session:navigated': (d: WSBrowserSessionNavigatedData) =>
+      followSessionUrl(d.sessionId, d.url),
 
-  'browser-session:result': (d: {
-    requestId: string;
-    ok: boolean;
-    value?: unknown;
-    error?: string;
-  }) => resolveBrowserSessionRequest(d.requestId, d.ok, d.value, d.error),
+    'browser-session:result': (d: {
+      requestId: string;
+      ok: boolean;
+      value?: BrowserSessionResult;
+      error?: string;
+    }) => resolveBrowserSessionRequest(d.requestId, d.ok, d.value, d.error),
 
-  // Visible only at debug log level — runner already emits the original.
-  'browser-session:console': (d: Record<string, unknown>) => log.debug('console', d),
+    // Visible only at debug log level — runner already emits the original.
+    'browser-session:console': (d: Record<string, unknown>) => log.debug('console', d),
 
-  'browser-session:error': (d: { sessionId: string; message: string }) => log.warn('page error', d),
+    'browser-session:error': (d: { sessionId: string; message: string }) =>
+      log.warn('page error', d),
 
-  'browser-session:closed': handleClosed,
-};
+    'browser-session:closed': handleClosed,
+  } satisfies Record<string, (data: any) => void>),
+);
 
-export function dispatchBrowserSessionEvent(type: string, data: unknown): boolean {
-  if (!Object.hasOwn(BROWSER_SESSION_HANDLERS, type)) return false;
-  BROWSER_SESSION_HANDLERS[type](data);
+export function dispatchBrowserSessionEvent(
+  type: string,
+  data: BrowserSessionRealtimeEvent['data'],
+): boolean {
+  const handle = BROWSER_SESSION_HANDLERS.get(type);
+  if (!handle) return false;
+  handle(data);
   return true;
 }

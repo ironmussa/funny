@@ -3,17 +3,17 @@ import { CheckCircle2, XCircle, Loader2, Eye, Wrench, Shield } from 'lucide-reac
 import { cn } from '@/lib/utils';
 import { usePipelineStore } from '@/stores/pipeline-store';
 
-const stageIcons: Record<string, typeof Eye> = {
+const stageIcons = {
   reviewer: Eye,
   corrector: Wrench,
   fixer: Shield,
-};
+} satisfies Record<string, typeof Eye>;
 
-const stageLabels: Record<string, string> = {
+const stageLabels = {
   reviewer: 'Reviewing',
   corrector: 'Fixing',
   fixer: 'Pre-commit fixing',
-};
+} satisfies Record<string, string>;
 
 export function PipelineProgressBanner({ threadId }: { threadId: string }) {
   const run = usePipelineStore((s) => s.activeRuns[threadId]);

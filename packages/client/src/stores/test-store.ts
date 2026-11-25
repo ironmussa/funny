@@ -41,7 +41,7 @@ interface OutputLine {
   timestamp: number;
 }
 
-interface TestState {
+interface TestData {
   files: TestFile[];
   isRunning: boolean;
   activeRunId: string | null;
@@ -79,8 +79,9 @@ interface TestState {
   selectedActionIndex: number;
   /** Frame history for action-frame correlation */
   frameHistory: Array<{ data: string; timestamp: number }>;
+}
 
-  // Actions
+interface TestState extends TestData {
   loadFiles: (projectId: string) => Promise<void>;
   startRun: (projectId: string, file: string) => Promise<void>;
   startSpecRun: (projectId: string, file: string, line: number, project?: string) => Promise<void>;
@@ -100,28 +101,101 @@ interface TestState {
   reset: () => void;
 }
 
+function initialTestData(): TestData {
+  return {
+    files: [],
+    isRunning: false,
+    activeRunId: null,
+    activeFile: null,
+    activeProjectId: null,
+    fileStatuses: {},
+    outputLines: [],
+    isStreaming: false,
+    isLoading: false,
+    fileSpecs: {},
+    fileSuites: {},
+    specsLoading: {},
+    availableProjects: [],
+    selectedProjects: [],
+    consoleEntries: [],
+    networkEntries: [],
+    errorEntries: [],
+    actions: [],
+    hoveredActionIndex: -1,
+    selectedActionIndex: -1,
+    frameHistory: [],
+  };
+}
+
+/** State for a run that starts on `file`: clears the previous output and debug data. */
+function runStartState(s: TestState, file: string): Partial<TestState> {
+  return {
+    outputLines: [],
+    consoleEntries: [],
+    networkEntries: [],
+    errorEntries: [],
+    actions: [],
+    hoveredActionIndex: -1,
+    selectedActionIndex: -1,
+    frameHistory: [],
+    isStreaming: false,
+    fileStatuses: { ...s.fileStatuses, [file]: 'running' },
+    activeFile: file,
+    isRunning: true,
+  };
+}
+
+function runFailedState(s: TestState, file: string): Partial<TestState> {
+  return {
+    isRunning: false,
+    activeFile: null,
+    fileStatuses: { ...s.fileStatuses, [file]: 'failed' },
+  };
+}
+
+/** Fields an update may carry as `0` / `false`; they are kept when not null. */
+const NULLABLE_NETWORK_FIELDS = ['status', 'size', 'responseBodyBase64'] as const;
+/** Fields an update carries only when set; empty values are ignored. */
+const TRUTHY_NETWORK_FIELDS = [
+  'statusText',
+  'mimeType',
+  'resourceType',
+  'method',
+  'url',
+  'failed',
+  'errorText',
+  'requestHeaders',
+  'responseHeaders',
+  'postData',
+  'responseBody',
+] as const;
+
+/**
+ * Update an existing network entry with response/completed/failure info.
+ * Only overwrite fields that have actual values to avoid clobbering.
+ */
+function mergeNetworkEntry(e: TestNetworkEntry, update: TestNetworkEntry): TestNetworkEntry {
+  const merged = { ...e };
+  for (const key of NULLABLE_NETWORK_FIELDS)
+    if (update[key] != null) copyField(merged, update, key);
+  for (const key of TRUTHY_NETWORK_FIELDS) if (update[key]) copyField(merged, update, key);
+  if (update.endTime) {
+    merged.endTime = update.endTime;
+    if (merged.startTime) merged.duration = update.endTime - merged.startTime;
+  }
+  return merged;
+}
+
+function copyField<K extends keyof TestNetworkEntry>(
+  target: TestNetworkEntry,
+  source: TestNetworkEntry,
+  key: K,
+): void {
+  target[key] = source[key];
+}
+
 export const useTestStore = create<TestState>((set, get) => ({
-  files: [],
-  isRunning: false,
-  activeRunId: null,
-  activeFile: null,
-  activeProjectId: null,
-  fileStatuses: {},
-  outputLines: [],
-  isStreaming: false,
-  isLoading: false,
-  fileSpecs: {},
-  fileSuites: {},
-  specsLoading: {},
-  availableProjects: [],
-  selectedProjects: [],
-  consoleEntries: [],
-  networkEntries: [],
-  errorEntries: [],
-  actions: [],
-  hoveredActionIndex: -1,
-  selectedActionIndex: -1,
-  frameHistory: [],
+  ...initialTestData(),
 
   loadFiles: async (projectId: string) => {
     set({ isLoading: true });
@@ -134,50 +208,19 @@ export const useTestStore = create<TestState>((set, get) => ({
   },
 
   startRun: async (projectId: string, file: string) => {
-    // Clear previous output and debug data
-    set((s) => ({
-      outputLines: [],
-      consoleEntries: [],
-      networkEntries: [],
-      errorEntries: [],
-      actions: [],
-      hoveredActionIndex: -1,
-      selectedActionIndex: -1,
-      frameHistory: [],
-      isStreaming: false,
-      fileStatuses: { ...s.fileStatuses, [file]: 'running' },
-      activeFile: file,
-      isRunning: true,
-    }));
+    set((s) => runStartState(s, file));
 
     const { selectedProjects } = get();
     const result = await api.runTest(projectId, file, undefined, selectedProjects);
     if (result.isOk()) {
       set({ activeRunId: result.value.runId });
     } else {
-      set((s) => ({
-        isRunning: false,
-        activeFile: null,
-        fileStatuses: { ...s.fileStatuses, [file]: 'failed' },
-      }));
+      set((s) => runFailedState(s, file));
     }
   },
 
   startSpecRun: async (projectId: string, file: string, line: number, project?: string) => {
-    set((s) => ({
-      outputLines: [],
-      consoleEntries: [],
-      networkEntries: [],
-      errorEntries: [],
-      actions: [],
-      hoveredActionIndex: -1,
-      selectedActionIndex: -1,
-      frameHistory: [],
-      isStreaming: false,
-      fileStatuses: { ...s.fileStatuses, [file]: 'running' },
-      activeFile: file,
-      isRunning: true,
-    }));
+    set((s) => runStartState(s, file));
 
     // If a specific browser project is given (e.g. clicking "chromium" under a spec), use it.
     // Otherwise use all selected projects.
@@ -187,11 +230,7 @@ export const useTestStore = create<TestState>((set, get) => ({
     if (result.isOk()) {
       set({ activeRunId: result.value.runId });
     } else {
-      set((s) => ({
-        isRunning: false,
-        activeFile: null,
-        fileStatuses: { ...s.fileStatuses, [file]: 'failed' },
-      }));
+      set((s) => runFailedState(s, file));
     }
   },
 
@@ -289,33 +328,11 @@ export const useTestStore = create<TestState>((set, get) => ({
       if (data.phase === 'request') {
         return { networkEntries: [...s.networkEntries, data.entry] };
       }
-      // Update existing entry with response/completed/failure info
-      // Only overwrite fields that have actual values to avoid clobbering
+      // Update the existing entry with response/completed/failure info
       return {
-        networkEntries: s.networkEntries.map((e) => {
-          if (e.id !== data.entry.id) return e;
-          const merged = { ...e };
-          if (data.entry.status != null) merged.status = data.entry.status;
-          if (data.entry.statusText) merged.statusText = data.entry.statusText;
-          if (data.entry.mimeType) merged.mimeType = data.entry.mimeType;
-          if (data.entry.resourceType) merged.resourceType = data.entry.resourceType;
-          if (data.entry.method) merged.method = data.entry.method;
-          if (data.entry.url) merged.url = data.entry.url;
-          if (data.entry.size != null) merged.size = data.entry.size;
-          if (data.entry.failed) merged.failed = data.entry.failed;
-          if (data.entry.errorText) merged.errorText = data.entry.errorText;
-          if (data.entry.requestHeaders) merged.requestHeaders = data.entry.requestHeaders;
-          if (data.entry.responseHeaders) merged.responseHeaders = data.entry.responseHeaders;
-          if (data.entry.postData) merged.postData = data.entry.postData;
-          if (data.entry.responseBody) merged.responseBody = data.entry.responseBody;
-          if (data.entry.responseBodyBase64 != null)
-            merged.responseBodyBase64 = data.entry.responseBodyBase64;
-          if (data.entry.endTime) {
-            merged.endTime = data.entry.endTime;
-            if (merged.startTime) merged.duration = data.entry.endTime - merged.startTime;
-          }
-          return merged;
-        }),
+        networkEntries: s.networkEntries.map((e) =>
+          e.id === data.entry.id ? mergeNetworkEntry(e, data.entry) : e,
+        ),
       };
     });
   },
@@ -364,28 +381,5 @@ export const useTestStore = create<TestState>((set, get) => ({
 
   setStreaming: (streaming: boolean) => set({ isStreaming: streaming }),
 
-  reset: () =>
-    set({
-      files: [],
-      isRunning: false,
-      activeRunId: null,
-      activeFile: null,
-      activeProjectId: null,
-      fileStatuses: {},
-      outputLines: [],
-      consoleEntries: [],
-      networkEntries: [],
-      errorEntries: [],
-      actions: [],
-      hoveredActionIndex: -1,
-      selectedActionIndex: -1,
-      frameHistory: [],
-      isStreaming: false,
-      isLoading: false,
-      fileSpecs: {},
-      fileSuites: {},
-      specsLoading: {},
-      availableProjects: [],
-      selectedProjects: [],
-    }),
+  reset: () => set(initialTestData()),
 }));

@@ -1,3 +1,4 @@
+import type { FileStatus } from '@funny/shared';
 import {
   Activity,
   Bot,
@@ -44,7 +45,7 @@ import { ExpandedDiffView } from './tool-cards/ExpandedDiffDialog';
 
 // ─── Diff helpers ─────────────────────────────────────────
 
-const fileStatusIcons: Record<string, typeof FileCode> = {
+const fileStatusIcons: Partial<Record<FileStatus, typeof FileCode>> = {
   added: FilePlus,
   modified: FileCode,
   deleted: FileX,

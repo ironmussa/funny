@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import {
   resolveThreadCwd,
   canDoGitOps,
+  canScheduleWakes,
   isReadOnlyThread,
   isScratchThread,
   receivesProjectSecrets,
@@ -137,5 +138,15 @@ describe('isReadOnlyThread', () => {
   test('a read-only agent is given no project secrets', () => {
     expect(receivesProjectSecrets({ projectId: 'p1', readOnly: 0 })).toBe(true);
     expect(receivesProjectSecrets({ projectId: 'p1', readOnly: 1 })).toBe(false);
+  });
+});
+
+describe('canScheduleWakes', () => {
+  test('only an issue factory thread may not schedule a deferred wake', () => {
+    expect(canScheduleWakes({ source: 'factory' })).toBe(false);
+    expect(canScheduleWakes({ source: 'web' })).toBe(true);
+    expect(canScheduleWakes({ source: 'automation' })).toBe(true);
+    expect(canScheduleWakes({ source: null })).toBe(true);
+    expect(canScheduleWakes(undefined)).toBe(true);
   });
 });

@@ -4,13 +4,14 @@
  * test files and commands that ran, and the output kept as evidence (on a
  * pass, the base's failing output; on a fail, the failing run's).
  */
-import { ChevronRight, ShieldCheck, ShieldMinus, ShieldX } from 'lucide-react';
+import { ChevronRight, CornerDownRight, ShieldCheck, ShieldMinus, ShieldX } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { useFactoryRunForThread } from '@/data/factory/hooks';
-import type { FactoryRegressionProof } from '@/lib/api/factory';
+import { useFactoryRunForThread, useLaterRunOfIssue } from '@/data/factory/hooks';
+import type { FactoryRegressionProof, FactoryRun } from '@/lib/api/factory';
+import { factoryRunStateLabel } from '@/lib/factory-run-labels';
 import { useThreadById } from '@/lib/thread-selectors';
 import { isFactoryThread } from '@/lib/thread-variant';
 import { cn } from '@/lib/utils';
@@ -24,9 +25,22 @@ export function FactoryRunProofCard({ threadId }: { threadId?: string }) {
 /** The proof card of the run that started `threadId` in `projectId`, once a proof ran. */
 export function FactoryRunProof({ projectId, threadId }: { projectId: string; threadId: string }) {
   const run = useFactoryRunForThread(projectId, threadId);
+  const laterRun = useLaterRunOfIssue(projectId, run);
   if (!run?.regressionProof) return null;
-  return <RegressionProofDetails proof={run.regressionProof} />;
+  return (
+    <RegressionProofDetails
+      proof={run.regressionProof}
+      laterRun={ENDED_UNMERGED.has(run.state) ? laterRun : null}
+    />
+  );
 }
+
+/** Ended without merging: a later run of the issue is what came of it. */
+const ENDED_UNMERGED: ReadonlySet<FactoryRun['state']> = new Set([
+  'failed',
+  'stopped',
+  'no_change',
+]);
 
 const VERDICT_STYLE = {
   pass: { Icon: ShieldCheck, tone: 'text-status-success', badge: 'secondary' },
@@ -35,7 +49,14 @@ const VERDICT_STYLE = {
 } as const;
 
 /** One proof, shown in the run's thread. */
-export function RegressionProofDetails({ proof }: { proof: FactoryRegressionProof }) {
+export function RegressionProofDetails({
+  proof,
+  laterRun,
+}: {
+  proof: FactoryRegressionProof;
+  /** The run of the same issue that came after this one, when this one ended unmerged. */
+  laterRun?: Pick<FactoryRun, 'issueNumber' | 'state' | 'prUrl'> | null;
+}) {
   const { t } = useTranslation();
   const style = VERDICT_STYLE[proof.verdict];
   const verdict = {
@@ -82,7 +103,43 @@ export function RegressionProofDetails({ proof }: { proof: FactoryRegressionProo
 
       <ProofFiles files={proof.files ?? []} />
       <ProofEvidence proof={proof} />
+      {laterRun && <LaterRunNote run={laterRun} />}
     </div>
+  );
+}
+
+const PR_NUMBER = /\/pull\/(\d+)/;
+
+/**
+ * Says the proof belongs to a run that ended, and what the issue's later run
+ * did, so a failed proof on a merged issue does not read as a merge despite it.
+ */
+function LaterRunNote({ run }: { run: Pick<FactoryRun, 'issueNumber' | 'state' | 'prUrl'> }) {
+  const { t } = useTranslation();
+  const prNumber = run.prUrl?.match(PR_NUMBER)?.[1];
+  return (
+    <p
+      className="text-muted-foreground flex flex-wrap items-center gap-1 border-t pt-2"
+      data-testid="factory-run-proof-later-run"
+    >
+      <CornerDownRight className="icon-xs shrink-0" />
+      {t(
+        'factory.proof.laterRun',
+        'This run ended. Issue #{{issue}} was sent again as a later run: {{state}}',
+        { issue: run.issueNumber, state: factoryRunStateLabel(t, run.state) },
+      )}
+      {run.prUrl && (
+        <a
+          href={run.prUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="text-foreground underline underline-offset-2"
+          data-testid="factory-run-proof-later-run-pr"
+        >
+          {prNumber ? `#${prNumber}` : t('factory.proof.laterRunPr', 'pull request')}
+        </a>
+      )}
+    </p>
   );
 }
 
@@ -111,33 +168,38 @@ function ProofEvidence({ proof }: { proof: FactoryRegressionProof }) {
   if (commands.length === 0 && !proof.outputTail) return null;
   return (
     <Collapsible>
-      <CollapsibleTrigger
-        className="group text-muted-foreground hover:text-foreground flex items-center gap-1"
-        data-testid="factory-run-proof-details-toggle"
-      >
-        <ChevronRight className="icon-xs transition-transform group-data-[state=open]:rotate-90" />
-        {proof.verdict === 'pass'
-          ? t('factory.proof.evidence', 'Commands and the failure without the fix')
-          : t('factory.proof.details', 'Commands and output')}
+      <CollapsibleTrigger asChild>
+        <button
+          type="button"
+          className="group text-muted-foreground hover:text-foreground flex items-center gap-1"
+          data-testid="factory-run-proof-details-toggle"
+        >
+          <ChevronRight className="icon-xs transition-transform group-data-[state=open]:rotate-90" />
+          {proof.verdict === 'pass'
+            ? t('factory.proof.evidence', 'Commands and the failure without the fix')
+            : t('factory.proof.details', 'Commands and output')}
+        </button>
       </CollapsibleTrigger>
-      <CollapsibleContent className="mt-1 space-y-1">
-        {commands.map((command) => (
-          <pre
-            key={command}
-            className="bg-muted overflow-x-auto rounded px-2 py-1 font-mono text-[length:var(--code-font-size)]"
-            data-testid="factory-run-proof-command"
-          >
-            {command}
-          </pre>
-        ))}
-        {proof.outputTail && (
-          <pre
-            className="bg-muted max-h-64 overflow-auto rounded px-2 py-1 font-mono text-[length:var(--code-font-size)] whitespace-pre-wrap"
-            data-testid="factory-run-proof-output"
-          >
-            {proof.outputTail}
-          </pre>
-        )}
+      <CollapsibleContent asChild>
+        <div className="mt-1 space-y-1">
+          {commands.map((command) => (
+            <pre
+              key={command}
+              className="bg-muted overflow-x-auto rounded px-2 py-1 font-mono text-[length:var(--code-font-size)]"
+              data-testid="factory-run-proof-command"
+            >
+              {command}
+            </pre>
+          ))}
+          {proof.outputTail && (
+            <pre
+              className="bg-muted max-h-64 overflow-auto rounded px-2 py-1 font-mono text-[length:var(--code-font-size)] whitespace-pre-wrap"
+              data-testid="factory-run-proof-output"
+            >
+              {proof.outputTail}
+            </pre>
+          )}
+        </div>
       </CollapsibleContent>
     </Collapsible>
   );

@@ -10,7 +10,12 @@ import { OperationRequestSchema } from '../packages/shared/src/generated/browser
 import { CarrierEnvelopeSchema } from '../packages/shared/src/generated/browser-v1/browser/v1/transport_pb.ts';
 
 const fixturePath = new URL('../protocol/browser/v1/fixtures/golden.json', import.meta.url);
-const schemas: Record<string, GenMessage<Message>> = {
+/** Fully qualified message type name → its generated schema. */
+interface MessageSchemas {
+  readonly [messageType: string]: GenMessage<Message>;
+}
+
+const schemas: MessageSchemas = {
   'browser.v1.Status': StatusSchema,
   'browser.v1.NegotiationRequest': NegotiationRequestSchema,
   'browser.v1.OperationRequest': OperationRequestSchema,

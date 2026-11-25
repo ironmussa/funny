@@ -38,7 +38,13 @@ function lineOf(source: string, index: number): number {
 }
 
 /** Ids declared in the index source, with duplicate violations. */
-export function readIndexIds(source: string): { ids: string[]; violations: string[] } {
+export interface IndexIds {
+  ids: string[];
+  violations: string[];
+}
+
+/** Ids declared in the index source, with duplicate violations. */
+export function readIndexIds(source: string): IndexIds {
   const ids: string[] = [];
   const violations: string[] = [];
   for (const match of source.matchAll(INDEX_ID)) {
@@ -52,10 +58,13 @@ export function readIndexIds(source: string): { ids: string[]; violations: strin
 }
 
 /** Rendered ids and shape violations for one client source file. */
-export function scanFile(
-  file: string,
-  source: string,
-): { rendered: string[]; violations: string[] } {
+export interface ScannedFile {
+  rendered: string[];
+  violations: string[];
+}
+
+/** Rendered ids and shape violations for one client source file. */
+export function scanFile(file: string, source: string): ScannedFile {
   const rendered = [...source.matchAll(RENDERED_ID)].map((m) => m[1]!);
   const violations: string[] = [];
   if (file !== PRIMITIVES_FILE) {
@@ -77,8 +86,14 @@ export function unrenderedIds(ids: readonly string[], rendered: ReadonlySet<stri
   );
 }
 
+/** Every problem of the settings index, and how many ids it has. */
+export interface SettingsIndexReport {
+  ids: number;
+  violations: string[];
+}
+
 /** Every problem of the settings index in the repository at `root`, and how many ids it has. */
-export function checkSettingsIndex(root: string): { ids: number; violations: string[] } {
+export function checkSettingsIndex(root: string): SettingsIndexReport {
   const { ids, violations } = readIndexIds(readFileSync(join(root, INDEX_FILE), 'utf8'));
   const rendered = new Set<string>();
   for (const abs of walkSources(join(root, CLIENT_SRC), /\.(test|stories)\.tsx?$/)) {

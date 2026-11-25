@@ -2,6 +2,7 @@ import { Database } from 'bun:sqlite';
 import { chmodSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
+import type { JsonObject } from '@bufbuild/protobuf';
 import { parseStoredJson } from '@funny/shared/json-validation';
 import { canonicalJson } from '@funny/shared/lib/canonical-json';
 import { EventDurability } from '@funny/shared/runner-v2/events';
@@ -163,7 +164,8 @@ export class GrpcEventReplayStore {
   append(input: {
     scope: GrpcEventScope;
     eventType: string;
-    data: Record<string, unknown>;
+    /** The event's payload, sent as the `AgentEvent.data` Struct. */
+    data: JsonObject;
     durability: number;
     occurredAt?: string;
   }): GrpcReplayEvent {

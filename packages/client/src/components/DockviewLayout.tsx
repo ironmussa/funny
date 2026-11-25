@@ -185,16 +185,18 @@ function writeStoredSize(key: string, size: number) {
   }
 }
 
+/** Minimum-shape check of a stored layout; anything richer is for fromJSON to reject. */
+function isSerializedDockview(value: unknown): value is SerializedDockview {
+  return typeof value === 'object' && value !== null && 'grid' in value && 'panels' in value;
+}
+
 function readStoredLayout(): SerializedDockview | null {
   try {
     const raw = localStorage.getItem(STORAGE_KEY_LAYOUT);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    // Minimum-shape check — anything richer is for fromJSON to reject.
-    if (typeof parsed === 'object' && parsed !== null && 'grid' in parsed && 'panels' in parsed) {
-      // SAFETY: the value was written by writeStoredLayout as a SerializedDockview and
-      // has its `grid` and `panels` keys (checked above); fromJSON rejects the rest.
-      return parsed as SerializedDockview;
+    if (isSerializedDockview(parsed)) {
+      return parsed;
     }
     return null;
   } catch {
@@ -1031,8 +1033,6 @@ export function DockviewLayout({
   // plumbing.
   useEffect(() => {
     const handler = (e: Event) => {
-      // SAFETY: the only dispatcher, TerminalDockview, sends a CustomEvent whose
-      // detail is `{ tabId }`; the optional chain below still tolerates a missing detail.
       const detail = (e as CustomEvent<{ tabId: string }>).detail;
       const tabId = detail?.tabId;
       if (!tabId) return;

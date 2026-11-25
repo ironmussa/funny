@@ -16,6 +16,10 @@ export function setFileMentionDragData(
   dataTransfer.effectAllowed = 'copy';
 }
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 export function readFileMentionDragData(dataTransfer: DataTransfer): FileMentionPayload | null {
   const raw = dataTransfer.getData(FILE_MENTION_MIME);
   if (!raw) return null;
@@ -23,7 +27,7 @@ export function readFileMentionDragData(dataTransfer: DataTransfer): FileMention
     // SAFETY: no field is trusted: path must be a non-empty string (else null) and
     // fileType falls back to 'file' unless it is exactly 'folder'.
     const parsed = JSON.parse(raw) as Partial<FileMentionPayload>;
-    if (typeof parsed?.path !== 'string' || !parsed.path) return null;
+    if (!isString(parsed?.path) || !parsed.path) return null;
     const fileType = parsed.fileType === 'folder' ? 'folder' : 'file';
     return { path: parsed.path, fileType };
   } catch {

@@ -1,3 +1,4 @@
+import type { WSToolCallData } from '@funny/shared';
 import { create } from 'zustand';
 
 import { omitThread } from './by-thread';
@@ -34,17 +35,26 @@ export function useThreadActiveTool(threadId: string): ActiveTool | undefined {
   return useThreadActiveToolStore((s) => s.byThread[threadId]);
 }
 
-/** Tool call input arrives as an object or as its JSON string. */
-export function parseToolInput(input: unknown): Record<string, unknown> {
-  if (typeof input === 'string') {
+/** True for a string value. */
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
+/** True for a non-null object. */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+/** A tool call's input as an object: it arrives as an object or as its JSON string. */
+export function parseToolInput(toolCall: Pick<WSToolCallData, 'input'>): Record<string, unknown> {
+  const input = toolCall.input;
+  if (isString(input)) {
     try {
       const parsed = JSON.parse(input);
-      return parsed && typeof parsed === 'object' ? parsed : {};
+      return isRecord(parsed) ? parsed : {};
     } catch {
       return {};
     }
   }
-  // SAFETY: the typeof check makes `input` a non-null object here, and its values are typed
-  // unknown, so the record claims nothing about them.
-  return input && typeof input === 'object' ? (input as Record<string, unknown>) : {};
+  return isRecord(input) ? input : {};
 }

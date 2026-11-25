@@ -15,7 +15,13 @@ export type ACPImageBlock = {
   mimeType: string;
 };
 
-export function toACPImageBlocks(images: unknown): ACPImageBlock[] {
+/**
+ * The turn's image attachments, as the process options carry them. Each
+ * element is still checked: either shape is accepted, anything else dropped.
+ */
+export type ImageAttachments = readonly unknown[] | null | undefined;
+
+export function toACPImageBlocks(images: ImageAttachments): ACPImageBlock[] {
   if (!Array.isArray(images) || images.length === 0) return [];
   const blocks: ACPImageBlock[] = [];
   for (const img of images) {

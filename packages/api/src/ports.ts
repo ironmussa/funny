@@ -63,6 +63,8 @@ import type {
   FactoryIssuelessFlow,
   FactoryQueueClearResult,
   FactoryQueueRun,
+  FactoryApprovalRequest,
+  FactoryReplacedPrClose,
   FactoryRun,
   FactorySettings,
   FactorySubmitResult,
@@ -454,8 +456,56 @@ export interface FactoryPort {
   stopRun(userId: string, projectId: string, runId: string): PortResult<FactoryRun>;
   /** Put a failed (or waiting) run of the caller's factory back in flight; audited. */
   retryRun(userId: string, projectId: string, runId: string): PortResult<FactoryRun>;
-  /** Approve merging a run's held high-risk commit, then retry the run. */
-  approveMerge(userId: string, projectId: string, runId: string): PortResult<FactoryRun>;
+  /** Open a parked too-large run's proposed parts as issues; the run ends `done`. */
+  splitRun(userId: string, projectId: string, runId: string): PortResult<FactoryRun>;
+  /**
+   * Approve merging a run's held high-risk commit, then retry the run. Refused
+   * (409) unless `expectedSha`, the commit the member was shown, is the held one.
+   */
+  approveMerge(
+    userId: string,
+    projectId: string,
+    runId: string,
+    expectedSha: string,
+  ): PortResult<FactoryRun>;
+  /**
+   * Mark a run of the caller's factory that ended with no change as done: the
+   * member agrees nothing needs changing. Refused (409) for any other run. Audited.
+   */
+  markRunDone(userId: string, projectId: string, runId: string): PortResult<FactoryRun>;
+  /**
+   * Close the pull request of a run of the caller's factory that a newer run
+   * of its issue replaced, and delete its branch. Refused (409) for a run that
+   * was not replaced, has not ended or has no pull request of its own; 502
+   * when GitHub refuses. A merged pull request is left as it is. Audited.
+   */
+  closeReplacedPr(
+    userId: string,
+    projectId: string,
+    runId: string,
+  ): PortResult<FactoryReplacedPrClose>;
+  /**
+   * Say a run of the caller's factory that triage classed as a lint cleanup is
+   * not one (`false`), or take that back (`true`), which changes how its risk
+   * is classed; a run held for its risk is retried. Audited.
+   */
+  setLintCleanup(
+    userId: string,
+    projectId: string,
+    runId: string,
+    lintCleanup: boolean,
+  ): PortResult<FactoryRun>;
+  /**
+   * The requests agents made that the caller approve a held merge, newest
+   * first, each brought in line with its run. Empty without a factory.
+   */
+  approvalRequests(userId: string, projectId: string): PortResult<FactoryApprovalRequest[]>;
+  /** Decline one pending request (404 not the caller's, 409 no longer pending); the run stays held. */
+  declineApprovalRequest(
+    userId: string,
+    projectId: string,
+    requestId: string,
+  ): PortResult<FactoryApprovalRequest>;
   /**
    * Queue chosen issues of the project's repository in the caller's own factory
    * with one flow (change factory-manual-queue). Refused as a whole (409) when

@@ -65,8 +65,14 @@ function resolveThread(
   return mergeThreadView(state.threadDataById[ctx.threadId], row);
 }
 
+/** A thread context and its live row. */
+interface ThreadSource {
+  ctx: ThreadContextValue;
+  row: Thread | undefined;
+}
+
 /** Context plus the live row, so row changes re-render consumers. */
-function useThreadSource(): { ctx: ThreadContextValue; row: Thread | undefined } {
+function useThreadSource(): ThreadSource {
   const ctx = useThreadContext();
   return { ctx, row: useThreadById(ctx.threadId) };
 }

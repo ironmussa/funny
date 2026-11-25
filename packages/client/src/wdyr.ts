@@ -1,4 +1,4 @@
-import whyDidYouRender from '@welldone-software/why-did-you-render';
+import whyDidYouRender, { type ReasonForUpdate } from '@welldone-software/why-did-you-render';
 /// <reference types="@welldone-software/why-did-you-render" />
 import * as React from 'react';
 
@@ -37,9 +37,9 @@ if (import.meta.env.DEV) {
       // Log with detail
       loggerMod.then(({ createClientLogger }) => {
         const logger = createClientLogger('wdyr');
-        const safeStringify = (v: unknown) => {
+        const safeStringify = (differences: ReasonForUpdate['propsDifferences'] | never[]) => {
           try {
-            return JSON.stringify(v);
+            return JSON.stringify(differences);
           } catch {
             return '[circular]';
           }

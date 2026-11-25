@@ -1,5 +1,9 @@
 import type { ThreadEvent, TurnOutcomeEventData } from '@funny/shared';
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 /**
  * How each user turn's run ended, keyed by user-message id, from persisted
  * `turn_outcome` thread events. Turns without an event (older threads, or the
@@ -13,7 +17,7 @@ export function turnOutcomesFromEvents(
     if (e.type !== 'turn_outcome') continue;
     let parsed: TurnOutcomeEventData | null = null;
     try {
-      parsed = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+      parsed = isString(e.data) ? JSON.parse(e.data) : (e.data as any);
     } catch {
       parsed = null;
     }

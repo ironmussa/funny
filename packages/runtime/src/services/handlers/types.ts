@@ -11,6 +11,11 @@ import type { GitSyncState, ImageAttachment } from '@funny/shared';
 import type { DomainError } from '@funny/shared/errors';
 import type { ResultAsync } from 'neverthrow';
 
+import type {
+  EnqueueMessageInput,
+  RuntimeThreadUpdate,
+  ThreadEventData,
+} from '../server-interfaces.js';
 import type { ThreadEventMap } from '../thread-event-bus.js';
 
 /** Queued follow-up message entry (inlined from deleted message-queue module). */
@@ -62,7 +67,7 @@ interface HandlerProject {
 export interface HandlerServiceContext {
   // Thread operations
   getThread(id: string): HandlerThread | undefined | Promise<HandlerThread | undefined>;
-  updateThread(id: string, updates: Record<string, any>): void | Promise<void>;
+  updateThread(id: string, updates: RuntimeThreadUpdate): void | Promise<void>;
   insertComment(data: {
     threadId: string;
     userId: string;
@@ -101,23 +106,11 @@ export interface HandlerServiceContext {
   invalidateGitStatusCache(projectId: string): void;
 
   // Thread events
-  saveThreadEvent(threadId: string, type: string, data: Record<string, unknown>): Promise<void>;
+  saveThreadEvent(threadId: string, type: string, data: ThreadEventData): Promise<void>;
 
   // Message queue
   dequeueMessage(threadId: string): QueueEntry | null | Promise<QueueEntry | null>;
-  enqueueMessage(
-    threadId: string,
-    entry: {
-      content: string;
-      provider?: string;
-      model?: string;
-      permissionMode?: string;
-      images?: string;
-      allowedTools?: string;
-      disallowedTools?: string;
-      fileReferences?: string;
-    },
-  ): Promise<QueueEntry | Record<string, unknown>>;
+  enqueueMessage(threadId: string, entry: EnqueueMessageInput): Promise<QueueEntry>;
   queueCount(threadId: string): number | Promise<number>;
   peekMessage(threadId: string): QueueEntry | null | Promise<QueueEntry | null>;
 

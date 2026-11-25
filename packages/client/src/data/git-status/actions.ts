@@ -13,6 +13,7 @@ import {
   nextStatusSeq,
   patchStatus,
   resolveThreadScope,
+  scopedProjectIds,
   scopeWidened,
   writeProjectStatus,
   writeStatuses,
@@ -48,11 +49,11 @@ const rootKey = (projectId: string) => ['git-status', 'root', projectId] as cons
  * function itself starts a microtask later, after events that arrived in
  * between, which must still win over this (older) response.
  */
-async function request(
+async function request<Status>(
   layer: DataLayer,
   queryKey: readonly unknown[],
   force: boolean,
-  queryFn: (signal: AbortSignal, seq: number) => Promise<unknown>,
+  queryFn: (signal: AbortSignal, seq: number) => Promise<Status>,
 ): Promise<void> {
   const seq = nextStatusSeq(getGitStatusData(layer));
   const { queryClient } = layer;
@@ -101,6 +102,15 @@ export function fetchForProject(
       : await unwrapResult(gitApi.getGitStatuses(projectId, signal));
     writeStatuses(data, result.statuses, seq);
   });
+}
+
+/**
+ * Re-ask the bulk status of every project a mounted view shows. Nothing tells
+ * the client when a pull request is merged or closed on GitHub, so a periodic
+ * call keeps the sidebar, kanban and search PR badges from staying "open".
+ */
+export function refreshScopedProjects(layer: DataLayer = getDataLayer()): void {
+  for (const projectId of scopedProjectIds()) void fetchForProject(projectId, false, layer);
 }
 
 /** Status of one thread; threads sharing a branch share the request and its freshness. */

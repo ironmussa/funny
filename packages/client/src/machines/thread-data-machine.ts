@@ -27,6 +27,11 @@ interface ThreadDataContext {
   stale: boolean;
 }
 
+/** The thread whose data the machine loads. */
+interface ThreadDataInput {
+  threadId: string;
+}
+
 type ThreadDataEvent =
   | { type: 'PREFETCH' }
   | { type: 'LOAD' }
@@ -39,10 +44,10 @@ export const threadDataMachine = setup({
   types: {
     context: {} as ThreadDataContext,
     events: {} as ThreadDataEvent,
-    input: {} as { threadId: string },
+    input: {} as ThreadDataInput,
   },
   actors: {
-    fetcher: fromPromise<ThreadDataSnapshot, { threadId: string }>(async ({ input, signal }) => {
+    fetcher: fromPromise<ThreadDataSnapshot, ThreadDataInput>(async ({ input, signal }) => {
       const scrollOptions = loadThreadScrollFetchOptions(input.threadId);
       const [threadResult, eventsResult] = await Promise.all([
         api.getThread(input.threadId, THREAD_MESSAGE_PAGE_SIZE, signal, scrollOptions),

@@ -43,10 +43,15 @@ export function deriveWaitingState(
   return {};
 }
 
+/** True for a string value. */
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 export function reconstructCompactionEvents(threadEvents: ThreadEvent[]): CompactionEvent[] {
   return threadEvents.flatMap((event) => {
     if (event.type !== 'compact_boundary') return [];
-    const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+    const data = isString(event.data) ? JSON.parse(event.data) : event.data;
     return [
       {
         trigger: data.trigger ?? 'auto',

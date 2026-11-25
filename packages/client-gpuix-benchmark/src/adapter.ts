@@ -25,9 +25,14 @@ export interface GpuixBenchmarkOperations {
   ) => Promise<GpuixWorkloadObservation>;
 }
 
-export function createGpuixBenchmarkAdapter(operations: GpuixBenchmarkOperations): {
+/** Answers the benchmark driver's commands. */
+export interface GpuixBenchmarkAdapter {
   handleCommand: (command: BenchmarkCommand) => Promise<BenchmarkEvent[]>;
-} {
+}
+
+export function createGpuixBenchmarkAdapter(
+  operations: GpuixBenchmarkOperations,
+): GpuixBenchmarkAdapter {
   return {
     async handleCommand(command) {
       if (command.type === 'initialize') {

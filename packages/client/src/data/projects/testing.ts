@@ -38,7 +38,7 @@ export function withProjects<T extends object>(patch: T): Omit<NoInfer<T>, 'proj
 }
 
 /** Seed one sample project (`proj-1`, "funny") and select it — the usual story setup. */
-export function withSampleProject(): { selectedProjectId: string } {
+export function withSampleProject() {
   seedProjects([
     {
       id: 'proj-1',

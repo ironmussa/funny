@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { loadTemplates } from '@/data/templates/loaders';
 import { useDocumentTitle } from '@/hooks/use-document-title';
+import { useGitStatusPolling } from '@/hooks/use-git-status-polling';
 import { useGlobalShortcuts } from '@/hooks/use-global-shortcuts';
 import { useRefreshOnFocus } from '@/hooks/use-refresh-on-focus';
 import { useRouteSync } from '@/hooks/use-route-sync';
@@ -82,6 +83,7 @@ export function useAppShell(): ShellState {
 
   useWS();
   useRefreshOnFocus();
+  useGitStatusPolling();
   useRouteSync();
 
   useEffect(() => {

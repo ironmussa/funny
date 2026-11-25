@@ -133,6 +133,21 @@ export function runsInSandbox(thread: { runtime?: string | null }): boolean {
 }
 
 /**
+ * Returns true for a worktree thread on this host that has no worktree
+ * recorded: it was removed (a factory retry, an archive) or never set up. Its
+ * checkout is NOT the project directory: a step that falls back to it runs on
+ * the member's own checkout and branch. A sandbox thread works in its
+ * sandbox's checkout and records no worktree path.
+ */
+export function hasNoWorktreeRecorded(thread: {
+  mode?: string | null;
+  worktreePath?: string | null;
+  runtime?: string | null;
+}): boolean {
+  return thread.mode === 'worktree' && !thread.worktreePath && !runsInSandbox(thread);
+}
+
+/**
  * Returns true for a worktree thread whose checkout is gone: its recorded
  * `worktreePath` has no `.git` entry, because the worktree was removed outside
  * funny (`git worktree remove`, a deleted folder). A folder that something

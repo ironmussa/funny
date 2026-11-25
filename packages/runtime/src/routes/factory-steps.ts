@@ -15,7 +15,11 @@ import { Hono, type Context } from 'hono';
 import { err } from 'neverthrow';
 
 import { cancelFactoryStep, getFactoryStep, startFactoryStep } from '../services/factory-steps.js';
-import { canDoGitOps, isWorktreeCheckoutMissing } from '../services/thread-context.js';
+import {
+  canDoGitOps,
+  hasNoWorktreeRecorded,
+  isWorktreeCheckoutMissing,
+} from '../services/thread-context.js';
 import type { HonoEnv } from '../types/hono-env.js';
 import { resultToResponse } from '../utils/result-response.js';
 import { requireProject, requireThread } from '../utils/route-helpers.js';
@@ -42,7 +46,8 @@ factoryStepRoutes.post('/:id/factory-steps', (c) =>
         400,
       );
     }
-    if (isWorktreeCheckoutMissing(thread)) {
+    // Never the project directory for a worktree thread: see `hasNoWorktreeRecorded`.
+    if (hasNoWorktreeRecorded(thread) || isWorktreeCheckoutMissing(thread)) {
       return c.json({ error: 'The thread has no checkout', code: 'worktree-missing' }, 409);
     }
     if (!thread.projectId)

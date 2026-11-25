@@ -111,33 +111,38 @@ function ProofEvidence({ proof }: { proof: FactoryRegressionProof }) {
   if (commands.length === 0 && !proof.outputTail) return null;
   return (
     <Collapsible>
-      <CollapsibleTrigger
-        className="group text-muted-foreground hover:text-foreground flex items-center gap-1"
-        data-testid="factory-run-proof-details-toggle"
-      >
-        <ChevronRight className="icon-xs transition-transform group-data-[state=open]:rotate-90" />
-        {proof.verdict === 'pass'
-          ? t('factory.proof.evidence', 'Commands and the failure without the fix')
-          : t('factory.proof.details', 'Commands and output')}
+      <CollapsibleTrigger asChild>
+        <button
+          type="button"
+          className="group text-muted-foreground hover:text-foreground flex items-center gap-1"
+          data-testid="factory-run-proof-details-toggle"
+        >
+          <ChevronRight className="icon-xs transition-transform group-data-[state=open]:rotate-90" />
+          {proof.verdict === 'pass'
+            ? t('factory.proof.evidence', 'Commands and the failure without the fix')
+            : t('factory.proof.details', 'Commands and output')}
+        </button>
       </CollapsibleTrigger>
-      <CollapsibleContent className="mt-1 space-y-1">
-        {commands.map((command) => (
-          <pre
-            key={command}
-            className="bg-muted overflow-x-auto rounded px-2 py-1 font-mono text-[length:var(--code-font-size)]"
-            data-testid="factory-run-proof-command"
-          >
-            {command}
-          </pre>
-        ))}
-        {proof.outputTail && (
-          <pre
-            className="bg-muted max-h-64 overflow-auto rounded px-2 py-1 font-mono text-[length:var(--code-font-size)] whitespace-pre-wrap"
-            data-testid="factory-run-proof-output"
-          >
-            {proof.outputTail}
-          </pre>
-        )}
+      <CollapsibleContent asChild>
+        <div className="mt-1 space-y-1">
+          {commands.map((command) => (
+            <pre
+              key={command}
+              className="bg-muted overflow-x-auto rounded px-2 py-1 font-mono text-[length:var(--code-font-size)]"
+              data-testid="factory-run-proof-command"
+            >
+              {command}
+            </pre>
+          ))}
+          {proof.outputTail && (
+            <pre
+              className="bg-muted max-h-64 overflow-auto rounded px-2 py-1 font-mono text-[length:var(--code-font-size)] whitespace-pre-wrap"
+              data-testid="factory-run-proof-output"
+            >
+              {proof.outputTail}
+            </pre>
+          )}
+        </div>
       </CollapsibleContent>
     </Collapsible>
   );

@@ -47,13 +47,16 @@ function DetailList({ testId, label, count, rows }: DetailListProps) {
   if (rows.length === 0) return null;
   return (
     <Collapsible>
-      <CollapsibleTrigger
-        data-testid={testId}
-        className="group hover:text-foreground flex w-full items-center gap-1 py-0.5 text-left"
-      >
-        <ChevronRight className="size-3 shrink-0 transition-transform group-data-[state=open]:rotate-90" />
-        <span className="flex-1">{label}</span>
-        <span className="tabular-nums">{count}</span>
+      <CollapsibleTrigger asChild>
+        <button
+          type="button"
+          data-testid={testId}
+          className="group hover:text-foreground flex w-full items-center gap-1 py-0.5 text-left"
+        >
+          <ChevronRight className="size-3 shrink-0 transition-transform group-data-[state=open]:rotate-90" />
+          <span className="flex-1">{label}</span>
+          <span className="tabular-nums">{count}</span>
+        </button>
       </CollapsibleTrigger>
       <CollapsibleContent>
         <ul className="max-h-32 overflow-y-auto pl-4">

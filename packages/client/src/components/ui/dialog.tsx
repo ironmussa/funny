@@ -32,6 +32,7 @@ function DialogContent({
   className,
   overlayClassName,
   flush = false,
+  square = false,
   children,
   ref,
   ...props
@@ -41,6 +42,8 @@ function DialogContent({
   overlayClassName?: string;
   /** No padding or gap: the header, body and footer lay out their own sections. */
   flush?: boolean;
+  /** Square corners for a full-screen dialog: always, or only below the `md` breakpoint. */
+  square?: boolean | 'below-md';
 }) {
   return (
     <DialogPortal>
@@ -51,6 +54,8 @@ function DialogContent({
         className={cn(
           'fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-card p-6 shadow-xl duration-100 outline-hidden data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 rounded-lg',
           flush && 'gap-0 p-0',
+          square === true && 'rounded-none',
+          square === 'below-md' && 'rounded-none md:rounded-lg',
           className,
         )}
         {...props}
@@ -128,9 +133,20 @@ const DialogHeader = ({
 };
 DialogHeader.displayName = 'DialogHeader';
 
-const DialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
+const DialogFooter = ({
+  className,
+  bordered = false,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement> & {
+  /** A footer section of a flush dialog: padded, with a rule above it (DialogHeader's `bordered`). */
+  bordered?: boolean;
+}) => (
   <div
-    className={cn('flex flex-col-reverse pt-4 sm:flex-row sm:justify-end sm:space-x-2', className)}
+    className={cn(
+      'flex flex-col-reverse pt-4 sm:flex-row sm:justify-end sm:space-x-2',
+      bordered && 'shrink-0 gap-2 border-t border-border px-4 py-3 sm:space-x-0',
+      className,
+    )}
     {...props}
   />
 );
@@ -139,12 +155,18 @@ DialogFooter.displayName = 'DialogFooter';
 function DialogTitle({
   className,
   size = 'default',
+  withIcon = false,
+  mono = false,
   ref,
   ...props
 }: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Title> & {
   ref?: React.Ref<React.ComponentRef<typeof DialogPrimitive.Title>>;
   /** `sm` for compact dialogs and panels (text-sm). */
   size?: 'default' | 'sm';
+  /** A leading icon beside the title: one row, gap between them, the text clipped. */
+  withIcon?: boolean;
+  /** A path or other identifier as the title. */
+  mono?: boolean;
 }) {
   return (
     <DialogPrimitive.Title
@@ -152,6 +174,8 @@ function DialogTitle({
       className={cn(
         'font-semibold leading-none tracking-tight',
         size === 'sm' ? 'text-sm' : 'text-base',
+        withIcon && 'flex min-w-0 items-center gap-2 overflow-hidden',
+        mono && 'font-mono',
         className,
       )}
       {...props}

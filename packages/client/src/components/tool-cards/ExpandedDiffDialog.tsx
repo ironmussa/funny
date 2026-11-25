@@ -392,7 +392,7 @@ export function ExpandedDiffDialog(props: ExpandedDiffDialogProps) {
     onOpenChange,
     filePath,
     baseLine,
-    icon: Icon = FileCode,
+    icon: FileIcon = FileCode,
     loading = false,
     description,
   } = props;
@@ -411,7 +411,8 @@ export function ExpandedDiffDialog(props: ExpandedDiffDialogProps) {
     >
       <DialogContent
         flush
-        className="flex h-dvh w-screen max-w-none flex-col rounded-none md:h-[85vh] md:w-[90vw] md:max-w-[90vw] md:rounded-lg"
+        square="below-md"
+        className="flex h-dvh w-screen max-w-none flex-col md:h-[85vh] md:w-[90vw] md:max-w-[90vw]"
         onOpenAutoFocus={focus.onOpenAutoFocus}
         onCloseAutoFocus={focus.onCloseAutoFocus}
         onEscapeKeyDown={(e) => {
@@ -419,11 +420,8 @@ export function ExpandedDiffDialog(props: ExpandedDiffDialogProps) {
         }}
       >
         <DialogHeader bordered className="overflow-hidden select-none">
-          <DialogTitle
-            size="sm"
-            className="flex min-w-0 items-center gap-2 overflow-hidden font-mono"
-          >
-            <Icon className="icon-base shrink-0" />
+          <DialogTitle size="sm" withIcon mono>
+            <FileIcon className="icon-base shrink-0" />
             <span
               className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
               style={{ direction: 'rtl', textAlign: 'left' }}
@@ -560,7 +558,13 @@ function CloseDiffButton({ onClose }: { onClose?: () => void }) {
 }
 
 export function ExpandedDiffView(props: ExpandedDiffViewProps) {
-  const { filePath, icon: Icon = FileCode, loading = false, onClose, onResolveConflict } = props;
+  const {
+    filePath,
+    icon: FileIcon = FileCode,
+    loading = false,
+    onClose,
+    onResolveConflict,
+  } = props;
   const { controls, display, effective, fileThreads, markdownContent, selectionProps } =
     useExpandedDiffViewModel(props);
 
@@ -568,7 +572,7 @@ export function ExpandedDiffView(props: ExpandedDiffViewProps) {
     <div className="bg-background flex h-full flex-col" data-testid="expanded-diff-view">
       {/* Header toolbar */}
       <div className="border-border flex h-12 shrink-0 items-center gap-2 border-b px-4 select-none">
-        <Icon className="icon-base text-muted-foreground shrink-0" />
+        <FileIcon className="icon-base text-muted-foreground shrink-0" />
         <span
           className="text-foreground min-w-0 flex-1 overflow-hidden font-mono text-xs text-ellipsis whitespace-nowrap"
           style={{ direction: 'rtl', textAlign: 'left' }}

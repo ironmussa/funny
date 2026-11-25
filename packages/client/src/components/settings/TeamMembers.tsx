@@ -273,7 +273,7 @@ export function TeamMembers() {
               value={inviteEmail}
               onChange={(e) => setInviteEmail(e.target.value)}
               placeholder="user@example.com"
-              className="flex-1 text-sm"
+              className="flex-1"
               disabled={smtpConfigured === false}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && smtpConfigured) handleInvite();

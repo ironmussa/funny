@@ -4,8 +4,10 @@ import type { ReactNode } from 'react';
 import {
   STATE_ICON_CLASS,
   STATE_PADDING,
+  STATE_SURFACE,
   STATE_TEXT_CLASS,
   type StatePadding,
+  type StateSurface,
 } from '@/components/ui/state-styles';
 import { cn } from '@/lib/utils';
 
@@ -26,6 +28,10 @@ interface EmptyStateProps {
   fill?: boolean;
   /** Vertical padding: sm (12px), md (24px), lg (48px). Defaults to 16px. */
   padding?: StatePadding;
+  /** Surface around the placeholder (a settings card, a dashed outline). */
+  surface?: StateSurface;
+  /** Horizontal padding: `sm` (8px) inside narrow panels and popovers. Defaults to 16px. */
+  inset?: 'default' | 'sm';
 }
 
 /**
@@ -42,6 +48,8 @@ export function EmptyState({
   testId,
   fill = true,
   padding,
+  surface = 'default',
+  inset = 'default',
 }: EmptyStateProps) {
   return (
     <div
@@ -50,6 +58,8 @@ export function EmptyState({
         'flex w-full flex-col items-center justify-center gap-2 p-4 text-center text-muted-foreground',
         fill && 'h-full min-h-0 flex-1',
         padding && STATE_PADDING[padding],
+        inset === 'sm' && 'px-2',
+        STATE_SURFACE[surface],
         className,
       )}
     >

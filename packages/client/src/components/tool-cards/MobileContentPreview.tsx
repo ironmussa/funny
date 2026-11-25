@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { cn } from '@/lib/utils';
 
 const FullContentContext = createContext(false);
 
@@ -47,7 +48,7 @@ export function MobileContentPreview({
         size="xs"
         ref={triggerRef}
         variant="ghost"
-        className="h-11 w-full justify-start gap-2 rounded-none px-3"
+        className="h-11 w-full justify-start rounded-none px-3"
         onClick={() => (onExpand ? onExpand() : setOpen(true))}
       >
         <Maximize2 className="icon-xs" />
@@ -57,7 +58,8 @@ export function MobileContentPreview({
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogContent
             flush
-            className="flex h-dvh w-screen max-w-none flex-col rounded-none"
+            square
+            className="flex h-dvh w-screen max-w-none flex-col"
             onCloseAutoFocus={(event) => {
               event.preventDefault();
               triggerRef.current?.focus({ preventScroll: true });
@@ -83,24 +85,28 @@ export function MobileContentPreview({
   );
 }
 
-/** Desktop keeps its existing scroll area; mobile gets non-scrolling content. */
+/**
+ * A tool card's output, ruled off from the card header above it. Desktop keeps
+ * its existing scroll area; mobile gets non-scrolling content.
+ */
 export function ToolContentArea({
   children,
   className,
   ...props
-}: ComponentProps<typeof ScrollArea>) {
+}: Omit<ComponentProps<typeof ScrollArea>, 'variant'>) {
   const isMobile = useIsMobile();
   const inViewer = useContext(FullContentContext);
   if (!isMobile)
     return (
-      <ScrollArea className={className} {...props}>
+      <ScrollArea variant="divided" className={className} {...props}>
         {children}
       </ScrollArea>
     );
-  if (inViewer) return <div className={className}>{children}</div>;
+  const contentClass = cn('border-border/40 border-t', className);
+  if (inViewer) return <div className={contentClass}>{children}</div>;
   return (
     <MobileContentPreview>
-      <div className={className}>{children}</div>
+      <div className={contentClass}>{children}</div>
     </MobileContentPreview>
   );
 }

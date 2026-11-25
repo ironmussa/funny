@@ -276,7 +276,7 @@ export function PermissionApprovalCard({
       {displayedInput && (
         <div className="space-y-1">
           {bashCommand && highlightedBash ? (
-            <ScrollArea className="bg-muted max-h-32 rounded">
+            <ScrollArea variant="muted" className="max-h-32">
               <pre
                 data-testid="permission-card-tool-input"
                 style={{
@@ -288,7 +288,7 @@ export function PermissionApprovalCard({
               />
             </ScrollArea>
           ) : (
-            <ScrollArea className="bg-muted max-h-32 rounded">
+            <ScrollArea variant="muted" className="max-h-32">
               <pre
                 data-testid="permission-card-tool-input"
                 style={{

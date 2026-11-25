@@ -269,12 +269,10 @@ function SearchablePickerContent({
           onKeyDown={handleSearchKeyDown}
           placeholder={searchPlaceholder}
           aria-label={label}
+          variant="bare"
+          touch={mobile}
           autoComplete="off"
-          className={cn(
-            'h-auto w-full rounded-none border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-0',
-            // ui-rules-allow: iOS Safari zooms into inputs below 16px, whatever the font size setting.
-            mobile && 'min-h-[48px] text-[16px]',
-          )}
+          className="h-auto w-full"
         />
       </div>
       <div
@@ -401,12 +399,13 @@ function SearchablePickerContent({
     <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>{trigger}</PopoverTrigger>
       <PopoverContent
+        padding="none"
         side={side}
         align={align}
         className={cn(
           // oxlint-disable-next-line shadcn/require-static-classes -- width is a Tailwind class prop from the caller
           width,
-          'p-0 flex flex-col overflow-hidden max-h-[min(70vh,520px)]',
+          'flex flex-col overflow-hidden max-h-[min(70vh,520px)]',
         )}
         onOpenAutoFocus={(e) => {
           e.preventDefault();
@@ -583,11 +582,11 @@ export function BranchPicker({
           }}
           placeholder={t('newThread.newBranchPlaceholder', 'new-branch-name')}
           data-testid={suffixTestId(testId, '-new-input')}
-          className={cn(
-            'text-foreground h-auto w-40 rounded-none border-0 bg-transparent p-0 font-mono text-xs shadow-none focus-visible:ring-0',
-            // ui-rules-allow: iOS Safari zooms into inputs below 16px, whatever the font size setting.
-            mobile && 'min-h-[48px] text-[16px]',
-          )}
+          size="xs"
+          mono
+          variant="bare-strong"
+          touch={mobile}
+          className="h-auto w-40"
         />
         <button
           type="button"

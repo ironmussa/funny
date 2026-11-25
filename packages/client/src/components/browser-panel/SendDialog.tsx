@@ -59,7 +59,7 @@ export function BrowserPanelFooter() {
         size="sm"
         disabled={!canSend}
         onClick={() => setOpen(true)}
-        className="gap-1.5"
+        gap="snug"
       >
         <Send className="size-3.5" />
         Send

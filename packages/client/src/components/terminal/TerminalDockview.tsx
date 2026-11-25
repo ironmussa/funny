@@ -161,11 +161,7 @@ function NewTerminalButton() {
       <Tooltip {...menu.tooltipProps}>
         <TooltipTrigger asChild>
           <DropdownMenuTrigger asChild>
-            <Button
-              variant="muted"
-              data-testid="terminal-new"
-              className="h-full rounded-none px-2.5"
-            >
+            <Button variant="muted" data-testid="terminal-new" size="strip">
               <Plus className="icon-sm" />
             </Button>
           </DropdownMenuTrigger>
@@ -208,12 +204,7 @@ function DetachTerminalButton({ activeTabId }: { activeTabId: string | undefined
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Button
-          variant="muted"
-          onClick={onClick}
-          data-testid="terminal-detach"
-          className="h-full rounded-none px-2.5"
-        >
+        <Button variant="muted" onClick={onClick} data-testid="terminal-detach" size="strip">
           <PictureInPicture2 className="icon-sm" />
         </Button>
       </TooltipTrigger>
@@ -238,7 +229,7 @@ function HideTerminalPanelButton() {
           variant="muted"
           onClick={() => togglePanel(selectedProjectId)}
           data-testid="terminal-hide-panel"
-          className="h-full rounded-none px-2.5"
+          size="strip"
         >
           <PanelBottomClose className="icon-sm" />
         </Button>

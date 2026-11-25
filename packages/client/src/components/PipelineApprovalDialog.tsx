@@ -128,7 +128,7 @@ function ApprovalForm({ approval, queueDepth }: ApprovalFormProps) {
           ) : null}
         </div>
 
-        <DialogFooter className="gap-2 sm:gap-2">
+        <DialogFooter spaced>
           <Button
             variant="destructive"
             onClick={handleReject}

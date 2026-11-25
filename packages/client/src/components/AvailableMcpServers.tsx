@@ -157,7 +157,12 @@ export function AvailableMcpServers({
                   {server.name}
                 </Badge>
               </TooltipTrigger>
-              <TooltipContent side="bottom" align="start" className="w-72 p-3 text-left">
+              <TooltipContent
+                side="bottom"
+                align="start"
+                variant="padded"
+                className="w-72 text-left"
+              >
                 <div className="flex items-start justify-between gap-3">
                   <p className="text-foreground min-w-0 truncate font-medium">{server.name}</p>
                   <span className="border-border bg-muted text-muted-foreground text-2xs shrink-0 rounded-full border px-1.5 py-0.5 font-mono leading-none uppercase">

@@ -56,7 +56,7 @@ export function HistoryFilters({
         value={branchScope}
         onValueChange={(value) => onBranchScopeChange(value as GraphBranchScope)}
       >
-        <SelectTrigger size="xs" className="w-auto gap-1" data-testid="graph-toggle-all-branches">
+        <SelectTrigger size="xs" className="w-auto" data-testid="graph-toggle-all-branches">
           <GitBranch className="icon-xs opacity-70" />
           <span>{scopeLabels[branchScope]}</span>
         </SelectTrigger>
@@ -65,7 +65,7 @@ export function HistoryFilters({
             <SelectItem
               key={scope}
               value={scope}
-              className="text-xs"
+              textSize="xs"
               data-testid={`graph-branch-scope-${scope}`}
             >
               {scopeLabels[scope]}
@@ -74,7 +74,7 @@ export function HistoryFilters({
         </SelectContent>
       </Select>
       <Select value={syncFilter} onValueChange={(value) => setStatus(value as CommitSyncFilter)}>
-        <SelectTrigger size="xs" className="w-auto gap-1" data-testid="graph-filter-status">
+        <SelectTrigger size="xs" className="w-auto" data-testid="graph-filter-status">
           <ArrowUpDown className="icon-xs opacity-70" />
           <span>{statusLabels[syncFilter]}</span>
         </SelectTrigger>
@@ -83,7 +83,7 @@ export function HistoryFilters({
             <SelectItem
               key={status}
               value={status}
-              className="text-xs"
+              textSize="xs"
               data-testid={`graph-filter-${status}`}
             >
               {statusLabels[status]}

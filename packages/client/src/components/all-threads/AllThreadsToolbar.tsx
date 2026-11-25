@@ -134,7 +134,8 @@ export function AllThreadsToolbar(props: Props) {
         autoFocus={false}
         placeholder={searchPlaceholder}
         testIdPrefix="all-threads-search"
-        className="border-input h-7 w-72 shrink-0 rounded-md border bg-transparent px-2"
+        variant="outline"
+        className="h-7 w-72 shrink-0"
       />
 
       <div className="bg-border h-4 w-px" />
@@ -289,7 +290,8 @@ function SortPopover({
       </PopoverTrigger>
       <PopoverContent
         align="start"
-        className="w-auto min-w-[140px] p-1"
+        padding="xs"
+        className="w-auto min-w-[140px]"
         onKeyDown={handleKeyDown}
         onOpenAutoFocus={(e) => {
           e.preventDefault();

@@ -453,7 +453,7 @@ function BranchRefDetail({
         <div className="border-border/70 flex border-t pt-3">
           <div className="flex flex-wrap gap-2">
             {githubUrl ? (
-              <Button asChild type="button" variant="outline" size="xs" className="gap-1.5">
+              <Button asChild type="button" variant="outline" size="xs" gap="snug">
                 <a
                   href={githubUrl}
                   target="_blank"
@@ -471,7 +471,7 @@ function BranchRefDetail({
                 variant="default"
                 size="xs"
                 aria-label={branchActionTooltip(t, summary)}
-                className="gap-1.5"
+                gap="snug"
                 disabled={!!actionInProgress}
                 onClick={(event) => {
                   event.preventDefault();
@@ -573,7 +573,8 @@ function GraphRefChip({
         <PopoverContent
           side="bottom"
           align="start"
-          className="w-72 p-3"
+          padding="md"
+          className="w-72"
           onClick={(event) => event.stopPropagation()}
         >
           <BranchRefDetail

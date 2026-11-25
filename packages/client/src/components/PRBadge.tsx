@@ -151,9 +151,7 @@ export function PRBadge({
             {content}
           </a>
         </TooltipTrigger>
-        <TooltipContent side="top" className="text-xs">
-          {tooltipLabel}
-        </TooltipContent>
+        <TooltipContent side="top">{tooltipLabel}</TooltipContent>
       </Tooltip>
     );
   }
@@ -165,9 +163,7 @@ export function PRBadge({
           {content}
         </span>
       </TooltipTrigger>
-      <TooltipContent side="top" className="text-xs">
-        {tooltipLabel}
-      </TooltipContent>
+      <TooltipContent side="top">{tooltipLabel}</TooltipContent>
     </Tooltip>
   );
 }

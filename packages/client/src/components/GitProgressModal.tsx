@@ -188,7 +188,7 @@ export function GitProgressModal({
     <Dialog open={open} onOpenChange={isFinished ? onOpenChange : undefined}>
       <DialogContent
         className={cn(
-          'flex max-h-[85vh] w-[calc(100vw-2rem)] max-w-lg flex-col gap-4 overflow-hidden [&>button.absolute]:hidden',
+          'flex max-h-[85vh] w-[calc(100vw-2rem)] max-w-lg flex-col overflow-hidden [&>button.absolute]:hidden',
           hasFailed && 'max-w-2xl',
         )}
         onPointerDownOutside={(e) => {

@@ -35,7 +35,7 @@ export function TerminalPhaseOverlay({
           variant="outline"
           size="xs"
           onClick={onRestart}
-          className="gap-1.5"
+          gap="snug"
           data-testid="terminal-restart"
         >
           <RotateCcw className="icon-xs" />

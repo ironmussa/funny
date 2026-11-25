@@ -29,12 +29,12 @@ export function GridPicker({ cols, rows, onChange }: Props) {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" className="text-2xs h-6 min-w-0 gap-1.5 px-2">
+        <Button variant="ghost" size="chip" gap="snug" className="min-w-0">
           <Grid2x2 className="icon-sm" />
           {cols}×{rows}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-auto p-3" align="start" sideOffset={4}>
+      <PopoverContent className="w-auto" padding="md" align="start" sideOffset={4}>
         <div
           className="grid grid-cols-[repeat(var(--grid-picker-columns),1fr)] gap-1"
           style={{ '--grid-picker-columns': MAX_GRID_COLS }}

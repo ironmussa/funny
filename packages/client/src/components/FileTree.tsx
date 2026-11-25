@@ -8,7 +8,7 @@ import {
   ExternalLink,
   EyeOff,
   FileCode,
-  Folder,
+  FolderIcon,
   FolderOpen,
   FolderOpenDot,
   FolderX,
@@ -309,7 +309,7 @@ export function FileTree({
               className={cn('icon-sm shrink-0 transition-transform', !isCollapsed && 'rotate-90')}
             />
             {isCollapsed ? (
-              <Folder className="icon-base text-muted-foreground/70 shrink-0" />
+              <FolderIcon className="icon-base text-muted-foreground/70 shrink-0" />
             ) : (
               <FolderOpen className="icon-base text-muted-foreground/70 shrink-0" />
             )}
@@ -491,8 +491,8 @@ export function FileTree({
             name={fileName}
             query={searchQuery}
             preserveExtension={!isSubmodule}
+            font="explorer"
             className={cn(
-              'font-mono-explorer',
               // oxlint-disable-next-line shadcn/require-static-classes -- fontSize is a Tailwind class prop
               fontSize,
             )}

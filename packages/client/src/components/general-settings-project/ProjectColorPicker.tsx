@@ -96,7 +96,7 @@ export function ProjectColorPicker({ projectId, currentColor, onSave }: Props) {
               )}
             </button>
           </PopoverTrigger>
-          <PopoverContent className="w-72 p-3" align="start">
+          <PopoverContent className="w-72" padding="md" align="start">
             <ColorPicker
               value={currentColor || '#7CB9E8'}
               onChange={([r, g, b]) => {
@@ -105,7 +105,7 @@ export function ProjectColorPicker({ projectId, currentColor, onSave }: Props) {
                 onSave(projectId, { color: hex });
               }}
             >
-              <ColorPickerSelection className="h-40 rounded-lg" />
+              <ColorPickerSelection corners="lg" className="h-40" />
               <ColorPickerHue />
               <ColorPickerAlpha />
               <div className="flex items-center gap-2">

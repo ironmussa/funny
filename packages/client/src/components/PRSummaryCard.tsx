@@ -3,7 +3,7 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
-  Circle,
+  CircleIcon,
   Clock,
   Loader2,
   XCircle,
@@ -45,7 +45,7 @@ export function CheckIcon({ check }: { check: Pick<CICheck, 'status' | 'conclusi
     case 'action_required':
       return <XCircle className="text-status-error size-3.5 shrink-0" />;
     case 'cancelled':
-      return <Circle className="text-muted-foreground size-3.5 shrink-0" />;
+      return <CircleIcon className="text-muted-foreground size-3.5 shrink-0" />;
     default:
       return <Clock className="text-status-pending size-3.5 shrink-0" />;
   }
@@ -128,24 +128,27 @@ function PRChecksSection({ detail }: { detail: PRDetail }) {
   return (
     <Collapsible open={checksOpen} onOpenChange={setChecksOpen} className="mt-1.5">
       <div className="flex items-center gap-3">
-        <CollapsibleTrigger
-          className="text-muted-foreground hover:text-foreground text-compact flex items-center gap-1"
-          data-testid="pr-summary-checks-toggle"
-        >
-          {checksOpen ? (
-            <ChevronDown className="size-3.5" />
-          ) : (
-            <ChevronRight className="size-3.5" />
-          )}
-          <span>
-            CI Checks ({detail.checks_passed}/{totalChecks} passed)
-            {detail.checks_failed > 0 && (
-              <span className="text-status-error ml-1">{detail.checks_failed} failed</span>
+        <CollapsibleTrigger asChild>
+          <button
+            type="button"
+            className="text-muted-foreground hover:text-foreground text-compact flex items-center gap-1"
+            data-testid="pr-summary-checks-toggle"
+          >
+            {checksOpen ? (
+              <ChevronDown className="size-3.5" />
+            ) : (
+              <ChevronRight className="size-3.5" />
             )}
-            {detail.checks_pending > 0 && (
-              <span className="text-status-pending ml-1">{detail.checks_pending} pending</span>
-            )}
-          </span>
+            <span>
+              CI Checks ({detail.checks_passed}/{totalChecks} passed)
+              {detail.checks_failed > 0 && (
+                <span className="text-status-error ml-1">{detail.checks_failed} failed</span>
+              )}
+              {detail.checks_pending > 0 && (
+                <span className="text-status-pending ml-1">{detail.checks_pending} pending</span>
+              )}
+            </span>
+          </button>
         </CollapsibleTrigger>
       </div>
       <CollapsibleContent>

@@ -257,7 +257,8 @@ function FileRowSummary({ file: f, fileSearch }: { file: FileDiffSummary; fileSe
         name={f.path.split('/').pop() || f.path}
         query={fileSearch}
         preserveExtension={!isSubmodule}
-        className="font-mono-explorer text-xs"
+        font="explorer"
+        textSize="xs"
       />
       {isSubmodule && (
         <SubmoduleBadge

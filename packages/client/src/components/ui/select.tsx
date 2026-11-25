@@ -22,9 +22,24 @@ const selectTriggerVariants = cva(
         md: FIELD_SIZE.md,
         lg: FIELD_SIZE.lg,
       },
+      // A trigger drawn as plain text inside a toolbar.
+      variant: {
+        default: '',
+        ghost: 'border-none bg-transparent shadow-none',
+      },
+      // Text size only, keeping the size's height and padding.
+      textSize: {
+        default: '',
+        '2xs': 'text-2xs',
+        compact: 'text-compact',
+        xs: 'text-xs',
+        sm: 'text-sm',
+      },
     },
     defaultVariants: {
       size: 'sm',
+      variant: 'default',
+      textSize: 'default',
     },
   },
 );
@@ -33,6 +48,8 @@ function SelectTrigger({
   className,
   children,
   size,
+  variant,
+  textSize,
   hideChevron,
   ref,
   ...props
@@ -43,7 +60,7 @@ function SelectTrigger({
   return (
     <SelectPrimitive.Trigger
       ref={ref}
-      className={cn(selectTriggerVariants({ size }), className)}
+      className={cn(selectTriggerVariants({ size, variant, textSize }), className)}
       {...props}
     >
       {children}
@@ -128,15 +145,22 @@ function SelectContent({
 }
 function SelectLabel({
   className,
+  size = 'default',
   ref,
   ...props
 }: React.ComponentPropsWithoutRef<typeof SelectPrimitive.Label> & {
   ref?: React.Ref<React.ComponentRef<typeof SelectPrimitive.Label>>;
+  /** `2xs` for the group headings of dense menus. */
+  size?: 'default' | '2xs';
 }) {
   return (
     <SelectPrimitive.Label
       ref={ref}
-      className={cn('px-2 py-1.5 text-xs font-semibold', className)}
+      className={cn(
+        'px-2 py-1.5 font-semibold',
+        size === '2xs' ? 'text-2xs' : 'text-xs',
+        className,
+      )}
       {...props}
     />
   );
@@ -153,9 +177,18 @@ const selectItemVariants = cva(
         md: 'py-1.5 pl-2 pr-8 text-sm',
         lg: 'py-1.5 pl-2 pr-8 text-base',
       },
+      // Text size only, keeping the size's height and padding.
+      textSize: {
+        default: '',
+        '2xs': 'text-2xs',
+        compact: 'text-compact',
+        xs: 'text-xs',
+        sm: 'text-sm',
+      },
     },
     defaultVariants: {
       size: 'sm',
+      textSize: 'default',
     },
   },
 );
@@ -164,6 +197,7 @@ function SelectItem({
   className,
   children,
   size,
+  textSize,
   ref,
   ...props
 }: React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item> &
@@ -173,7 +207,7 @@ function SelectItem({
   return (
     <SelectPrimitive.Item
       ref={ref}
-      className={cn(selectItemVariants({ size }), className)}
+      className={cn(selectItemVariants({ size, textSize }), className)}
       {...props}
     >
       <span

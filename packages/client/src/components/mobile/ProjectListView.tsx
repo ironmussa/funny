@@ -1,5 +1,5 @@
 import type { Project } from '@funny/shared';
-import { Folder, Plus } from 'lucide-react';
+import { FolderIcon, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -65,7 +65,7 @@ export function ProjectListView({ projects, onSelect, onAddProject }: Props) {
                   pressedId === project.id ? 'bg-accent' : 'active:bg-accent',
                 )}
               >
-                <Folder className="icon-lg text-muted-foreground shrink-0" />
+                <FolderIcon className="icon-lg text-muted-foreground shrink-0" />
                 <div className="min-w-0">
                   <div className="truncate text-sm font-medium">{project.name}</div>
                   <div className="text-muted-foreground truncate text-xs">{project.path}</div>

@@ -320,7 +320,7 @@ function WorkflowsDesigner({ projectId }: { projectId: string | null }) {
                 value={filter}
                 onChange={(event) => setFilter(event.target.value)}
                 placeholder="Filter workflows"
-                className="pl-8"
+                inset="icon"
               />
             </div>
           </div>
@@ -440,7 +440,8 @@ function RunPanel({
         value={inputsSource}
         onChange={(event) => onInputsChange(event.target.value)}
         spellCheck={false}
-        className="font-mono text-xs"
+        mono
+        textSize="xs"
         rows={4}
       />
     </section>
@@ -576,7 +577,9 @@ function Inspector({
           onChange={(event) => setActionSource(event.target.value)}
           onBlur={applyAction}
           spellCheck={false}
-          className="min-h-28 font-mono text-xs"
+          mono
+          textSize="xs"
+          className="min-h-28"
         />
         <Textarea
           value={retrySource}
@@ -584,7 +587,9 @@ function Inspector({
           onBlur={() => applyJsonField('retry', retrySource)}
           placeholder='{"max_attempts":2}'
           spellCheck={false}
-          className="min-h-20 font-mono text-xs"
+          mono
+          textSize="xs"
+          className="min-h-20"
         />
         <Textarea
           value={loopSource}
@@ -592,7 +597,9 @@ function Inspector({
           onBlur={() => applyJsonField('loop', loopSource)}
           placeholder='{"until":"done = true","back_to":"review"}'
           spellCheck={false}
-          className="min-h-20 font-mono text-xs"
+          mono
+          textSize="xs"
+          className="min-h-20"
         />
       </div>
     </section>
@@ -620,7 +627,10 @@ function SourcePanel({
         value={source}
         onChange={(event) => onSourceChange(event.target.value)}
         spellCheck={false}
-        className="min-h-64 flex-1 resize-none rounded-none border-0 font-mono text-xs focus-visible:ring-0"
+        mono
+        variant="bare"
+        textSize="xs"
+        className="min-h-64 flex-1 resize-none"
       />
       {diagnostics.length > 0 ? (
         <div className="border-border max-h-28 overflow-auto border-t p-2">

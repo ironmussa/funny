@@ -9,6 +9,8 @@ interface CodeViewerProps {
   startLine?: number;
   maxHeight?: string;
   className?: string;
+  /** 8px above and below the code, inside the scroll box. */
+  padded?: boolean;
 }
 
 export function CodeViewer({
@@ -17,6 +19,7 @@ export function CodeViewer({
   startLine = 1,
   maxHeight = '320px',
   className,
+  padded = false,
 }: CodeViewerProps) {
   const [html, setHtml] = useState<string | null>(null);
 
@@ -34,7 +37,10 @@ export function CodeViewer({
   }, [code, language]);
 
   return (
-    <div className={cn('overflow-x-auto overflow-y-auto', className)} style={{ maxHeight }}>
+    <div
+      className={cn('overflow-x-auto overflow-y-auto', padded && 'py-2', className)}
+      style={{ maxHeight }}
+    >
       {html ? (
         <div
           className="hljs code-viewer px-3 font-mono text-xs leading-relaxed whitespace-pre"

@@ -63,7 +63,7 @@ export function AnnotationList() {
         }}
       >
         {annotations.map((a, i) => {
-          const Icon = kindIcon(a.kind);
+          const KindIcon = kindIcon(a.kind);
           const snippet = truncate(a.note.trim(), NOTE_SNIPPET_MAX);
           return (
             <li
@@ -77,7 +77,10 @@ export function AnnotationList() {
               >
                 {i + 1}
               </span>
-              <Icon className="text-muted-foreground mt-1 size-3.5 shrink-0" aria-label={a.kind} />
+              <KindIcon
+                className="text-muted-foreground mt-1 size-3.5 shrink-0"
+                aria-label={a.kind}
+              />
               <div className="flex min-w-0 flex-1 flex-col">
                 <span className="text-muted-foreground">{summarize(a)}</span>
                 {snippet && <span className="truncate">{snippet}</span>}

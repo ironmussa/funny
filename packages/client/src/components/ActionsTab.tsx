@@ -220,56 +220,58 @@ function PRChecksSection({
   const checks = detail ? sortChecks(detail.checks) : [];
 
   return (
-    <Collapsible open={open} onOpenChange={setOpen} className="border-sidebar-border border-b">
-      <div className="flex items-center gap-2 px-3 py-1.5 text-xs">
-        <CollapsibleTrigger asChild>
-          <button
-            type="button"
-            className="flex min-w-0 flex-1 items-center gap-2 text-left"
-            data-testid="actions-pr-checks-toggle"
-          >
-            <ChevronRight
-              className={cn(
-                'icon-sm text-muted-foreground shrink-0 transition-transform',
-                open && 'rotate-90',
+    <div className="border-sidebar-border border-b">
+      <Collapsible open={open} onOpenChange={setOpen}>
+        <div className="flex items-center gap-2 px-3 py-1.5 text-xs">
+          <CollapsibleTrigger asChild>
+            <button
+              type="button"
+              className="flex min-w-0 flex-1 items-center gap-2 text-left"
+              data-testid="actions-pr-checks-toggle"
+            >
+              <ChevronRight
+                className={cn(
+                  'icon-sm text-muted-foreground shrink-0 transition-transform',
+                  open && 'rotate-90',
+                )}
+              />
+              <GitPullRequest className="icon-sm text-muted-foreground shrink-0" />
+              <span className="shrink-0 font-medium">#{prNumber}</span>
+              {detail && checks.length > 0 ? (
+                <CISummaryCounts detail={detail} total={checks.length} />
+              ) : (
+                <span className="text-muted-foreground truncate">
+                  {t('review.ci.noChecks', 'No CI checks reported for this PR')}
+                </span>
               )}
-            />
-            <GitPullRequest className="icon-sm text-muted-foreground shrink-0" />
-            <span className="shrink-0 font-medium">#{prNumber}</span>
-            {detail && checks.length > 0 ? (
-              <CISummaryCounts detail={detail} total={checks.length} />
-            ) : (
-              <span className="text-muted-foreground truncate">
-                {t('review.ci.noChecks', 'No CI checks reported for this PR')}
-              </span>
-            )}
-          </button>
-        </CollapsibleTrigger>
-        {detail && <ReviewDecisionBadge decision={detail.review_decision} />}
-        {detail && <MergeStatus mergeable={detail.mergeable_state} merged={detail.merged} />}
-        {prUrl && (
-          <a
-            href={prUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label={t('review.ci.openOnGithub', 'Open PR on GitHub')}
-            className="text-muted-foreground hover:text-foreground shrink-0"
-            data-testid="actions-pr-open-github"
-          >
-            <ExternalLink className="size-3" />
-          </a>
-        )}
-      </div>
-      <CollapsibleContent>
-        {open && (
-          <div className="flex flex-col pb-1" data-testid="ci-checks-list">
-            {checks.map((check) => (
-              <CICheckRow key={check.id} check={check} />
-            ))}
-          </div>
-        )}
-      </CollapsibleContent>
-    </Collapsible>
+            </button>
+          </CollapsibleTrigger>
+          {detail && <ReviewDecisionBadge decision={detail.review_decision} />}
+          {detail && <MergeStatus mergeable={detail.mergeable_state} merged={detail.merged} />}
+          {prUrl && (
+            <a
+              href={prUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={t('review.ci.openOnGithub', 'Open PR on GitHub')}
+              className="text-muted-foreground hover:text-foreground shrink-0"
+              data-testid="actions-pr-open-github"
+            >
+              <ExternalLink className="size-3" />
+            </a>
+          )}
+        </div>
+        <CollapsibleContent>
+          {open && (
+            <div className="flex flex-col pb-1" data-testid="ci-checks-list">
+              {checks.map((check) => (
+                <CICheckRow key={check.id} check={check} />
+              ))}
+            </div>
+          )}
+        </CollapsibleContent>
+      </Collapsible>
+    </div>
   );
 }
 
@@ -482,9 +484,9 @@ function JobRow({ projectId, job }: { projectId: string; job: ActionJob }) {
         {failed && (
           <Button
             variant="muted"
-            size="xs"
+            size="2xs"
             onClick={() => setShowLog((v) => !v)}
-            className="h-5 shrink-0 px-1.5"
+            className="shrink-0"
             data-testid={`actions-job-log-toggle-${job.id}`}
           >
             {showLog
@@ -566,7 +568,9 @@ function ScopeToggle({
       <ToggleGroupItem
         value="branch"
         disabled={!currentBranch}
-        className="h-6 max-w-40 truncate px-2 text-xs"
+        size="xs"
+        truncate
+        className="max-w-40"
         title={currentBranch}
         data-testid="actions-scope-branch"
       >
@@ -576,7 +580,7 @@ function ScopeToggle({
           t('review.actions.thisBranch', 'This branch')
         )}
       </ToggleGroupItem>
-      <ToggleGroupItem value="all" className="h-6 px-2 text-xs" data-testid="actions-scope-all">
+      <ToggleGroupItem value="all" size="xs" data-testid="actions-scope-all">
         {t('review.actions.allBranches', 'All branches')}
       </ToggleGroupItem>
     </ToggleGroup>

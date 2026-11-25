@@ -249,9 +249,9 @@ export function IssueFactoryStatus({
       )}
       {run.state === 'requested' && (
         <Button
-          variant="outline"
+          variant="outline-muted"
           size="xs"
-          className="text-muted-foreground hover:text-foreground ml-1"
+          className="ml-1"
           onClick={cancel}
           data-testid={`issue-factory-cancel-${run.issueNumber}`}
         >
@@ -395,7 +395,7 @@ export function IssuesFactoryBar({
       )}
       <div className="flex items-center justify-end gap-1.5">
         <Select value={flow} onValueChange={setFlow}>
-          <SelectTrigger size="xs" className="w-auto gap-1" data-testid="issues-factory-flow">
+          <SelectTrigger size="xs" className="w-auto" data-testid="issues-factory-flow">
             <span className="truncate">{flow}</span>
           </SelectTrigger>
           <SelectContent>
@@ -403,7 +403,7 @@ export function IssuesFactoryBar({
               <SelectItem
                 key={option.name}
                 value={option.name}
-                className="text-xs"
+                textSize="xs"
                 data-testid={`issues-factory-flow-${option.name}`}
               >
                 {option.name}

@@ -63,7 +63,7 @@ export function BoardColumn({
           {count === 0 ? (
             <EmptyState
               fill={false}
-              className="py-8"
+              padding="roomy"
               title={emptyTitle ?? t('kanban.emptyColumn')}
             />
           ) : (

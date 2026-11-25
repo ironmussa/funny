@@ -429,12 +429,7 @@ export function GraphCommitRow({
             '--graph-time-margin-top': `${titleYForRow(entry, rowHeight) - titleLineH / 2}px`,
           }}
         >
-          <HoverTimeMenu
-            time={commitTime}
-            timeClassName="text-muted-foreground text-2xs"
-            open={menuOpen}
-            className="min-w-12"
-          >
+          <HoverTimeMenu time={commitTime} timeTone="subtle" open={menuOpen} className="min-w-12">
             <CommitActionsMenu
               hash={entry.hash}
               shortHash={entry.shortHash}
@@ -449,7 +444,8 @@ export function GraphCommitRow({
               onSelectRebaseEvent={onSelectRebaseEvent}
               onAfterAction={onAfterAction}
               onOpenChange={setMenuOpen}
-              triggerClassName="text-muted-foreground hover:text-foreground"
+              triggerClassName="shrink-0"
+              triggerVariant="muted-strong"
             />
           </HoverTimeMenu>
         </div>

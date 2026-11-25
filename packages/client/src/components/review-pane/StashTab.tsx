@@ -18,6 +18,7 @@ import { parseDiffOld, parseDiffNew } from '@/lib/diff-parse';
 import {
   listRowActionBusyClassName,
   listRowActionClassName,
+  listRowDestructiveActionClassName,
   listRowClassName,
   listRowTitleClassName,
 } from '@/lib/list-row-styles';
@@ -142,7 +143,7 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
         >
           <div className="border-border shrink-0 border-b px-4 py-3">
             <div className="flex items-start justify-between gap-2">
-              <DialogTitle size="sm" className="leading-tight">
+              <DialogTitle size="sm" leading="tight">
                 {selectedStashEntry?.message ?? t('review.stashDetails', 'Stash details')}
               </DialogTitle>
               <Button
@@ -439,11 +440,7 @@ function StashDropButton({
           size="icon-xs"
           aria-label={t('review.dropStash', 'Discard stash')}
           // oxlint-disable shadcn/require-static-classes -- listRowActionClassName and listRowActionBusyClassName are static constants from list-row-styles
-          className={cn(
-            listRowActionClassName,
-            'hover:text-destructive',
-            dropping && listRowActionBusyClassName,
-          )}
+          className={cn(listRowDestructiveActionClassName, dropping && listRowActionBusyClassName)}
           // oxlint-enable shadcn/require-static-classes
           onClick={(e) => {
             e.stopPropagation();

@@ -104,11 +104,16 @@ export function resultEventType(
   return subtype === 'success' && providerError === undefined ? 'COMPLETE' : 'FAIL';
 }
 
+interface ResultErrorFields {
+  errorReason: string;
+  error: string | undefined;
+}
+
 /** `errorReason` + `error` for a failed result: the provider error, else the result or errors array. */
 export function resultErrorFields(
   msg: ResultMessage,
   providerError: string | undefined,
-): { errorReason: string; error: string | undefined } {
+): ResultErrorFields {
   if (providerError !== undefined) return { errorReason: 'provider_error', error: providerError };
   const error = msg.result ? decodeUnicodeEscapes(msg.result) : (msg.errors?.[0] ?? undefined);
   return { errorReason: msg.subtype, error };

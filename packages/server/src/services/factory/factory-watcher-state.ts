@@ -9,6 +9,7 @@
  */
 
 import type { ConcurrencyGate } from '@funny/pipelines';
+import { errorMessage } from '@funny/shared/errors';
 import { type Result } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
@@ -27,6 +28,7 @@ import {
   createFactoryFlowRuns,
   type FactoryFlowRunsDeps,
   type FactoryRunJob,
+  type NotifyOutcome,
   type WaitingNotice,
 } from './factory-flow-runs.js';
 import { type FactoryFlow, type FactoryFlowError } from './factory-flow.js';
@@ -100,7 +102,7 @@ export interface FactoryWatcherDeps {
   /** "No change" cleanup override for tests; defaults to `cleanupFactoryWorktrees` keeping unsaved work. */
   cleanupUnchanged?: (userId: string, threadIds: string[]) => Promise<KeptWorktree[]>;
   /** Notification override for tests; defaults to Web Push. */
-  notify?: (userId: string, message: WaitingNotice) => Promise<unknown>;
+  notify?: (userId: string, message: WaitingNotice) => Promise<NotifyOutcome>;
   /** Flow loader override for tests; defaults to the default branch, then the built-ins. */
   loadFlow?: (job: FactoryRunJob) => Promise<Result<FactoryFlow, FactoryFlowError>>;
   /** Proof service override for tests; defaults to runner thread requests. */
@@ -147,11 +149,11 @@ export const blockedReasons = new Map<string, string | null>();
 export async function reportBlocked(factoryId: string, reason: string | null): Promise<void> {
   if (blockedReasons.has(factoryId) && blockedReasons.get(factoryId) === reason) return;
   blockedReasons.set(factoryId, reason);
-  await setFactoryBlocked(factoryId, reason).catch((error: unknown) =>
+  await setFactoryBlocked(factoryId, reason).catch((cause: unknown) =>
     log.warn('Failed to record why an issue factory is blocked', {
       namespace: 'factory',
       factoryId,
-      error: error instanceof Error ? error.message : String(error),
+      error: errorMessage(cause),
     }),
   );
 }

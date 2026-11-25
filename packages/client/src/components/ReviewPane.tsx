@@ -175,149 +175,146 @@ export function ReviewPane() {
         deselectAllSignal={deselectAllSignal}
       />
       {/* Normal ReviewPane content */}
-      <Tabs
-        value={reviewSubTab}
-        onValueChange={(v) => setReviewSubTab(v as ReviewSubTab)}
-        className="flex h-full flex-col text-xs"
-        style={{ contain: 'strict' }}
-      >
-        {/* Header with tabs */}
-        <ReviewPaneTabsHeader onClose={() => setReviewPaneOpen(false)} />
+      <Tabs value={reviewSubTab} onValueChange={(v) => setReviewSubTab(v as ReviewSubTab)} asChild>
+        <div className="flex h-full flex-col text-xs [contain:strict]">
+          {/* Header with tabs */}
+          <ReviewPaneTabsHeader onClose={() => setReviewPaneOpen(false)} />
 
-        <ReviewChangesTab
-          truncatedInfo={truncatedInfo}
-          summaries={summaries}
-          prSummary={buildPrSummary(
-            gitStatus,
-            projectId,
-            reviewSubTab === 'changes' && reviewPaneOpen,
-          )}
-          search={buildFileSearch({
-            fileSearch,
-            setFileSearch,
-            caseSensitive: fileSearchCaseSensitive,
-            setCaseSensitive: setFileSearchCaseSensitive,
-            matchCount: filteredDiffs.length,
-            totalCount: summaries.length,
-            placeholder: t('review.searchFiles', 'Filter files…'),
-          })}
-          toolbar={{
-            refresh: refreshAll,
-            loading,
-            handlePull,
-            handleFetchOrigin,
-            pullInProgress,
-            fetchInProgress,
-            handlePushOnly,
-            pushInProgress,
-            remoteUrl,
-            setPublishDialogOpen,
-            unpushedCommitCount,
-            threadBranch,
-            baseBranch,
-            isOnDifferentBranch,
-            openMergeDialog,
-            mergeInProgress,
-            setPrDialog,
-            summaries,
-            checkedFiles,
-            handleStageSelected,
-            handleUnstageAll,
-            handleStashSelected,
-            handleDiscardAll,
-            handleIgnoreFiles,
-            actionInProgress,
-            stashInProgress,
-            gitStatus,
-            isAgentRunning,
-            readOnly: viewerReadOnly,
-          }}
-          filesPanel={{
-            summaries,
-            filteredDiffs,
-            checkedCount,
-            totalCount,
-            toggleAll,
-            hasFolders,
-            allFoldersCollapsed,
-            collapsedFolders,
-            handleCollapseAllFolders,
-            handleExpandAllFolders,
-            loading,
-            loadError,
-            loadErrorMessage,
-            refresh,
-            fileSearch,
-            treeRows,
-            selectedFile,
-            setSelectedFile,
-            expandedFile,
-            setExpandedFile,
-            loadDiffForFile,
-            checkedFiles,
-            toggleFile,
-            toggleFolder,
-            toggleSubmodule,
-            expandedSubmodules,
-            fileSelectionState,
-            setFileSelectionState,
-            setSelectAllSignal,
-            setDeselectAllSignal,
-            handleStageFile,
-            handleUnstageFile,
-            handleRevertFile,
-            handleDiscardFolder,
-            handleIgnore,
-            handleCopyPath,
-            handleOpenDirectory,
-            basePath,
-            readOnly: viewerReadOnly,
-          }}
-          commitDraft={{
-            commitEntry,
-            commitProgressId,
-            setActionInProgress,
-            summaries,
-            commitInProgress,
-            commitTitle,
-            commitBody,
-            setCommitTitle,
-            setCommitBody,
-            generatingMsg,
-            handleGenerateCommitMsg,
-            selectedAction,
-            setSelectedAction,
-            actionInProgress,
-            isOnDifferentBranch,
-            gitStatus,
-            canCommit,
-            handleCommitAction,
-            isAgentRunning,
-            effectiveThreadId,
-            hasRebaseConflict,
-            baseBranch,
-            isWorktree,
-            handleOpenInEditorConflict,
-            handleAskAgentResolve,
-            readOnly: viewerReadOnly,
-          }}
-        />
+          <ReviewChangesTab
+            truncatedInfo={truncatedInfo}
+            summaries={summaries}
+            prSummary={buildPrSummary(
+              gitStatus,
+              projectId,
+              reviewSubTab === 'changes' && reviewPaneOpen,
+            )}
+            search={buildFileSearch({
+              fileSearch,
+              setFileSearch,
+              caseSensitive: fileSearchCaseSensitive,
+              setCaseSensitive: setFileSearchCaseSensitive,
+              matchCount: filteredDiffs.length,
+              totalCount: summaries.length,
+              placeholder: t('review.searchFiles', 'Filter files…'),
+            })}
+            toolbar={{
+              refresh: refreshAll,
+              loading,
+              handlePull,
+              handleFetchOrigin,
+              pullInProgress,
+              fetchInProgress,
+              handlePushOnly,
+              pushInProgress,
+              remoteUrl,
+              setPublishDialogOpen,
+              unpushedCommitCount,
+              threadBranch,
+              baseBranch,
+              isOnDifferentBranch,
+              openMergeDialog,
+              mergeInProgress,
+              setPrDialog,
+              summaries,
+              checkedFiles,
+              handleStageSelected,
+              handleUnstageAll,
+              handleStashSelected,
+              handleDiscardAll,
+              handleIgnoreFiles,
+              actionInProgress,
+              stashInProgress,
+              gitStatus,
+              isAgentRunning,
+              readOnly: viewerReadOnly,
+            }}
+            filesPanel={{
+              summaries,
+              filteredDiffs,
+              checkedCount,
+              totalCount,
+              toggleAll,
+              hasFolders,
+              allFoldersCollapsed,
+              collapsedFolders,
+              handleCollapseAllFolders,
+              handleExpandAllFolders,
+              loading,
+              loadError,
+              loadErrorMessage,
+              refresh,
+              fileSearch,
+              treeRows,
+              selectedFile,
+              setSelectedFile,
+              expandedFile,
+              setExpandedFile,
+              loadDiffForFile,
+              checkedFiles,
+              toggleFile,
+              toggleFolder,
+              toggleSubmodule,
+              expandedSubmodules,
+              fileSelectionState,
+              setFileSelectionState,
+              setSelectAllSignal,
+              setDeselectAllSignal,
+              handleStageFile,
+              handleUnstageFile,
+              handleRevertFile,
+              handleDiscardFolder,
+              handleIgnore,
+              handleCopyPath,
+              handleOpenDirectory,
+              basePath,
+              readOnly: viewerReadOnly,
+            }}
+            commitDraft={{
+              commitEntry,
+              commitProgressId,
+              setActionInProgress,
+              summaries,
+              commitInProgress,
+              commitTitle,
+              commitBody,
+              setCommitTitle,
+              setCommitBody,
+              generatingMsg,
+              handleGenerateCommitMsg,
+              selectedAction,
+              setSelectedAction,
+              actionInProgress,
+              isOnDifferentBranch,
+              gitStatus,
+              canCommit,
+              handleCommitAction,
+              isAgentRunning,
+              effectiveThreadId,
+              hasRebaseConflict,
+              baseBranch,
+              isWorktree,
+              handleOpenInEditorConflict,
+              handleAskAgentResolve,
+              readOnly: viewerReadOnly,
+            }}
+          />
 
-        <ReviewSecondaryTabs
-          activePath={basePath}
-          readOnly={viewerReadOnly}
-          reviewSubTab={reviewSubTab}
-          reviewPaneOpen={reviewPaneOpen}
-          stashTab={{
-            stash,
-            currentBranch,
-            isAgentRunning,
-            onRequestDrop: (stashIndex) => setConfirmDialog({ type: 'drop-stash', stashIndex }),
-          }}
-          projectId={projectId}
-          prNumber={prNumber}
-          prUrl={prUrl}
-        />
+          <ReviewSecondaryTabs
+            activePath={basePath}
+            readOnly={viewerReadOnly}
+            reviewSubTab={reviewSubTab}
+            reviewPaneOpen={reviewPaneOpen}
+            stashTab={{
+              stash,
+              currentBranch,
+              isAgentRunning,
+              onRequestDrop: (stashIndex) => setConfirmDialog({ type: 'drop-stash', stashIndex }),
+            }}
+            projectId={projectId}
+            prNumber={prNumber}
+            prUrl={prUrl}
+          />
+        </div>
       </Tabs>
 
       <ReviewDialogs

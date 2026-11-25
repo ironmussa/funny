@@ -32,46 +32,49 @@ export interface ResolvedModel {
 
 // ── Short name → full model ID maps ──────────────────────────
 
-const ANTHROPIC_MODEL_ALIASES: Record<string, string> = {
-  opus: 'claude-opus-4-6',
-  'opus-4.7': 'claude-opus-4-7',
-  'opus-4.8': 'claude-opus-4-8',
-  'opus-5': 'claude-opus-5',
-  'opus-5.5': 'claude-opus-5-5',
-  'fable-5': 'claude-fable-5',
-  'fable-5.1': 'claude-fable-5-1',
-  'fable-5.2': 'claude-fable-5-2',
-  'mythos-5.2': 'claude-mythos-5-2',
-  sonnet: 'claude-sonnet-4-5-20250929',
-  haiku: 'claude-haiku-4-5-20251001',
-};
+const ANTHROPIC_MODEL_ALIASES = new Map(
+  Object.entries({
+    opus: 'claude-opus-4-6',
+    'opus-4.7': 'claude-opus-4-7',
+    'opus-4.8': 'claude-opus-4-8',
+    'opus-5': 'claude-opus-5',
+    'opus-5.5': 'claude-opus-5-5',
+    'fable-5': 'claude-fable-5',
+    'fable-5.1': 'claude-fable-5-1',
+    'fable-5.2': 'claude-fable-5-2',
+    'mythos-5.2': 'claude-mythos-5-2',
+    sonnet: 'claude-sonnet-4-5-20250929',
+    haiku: 'claude-haiku-4-5-20251001',
+  }),
+);
 
-const OPENAI_MODEL_ALIASES: Record<string, string> = {
-  'gpt-4': 'gpt-4-turbo',
-  'gpt-4o': 'gpt-4o',
-  o1: 'o1',
-  // Claude short names — for OpenAI-compatible servers backed by Claude
-  opus: 'claude-opus-4-6',
-  'opus-4.7': 'claude-opus-4-7',
-  'opus-4.8': 'claude-opus-4-8',
-  'opus-5': 'claude-opus-5',
-  'opus-5.5': 'claude-opus-5-5',
-  'fable-5': 'claude-fable-5',
-  'fable-5.1': 'claude-fable-5-1',
-  'fable-5.2': 'claude-fable-5-2',
-  'mythos-5.2': 'claude-mythos-5-2',
-  sonnet: 'claude-sonnet-4-5-20250929',
-  haiku: 'claude-haiku-4-5-20251001',
-};
+const OPENAI_MODEL_ALIASES = new Map(
+  Object.entries({
+    'gpt-4': 'gpt-4-turbo',
+    'gpt-4o': 'gpt-4o',
+    o1: 'o1',
+    // Claude short names — for OpenAI-compatible servers backed by Claude
+    opus: 'claude-opus-4-6',
+    'opus-4.7': 'claude-opus-4-7',
+    'opus-4.8': 'claude-opus-4-8',
+    'opus-5': 'claude-opus-5',
+    'opus-5.5': 'claude-opus-5-5',
+    'fable-5': 'claude-fable-5',
+    'fable-5.1': 'claude-fable-5-1',
+    'fable-5.2': 'claude-fable-5-2',
+    'mythos-5.2': 'claude-mythos-5-2',
+    sonnet: 'claude-sonnet-4-5-20250929',
+    haiku: 'claude-haiku-4-5-20251001',
+  }),
+);
+
+const MODEL_ALIASES_BY_PROVIDER = new Map([
+  ['anthropic', ANTHROPIC_MODEL_ALIASES],
+  ['openai', OPENAI_MODEL_ALIASES],
+]);
 
 function resolveModelId(provider: string, modelId: string): string {
-  if (provider === 'anthropic' && ANTHROPIC_MODEL_ALIASES[modelId]) {
-    return ANTHROPIC_MODEL_ALIASES[modelId];
-  }
-  if (provider === 'openai' && OPENAI_MODEL_ALIASES[modelId]) {
-    return OPENAI_MODEL_ALIASES[modelId];
-  }
-  return modelId;
+  return MODEL_ALIASES_BY_PROVIDER.get(provider)?.get(modelId) || modelId;
 }
 
 // ── Factory ───────────────────────────────────────────────────

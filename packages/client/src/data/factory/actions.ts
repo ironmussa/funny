@@ -1,4 +1,7 @@
-import type { FactoryApprovalRequest } from '@funny/shared/contracts/factory';
+import type {
+  FactoryApprovalRequest,
+  FactoryReplacedPrClose,
+} from '@funny/shared/contracts/factory';
 import type { DomainError } from '@funny/shared/errors';
 import type { ResultAsync } from 'neverthrow';
 
@@ -14,6 +17,7 @@ import {
 } from '@/lib/api/factory';
 
 import type { DataLayer } from '../data-layer';
+import { fetchPRDetail } from '../pull-requests/queries';
 import { getDataLayer } from '../runtime';
 import {
   refetchFactorySettings,
@@ -104,6 +108,24 @@ export function markFactoryRunDone(
   return factoryApi.markRunDone(projectId, runId).map((run) => {
     writeFactoryRun(projectId, run, layer);
     return run;
+  });
+}
+
+/**
+ * Close the pull request a replaced run left open, and delete its branch. The
+ * server decides again that a newer run of the issue replaced it. The run does
+ * not change; the PR's state is read again from GitHub so the card shows it
+ * closed. The caller shows the error.
+ */
+export function closeFactoryReplacedPr(
+  projectId: string,
+  runId: string,
+  prNumber: number,
+  layer: DataLayer = getDataLayer(),
+): ResultAsync<FactoryReplacedPrClose, DomainError> {
+  return factoryApi.closeReplacedPr(projectId, runId).map((result) => {
+    void fetchPRDetail(projectId, prNumber, { force: true }, layer);
+    return result;
   });
 }
 

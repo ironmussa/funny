@@ -68,6 +68,6 @@ export function scrubSensitiveEnv<T extends Record<string, string | undefined>>(
 export function buildChildEnv(
   extra?: Record<string, string | undefined>,
   base: Record<string, string | undefined> = process.env,
-): Record<string, string | undefined> {
+): NodeJS.ProcessEnv {
   return { ...scrubSensitiveEnv(base), ...extra };
 }

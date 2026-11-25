@@ -57,7 +57,7 @@ function FlowYamlDialog({
               <AlertDescription>{error.message}</AlertDescription>
             </Alert>
           ) : definition ? (
-            <CodeViewer code={definition.yaml} language="yaml" maxHeight="70vh" className="py-2" />
+            <CodeViewer code={definition.yaml} language="yaml" maxHeight="70vh" padded />
           ) : (
             <LoadingState label={loading} className="min-h-[20vh]" />
           )}

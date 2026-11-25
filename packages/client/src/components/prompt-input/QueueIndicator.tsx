@@ -13,8 +13,8 @@ interface QueueIconButtonProps {
   label: string;
   onClick: () => void;
   disabled: boolean;
-  variant?: 'ghost';
-  className: string;
+  variant?: 'ghost-destructive' | 'muted-strong';
+  className?: string;
   children: React.ReactNode;
 }
 
@@ -78,7 +78,7 @@ function QueueItemEditor({ message, index, queue }: QueueItemProps) {
         value={queue.editingContent}
         onChange={(event) => queue.setEditingContent(event.target.value)}
         disabled={isBusy}
-        className="bg-background flex-1"
+        className="flex-1"
       />
       <div className="flex shrink-0 items-center gap-0.5">
         <QueueIconButton
@@ -86,7 +86,7 @@ function QueueItemEditor({ message, index, queue }: QueueItemProps) {
           label={t('prompt.saveQueuedMessage', 'Save')}
           onClick={() => queue.saveEdit(message.id)}
           disabled={isBusy}
-          className="text-muted-foreground hover:text-foreground"
+          variant="muted-strong"
         >
           <BusyIcon busy={isBusy}>
             <Check className="icon-xs" />
@@ -95,10 +95,9 @@ function QueueItemEditor({ message, index, queue }: QueueItemProps) {
         <QueueIconButton
           testId={`queue-cancel-edit-${message.id}`}
           label={t('prompt.cancelQueuedEdit', 'Cancel')}
-          variant="ghost"
+          variant="muted-strong"
           onClick={queue.cancelEdit}
           disabled={isBusy}
-          className="text-muted-foreground hover:text-foreground"
         >
           <X className="icon-xs" />
         </QueueIconButton>
@@ -126,20 +125,18 @@ function QueueItemView({ message, index, queue }: QueueItemProps) {
         <QueueIconButton
           testId={`queue-edit-${message.id}`}
           label={t('prompt.editQueuedMessage', 'Edit')}
-          variant="ghost"
+          variant="muted-strong"
           onClick={() => queue.startEdit(message)}
           disabled={actionsDisabled}
-          className="text-muted-foreground hover:text-foreground"
         >
           <Pencil className="icon-xs" />
         </QueueIconButton>
         <QueueIconButton
           testId={`queue-delete-${message.id}`}
           label={t('prompt.deleteQueuedMessage', 'Delete')}
-          variant="ghost"
+          variant="ghost-destructive"
           onClick={() => queue.deleteMessage(message.id)}
           disabled={actionsDisabled}
-          className="text-destructive hover:text-destructive"
         >
           <BusyIcon busy={isBusy}>
             <Trash2 className="icon-xs" />

@@ -54,8 +54,8 @@ export function AuthorBadge({
     <span className={cn('flex min-w-0 items-center gap-1 truncate', className)}>
       <Avatar className={avatarSize}>
         {cachedUrl && <AvatarImage src={cachedUrl} alt={name} />}
-        <AvatarFallback name={name} className={fallbackText}>
-          {name.charAt(0).toUpperCase()}
+        <AvatarFallback name={name}>
+          <span className={fallbackText}>{name.charAt(0).toUpperCase()}</span>
         </AvatarFallback>
       </Avatar>
       <span className="truncate">{children ?? name}</span>

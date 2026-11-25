@@ -8,7 +8,14 @@ import { query } from '@anthropic-ai/claude-agent-sdk';
  * Drop-in replacement for the former ClaudeProcess (CLI subprocess).
  * AgentRunner and AgentMessageHandler work unchanged.
  */
-import type { SDKMessage, Query } from '@anthropic-ai/claude-agent-sdk';
+import type {
+  SDKMessage,
+  SDKUserMessage,
+  EffortLevel,
+  Options,
+  PermissionMode,
+  Query,
+} from '@anthropic-ai/claude-agent-sdk';
 import { consumeAsync } from '@funny/shared/async';
 import { scrubSensitiveEnv } from '@funny/shared/lib/child-env';
 
@@ -26,6 +33,14 @@ import {
 } from './read-only.js';
 import { resolveSDKCli } from './resolve-sdk-cli.js';
 import type { CLIMessage, ClaudeProcessOptions } from './types.js';
+
+/**
+ * SDKClaudeProcess — adapter that wraps @anthropic-ai/claude-agent-sdk query()
+ * behind the IAgentProcess EventEmitter interface.
+ *
+ * Drop-in replacement for the former ClaudeProcess (CLI subprocess).
+ * AgentRunner and AgentMessageHandler work unchanged.
+ */
 
 const dlog = createDebugLogger('sdk');
 
@@ -46,6 +61,19 @@ interface ToolPathFields {
 /** A tool call's input: any non-null object, read only for the fields below. */
 function isToolInput(value: unknown): value is ToolPathFields {
   return typeof value === 'object' && value !== null;
+}
+
+/** The effort levels the Claude SDK accepts. */
+const EFFORT_LEVELS: ReadonlySet<string> = new Set<EffortLevel>([
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+]);
+
+function isEffortLevel(value: string): value is EffortLevel {
+  return EFFORT_LEVELS.has(value);
 }
 
 /** Any object, null included (`Object.assign` skips a null source). */
@@ -211,7 +239,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
   //  - everything else: one-shot, but closed only once the session is truly
   //    over — a `result` with no background tasks still running, or the CLI's
   //    `session_state_changed: idle` signal (see trackInputLifetime).
-  private inputQueue: Array<Record<string, unknown>> = [];
+  private inputQueue: SDKUserMessage[] = [];
   private inputWaiters: Array<() => void> = [];
   private inputClosed = false;
   private backgroundTaskIds = new Set<string>();
@@ -295,7 +323,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
     for (const wake of waiters) wake();
   }
 
-  private makeUserMessage(prompt: string, images?: unknown[]): Record<string, unknown> {
+  private makeUserMessage(prompt: string, images?: unknown[]): SDKUserMessage {
     const content: any[] = [{ type: 'text', text: prompt }];
     if (images?.length) content.push(...images);
     return {
@@ -306,7 +334,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
     };
   }
 
-  private async *consumeInput(): AsyncGenerator<Record<string, unknown>, void, unknown> {
+  private async *consumeInput(): AsyncGenerator<SDKUserMessage, void, unknown> {
     while (true) {
       const next = this.inputQueue.shift();
       if (next) {
@@ -358,7 +386,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
     });
 
     const cli = resolveSDKCli();
-    const sdkOptions: Record<string, any> = {
+    const sdkOptions: Options = {
       pathToClaudeCodeExecutable: cli.path,
       model: this.options.model,
       cwd: this.options.cwd,
@@ -410,7 +438,10 @@ export class SDKClaudeProcess extends BaseAgentProcess {
     }
 
     if (this.options.permissionMode) {
-      sdkOptions.permissionMode = this.options.permissionMode;
+      // SAFETY: `resolvePermissionMode` (orchestrator) maps funny's modes onto
+      // the Claude SDK's own; any other value is passed through for the SDK to
+      // refuse, as it always was.
+      sdkOptions.permissionMode = this.options.permissionMode as PermissionMode;
       if (this.options.permissionMode === 'bypassPermissions') {
         sdkOptions.allowDangerouslySkipPermissions = true;
       }
@@ -504,8 +535,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
     // rejects unsupported levels per model at runtime; coerce unknown values
     // to 'high' defensively for un-validated callers.
     if (this.options.effort) {
-      const validEfforts = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
-      sdkOptions.effort = validEfforts.has(this.options.effort) ? this.options.effort : 'high';
+      sdkOptions.effort = isEffortLevel(this.options.effort) ? this.options.effort : 'high';
     }
 
     // Fast mode (speed): enabled via the inline `settings` layer, which sits

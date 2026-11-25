@@ -1,3 +1,4 @@
+import type { JsonObject } from '@funny/shared/json';
 import { ChevronRight, Bot, Loader2 } from 'lucide-react';
 import { Suspense, lazy, useState, useMemo, memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -100,7 +101,7 @@ function TaskResult({ rawOutput }: { rawOutput?: string }) {
 type RenderChildToolCall = (item: ToolItem, idx: number) => ReactNode;
 
 interface TaskCardProps {
-  parsed: Record<string, unknown>;
+  parsed: JsonObject;
   output?: string;
   hideLabel?: boolean;
   childToolCalls?: any[];

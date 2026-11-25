@@ -1,90 +1,87 @@
 import type { VisualParityFixture } from '@funny/ui-contracts/fixtures';
 import { referenceDark } from '@funny/ui-contracts/tokens';
 
+import { cn } from '@/lib/utils';
+
 export function VisualParityFixtureHost({ fixture }: { fixture: VisualParityFixture }) {
   const compact = fixture.viewport === 'compact';
+  const { colors, layout, radii } = referenceDark;
   return (
     <div
       data-testid={`parity-fixture-${fixture.id}`}
       data-viewport={fixture.viewport}
+      className={cn(
+        'flex [background:var(--parity-canvas)] text-[color:var(--parity-text)]',
+        compact ? 'h-[760px] w-[720px]' : 'h-[900px] w-[1440px]',
+      )}
+      // The fixture renders the visual contract's own values, not the app theme:
+      // they are set once here as custom properties and read by the classes below.
       style={{
-        display: 'flex',
-        width: compact ? 720 : 1440,
-        height: compact ? 760 : 900,
-        color: referenceDark.colors.text,
-        background: referenceDark.colors.canvas,
+        '--parity-canvas': colors.canvas,
+        '--parity-text': colors.text,
+        '--parity-sidebar': colors.sidebar,
+        '--parity-surface-raised': colors.surfaceRaised,
+        '--parity-border': colors.border,
+        '--parity-inverse-surface': colors.inverseSurface,
+        '--parity-inverse-text': colors.inverseText,
+        '--parity-sidebar-width': `${layout.sidebarWidth}px`,
+        '--parity-header-height': `${layout.headerHeight}px`,
+        '--parity-conversation-max-width': `${layout.conversationMaximumWidth}px`,
+        '--parity-composer-max-width': `${layout.composerMaximumWidth}px`,
+        '--parity-radius-medium': `${radii.medium}px`,
+        '--parity-radius-large': `${radii.large}px`,
       }}
     >
       {!compact && (
         <aside
           data-parity-role="navigation"
-          style={{
-            width: referenceDark.layout.sidebarWidth,
-            padding: 8,
-            background: referenceDark.colors.sidebar,
-            borderRight: `1px solid ${referenceDark.colors.border}`,
-          }}
+          className="w-[var(--parity-sidebar-width)] p-2 [background:var(--parity-sidebar)] [border-right:1px_solid_var(--parity-border)]"
         >
           {fixture.navigation.map((row) => (
             <div
               key={row.id}
               data-parity-id={row.id}
               data-selected={row.selected || undefined}
-              style={{
-                marginBottom: 4,
-                padding: '6px 8px',
-                borderRadius: referenceDark.radii.medium,
-                background: row.selected ? referenceDark.colors.surfaceRaised : 'transparent',
-              }}
+              className={cn(
+                'mb-1 rounded-[var(--parity-radius-medium)] px-2 py-1.5',
+                row.selected
+                  ? '[background:var(--parity-surface-raised)]'
+                  : '[background:transparent]',
+              )}
             >
               {row.label}
             </div>
           ))}
         </aside>
       )}
-      <main style={{ display: 'flex', minWidth: 0, flex: 1, flexDirection: 'column' }}>
+      <main className="flex min-w-0 flex-1 flex-col">
         <header
           data-parity-role="thread-header"
-          style={{
-            minHeight: referenceDark.layout.headerHeight,
-            padding: '0 12px',
-            borderBottom: `1px solid ${referenceDark.colors.border}`,
-          }}
+          className="min-h-[var(--parity-header-height)] px-3 py-0 [border-bottom:1px_solid_var(--parity-border)]"
         >
           {fixture.threadTitle}
         </header>
         <section
           data-parity-role="conversation"
-          style={{ flex: 1, overflow: 'auto', padding: compact ? 8 : 16 }}
+          className={cn('flex-1 overflow-auto', compact ? 'p-2' : 'p-4')}
         >
-          <div
-            style={{ maxWidth: referenceDark.layout.conversationMaximumWidth, margin: '0 auto' }}
-          >
+          <div className="mx-auto my-0 max-w-[var(--parity-conversation-max-width)]">
             {fixture.conversation.map((item) => (
               <article
                 key={item.id}
                 data-parity-id={item.id}
                 data-kind={item.kind}
-                style={{
-                  margin: '0 0 16px',
-                  padding: item.kind === 'user' || !['assistant'].includes(item.kind) ? 12 : 0,
-                  borderRadius: referenceDark.radii.large,
-                  color:
-                    item.kind === 'user'
-                      ? referenceDark.colors.inverseText
-                      : referenceDark.colors.text,
-                  background:
-                    // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
-                    item.kind === 'user'
-                      ? referenceDark.colors.inverseSurface
-                      : item.kind === 'assistant'
-                        ? 'transparent'
-                        : referenceDark.colors.sidebar,
-                  border:
-                    item.kind === 'assistant' || item.kind === 'user'
-                      ? undefined
-                      : `1px solid ${referenceDark.colors.border}`,
-                }}
+                className={cn(
+                  'mx-0 mt-0 mb-4 rounded-[var(--parity-radius-large)]',
+                  item.kind === 'assistant' ? 'p-0' : 'p-3',
+                  item.kind === 'user'
+                    ? 'text-[color:var(--parity-inverse-text)] [background:var(--parity-inverse-surface)]'
+                    : 'text-[color:var(--parity-text)]',
+                  item.kind === 'assistant' && '[background:transparent]',
+                  item.kind !== 'user' &&
+                    item.kind !== 'assistant' &&
+                    '[border:1px_solid_var(--parity-border)] [background:var(--parity-sidebar)]',
+                )}
               >
                 {item.title && <strong>{item.title}</strong>}
                 <div>{item.content}</div>
@@ -95,15 +92,7 @@ export function VisualParityFixtureHost({ fixture }: { fixture: VisualParityFixt
         <footer
           data-parity-role="composer"
           data-lifecycle={fixture.composer.lifecycle}
-          style={{
-            width: 'calc(100% - 32px)',
-            maxWidth: referenceDark.layout.composerMaximumWidth,
-            margin: '0 auto 16px',
-            padding: 10,
-            border: `1px solid ${referenceDark.colors.border}`,
-            borderRadius: referenceDark.radii.medium,
-            background: referenceDark.colors.surfaceRaised,
-          }}
+          className="mx-auto mt-0 mb-4 w-[calc(100%-32px)] max-w-[var(--parity-composer-max-width)] rounded-[var(--parity-radius-medium)] p-2.5 [background:var(--parity-surface-raised)] [border:1px_solid_var(--parity-border)]"
         >
           <div>{fixture.composer.value || 'Send a message…'}</div>
           <small>

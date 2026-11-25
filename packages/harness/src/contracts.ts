@@ -1,3 +1,4 @@
+import type { JsonObject } from '@funny/shared/json';
 import type { z, ZodTypeAny } from 'zod';
 
 import type { HarnessEvent, HarnessEventSink } from './events.js';
@@ -8,7 +9,7 @@ export type HarnessPermissionMode = 'plan' | 'autoEdit' | 'confirmEdit' | (strin
 export interface ToolExecutionContext {
   cwd?: string;
   runtime?: HarnessRuntime;
-  metadata?: Record<string, unknown>;
+  metadata?: JsonObject;
 }
 
 export interface HarnessToolDefinition<TSchema extends ZodTypeAny, TResult> {
@@ -16,7 +17,7 @@ export interface HarnessToolDefinition<TSchema extends ZodTypeAny, TResult> {
   description: string;
   inputSchema: TSchema;
   handler: (input: z.infer<TSchema>, context: ToolExecutionContext) => TResult | Promise<TResult>;
-  metadata?: Record<string, unknown>;
+  metadata?: JsonObject;
 }
 
 export interface HarnessTool<TSchema extends ZodTypeAny = ZodTypeAny, TResult = unknown> {
@@ -27,7 +28,7 @@ export interface HarnessTool<TSchema extends ZodTypeAny = ZodTypeAny, TResult = 
     input: z.infer<TSchema>,
     context: ToolExecutionContext,
   ) => TResult | Promise<TResult>;
-  readonly metadata?: Readonly<Record<string, unknown>>;
+  readonly metadata?: Readonly<JsonObject>;
 }
 
 export interface HarnessAgentOptions {
@@ -39,11 +40,11 @@ export interface HarnessAgentOptions {
   allowedTools?: readonly string[];
   disallowedTools?: readonly string[];
   tools?: readonly HarnessTool[];
-  mcpServers?: Record<string, unknown>;
+  mcpServers?: Record<string, JsonObject>;
   maxTurns?: number;
   effort?: string;
   sandbox?: SandboxIntent;
-  metadata?: Record<string, unknown>;
+  metadata?: JsonObject;
 }
 
 export interface HarnessAgentDefinition {
@@ -55,11 +56,11 @@ export interface HarnessAgentDefinition {
   readonly allowedTools: readonly string[];
   readonly disallowedTools: readonly string[];
   readonly tools: readonly HarnessTool[];
-  readonly mcpServers?: Readonly<Record<string, unknown>>;
+  readonly mcpServers?: Readonly<Record<string, JsonObject>>;
   readonly maxTurns?: number;
   readonly effort?: string;
   readonly sandbox: SandboxIntent;
-  readonly metadata?: Readonly<Record<string, unknown>>;
+  readonly metadata?: Readonly<JsonObject>;
 }
 
 export interface HarnessRuntimeCapabilities {
@@ -84,8 +85,8 @@ export interface HarnessRuntime {
 }
 
 export interface HarnessToolExposure {
-  mcpServers?: Record<string, unknown>;
-  metadata?: Record<string, unknown>;
+  mcpServers?: Record<string, JsonObject>;
+  metadata?: JsonObject;
 }
 
 export interface HarnessAgentRequest {
@@ -99,7 +100,7 @@ export interface HarnessAgentRequest {
   resolvedSandbox?: SandboxExecutionHandle;
   tools: readonly HarnessTool[];
   onEvent?: HarnessEventSink;
-  metadata?: Record<string, unknown>;
+  metadata?: JsonObject;
 }
 
 export interface HarnessAgentResult {
@@ -111,7 +112,7 @@ export interface HarnessAgentResult {
   durationMs?: number;
   raw?: unknown;
   events?: HarnessEvent[];
-  metadata?: Record<string, unknown>;
+  metadata?: JsonObject;
 }
 
 export interface HarnessCommandRequest {
@@ -135,12 +136,12 @@ export interface HarnessApprovalRequest {
   message: string;
   captureResponse?: boolean;
   timeoutMs?: number;
-  metadata?: Record<string, unknown>;
+  metadata?: JsonObject;
 }
 
 export type HarnessApprovalDecision =
-  | { decision: 'approve'; comment?: string; metadata?: Record<string, unknown> }
-  | { decision: 'reject'; reason: string; metadata?: Record<string, unknown> };
+  | { decision: 'approve'; comment?: string; metadata?: JsonObject }
+  | { decision: 'reject'; reason: string; metadata?: JsonObject };
 
 export interface ProcessSandboxAdapter {
   resolve(request: SandboxExecutionRequest): Promise<SandboxExecutionHandle>;
@@ -160,7 +161,7 @@ export interface CoreAgentProcessOptions {
   permissionMode?: string;
   allowedTools?: string[];
   disallowedTools?: string[];
-  mcpServers?: Record<string, unknown>;
+  mcpServers?: Record<string, JsonObject>;
   systemPrefix?: string;
   effort?: string;
   images?: unknown[];

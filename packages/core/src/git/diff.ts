@@ -22,9 +22,18 @@ import { getGitWriteGeneration, gitRead } from './process.js';
 
 // ─── Helpers ────────────────────────────────────────────
 
-/**
- * Parse git status line to extract file status
- */
+/** `--name-status` status letters → the status the review pane shows. */
+const STATUS_BY_CODE = new Map<string, FileDiff['status']>([
+  ['A', 'added'],
+  ['M', 'modified'],
+  ['D', 'deleted'],
+  ['R', 'renamed'],
+  ['C', 'added'],
+  ['T', 'modified'],
+  ['?', 'added'],
+  ['U', 'conflicted'],
+]);
+
 /**
  * Parse one `--name-status` line. Callers pass `--no-renames`, matching the
  * native (gitoxide) summary: a rename is a delete plus an add. Should a
@@ -38,19 +47,8 @@ function parseStatusLine(line: string): {
   const match = line.match(/^([MADRCTU?])\d*\t(.+)$/) ?? line.match(/^([MADR?U])\s+(.+)$/);
   if (!match) return null;
 
-  const statusMap: Record<string, FileDiff['status']> = {
-    A: 'added',
-    M: 'modified',
-    D: 'deleted',
-    R: 'renamed',
-    C: 'added',
-    T: 'modified',
-    '?': 'added',
-    U: 'conflicted',
-  };
-
   return {
-    status: statusMap[match[1]] ?? 'modified',
+    status: STATUS_BY_CODE.get(match[1]) ?? 'modified',
     path: match[2].split('\t').at(-1)!.trim(),
   };
 }
@@ -75,13 +73,19 @@ function splitDiffByFile(rawDiff: string): Map<string, string> {
   return result;
 }
 
+/** A diff entry's path, and whether it is a whole nested repository. */
+interface ClassifiedPath {
+  path: string;
+  isSubmodule: boolean;
+}
+
 /**
  * Normalize a path entry and detect whether it's a submodule / nested git repo.
  * `git ls-files --others --exclude-standard` returns nested repos with a trailing `/`,
  * and `git diff` reports gitlink entries (mode 160000) without content. In both cases
  * the entry represents a whole repo — detect by probing `<cwd>/<path>/.git`.
  */
-function classifyPath(cwd: string, rawPath: string): { path: string; isSubmodule: boolean } {
+function classifyPath(cwd: string, rawPath: string): ClassifiedPath {
   const path = rawPath.endsWith('/') ? rawPath.slice(0, -1) : rawPath;
   // `.git` can be a dir (standalone clone) or a file (submodule gitlink pointer).
   const dotGit = join(cwd, path, '.git');

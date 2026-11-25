@@ -5,7 +5,6 @@ import {
   GUTTER_BG_ADDED,
   GUTTER_BG_CARD,
   GUTTER_BG_REMOVED,
-  H_SCROLL_STYLE,
 } from '@/lib/diff/conflict-colors';
 import { countTextMatches, getDiffHighlight, getSearchHighlight } from '@/lib/diff/highlight';
 import type { DiffLine } from '@/lib/diff/types';
@@ -49,18 +48,24 @@ export const ThreePaneRow = memo(function ThreePaneRow({
     rightConflictBg ?? (right?.type === 'add' ? GUTTER_BG_ADDED : GUTTER_BG_CARD);
   return (
     <div
-      className="flex font-mono text-(length:--diff-font-size)"
-      style={wrap ? { minHeight: 'var(--diff-row-height)' } : { height: 'var(--diff-row-height)' }}
+      className={cn(
+        'flex font-mono text-(length:--diff-font-size)',
+        wrap ? 'min-h-[var(--diff-row-height)]' : 'h-[var(--diff-row-height)]',
+      )}
     >
       {/* Left (old) */}
       <div
-        className={cn('flex flex-1 border-r border-border/30', align)}
-        style={leftBg ? { backgroundColor: leftBg } : undefined}
+        className={cn(
+          'flex flex-1 border-r border-border/30',
+          align,
+          leftBg && 'bg-[color:var(--three-pane-pane-bg)]',
+        )}
+        style={leftBg ? { '--three-pane-pane-bg': leftBg } : undefined}
         data-pane="left"
       >
         <div
-          className="relative z-10 flex shrink-0 items-center"
-          style={{ backgroundColor: leftGutterBg }}
+          className="relative z-10 flex shrink-0 items-center bg-[color:var(--three-pane-gutter-bg)]"
+          style={{ '--three-pane-gutter-bg': leftGutterBg }}
         >
           <span className="text-muted-foreground/40 w-11 shrink-0 pr-1 text-right select-none">
             {left?.oldNo ?? ''}
@@ -78,9 +83,9 @@ export const ThreePaneRow = memo(function ThreePaneRow({
           <span
             className={cn(
               wrap ? 'whitespace-pre-wrap break-all pr-2' : 'whitespace-pre pr-2',
+              !wrap && 'relative z-0 [transform:translateX(calc(-1*var(--h-scroll,0px)))]',
               left.type === 'del' ? 'text-diff-removed' : 'text-foreground/80',
             )}
-            style={wrap ? undefined : H_SCROLL_STYLE}
             dangerouslySetInnerHTML={{
               __html: getDiffHighlight(
                 left.text,
@@ -99,8 +104,8 @@ export const ThreePaneRow = memo(function ThreePaneRow({
       {/* Center (result — clean, no diff highlighting) */}
       <div className={cn('flex flex-1 border-r border-border/30', align)} data-pane="center">
         <div
-          className="relative z-10 flex shrink-0 items-center"
-          style={{ backgroundColor: GUTTER_BG_CARD }}
+          className="relative z-10 flex shrink-0 items-center bg-[color:var(--three-pane-gutter-bg)]"
+          style={{ '--three-pane-gutter-bg': GUTTER_BG_CARD }}
         >
           <span className="text-muted-foreground/40 w-11 shrink-0 pr-1 text-right select-none">
             {center?.newNo ?? ''}
@@ -108,12 +113,12 @@ export const ThreePaneRow = memo(function ThreePaneRow({
         </div>
         {center && (
           <span
-            className={
+            className={cn(
               wrap
                 ? 'text-foreground pr-2 break-all whitespace-pre-wrap'
-                : 'text-foreground pr-2 whitespace-pre'
-            }
-            style={wrap ? undefined : H_SCROLL_STYLE}
+                : 'text-foreground pr-2 whitespace-pre',
+              !wrap && 'relative z-0 [transform:translateX(calc(-1*var(--h-scroll,0px)))]',
+            )}
             dangerouslySetInnerHTML={{
               __html: getSearchHighlight(
                 center.text,
@@ -129,13 +134,13 @@ export const ThreePaneRow = memo(function ThreePaneRow({
       </div>
       {/* Right (new) */}
       <div
-        className={cn('flex flex-1', align)}
-        style={rightBg ? { backgroundColor: rightBg } : undefined}
+        className={cn('flex flex-1', align, rightBg && 'bg-[color:var(--three-pane-pane-bg)]')}
+        style={rightBg ? { '--three-pane-pane-bg': rightBg } : undefined}
         data-pane="right"
       >
         <div
-          className="relative z-10 flex shrink-0 items-center"
-          style={{ backgroundColor: rightGutterBg }}
+          className="relative z-10 flex shrink-0 items-center bg-[color:var(--three-pane-gutter-bg)]"
+          style={{ '--three-pane-gutter-bg': rightGutterBg }}
         >
           <span className="text-muted-foreground/40 w-11 shrink-0 pr-1 text-right select-none">
             {right?.newNo ?? ''}
@@ -153,9 +158,9 @@ export const ThreePaneRow = memo(function ThreePaneRow({
           <span
             className={cn(
               wrap ? 'whitespace-pre-wrap break-all pr-2' : 'whitespace-pre pr-2',
+              !wrap && 'relative z-0 [transform:translateX(calc(-1*var(--h-scroll,0px)))]',
               right.type === 'add' ? 'text-diff-added' : 'text-foreground/80',
             )}
-            style={wrap ? undefined : H_SCROLL_STYLE}
             dangerouslySetInnerHTML={{
               __html: getDiffHighlight(
                 right.text,

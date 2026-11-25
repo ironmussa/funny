@@ -73,7 +73,7 @@ export function BrowserControlBar() {
             <Button
               variant="ghost"
               size="xs"
-              className="border-border rounded-l-none border-l"
+              segment="end"
               onClick={() => void setUserControl(controller !== 'user')}
               data-testid={
                 controller === 'user' ? 'browser-panel-hand-back' : 'browser-panel-take-over'

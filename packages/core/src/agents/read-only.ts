@@ -32,10 +32,12 @@
 import { realpathSync } from 'node:fs';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 
-import type { Options } from '@anthropic-ai/claude-agent-sdk';
+import type { Options, Settings } from '@anthropic-ai/claude-agent-sdk';
+import type { JsonObject } from '@funny/shared/json';
 import { READ_ONLY_AGENT_TOOLS } from '@funny/shared/models';
 
 import { execute } from '../git/process.js';
+import { isJsonPayloadObject } from './json-payload.js';
 
 /** Environment variables a sandboxed command never sees. */
 const CREDENTIAL_ENV_VARS = [
@@ -210,22 +212,19 @@ function isObject<T>(value: T): value is T & object {
  * into a command that prints nothing in the sandbox. funny's own pre-tool hook
  * is an SDK callback, not a settings hook, and keeps running.
  */
-export function withSettingsHooksOff(settings: Options['settings']): Record<string, unknown> {
+export function withSettingsHooksOff(settings: Options['settings']): Settings {
   const current = isObject(settings) ? settings : {};
   return { ...current, disableAllHooks: true };
 }
 
 const ALLOWED = new Set(READ_ONLY_AGENT_TOOLS);
 
-/** A tool call's input, as the SDK's pre-tool hook hands it over; every field is checked. */
-type ToolInput = Readonly<Record<string, unknown>>;
-
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0;
 }
 
 /** A tool input's field when it is a non-empty string, else null. */
-function text(input: ToolInput, field: string): string | null {
+function text(input: JsonObject, field: string): string | null {
   const value = input[field];
   return isNonEmptyString(value) ? value : null;
 }
@@ -238,12 +237,12 @@ function patternRoot(pattern: string | null): string[] {
 }
 
 /** The pattern field of each searching tool. */
-const PATTERN_FIELD: Record<string, string> = { Glob: 'pattern', Grep: 'glob' };
+const PATTERN_FIELD = new Map(Object.entries({ Glob: 'pattern', Grep: 'glob' }));
 
 /** Where a reading tool looks: its file or folder, or where an absolute pattern starts. */
-function targetsOf(toolName: string, input: ToolInput, cwd: string): string[] {
+function targetsOf(toolName: string, input: JsonObject, cwd: string): string[] {
   if (toolName === 'Read') return [text(input, 'file_path') ?? ''];
-  const field = PATTERN_FIELD[toolName];
+  const field = PATTERN_FIELD.get(toolName);
   if (!field) return [];
   return [text(input, 'path') ?? cwd, ...patternRoot(text(input, field))];
 }
@@ -272,14 +271,14 @@ const inside = (path: string, root: string) => {
 /** Why a read-only agent may not make this call, or null when it may. */
 export function readOnlyDenial(
   toolName: string,
-  toolInput: ToolInput | null | undefined,
+  toolInput: JsonObject | null | undefined,
   /** The checkout first, then any other folder its reading tools may read (role inputs). */
   roots: readonly string[],
 ): string | null {
   if (!ALLOWED.has(toolName)) {
     return `This thread may only read: ${toolName} is not available. Use ${READ_ONLY_AGENT_TOOLS.join(', ')}.`;
   }
-  const input: ToolInput = isObject(toolInput) ? toolInput : {};
+  const input: JsonObject = isJsonPayloadObject(toolInput) ? toolInput : {};
   if (toolName === 'Bash' && input.dangerouslyDisableSandbox) {
     return 'This thread may only read: commands run in the sandbox, without network or writes.';
   }

@@ -1,9 +1,14 @@
+import { isJsonObject, type JsonValue } from '@funny/shared/json';
+
 import type { FileRef, SymbolRef } from '@/lib/thread-payload';
+
+/** A workflow run's inputs: the JSON the user typed, plus the prompt's file and symbol references. */
+export type WorkflowRunInputs = { [key: string]: JsonValue | FileRef[] | SymbolRef[] };
 
 export interface WorkflowInvocation {
   workflowName: string;
   prompt?: string;
-  inputs?: Record<string, unknown>;
+  inputs?: WorkflowRunInputs;
 }
 
 export type WorkflowInvocationParseResult =
@@ -22,8 +27,8 @@ export function parseWorkflowInvocation(prompt: string): WorkflowInvocationParse
 
   if (tail.startsWith('{')) {
     try {
-      const parsed = JSON.parse(tail) as unknown;
-      if (!isPlainObject(parsed)) {
+      const parsed: JsonValue = JSON.parse(tail);
+      if (!isJsonObject(parsed)) {
         return { ok: false, error: 'Workflow inputs must be a JSON object.' };
       }
       return { ok: true, invocation: { workflowName, inputs: parsed } };
@@ -38,7 +43,7 @@ export function parseWorkflowInvocation(prompt: string): WorkflowInvocationParse
 /** The request body that runs a workflow. */
 interface WorkflowRunBody {
   prompt?: string;
-  inputs?: Record<string, unknown>;
+  inputs?: WorkflowRunInputs;
 }
 
 export function buildWorkflowRunBody(
@@ -53,8 +58,4 @@ export function buildWorkflowRunBody(
     prompt: invocation.prompt,
     inputs: Object.keys(inputs).length > 0 ? inputs : undefined,
   };
-}
-
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

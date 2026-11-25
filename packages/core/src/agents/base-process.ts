@@ -461,8 +461,8 @@ export abstract class BaseAgentProcess extends EventEmitter {
     const base = 'message' in cause && isString(cause.message) ? cause.message : String(cause);
 
     // ACP RequestError: { code, message, data: { details } }
-    if ('data' in cause && cause.data && isObject(cause.data) && 'details' in cause.data) {
-      const details = cause.data.details;
+    if ('data' in cause && cause.data && isObject(cause.data)) {
+      const details = 'details' in cause.data ? cause.data.details : undefined;
       if (isString(details)) {
         return this.cleanErrorDetails(details);
       }

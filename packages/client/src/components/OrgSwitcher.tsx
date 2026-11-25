@@ -116,7 +116,8 @@ export function OrgSwitcher() {
       <SelectTrigger
         data-testid="org-switcher-trigger"
         size="sm"
-        className="w-full border-none bg-transparent shadow-none"
+        variant="ghost"
+        className="w-full"
       >
         <SelectValue />
       </SelectTrigger>

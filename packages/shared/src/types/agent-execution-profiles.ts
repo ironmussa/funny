@@ -72,14 +72,19 @@ export interface ProjectAgentProfileBindingResponse {
   profile: AgentExecutionProfileResponse | null;
 }
 
+/** The environment variables an agent execution profile sets for the agent. */
+export interface AgentExecutionProfileEnv {
+  [name: string]: string;
+}
+
 export interface ResolvedAgentExecutionProfile {
   profile: AgentExecutionProfile;
-  env: Record<string, string>;
+  env: AgentExecutionProfileEnv;
 }
 
 export interface ResolvedAgentExecutionProfileResponse {
   profile: AgentExecutionProfileResponse | null;
-  env: Record<string, string>;
+  env: AgentExecutionProfileEnv;
 }
 
 export interface ThreadResolvedAgentProfileSnapshot {
@@ -103,7 +108,7 @@ export function toAgentExecutionProfileResponse(
 
 export function buildAgentExecutionProfileEnv(
   profile: AgentExecutionProfile,
-): Record<string, string> {
+): AgentExecutionProfileEnv {
   if (profile.provider === 'claude') {
     return { CLAUDE_CONFIG_DIR: profile.config.claude.configDir };
   }

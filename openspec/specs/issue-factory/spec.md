@@ -1703,3 +1703,17 @@ SHALL NOT close its pull request.
 - **WHEN** GitHub refuses to close one superseded pull request
 - **THEN** the merged run stays merged, the other superseded pull requests are still closed, and
   the failure is recorded in the activity
+
+### Requirement: A factory may merge into a branch other than the default
+
+A factory's settings SHALL name the branch its runs merge into, empty meaning the repository's default branch on GitHub. A run SHALL start its branch from that branch, its pull request SHALL target it, its integration, stacking retarget, merge lane and "no change" check SHALL use it. Flows and their prompt files SHALL still be read from the repository's default branch. A pull request the agent opened against another branch SHALL be retargeted to the factory's branch before the run goes on, and a run whose pull request cannot be retargeted SHALL stop there. A save SHALL refuse a name git does not accept as a branch.
+
+#### Scenario: A factory that merges into develop
+
+- **WHEN** the enabler sets the factory's branch to `develop` and an issue runs
+- **THEN** the run's worktree starts from `origin/develop`, its pull request targets `develop`, and the flow is read from the default branch
+
+#### Scenario: A pull request opened against the default branch
+
+- **WHEN** the factory merges into `develop` and the agent opens its pull request against `main`
+- **THEN** the factory retargets the pull request to `develop` before CI and review

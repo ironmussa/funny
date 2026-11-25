@@ -12,6 +12,7 @@
  */
 
 import { resolveSandboxSize } from '@funny/sandbox';
+import { errorMessage } from '@funny/shared/errors';
 import { and, eq, sql, type SQL } from 'drizzle-orm';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
@@ -50,9 +51,9 @@ export interface SaveProjectSandboxInput {
 
 type Row = typeof projectSandboxSettings.$inferSelect;
 
-const storage = (error: unknown): ProjectSandboxError => ({
+const storage = (cause: unknown): ProjectSandboxError => ({
   kind: 'storage',
-  message: error instanceof Error ? error.message : String(error),
+  message: errorMessage(cause),
 });
 
 const toView = (row: Row): ProjectSandboxView => ({
@@ -91,11 +92,11 @@ const requireProjectAccess = (userId: string, projectId: string, capability: 'vi
  * — falls back to `local`. Used when a connection is removed and when the user
  * picks "no sandbox".
  */
-export function detachSandboxConnection(
+export async function detachSandboxConnection(
   executor: Pick<typeof db, 'update'>,
   where: SQL | undefined,
-): Promise<unknown> {
-  return executor
+): Promise<void> {
+  await executor
     .update(projectSandboxSettings)
     .set({
       connectionId: '',

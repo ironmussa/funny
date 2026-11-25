@@ -43,6 +43,7 @@ import {
   type CreationIntent,
   type CreationPayload,
   type ForkVariant,
+  type RunnerJson,
 } from '../modules/threads/index.js';
 import { forgetThreadOwnership } from '../services/data-ownership.js';
 import { noteOwnerFollowUp } from '../services/factory/factory-follow-ups.js';
@@ -297,7 +298,11 @@ const createdThreadIdSchema = z.object({ id: z.string().min(1) });
  * If the row is somehow missing, the original payload goes out unchanged
  * rather than failing a creation that succeeded.
  */
-async function createdThreadResponse(c: Context<ServerEnv>, created: unknown, status: 201 | 202) {
+async function createdThreadResponse(
+  c: Context<ServerEnv>,
+  created: RunnerJson | undefined,
+  status: 201 | 202,
+) {
   const parsed = createdThreadIdSchema.safeParse(created);
   const row = parsed.success ? await threadRepo.getThread(parsed.data.id) : undefined;
   if (!row) {
@@ -305,7 +310,12 @@ async function createdThreadResponse(c: Context<ServerEnv>, created: unknown, st
       namespace: 'threads',
       threadId: parsed.success ? parsed.data.id : undefined,
     });
-    return c.json(created, status);
+    // Written as text: the runner's JSON goes back byte for byte, and Hono's
+    // typed `c.json` cannot expand a recursive JSON type. No payload at all
+    // (a sandbox thread whose row is missing) is an empty body, as `c.json` sent.
+    return c.newResponse(JSON.stringify(created), status, {
+      'Content-Type': 'application/json',
+    });
   }
   return c.json(toThread(row) satisfies Thread, status);
 }

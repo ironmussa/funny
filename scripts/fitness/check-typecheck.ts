@@ -143,6 +143,14 @@ function isString(value: unknown): value is string {
   return typeof value === 'string';
 }
 
+/** The `package.json` fields the workspace graph reads. */
+interface PackageManifest {
+  name?: string;
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
+}
+
 function readWorkspace(root: string): Workspace {
   const nameToDir = new Map<string, string>();
   const rawDeps = new Map<string, string[]>();
@@ -150,7 +158,7 @@ function readWorkspace(root: string): Workspace {
   for (const entry of existsSync(packagesDir) ? readdirSync(packagesDir) : []) {
     const manifest = join(packagesDir, entry, 'package.json');
     if (!existsSync(manifest)) continue;
-    const pkg: Record<string, any> = JSON.parse(readFileSync(manifest, 'utf-8'));
+    const pkg: PackageManifest = JSON.parse(readFileSync(manifest, 'utf-8'));
     const dir = `packages/${entry}`;
     if (isString(pkg.name)) nameToDir.set(pkg.name, dir);
     rawDeps.set(

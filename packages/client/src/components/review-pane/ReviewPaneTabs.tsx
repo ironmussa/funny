@@ -14,9 +14,6 @@ import { PullRequestsTab } from '../PullRequestsTab';
 import { WorktreeSettings } from '../WorktreeSettings';
 import { StashTab } from './StashTab';
 
-const TAB_TRIGGER_CLASS =
-  'data-[state=active]:bg-background h-6 px-2.5 focus-visible:ring-0 data-[state=active]:shadow-xs';
-
 const TAB_CONTENT_CLASS = 'flex min-h-0 flex-1 data-[state=inactive]:hidden';
 
 const TABS: Array<{ value: ReviewSubTab; labelKey: string; fallback: string }> = [
@@ -34,12 +31,13 @@ export function ReviewPaneTabsHeader({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
   return (
     <div className="border-sidebar-border flex h-12 items-center justify-between border-b px-2">
-      <TabsList className="bg-sidebar-accent/50 h-7 min-w-0 justify-start overflow-x-auto p-0.5">
+      <TabsList variant="pane" size="sm" className="min-w-0 justify-start overflow-x-auto">
         {TABS.map((tab) => (
           <TabsTrigger
             key={tab.value}
             value={tab.value}
-            className={TAB_TRIGGER_CLASS}
+            size="sm"
+            focusRing={false}
             data-testid={`review-tab-${tab.value}`}
           >
             {t(tab.labelKey, tab.fallback)}

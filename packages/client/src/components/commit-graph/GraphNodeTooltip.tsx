@@ -18,8 +18,11 @@ function BranchColorDot({ color }: { color: string | undefined }) {
   return (
     <span
       aria-hidden
-      className={cn('size-2 shrink-0 rounded-full', !color && 'bg-muted-foreground')}
-      style={color ? { backgroundColor: color } : undefined}
+      className={cn(
+        'size-2 shrink-0 rounded-full',
+        color ? 'bg-[color:var(--graph-tooltip-dot-color)]' : 'bg-muted-foreground',
+      )}
+      style={color ? { '--graph-tooltip-dot-color': color } : undefined}
     />
   );
 }
@@ -70,7 +73,7 @@ function NodeTooltipPerson({
     <span className="flex items-center gap-1.5" data-testid={testId}>
       <Avatar size="xs">
         {avatarUrl ? <AvatarImage src={avatarUrl} alt="" /> : null}
-        <AvatarFallback name={name} className="text-[0.5rem] font-semibold">
+        <AvatarFallback name={name} textSize="micro">
           {initialsOf(name)}
         </AvatarFallback>
       </Avatar>
@@ -133,8 +136,13 @@ export function GraphNodeTooltipContent({
             return (
               <GitBranch
                 aria-hidden
-                className={cn('h-3 w-3 shrink-0', !color && 'text-muted-foreground')}
-                style={color ? { color } : undefined}
+                className={cn(
+                  'h-3 w-3 shrink-0',
+                  color
+                    ? 'text-[color:var(--graph-tooltip-branch-color)]'
+                    : 'text-muted-foreground',
+                )}
+                style={color ? { '--graph-tooltip-branch-color': color } : undefined}
               />
             );
           })()}

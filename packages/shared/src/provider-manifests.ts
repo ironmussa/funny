@@ -319,10 +319,11 @@ export const DYNAMIC_ACP_PROVIDER_IDS = KNOWN_ACP_PROVIDER_IDS.filter(
 /** Providers with dynamic model discovery, including non-ACP SDK providers. */
 export const DYNAMIC_MODEL_PROVIDER_IDS = ['pi', ...DYNAMIC_ACP_PROVIDER_IDS] as const;
 
+const MANIFEST_BY_ID = new Map<string, ProviderManifest>(Object.entries(ACP_MANIFESTS));
+
 /** Look up a manifest by provider id (any string; returns undefined if unknown). */
 export function getManifest(providerId: string): ProviderManifest | undefined {
-  const manifests: Record<string, ProviderManifest | undefined> = ACP_MANIFESTS;
-  return manifests[providerId];
+  return MANIFEST_BY_ID.get(providerId);
 }
 
 /** True when the provider id is a bundled ACP provider. */

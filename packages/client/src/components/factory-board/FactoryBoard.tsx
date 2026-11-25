@@ -8,13 +8,15 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { BoardColumn } from '@/components/board/BoardColumn';
-import { Button } from '@/components/ui/button';
+import { LoadMoreSentinel } from '@/components/LoadMoreSentinel';
+import type { FactoryRunReplacement } from '@/components/thread/FactoryRunControls';
 import { useFactorySettings } from '@/data/factory/hooks';
 import type { FactoryQueueRun } from '@/lib/api/factory';
 
 import {
   FACTORY_BOARD_COLUMNS,
   type FactoryBoardColumnId,
+  factoryRunReplacements,
   layoutFactoryBoard,
 } from './board-columns';
 import { FactoryRunCard } from './FactoryRunCard';
@@ -22,7 +24,7 @@ import type { FactoryRunDependencyLookup } from './run-dependencies';
 import { stageMedians } from './step-timings';
 import { StageMedian } from './StepTimeBadges';
 
-/** Cards a column shows before "Show more". */
+/** Cards a column adds each time its end scrolls into view. */
 const PAGE = 50;
 
 /** The flow node whose limit a column shows (the built-in flows' ids). */
@@ -94,48 +96,6 @@ function DoneTitle({
   );
 }
 
-/** The Done header's link to the finished runs it leaves to the list. */
-function HiddenDone({ count, onShow }: { count: number; onShow: () => void }) {
-  const { t } = useTranslation();
-  if (count === 0) return null;
-  return (
-    <button
-      type="button"
-      className="text-muted-foreground hover:text-foreground ml-auto text-xs underline-offset-2 hover:underline"
-      onClick={onShow}
-      data-testid="factory-board-done-hidden"
-    >
-      {t('factoryBoard.doneHidden', '+{{count}} older in the list', { count })}
-    </button>
-  );
-}
-
-/** "Show N more" under a column's cards, when it has more than it shows. */
-function ShowMore({
-  column,
-  hidden,
-  onMore,
-}: {
-  column: FactoryBoardColumnId;
-  hidden: number;
-  onMore: () => void;
-}) {
-  const { t } = useTranslation();
-  if (hidden <= 0) return null;
-  return (
-    <div className="flex justify-center">
-      <Button
-        size="xs"
-        variant="ghost"
-        onClick={onMore}
-        data-testid={`factory-board-more-${column}`}
-      >
-        {t('factoryBoard.showMore', 'Show {{count}} more', { count: Math.min(PAGE, hidden) })}
-      </Button>
-    </div>
-  );
-}
-
 interface ColumnProps {
   id: FactoryBoardColumnId;
   title: string;
@@ -143,24 +103,26 @@ interface ColumnProps {
   projectNameById: ReadonlyMap<string, string>;
   now: number;
   singleProjectId: string | null;
-  hiddenDone: number;
   /** The median time in this stage over the last week, when measured. */
   medianMs: number | undefined;
   /** Opens the run's detail panel. */
   onSelect: (run: FactoryQueueRun) => void;
-  onShowOlderDone: () => void;
   dependencies?: FactoryRunDependencyLookup;
+  /** The newer run of the same issue that replaced each replaced run. */
+  replacements: ReadonlyMap<string, FactoryRunReplacement>;
+  /** The runs picked for a bulk action. */
+  selectedIds?: ReadonlySet<string>;
+  /** Picks or unpicks a run; absent, the cards have no checkbox. */
+  onToggleSelected?: (runId: string) => void;
 }
 
-/** What a column header shows after its count: the stage's median, its limit, and Done's hidden runs. */
+/** What a column header shows after its count: the stage's median and its limit. */
 function StageHeaderExtra({
   id,
   count,
   medianMs,
   singleProjectId,
-  hiddenDone,
-  onShowOlderDone,
-}: Pick<ColumnProps, 'id' | 'medianMs' | 'singleProjectId' | 'hiddenDone' | 'onShowOlderDone'> & {
+}: Pick<ColumnProps, 'id' | 'medianMs' | 'singleProjectId'> & {
   count: number;
 }) {
   const limitProject = id === 'merge' || id in LIMIT_NODE ? singleProjectId : null;
@@ -168,12 +130,11 @@ function StageHeaderExtra({
     <>
       <StageMedian column={id} medianMs={medianMs} />
       {limitProject && <StageLimit projectId={limitProject} column={id} count={count} />}
-      {id === 'done' && <HiddenDone count={hiddenDone} onShow={onShowOlderDone} />}
     </>
   );
 }
 
-/** One stage column: its cards a page at a time, its limit, and for Done the fold and hidden count. */
+/** One stage column: its cards a page at a time as it scrolls, its limit, and for Done the fold. */
 function FactoryBoardStage({
   id,
   title,
@@ -181,17 +142,19 @@ function FactoryBoardStage({
   projectNameById,
   now,
   singleProjectId,
-  hiddenDone,
   medianMs,
   onSelect,
-  onShowOlderDone,
   dependencies,
+  replacements,
+  selectedIds,
+  onToggleSelected,
 }: ColumnProps) {
   const { t } = useTranslation();
   const [limit, setLimit] = useState(PAGE);
   const [doneCollapsed, setDoneCollapsed] = useState(false);
   const isDone = id === 'done';
   const collapsed = isDone && doneCollapsed;
+  const visible = cards.slice(0, limit);
   const doneTitle = (
     <DoneTitle
       title={title}
@@ -213,12 +176,10 @@ function FactoryBoardStage({
           count={cards.length}
           medianMs={medianMs}
           singleProjectId={singleProjectId}
-          hiddenDone={hiddenDone}
-          onShowOlderDone={onShowOlderDone}
         />
       }
     >
-      {cards.slice(0, limit).map((run) => (
+      {visible.map((run) => (
         <FactoryRunCard
           key={run.id}
           run={run}
@@ -226,12 +187,18 @@ function FactoryBoardStage({
           now={now}
           onSelect={onSelect}
           dependencies={dependencies}
+          replacedBy={replacements.get(run.id)}
+          selected={selectedIds?.has(run.id) ?? false}
+          selecting={(selectedIds?.size ?? 0) > 0}
+          onToggleSelected={onToggleSelected}
         />
       ))}
-      <ShowMore
-        column={id}
-        hidden={cards.length - limit}
-        onMore={() => setLimit((value) => value + PAGE)}
+      <LoadMoreSentinel
+        hasMore={cards.length > limit}
+        itemCount={visible.length}
+        onLoadMore={() => setLimit((value) => value + PAGE)}
+        testId={`factory-board-more-${id}`}
+        className="py-0"
       />
     </BoardColumn>
   );
@@ -245,16 +212,17 @@ interface Props {
   singleProjectId: string | null;
   /** Opens the run's detail panel. */
   onSelect: (run: FactoryQueueRun) => void;
-  /** Shows the finished runs the Done column hides, in the list. */
-  onShowOlderDone: () => void;
   /** How every listed run (not only the shown ones) holds the others back. */
   dependencies?: FactoryRunDependencyLookup;
+  selectedIds?: ReadonlySet<string>;
+  onToggleSelected?: (runId: string) => void;
 }
 
 export function FactoryBoard({ runs, now, ...rest }: Props) {
   const { t } = useTranslation();
-  const { columns, hiddenDone } = layoutFactoryBoard(runs, now);
+  const columns = layoutFactoryBoard(runs);
   const medians = stageMedians(runs, now);
+  const replacements = factoryRunReplacements(runs);
   const titles: Record<FactoryBoardColumnId, string> = {
     queue: t('factoryBoard.column.queue', 'Queue'),
     triage: t('factoryBoard.column.triage', 'Triage'),
@@ -274,8 +242,8 @@ export function FactoryBoard({ runs, now, ...rest }: Props) {
           title={titles[id]}
           cards={columns[id]}
           now={now}
-          hiddenDone={hiddenDone}
           medianMs={medians[id]}
+          replacements={replacements}
           {...rest}
         />
       ))}

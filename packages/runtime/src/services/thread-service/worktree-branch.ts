@@ -12,6 +12,11 @@ export interface WorktreeBranch {
   name: string;
   /** The branch exists already: check it out instead of creating it. */
   reuse: boolean;
+  /**
+   * The worktree that has `requested` checked out, when `generated` is used
+   * because of it: a caller that requires its branch refuses with this path.
+   */
+  heldBy?: string;
 }
 
 /**
@@ -36,5 +41,8 @@ export async function worktreeBranchName(
   const exists = await git(['rev-parse', '--verify', '--quiet', `refs/heads/${name}`], projectPath);
   if (exists.isErr()) return { name, reuse: false };
   const checkedOut = await findWorktreeForBranch(projectPath, name);
-  return checkedOut.isOk() && checkedOut.value === null ? { name, reuse: true } : fallback;
+  if (checkedOut.isOk() && checkedOut.value === null) return { name, reuse: true };
+  return checkedOut.isOk() && checkedOut.value
+    ? { ...fallback, heldBy: checkedOut.value }
+    : fallback;
 }

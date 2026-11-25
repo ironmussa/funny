@@ -42,14 +42,14 @@ export function SettingsDetailView() {
             <BreadcrumbList>
               {selectedProject && (
                 <BreadcrumbItem>
-                  <BreadcrumbLink className="cursor-default truncate text-sm">
+                  <BreadcrumbLink truncate className="cursor-default">
                     {selectedProject.name}
                   </BreadcrumbLink>
                 </BreadcrumbItem>
               )}
               {selectedProject && <BreadcrumbSeparator />}
               <BreadcrumbItem>
-                <BreadcrumbPage className="truncate text-sm">{label}</BreadcrumbPage>
+                <BreadcrumbPage truncate>{label}</BreadcrumbPage>
               </BreadcrumbItem>
             </BreadcrumbList>
           </Breadcrumb>

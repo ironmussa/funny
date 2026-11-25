@@ -146,7 +146,7 @@ export function CommitDraftPanel({
       {summaries.length > 0 && !commitInProgress && (
         <div className="border-sidebar-border shrink-0 space-y-1.5 border-t p-2">
           <Input
-            size="xs"
+            size="form-xs"
             type="text"
             placeholder={t('review.commitTitle')}
             aria-label={t('review.commitTitle', 'Commit title')}
@@ -154,7 +154,6 @@ export function CommitDraftPanel({
             value={commitTitle}
             onChange={(e) => setCommitTitle(e.target.value)}
             disabled={!!actionInProgress || generatingMsg}
-            className="h-auto py-1.5"
           />
           <div className="border-input bg-background focus-within:border-ring focus-within:ring-ring/50 rounded-md border focus-within:ring-1">
             <textarea

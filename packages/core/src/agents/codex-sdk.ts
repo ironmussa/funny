@@ -125,10 +125,12 @@ export class CodexSDKProcess extends BaseAgentProcess {
       this.options.originalPermissionMode ?? this.options.permissionMode;
     // Funny's HTTP MCP servers (e.g. `funny_browser`); tokens ride in the env.
     const mcp = codexMcpSettings(this.options.mcpServers, requestedPermissionMode);
-    // SAFETY: a value is `undefined` only when the caller's `options.env` names a key without
-    // a value (`process.env` and `mcp.env` hold strings); `child_process.spawn`, where the Codex
-    // SDK hands this env, skips `undefined` entries.
-    const env = { ...buildChildEnv(this.options.env), ...mcp.env } as Record<string, string>;
+    // Only the variables that are set: a spawn skips an unset one anyway.
+    const env = Object.fromEntries(
+      Object.entries({ ...buildChildEnv(this.options.env), ...mcp.env }).filter(
+        (entry): entry is [string, string] => entry[1] !== undefined,
+      ),
+    );
 
     this.codex = new Codex({
       codexPathOverride: env.CODEX_BINARY_PATH || env.CODEX_BIN,
@@ -265,13 +267,15 @@ export class CodexSDKProcess extends BaseAgentProcess {
         .join('\n');
     if (name === 'status')
       return `Session: ${this.activeSessionId ?? 'not started'}\nModel: ${this.options.model ?? 'default'}\nReasoning: ${this.options.effort ?? 'default'}\nPermissions: ${this.options.originalPermissionMode ?? this.options.permissionMode ?? 'default'}\nDirectory: ${this.options.cwd}`;
-    const methods: Record<string, string> = {
-      mcp: 'mcpServerStatus/list',
-      skills: 'skills/list',
-      apps: 'app/list',
-      plugins: 'plugin/list',
-    };
-    if (!methods[name] && name !== 'compact' && name !== 'review') {
+    const method = new Map(
+      Object.entries({
+        mcp: 'mcpServerStatus/list',
+        skills: 'skills/list',
+        apps: 'app/list',
+        plugins: 'plugin/list',
+      }),
+    ).get(name);
+    if (!method && name !== 'compact' && name !== 'review') {
       throw new Error(`/${name} must be executed from the Funny composer.`);
     }
     if (name === 'compact' && !this.activeSessionId)
@@ -279,12 +283,12 @@ export class CodexSDKProcess extends BaseAgentProcess {
     const server = new CodexAppServer(this.options.cwd, buildChildEnv(this.options.env), signal);
     try {
       await server.initialize();
-      if (methods[name]) {
+      if (method) {
         const pages: unknown[] = [];
         let cursor: string | undefined;
         do {
           const page = await server.request(
-            methods[name],
+            method,
             {
               cwds: ['skills', 'plugins'].includes(name) ? [this.options.cwd] : undefined,
               cursor: cursor ?? undefined,

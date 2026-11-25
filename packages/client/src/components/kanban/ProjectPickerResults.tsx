@@ -21,8 +21,8 @@ export function ProjectPickerResults({
       onClick={() => onSelect(project.id)}
     >
       <span
-        className="size-2.5 shrink-0 rounded-full"
-        style={{ backgroundColor: project.color || colorFromName(project.name) }}
+        className="size-2.5 shrink-0 rounded-full bg-[color:var(--project-dot-color)]"
+        style={{ '--project-dot-color': project.color || colorFromName(project.name) }}
       />
       <span className="truncate">{project.name}</span>
     </button>

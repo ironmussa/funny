@@ -81,6 +81,15 @@ function isString(value: unknown): value is string {
   return typeof value === 'string';
 }
 
+/** A terminal session in a legacy `pty:list` answer; each field is checked before use. */
+interface LegacyPtySession {
+  ptyId?: unknown;
+  cwd?: unknown;
+  projectId?: unknown;
+  label?: unknown;
+  shell?: unknown;
+}
+
 function scopeKey(scope: ScopeReference): string {
   return `${scope.kind}:${scope.parentId ?? ''}:${scope.id}`;
 }
@@ -494,7 +503,7 @@ export class SocketIoClientRealtimePort implements ClientRealtimePort {
         .timeout(this.acknowledgementTimeoutMs)
         .emitWithAck('pty:list', {})) as {
         status?: string;
-        sessions?: Array<Record<string, unknown>>;
+        sessions?: LegacyPtySession[];
         error?: string;
       };
       if (response.status !== 'ok') {

@@ -3,6 +3,11 @@ import { setup } from 'xstate';
 import { statusWriteGuards } from './status-transitions.js';
 import type { JobStatus } from './types.js';
 
+/** The events the machine accepts. */
+interface JobMachineTypes {
+  events: { type: 'SPAWNED' | 'EXIT' | 'FAIL' | 'KILL' | 'CANCEL' };
+}
+
 /**
  * Background job lifecycle. Enforced by the job repository on every status
  * write.
@@ -18,7 +23,7 @@ import type { JobStatus } from './types.js';
  */
 const jobMachine = setup({
   // SAFETY: xstate's `types` is a type-only carrier; the empty object is never read at runtime.
-  types: {} as { events: { type: 'SPAWNED' | 'EXIT' | 'FAIL' | 'KILL' | 'CANCEL' } },
+  types: {} as JobMachineTypes,
 }).createMachine({
   id: 'job',
   initial: 'running',

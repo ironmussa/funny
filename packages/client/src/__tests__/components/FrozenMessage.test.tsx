@@ -1,4 +1,13 @@
-import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  test,
+  vi,
+  mock,
+  setDefaultTimeout,
+} from 'bun:test';
 
 import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { act, render } from '@testing-library/react';
@@ -7,6 +16,10 @@ import { useEffect } from 'react';
 import { FrozenMessage } from '@/components/thread/FrozenMessage';
 
 import { buildIntersectionEntry } from '../helpers/builders-components';
+
+// The proof and pre-push run these files together under `bun test --parallel`; on a
+// loaded machine a first render (cold module load) ran well past the 5 s default.
+setDefaultTimeout(60_000);
 
 // Track live Sätteri mounts so we can prove the fiber tree is dropped
 // when frozen (the memory goal), rather than relying on DOM text (the captured
@@ -140,6 +153,8 @@ describe('FrozenMessage', () => {
 
     act(() => setIntersecting(false));
 
-    expect(getByTestId('frozen-message')).toHaveStyle({ height: '96px' });
+    const frozen = getByTestId('frozen-message');
+    expect(frozen).toHaveClass('h-[var(--frozen-message-height)]');
+    expect(frozen.style.getPropertyValue('--frozen-message-height')).toBe('96px');
   });
 });

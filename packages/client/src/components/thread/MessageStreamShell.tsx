@@ -105,14 +105,12 @@ export function MessageStreamShell({
       className={cn(
         'flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto',
         className,
+        // Last, so they win over a caller's className as the inline style did.
+        '[contain:layout_style] overscroll-y-contain',
+        !compact && '[scrollbar-gutter:stable]',
+        overflowAnchor === 'none' ? '[overflow-anchor:none]' : '[overflow-anchor:auto]',
       )}
       ref={scrollViewportRef}
-      style={{
-        contain: 'layout style',
-        scrollbarGutter: compact ? undefined : 'stable',
-        overscrollBehaviorY: 'contain',
-        overflowAnchor,
-      }}
     >
       <div
         ref={contentStackRef}
@@ -176,7 +174,7 @@ export function MessageStreamShell({
       {/* Sticky bottom dock: scroll-to-bottom button + footer (PromptInput) */}
       <div className="bg-background sticky bottom-0 z-30">
         {/* Scroll to bottom button */}
-        <div ref={scrollDownRef} className="relative" style={{ display: 'none' }}>
+        <div ref={scrollDownRef} className="relative hidden">
           <button
             type="button"
             onClick={scrollToBottom}
@@ -209,5 +207,11 @@ function PaginationLoading({ pagination, t }: Pick<MessageStreamShellProps, 'pag
 
 function PromptPinSpacer({ compact, height }: { compact: boolean; height: number }) {
   if (compact || height <= 0) return null;
-  return <div aria-hidden="true" style={{ height }} />;
+  return (
+    <div
+      aria-hidden="true"
+      className="h-[var(--prompt-pin-spacer-height)]"
+      style={{ '--prompt-pin-spacer-height': `${height}px` }}
+    />
+  );
 }

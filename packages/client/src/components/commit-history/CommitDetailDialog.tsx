@@ -399,7 +399,7 @@ function CommitDetailHeader({ selectedCommit, commitBody, ...rowProps }: CommitD
   return (
     <div className="border-border shrink-0 border-b px-4 py-3">
       <div className="flex items-start justify-between gap-2">
-        <DialogTitle size="sm" className="leading-tight">
+        <DialogTitle size="sm" leading="tight">
           {selectedCommit?.message ?? 'Commit details'}
         </DialogTitle>
         <Button
@@ -438,7 +438,11 @@ function CommitFileSidebar({ data, width }: { data: CommitDetailData; width: num
     handleFileClick,
   } = data;
   return (
-    <div className="flex shrink-0 flex-col" style={{ width }} data-testid="commit-detail-file-tree">
+    <div
+      className="flex w-[var(--commit-detail-sidebar-width)] shrink-0 flex-col"
+      style={{ '--commit-detail-sidebar-width': `${width}px` }}
+      data-testid="commit-detail-file-tree"
+    >
       {commitFiles.length > 0 && (
         <div className="border-sidebar-border shrink-0 border-b px-2 py-1">
           <SearchBar

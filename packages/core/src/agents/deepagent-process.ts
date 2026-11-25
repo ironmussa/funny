@@ -56,6 +56,18 @@ const DEEPAGENT_BUILTIN_TOOLS = [
   'compact_conversation',
 ];
 
+/** A reply's visible text with its `<think>` blocks taken out, and those blocks. */
+interface ThinkBlocks {
+  cleaned: string;
+  thoughts: string[];
+}
+
+/** How to start the deep agent ACP server. */
+interface BinaryCommand {
+  command: string;
+  args?: string[];
+}
+
 export class DeepAgentProcess extends BaseAgentProcess {
   private childProcess: ChildProcess | null = null;
 
@@ -685,7 +697,7 @@ export class DeepAgentProcess extends BaseAgentProcess {
    * Partial/unclosed <think> tags at the end are also stripped from the
    * visible text (the user shouldn't see raw `<think>` markup while streaming).
    */
-  private static extractThinkBlocks(text: string): { cleaned: string; thoughts: string[] } {
+  private static extractThinkBlocks(text: string): ThinkBlocks {
     const thoughts: string[] = [];
     // Match completed <think>...</think> blocks (non-greedy, handles multiline)
     let cleaned = text.replace(/<think>([\s\S]*?)<\/think>/gi, (_match, thought: string) => {
@@ -706,7 +718,7 @@ export class DeepAgentProcess extends BaseAgentProcess {
 
   // ── Binary resolution ───────────────────────────────────────
 
-  private resolveBinary(): { command: string; args?: string[] } {
+  private resolveBinary(): BinaryCommand {
     // 1. DEEPAGENT_BINARY_PATH env var — explicit full path
     const envPath = process.env.DEEPAGENT_BINARY_PATH;
     if (envPath) return { command: envPath };

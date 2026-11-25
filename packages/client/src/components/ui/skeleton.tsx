@@ -4,6 +4,7 @@ import { cn } from '@/lib/utils';
 const SKELETON_CORNERS = {
   default: 'rounded-md',
   square: 'rounded',
+  lg: 'rounded-lg',
   circle: 'rounded-full',
 } as const;
 

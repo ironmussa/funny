@@ -102,25 +102,27 @@ export function ProjectFactoryIncident({
 
   return (
     <Alert variant="destructive" className="mx-4 my-2 w-auto" data-testid={`${testIdPrefix}`}>
-      <AlertDescription className="flex flex-col gap-2">
-        <p>
-          {t(
-            'factory.incident.title',
-            'The base branch {{branch}} of {{repo}} is red after a factory merge. No new issue starts until it is green again.',
-            { branch: incident.baseBranch, repo: incident.repo },
-          )}
-        </p>
-        <IncidentFinding incident={incident} testIdPrefix={testIdPrefix} />
-        <div>
-          <Button
-            size="xs"
-            variant="outline"
-            disabled={closing}
-            data-testid={`${testIdPrefix}-close`}
-            onClick={close}
-          >
-            {t('factory.incident.close', 'Close incident and resume')}
-          </Button>
+      <AlertDescription>
+        <div className="flex flex-col gap-2">
+          <p>
+            {t(
+              'factory.incident.title',
+              'The base branch {{branch}} of {{repo}} is red after a factory merge. No new issue starts until it is green again.',
+              { branch: incident.baseBranch, repo: incident.repo },
+            )}
+          </p>
+          <IncidentFinding incident={incident} testIdPrefix={testIdPrefix} />
+          <div>
+            <Button
+              size="xs"
+              variant="outline"
+              disabled={closing}
+              data-testid={`${testIdPrefix}-close`}
+              onClick={close}
+            >
+              {t('factory.incident.close', 'Close incident and resume')}
+            </Button>
+          </div>
         </div>
       </AlertDescription>
     </Alert>

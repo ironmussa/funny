@@ -124,17 +124,13 @@ function LogTab({ outputLines }: { outputLines: OutputLine[] }) {
   };
 
   return (
-    <ScrollArea
-      viewportRef={logRef}
-      viewportProps={{ onScroll: handleScroll }}
-      className="h-full font-mono text-xs"
-    >
+    <ScrollArea viewportRef={logRef} viewportProps={{ onScroll: handleScroll }} className="h-full">
       {outputLines.length === 0 ? (
-        <div className="text-muted-foreground flex h-full items-center justify-center">
+        <div className="text-muted-foreground flex h-full items-center justify-center font-mono text-xs">
           Test output will appear here…
         </div>
       ) : (
-        <pre className="text-foreground px-3 py-1 leading-relaxed wrap-break-word whitespace-pre-wrap">
+        <pre className="text-foreground px-3 py-1 font-mono text-xs leading-relaxed wrap-break-word whitespace-pre-wrap">
           {keyedOutputLines.map(({ key, value: line }) => (
             <div
               key={key}
@@ -175,17 +171,13 @@ function ConsoleTab({ entries }: { entries: WSTestConsoleData[] }) {
   };
 
   return (
-    <ScrollArea
-      viewportRef={ref}
-      viewportProps={{ onScroll: handleScroll }}
-      className="h-full font-mono text-xs"
-    >
+    <ScrollArea viewportRef={ref} viewportProps={{ onScroll: handleScroll }} className="h-full">
       {entries.length === 0 ? (
-        <div className="text-muted-foreground flex h-full items-center justify-center">
+        <div className="text-muted-foreground flex h-full items-center justify-center font-mono text-xs">
           Browser console messages will appear here…
         </div>
       ) : (
-        <div>
+        <div className="font-mono text-xs">
           {keyedEntries.map(({ key, value: entry }) => (
             <div
               key={key}
@@ -228,7 +220,7 @@ function ErrorsTab({ entries }: { entries: WSTestErrorData[] }) {
   );
 
   return (
-    <ScrollArea className="h-full font-mono text-xs">
+    <ScrollArea variant="code" className="h-full">
       {entries.length === 0 ? (
         <EmptyState title="No errors captured" />
       ) : (
@@ -418,13 +410,9 @@ function CallTab({
   }
 
   return (
-    <ScrollArea
-      viewportRef={ref}
-      viewportProps={{ onScroll: handleScroll }}
-      className="h-full font-mono text-xs"
-    >
+    <ScrollArea viewportRef={ref} viewportProps={{ onScroll: handleScroll }} className="h-full">
       {hasStructured ? (
-        <div>
+        <div className="font-mono text-xs">
           {structuredActions!.map((action) => (
             <div
               key={action.id}
@@ -449,7 +437,7 @@ function CallTab({
           ))}
         </div>
       ) : (
-        <div>
+        <div className="font-mono text-xs">
           {withStableOccurrenceKeys(
             parsedActions,
             ({ isError, text, timestamp }) => `${timestamp}\u0000${isError}\u0000${text}`,
@@ -509,11 +497,11 @@ function AnnotationsTab({ outputLines }: { outputLines: OutputLine[] }) {
   }, [outputLines]);
 
   return (
-    <ScrollArea className="h-full text-xs">
+    <ScrollArea className="h-full">
       {annotations.length === 0 ? (
         <EmptyState title="No annotations found" />
       ) : (
-        <div>
+        <div className="text-xs">
           {annotations.map((anno) => (
             <div
               key={`${anno.type}\u0000${anno.description}`}
@@ -557,7 +545,8 @@ export function TestDetailTabs({
   return (
     <Tabs defaultValue="log" className="flex h-full flex-col">
       <TabsList
-        className="h-auto w-full justify-start gap-0 rounded-none border-b bg-transparent p-0"
+        variant="underline"
+        className="h-auto w-full justify-start"
         data-testid="test-detail-tabs"
       >
         <TabTrigger value="locator" icon={<Crosshair className="size-3.5" />} label="Locator" />
@@ -637,11 +626,7 @@ function TabTrigger({
   count?: number;
 }) {
   return (
-    <TabsTrigger
-      value={value}
-      className="data-[state=active]:border-primary gap-1.5 rounded-none border-b-2 border-transparent px-3 py-1.5 data-[state=active]:bg-transparent data-[state=active]:shadow-none"
-      data-testid={`test-detail-tab-${value}`}
-    >
+    <TabsTrigger value={value} variant="underline" data-testid={`test-detail-tab-${value}`}>
       {icon}
       {label}
       {count != null && count > 0 && (

@@ -155,7 +155,7 @@ function ExternalClaudeHeader({
             <h1 className="truncate text-sm font-medium" data-testid="external-claude-title">
               {title}
             </h1>
-            <Badge variant="outline" size="xxs" className="text-muted-foreground">
+            <Badge variant="outline-muted" size="xxs">
               {t('externalClaude.readOnlyBadge', 'Read-only')}
             </Badge>
           </div>

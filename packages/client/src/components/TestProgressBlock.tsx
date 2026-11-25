@@ -90,7 +90,7 @@ function SuiteRow({ suite, now, t }: { suite: TestProgressSuite; now: number; t:
         <StatusIcon status={suite.status} />
         <span className="truncate font-medium">{suite.name}</span>
         {suite.related && (
-          <Badge variant="outline" size="xs" className="font-normal">
+          <Badge variant="outline" size="xs" weight="normal">
             {t('testProgress.related')}
           </Badge>
         )}
@@ -146,8 +146,10 @@ function SlowList({ items, t }: { items: SlowItem[]; t: T }) {
 function StartTruncatedPath({ path, className }: { path: string; className?: string }) {
   return (
     <span
-      className={cn('min-w-0 overflow-hidden text-ellipsis whitespace-nowrap', className)}
-      style={{ direction: 'rtl', textAlign: 'left' }}
+      className={cn(
+        'min-w-0 overflow-hidden text-left text-ellipsis whitespace-nowrap [direction:rtl]',
+        className,
+      )}
       title={path}
     >
       <bdi dir="ltr">{path}</bdi>

@@ -542,6 +542,15 @@ const ENTRIES = [
     description: 'settings.projectFactoryFlowDesc',
   },
   {
+    id: 'factory.baseBranch',
+    scope: 'project',
+    page: 'factory',
+    kind: 'row',
+    title: 'settings.projectFactoryBaseBranch',
+    description: 'settings.projectFactoryBaseBranchDesc',
+    keywords: ['branch', 'base', 'target', 'merge', 'rama'],
+  },
+  {
     id: 'factory.concurrency',
     scope: 'project',
     page: 'factory',
@@ -567,6 +576,15 @@ const ENTRIES = [
     title: 'settings.projectFactorySensitivePaths',
     description: 'settings.projectFactorySensitivePathsDesc',
     keywords: ['risk', 'glob', 'paths'],
+  },
+  {
+    id: 'factory.sizeGateEnabled',
+    scope: 'project',
+    page: 'factory',
+    kind: 'row',
+    title: 'settings.projectFactorySizeGate',
+    description: 'settings.projectFactorySizeGateDesc',
+    keywords: ['risk', 'size', 'lines', 'high risk', 'gate', 'limit'],
   },
   {
     id: 'factory.maxLowRiskLines',

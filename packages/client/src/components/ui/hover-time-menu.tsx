@@ -27,6 +27,8 @@ interface HoverTimeMenuProps {
   time: ReactNode;
   /** Extra classes for the resting time text. */
   timeClassName?: string;
+  /** `subtle`: small muted time text (the commit graph). */
+  timeTone?: 'default' | 'subtle';
   /** The menu element (kebab trigger + dropdown) revealed on hover. */
   children: ReactNode;
   /**
@@ -54,6 +56,7 @@ interface HoverTimeMenuProps {
 export function HoverTimeMenu({
   time,
   timeClassName,
+  timeTone = 'default',
   children,
   open = false,
   group = 'default',
@@ -69,6 +72,7 @@ export function HoverTimeMenu({
           // Keyboard users reach the menu by tabbing to it: hide the time while
           // the menu holds focus, like on hover.
           'group-focus-within/swap:pointer-events-none group-focus-within/swap:opacity-0',
+          timeTone === 'subtle' && 'text-muted-foreground text-2xs',
           timeClassName,
           open && 'pointer-events-none opacity-0',
         )}

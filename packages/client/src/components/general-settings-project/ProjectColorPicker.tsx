@@ -67,8 +67,9 @@ export function ProjectColorPicker({ projectId, currentColor, onSave }: Props) {
               currentColor === color
                 ? 'border-primary shadow-xs scale-110'
                 : 'border-transparent hover:border-muted-foreground',
+              'bg-[color:var(--project-color-swatch)]',
             )}
-            style={{ backgroundColor: color }}
+            style={{ '--project-color-swatch': color }}
             aria-label={`Color ${color}`}
             aria-pressed={currentColor === color}
           />
@@ -84,8 +85,9 @@ export function ProjectColorPicker({ projectId, currentColor, onSave }: Props) {
               className={cn(
                 'size-8 rounded-lg border-2 shadow-xs cursor-pointer transition-all hover:scale-105',
                 currentColor ? 'border-primary/50' : 'border-border',
+                'bg-[color:var(--project-color-current)]',
               )}
-              style={{ backgroundColor: currentColor || 'transparent' }}
+              style={{ '--project-color-current': currentColor || 'transparent' }}
             >
               {!currentColor && (
                 <div className="from-muted-foreground/10 to-muted-foreground/30 flex size-full items-center justify-center rounded-md bg-linear-to-br">
@@ -94,7 +96,7 @@ export function ProjectColorPicker({ projectId, currentColor, onSave }: Props) {
               )}
             </button>
           </PopoverTrigger>
-          <PopoverContent className="w-72 p-3" align="start">
+          <PopoverContent className="w-72" padding="md" align="start">
             <ColorPicker
               value={currentColor || '#7CB9E8'}
               onChange={([r, g, b]) => {
@@ -103,7 +105,7 @@ export function ProjectColorPicker({ projectId, currentColor, onSave }: Props) {
                 onSave(projectId, { color: hex });
               }}
             >
-              <ColorPickerSelection className="h-40 rounded-lg" />
+              <ColorPickerSelection corners="lg" className="h-40" />
               <ColorPickerHue />
               <ColorPickerAlpha />
               <div className="flex items-center gap-2">

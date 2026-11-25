@@ -41,6 +41,12 @@ export type StepParser = (line: string) => { report: StepReport; issues: TaskIss
 
 type Issue = Omit<TaskIssue, 'step'>;
 
+/** What a line did to a headed issue waiting for its location: the issues it closed, and whether it was the location. */
+interface HeadedFlush {
+  issues: TaskIssue[];
+  consumed: boolean;
+}
+
 const LOCATED = /^(.+?):(\d+):(\d+): (warning|error) (.+)$/;
 const TSC = /^(.+?)\((\d+),(\d+)\): (error|warning) (TS\d+: .+)$/;
 const TSC_PRETTY = /^(.+?):(\d+):(\d+) - (error|warning) (TS\d+: .+)$/;
@@ -196,7 +202,7 @@ export function createStepParser(step: string): StepParser {
 
   // An issue's location comes on one of the next lines (cargo and ruff right
   // after it, oxlint after a blank line): `consumed` tells whether `line` was it.
-  const flushHeaded = (line: string): { issues: TaskIssue[]; consumed: boolean } => {
+  const flushHeaded = (line: string): HeadedFlush => {
     if (!headed) return { issues: [], consumed: false };
     const at = CARGO_AT.exec(line) ?? OXLINT_AT.exec(line);
     if (at) {

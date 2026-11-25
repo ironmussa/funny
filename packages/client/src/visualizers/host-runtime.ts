@@ -14,11 +14,12 @@ import { pluginSdkApi } from './host-api';
  * Idempotent: safe to call more than once.
  */
 export function installVisualizerHostGlobals(): void {
-  const g = globalThis as Record<string, unknown>;
-  g.__FUNNY_REACT__ = React;
-  g.__FUNNY_REACT_DOM__ = ReactDOM;
-  g.__FUNNY_REACT_JSX_RUNTIME__ = ReactJsxRuntime;
-  g.__FUNNY_PLUGIN_SDK__ = pluginSdkApi;
-  // Backward-compatible alias for visualizers compiled against @funny/host.
-  g.__FUNNY_HOST__ = pluginSdkApi;
+  Object.assign(globalThis, {
+    __FUNNY_REACT__: React,
+    __FUNNY_REACT_DOM__: ReactDOM,
+    __FUNNY_REACT_JSX_RUNTIME__: ReactJsxRuntime,
+    __FUNNY_PLUGIN_SDK__: pluginSdkApi,
+    // Backward-compatible alias for visualizers compiled against @funny/host.
+    __FUNNY_HOST__: pluginSdkApi,
+  });
 }

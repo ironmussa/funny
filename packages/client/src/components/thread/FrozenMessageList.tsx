@@ -7,7 +7,7 @@ import {
   useListFontConfig,
   usePretextWarmup,
 } from './MemoizedMessageList.hooks';
-import { estimateVirtualRowHeight, VIRTUAL_ROW_GAP_PX } from './MemoizedMessageList.measurement';
+import { estimateVirtualRowHeight } from './MemoizedMessageList.measurement';
 import { UserMessageRenderer, VirtualRowContent } from './MemoizedMessageList.renderers';
 import type {
   MemoizedMessageListProps,
@@ -198,21 +198,12 @@ export const FrozenMessageList = memo(function FrozenMessageList({
     const isUserRow =
       row.type === 'item' && row.item.type === 'message' && row.item.msg.role === 'user';
     const estimate = Math.round(estimateVirtualRowHeight(row, containerWidth, fontConfig));
-    const rowStyle: CSSProperties = isUserRow
-      ? {
-          position: 'sticky',
-          top: 0,
-          zIndex: 20,
-          overflowAnchor: 'auto',
-          // Own paint layer: avoids a trailing ghost of the stuck header when
-          // neighboring content-visibility rows repaint during scroll.
-          transform: 'translateZ(0)',
-        }
-      : {
-          contentVisibility: 'auto',
-          containIntrinsicSize: `auto ${estimate}px`,
-          overflowAnchor: 'auto',
-        };
+    // Sticky user rows own a paint layer (`translateZ(0)`): avoids a trailing
+    // ghost of the stuck header when neighboring content-visibility rows
+    // repaint during scroll. Other rows skip offscreen paint natively.
+    const rowStyle: CSSProperties | undefined = isUserRow
+      ? undefined
+      : { '--frozen-row-estimate': `${estimate}px` };
     return (
       <div
         key={row.key}
@@ -221,7 +212,11 @@ export const FrozenMessageList = memo(function FrozenMessageList({
         {...(isUserRow ? { 'data-section-msg-id': (row as any).item.msg.id } : {})}
         // Opaque bg so content scrolling under the stuck header cannot bleed
         // through the transparent padding around the card.
-        className={isUserRow ? 'bg-background' : undefined}
+        className={
+          isUserRow
+            ? 'bg-background sticky top-0 z-20 [transform:translateZ(0)] [overflow-anchor:auto]'
+            : '[contain-intrinsic-size:auto_var(--frozen-row-estimate)] [content-visibility:auto] [overflow-anchor:auto]'
+        }
         style={rowStyle}
       >
         <VirtualRowContent
@@ -251,20 +246,14 @@ export const FrozenMessageList = memo(function FrozenMessageList({
       <div
         ref={containerRef}
         data-testid="frozen-message-list"
-        style={{ display: 'flex', flexDirection: 'column', gap: `${VIRTUAL_ROW_GAP_PX}px` }}
+        // gap-4 = VIRTUAL_ROW_GAP_PX (16px), which the height estimates assume.
+        className="flex flex-col gap-4"
       >
         {detachedLastUserItem ? (
           <div
             data-testid="frozen-last-user-context"
             data-section-msg-id={detachedLastUserItem.msg.id}
-            className="bg-background"
-            style={{
-              position: 'sticky',
-              top: 0,
-              zIndex: 30,
-              overflowAnchor: 'auto',
-              transform: 'translateZ(0)',
-            }}
+            className="bg-background sticky top-0 z-30 [transform:translateZ(0)] [overflow-anchor:auto]"
           >
             <UserMessageRenderer
               item={detachedLastUserItem}
@@ -284,7 +273,7 @@ export const FrozenMessageList = memo(function FrozenMessageList({
             key={section.key}
             data-frozen-section=""
             data-turn-section={getRowSectionId(section.rows[0])}
-            style={{ display: 'flex', flexDirection: 'column', gap: `${VIRTUAL_ROW_GAP_PX}px` }}
+            className="flex flex-col gap-4"
           >
             {section.rows.map(renderRow)}
           </div>

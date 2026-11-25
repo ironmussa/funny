@@ -137,13 +137,13 @@ export interface FileHistoryEntry {
   previousPath: string | null;
 }
 
-const STATUS_MAP: Record<string, CommitFileEntry['status']> = {
-  A: 'added',
-  M: 'modified',
-  D: 'deleted',
-  R: 'renamed',
-  C: 'copied',
-};
+const STATUS_MAP = new Map<string, CommitFileEntry['status']>([
+  ['A', 'added'],
+  ['M', 'modified'],
+  ['D', 'deleted'],
+  ['R', 'renamed'],
+  ['C', 'copied'],
+]);
 
 const REBASE_REFLOG_RE = /^(.*?rebase.*?)\s+\(([^)]+)\):\s*(.*)$/i;
 
@@ -238,10 +238,13 @@ export function getLog(
  * e.g. `HEAD -> refs/heads/main, refs/remotes/origin/main, refs/remotes/origin/HEAD, tag: refs/tags/v1.0`
  *   → `{ refs: [{name:'main',kind:'local'}, {name:'origin/main',kind:'remote'}, {name:'v1.0',kind:'tag'}], headBranch: 'main' }`
  */
-function parseRefs(decoration: string): {
+/** A commit's ref chips, and the branch HEAD points at (when on one). */
+interface CommitRefs {
   refs: GraphRef[];
   headBranch: string | null;
-} {
+}
+
+function parseRefs(decoration: string): CommitRefs {
   const trimmed = decoration.trim();
   if (!trimmed) return { refs: [], headBranch: null };
   const refs: GraphRef[] = [];
@@ -706,7 +709,7 @@ function getCommitFilesUnchecked(
         const parts = line.split('\t');
         if (parts.length < 2) continue;
         const statusChar = parts[0][0]; // R100 → R, etc.
-        const status = STATUS_MAP[statusChar] || 'modified';
+        const status = STATUS_MAP.get(statusChar) || 'modified';
         // For renames/copies, use the destination path (parts[2])
         const path =
           parts.length >= 3 && (statusChar === 'R' || statusChar === 'C') ? parts[2] : parts[1];
@@ -798,7 +801,7 @@ function parseFileHistoryNameStatus(
   const parts = line.split('\t');
   if (parts.length < 2) return null;
   const statusChar = parts[0][0];
-  const status = STATUS_MAP[statusChar] || 'modified';
+  const status = STATUS_MAP.get(statusChar) || 'modified';
   if ((statusChar === 'R' || statusChar === 'C') && parts.length >= 3) {
     return { status, previousPath: parts[1], path: parts[2] };
   }

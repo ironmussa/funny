@@ -132,8 +132,10 @@ export function DrawTool({ overlayRef, isActive }: DrawToolProps) {
       <canvas
         ref={canvasRef}
         data-testid="browser-panel-draw-canvas"
-        className={cn('absolute inset-0 h-full w-full', isActive && 'cursor-crosshair')}
-        style={{ pointerEvents: isActive ? 'auto' : 'none' }}
+        className={cn(
+          'absolute inset-0 h-full w-full',
+          isActive ? 'pointer-events-auto cursor-crosshair' : 'pointer-events-none',
+        )}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
@@ -147,10 +149,8 @@ export function DrawTool({ overlayRef, isActive }: DrawToolProps) {
           onClear={clearDraw}
           drawAnnotation={drawAnnotation ?? null}
           updateAnnotationNote={updateAnnotationNote}
-          fontStyle={{
-            fontSize: PROSE_FONT_SIZE_PX[fontSize],
-            lineHeight: `${PROSE_LINE_HEIGHT_PX[fontSize]}px`,
-          }}
+          noteFontSizePx={PROSE_FONT_SIZE_PX[fontSize]}
+          noteLineHeightPx={PROSE_LINE_HEIGHT_PX[fontSize]}
         />
       )}
     </>
@@ -163,14 +163,16 @@ function DrawToolbar({
   onClear,
   drawAnnotation,
   updateAnnotationNote,
-  fontStyle,
+  noteFontSizePx,
+  noteLineHeightPx,
 }: {
   drawColor: string;
   setDrawColor: (c: string) => void;
   onClear: () => void;
   drawAnnotation: Extract<Annotation, { kind: 'draw' }> | null;
   updateAnnotationNote: (id: string, note: string) => void;
-  fontStyle: React.CSSProperties;
+  noteFontSizePx: number;
+  noteLineHeightPx: number;
 }) {
   const [localNote, setLocalNote] = useResettableState(drawAnnotation?.note ?? '', [
     drawAnnotation?.id,
@@ -194,10 +196,10 @@ function DrawToolbar({
               aria-pressed={active}
               onClick={() => setDrawColor(color)}
               className={cn(
-                'size-6 rounded-full border-2 transition-transform',
+                'size-6 rounded-full border-2 bg-[color:var(--draw-swatch-color)] transition-transform',
                 active ? 'scale-110 border-foreground' : 'border-border hover:scale-105',
               )}
-              style={{ backgroundColor: color }}
+              style={{ '--draw-swatch-color': color }}
             />
           );
         })}
@@ -221,7 +223,11 @@ function DrawToolbar({
         onBlur={() => {
           if (drawAnnotation) updateAnnotationNote(drawAnnotation.id, localNote);
         }}
-        style={fontStyle}
+        size="prose"
+        style={{
+          '--textarea-font-size': `${noteFontSizePx}px`,
+          '--textarea-line-height': `${noteLineHeightPx}px`,
+        }}
         data-testid="browser-panel-draw-note"
       />
     </div>

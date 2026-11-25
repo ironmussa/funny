@@ -26,11 +26,21 @@ interface BranchBadgeProps {
 }
 
 const sizeStyles = {
-  // `xs` is the History tab's chip size (15px tall, `text-2xs`).
-  xs: { icon: ICON_SIZE['2xs'], text: 'text-2xs leading-none', chip: 'h-[0.9375rem] px-1.5' },
+  // `xs` is the History tab's chip size (16px tall, `text-2xs`).
+  xs: { icon: ICON_SIZE['2xs'], text: 'text-2xs leading-none', chip: 'h-4 px-2' },
   sm: { icon: ICON_SIZE.xs, text: 'text-xs', chip: 'px-1.5 py-px' },
   md: { icon: ICON_SIZE.sm, text: 'text-sm', chip: 'px-2 py-0.5' },
 };
+
+const BRANCH_COLOR_CLASSES =
+  'bg-[color:var(--branch-badge-bg)] text-[color:var(--branch-badge-fg)]';
+const BRANCH_OUTLINE_CLASS = '[box-shadow:0_0_0_1.5px_var(--branch-badge-outline)]';
+
+/** Classes that read the branch color variables set in the chip's style. */
+function branchColorClasses(bg: string | undefined, outlined: boolean) {
+  if (!bg) return undefined;
+  return outlined ? [BRANCH_COLOR_CLASSES, BRANCH_OUTLINE_CLASS] : BRANCH_COLOR_CLASSES;
+}
 
 /**
  * The one way a git branch name is shown in the UI: branch icon, monospace
@@ -63,13 +73,16 @@ export function BranchBadge({
             // 1px off-center depending on where the row lands.
             variant === 'badge' && ['rounded-full font-medium will-change-transform', s.chip],
             className,
+            // Last, so the branch color wins over a caller's color classes
+            // (it used to be an inline style).
+            branchColorClasses(bg, outlined),
           )}
           style={
             bg
               ? {
-                  backgroundColor: bg,
-                  color: contrastText(bg),
-                  boxShadow: outlined ? `0 0 0 1.5px ${darkenHex(bg, 0.35)}` : undefined,
+                  '--branch-badge-bg': bg,
+                  '--branch-badge-fg': contrastText(bg),
+                  '--branch-badge-outline': outlined ? darkenHex(bg, 0.35) : undefined,
                 }
               : undefined
           }

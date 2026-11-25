@@ -3,6 +3,11 @@ import { setup } from 'xstate';
 import { statusWriteGuards } from './status-transitions.js';
 import type { ActivityStatus } from './types.js';
 
+/** The events the machine accepts. */
+interface ActivityMachineTypes {
+  events: { type: 'STEP' | 'SUCCEED' | 'FAIL' | 'INTERRUPT' };
+}
+
 /**
  * Background activity lifecycle (track-background-activities, design D2).
  * Enforced by the activity repository on every status write.
@@ -18,7 +23,7 @@ import type { ActivityStatus } from './types.js';
  */
 const activityMachine = setup({
   // SAFETY: xstate's `types` is a type-only carrier; the empty object is never read at runtime.
-  types: {} as { events: { type: 'STEP' | 'SUCCEED' | 'FAIL' | 'INTERRUPT' } },
+  types: {} as ActivityMachineTypes,
 }).createMachine({
   id: 'activity',
   initial: 'running',

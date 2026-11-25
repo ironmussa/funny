@@ -15,25 +15,16 @@
  * gets dropped by `Object.values`) and treats `args`/`env`/`headers` as
  * required, so we always include them with sane defaults.
  */
+import type { McpServerMap, McpStringPairs } from './mcp-server-map.js';
+
 type ACPMcpServer = import('@agentclientprotocol/sdk').McpServer;
 
-/** Name/value pairs as the internal map writes them: a plain object, or ACP's own pair list. */
-type PairSource = Readonly<Record<string, unknown>> | readonly unknown[];
-
-/** One entry of the internal MCP server map; every field is checked before use. */
-interface InternalMcpServer {
-  type?: unknown;
-  command?: unknown;
-  args?: unknown;
-  url?: unknown;
-  env?: PairSource;
-  headers?: PairSource;
-}
-
-export function toACPMcpServers(mcpServers: Record<string, any> | undefined): ACPMcpServer[] {
+export function toACPMcpServers(mcpServers: McpServerMap | undefined): ACPMcpServer[] {
   if (!mcpServers) return [];
 
-  const recordToPairs = (rec: PairSource | undefined): Array<{ name: string; value: string }> => {
+  const recordToPairs = (
+    rec: McpStringPairs | undefined,
+  ): Array<{ name: string; value: string }> => {
     if (!rec) return [];
     if (Array.isArray(rec)) {
       return rec
@@ -44,9 +35,7 @@ export function toACPMcpServers(mcpServers: Record<string, any> | undefined): AC
         .map((e) => ({ name: String(e.name), value: String(e.value) }));
     }
     if (isObject(rec)) {
-      // SAFETY: `rec` is a non-null, non-array object (checked above); each value is
-      // coerced with `String`.
-      return Object.entries(rec as Record<string, unknown>).map(([name, value]) => ({
+      return Object.entries(rec).map(([name, value]) => ({
         name,
         value: String(value ?? ''),
       }));
@@ -55,12 +44,9 @@ export function toACPMcpServers(mcpServers: Record<string, any> | undefined): AC
   };
 
   const out: ACPMcpServer[] = [];
-  for (const [name, raw] of Object.entries(mcpServers)) {
-    if (!raw || !isObject(raw)) continue;
-    const cfg: InternalMcpServer = raw;
-    // SAFETY: the Claude-shaped config declares `type` as a transport name string;
-    // configs without a `type` are treated as stdio below.
-    const type = (cfg.type as string | undefined)?.toLowerCase();
+  for (const [name, cfg] of Object.entries(mcpServers)) {
+    if (!cfg || !isObject(cfg)) continue;
+    const type = cfg.type?.toLowerCase();
 
     // In-process SDK MCP servers (createSdkMcpServer) run inside this process
     // and have no stdio/http transport, so they cannot be handed to a separate
@@ -84,7 +70,7 @@ export function toACPMcpServers(mcpServers: Record<string, any> | undefined): AC
       out.push({
         name,
         command: String(cfg.command ?? ''),
-        args: Array.isArray(cfg.args) ? (cfg.args as string[]).map(String) : [],
+        args: Array.isArray(cfg.args) ? cfg.args.map(String) : [],
         env: recordToPairs(cfg.env),
       } as ACPMcpServer);
     }

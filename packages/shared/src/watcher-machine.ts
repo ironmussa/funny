@@ -3,6 +3,11 @@ import { setup } from 'xstate';
 import { statusWriteGuards } from './status-transitions.js';
 import type { WatcherStatus } from './types.js';
 
+/** The events the machine accepts. */
+interface WatcherMachineTypes {
+  events: { type: 'FIRE' | 'RESCHEDULE' | 'EXPIRE' | 'COMPLETE' | 'CANCEL' };
+}
+
 /**
  * Watcher (deferred wake) lifecycle. Enforced by the watcher repository on
  * every status write.
@@ -18,9 +23,7 @@ import type { WatcherStatus } from './types.js';
  */
 const watcherMachine = setup({
   // SAFETY: xstate's `types` is a type-only carrier; the empty object is never read at runtime.
-  types: {} as {
-    events: { type: 'FIRE' | 'RESCHEDULE' | 'EXPIRE' | 'COMPLETE' | 'CANCEL' };
-  },
+  types: {} as WatcherMachineTypes,
 }).createMachine({
   id: 'watcher',
   initial: 'pending',

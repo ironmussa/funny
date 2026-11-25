@@ -8,6 +8,7 @@ import {
   type RealtimeEffectSink,
   type Unsubscribe,
 } from '@funny/client-core';
+import type { JsonValue } from '@funny/shared/json';
 import { io } from 'socket.io-client';
 
 import type { NativeCookieJar } from '../platform/transport';
@@ -29,11 +30,14 @@ export interface NativeRealtimeSnapshot {
   error: string | null;
 }
 
-/** A Socket.IO event's envelope fields, read before they are checked. */
-type SocketEnvelope = Record<string, unknown>;
-
 function isString(value: unknown): value is string {
   return typeof value === 'string';
+}
+
+/** A Socket.IO event's envelope fields (it arrived as JSON), read before they are checked. */
+interface SocketEnvelope {
+  threadId?: JsonValue;
+  data?: JsonValue;
 }
 
 function isSocketEnvelope(payload: unknown): payload is SocketEnvelope {

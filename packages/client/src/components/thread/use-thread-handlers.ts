@@ -244,7 +244,7 @@ function applyQueuedCount(threadId: string, responseQueuedCount: number | undefi
 export function reportSendFailure(
   err: { type: string; message: string },
   threadId: string,
-  t: (key: string, opts?: Record<string, unknown>) => string,
+  t: (key: string, opts?: { [option: string]: string | number }) => string,
   /** False when this send did not mark the thread running (it was already running). */
   undoOptimisticRun = true,
 ): void {
@@ -260,7 +260,7 @@ function handleSendResult(
   result: Awaited<ReturnType<typeof api.sendMessage>>,
   threadId: string,
   options: { rollbackOnQueue: boolean },
-  t: (key: string, opts?: Record<string, unknown>) => string,
+  t: (key: string, opts?: { [option: string]: string | number }) => string,
 ) {
   if (result.isErr()) {
     reportSendFailure(result.error, threadId, t, options.rollbackOnQueue);

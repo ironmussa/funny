@@ -79,9 +79,7 @@ export function pickStyles(cs: CSSStyleDeclaration): Record<string, string> {
     'margin',
     'opacity',
   ];
-  const out: Record<string, string> = {};
-  for (const k of keys) out[k] = cs.getPropertyValue(k);
-  return out;
+  return Object.fromEntries(keys.map((k) => [k, cs.getPropertyValue(k)]));
 }
 
 /**

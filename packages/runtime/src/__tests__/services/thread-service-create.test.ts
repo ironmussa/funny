@@ -723,6 +723,31 @@ describe('createAndStartThread', () => {
     );
   });
 
+  // #457, #483, #488: the run's branch was held by an earlier attempt's
+  // worktree, the thread was put on a branch named from its title, and every
+  // later factory step was refused on it.
+  test('a required branch held by another worktree refuses the thread instead of renaming it', async () => {
+    mocks.git.mockResolvedValue(ok('abc123'));
+    mocks.findWorktreeForBranch.mockResolvedValue(ok('/projects/.worktrees/factory-issue-1-old'));
+
+    const result = await createAndStartThread({
+      projectId: 'p-1',
+      userId: 'u-1',
+      mode: 'worktree',
+      branch: 'factory/issue-1',
+      requireBranch: true,
+      prompt: 'Build',
+      title: 'Feature',
+    });
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.statusCode).toBe(409);
+      expect(result.error.message).toContain('/projects/.worktrees/factory-issue-1-old');
+    }
+    expect(mocks.tm.createThread).not.toHaveBeenCalled();
+  });
+
   test('creates worktree thread in setting_up and kicks off background setup', async () => {
     mocks.createWorktree.mockResolvedValue(ok('/projects/my-app/.worktrees/feature'));
     mocks.setupWorktree.mockResolvedValue(ok({ postCreateErrors: [] }));

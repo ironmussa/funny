@@ -5,6 +5,8 @@
  * into renderable parts instead of raw JSON.
  */
 
+import { isJsonObject, type JsonObject, type JsonValue } from '@funny/shared/json';
+
 export interface McpToolName {
   server: string;
   tool: string;
@@ -83,27 +85,27 @@ function isBoolean(value: unknown): value is boolean {
   return typeof value === 'boolean';
 }
 
-type Summarizer = (parsed: Record<string, unknown>) => string | null;
+type Summarizer = (parsed: JsonObject) => string | null;
 
 /** The trimmed text in `parsed[key]`, or null when it is not a non-blank string. */
-function str(parsed: Record<string, unknown>, key: string): string | null {
+function str(parsed: JsonObject, key: string): string | null {
   const value = parsed[key];
   return isString(value) && value.trim() ? value.trim() : null;
 }
 
 /** The number in `parsed[key]`, or null when it is not a number. */
-function num(parsed: Record<string, unknown>, key: string): number | null {
+function num(parsed: JsonObject, key: string): number | null {
   const value = parsed[key];
   return isNumber(value) ? value : null;
 }
 
-function actTarget(parsed: Record<string, unknown>): string | null {
+function actTarget(parsed: JsonObject): string | null {
   const x = num(parsed, 'x');
   const y = num(parsed, 'y');
   return str(parsed, 'ref') ?? (x !== null && y !== null ? `(${x}, ${y})` : null);
 }
 
-function actDetail(parsed: Record<string, unknown>): string | null {
+function actDetail(parsed: JsonObject): string | null {
   const text = str(parsed, 'text');
   if (text) return `"${firstLine(text, 60)}"`;
   if (Array.isArray(parsed.paths)) return parsed.paths.join(', ');
@@ -218,7 +220,7 @@ const SUMMARY_KEYS = [
 
 /** A one-line description of the call for the card header, with the input it came from. */
 export function getMcpSummary(
-  parsed: Record<string, unknown>,
+  parsed: JsonObject,
   mcp?: McpToolName,
 ): { key: string; text: string } | null {
   if (mcp && isBrowserTool(mcp)) {
@@ -254,21 +256,8 @@ function textPart(text: string): McpResultPart {
   return { kind: 'text', text, markdown: MARKDOWN_HINT.test(text) };
 }
 
-type ContentBlock = Record<string, any>;
-
-/** Any non-null object (arrays included), read as a bag of fields. */
-function isContentBlock(value: JsonValue | undefined): value is ContentBlock {
-  return !!value && typeof value === 'object';
-}
-
-/** What `JSON.parse` returns for the tool output. */
-export type JsonValue =
-  | string
-  | number
-  | boolean
-  | null
-  | JsonValue[]
-  | { [key: string]: JsonValue };
+/** An MCP content block: a JSON object, its fields checked before use. */
+type ContentBlock = JsonObject;
 
 function imagePart(b: ContentBlock): McpResultPart | null {
   const mimeType = isString(b.mimeType) ? b.mimeType : 'image/png';
@@ -278,7 +267,7 @@ function imagePart(b: ContentBlock): McpResultPart | null {
 }
 
 function resourcePart(b: ContentBlock): McpResultPart | null {
-  const r = b.resource ?? {};
+  const r = isJsonObject(b.resource) ? b.resource : {};
   if (!isString(r.uri)) return null;
   return { kind: 'resource', uri: r.uri, text: isString(r.text) ? r.text : null };
 }
@@ -293,15 +282,14 @@ const CONTENT_PARSERS = new Map<string, (b: ContentBlock) => McpResultPart | nul
 );
 
 function contentPart(block: JsonValue): McpResultPart | null {
-  if (!isContentBlock(block)) return null;
-  // Arrays included: a block is read as a bag of fields.
+  if (!isJsonObject(block)) return null;
   const b: ContentBlock = block;
   const parse = isString(b.type) ? CONTENT_PARSERS.get(b.type) : undefined;
   return parse ? parse(b) : null;
 }
 
 function durationFromMeta(meta: JsonValue | undefined): number | null {
-  if (!isContentBlock(meta)) return null;
+  if (!isJsonObject(meta)) return null;
   for (const [key, value] of Object.entries(meta)) {
     if (/durationms$/i.test(key) && isNumber(value) && Number.isFinite(value)) {
       return value;
@@ -325,7 +313,7 @@ export function parseMcpResult(output: string | undefined): McpResult | null {
     return null;
   }
   const envelope = Array.isArray(value) ? { content: value } : value;
-  if (!isContentBlock(envelope) || !Array.isArray(envelope.content)) return null;
+  if (!isJsonObject(envelope) || !Array.isArray(envelope.content)) return null;
   const parts = envelope.content.map(contentPart);
   // Not an MCP envelope if any block is unrecognized: show the raw output instead.
   if (parts.some((p: McpResultPart | null) => p === null)) return null;

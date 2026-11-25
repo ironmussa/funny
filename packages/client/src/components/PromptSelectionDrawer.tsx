@@ -38,18 +38,23 @@ export function PromptSelectionDrawer({
         }}
       >
         <div className="flex shrink-0 items-center justify-between gap-2 border-b px-4">
-          <DrawerTitle
-            ref={titleRef}
-            tabIndex={-1}
-            className="min-w-0 py-3 text-base font-semibold outline-hidden"
-          >
-            {title}
+          <DrawerTitle asChild>
+            <h2
+              ref={titleRef}
+              tabIndex={-1}
+              className="min-w-0 py-3 text-base font-semibold outline-hidden"
+            >
+              {title}
+            </h2>
           </DrawerTitle>
-          <DrawerClose
-            aria-label={t('prompt.mobileSelectors.close', 'Close')}
-            className="focus-visible:ring-ring flex size-[48px] shrink-0 items-center justify-center rounded-md focus-visible:ring-2"
-          >
-            <X className="size-5" />
+          <DrawerClose asChild>
+            <button
+              type="button"
+              aria-label={t('prompt.mobileSelectors.close', 'Close')}
+              className="focus-visible:ring-ring flex size-[48px] shrink-0 items-center justify-center rounded-md focus-visible:ring-2"
+            >
+              <X className="size-5" />
+            </button>
           </DrawerClose>
         </div>
         <div className="flex min-h-0 flex-col overflow-hidden pb-[max(0.5rem,env(safe-area-inset-bottom))]">

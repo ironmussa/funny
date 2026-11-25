@@ -107,12 +107,9 @@ function WorktreeDeleteDialogInstance({
           ) : status ? (
             <>
               {status.unpushedCommitCount > 0 && (
-                <Alert
-                  variant="destructive"
-                  className="border-status-warning/30 bg-status-warning/10 text-status-warning [&>svg]:text-status-warning"
-                >
+                <Alert variant="warning">
                   <AlertTriangle className="icon-base" />
-                  <AlertDescription className="text-xs">
+                  <AlertDescription size="xs">
                     {t('dialog.unpushedCommitsWarning', {
                       count: status.unpushedCommitCount,
                     })}
@@ -120,12 +117,9 @@ function WorktreeDeleteDialogInstance({
                 </Alert>
               )}
               {status.dirtyFileCount > 0 && (
-                <Alert
-                  variant="destructive"
-                  className="border-status-warning/30 bg-status-warning/10 text-status-warning [&>svg]:text-status-warning"
-                >
+                <Alert variant="warning">
                   <AlertTriangle className="icon-base" />
-                  <AlertDescription className="text-xs">
+                  <AlertDescription size="xs">
                     {t('dialog.dirtyFilesWarning', { count: status.dirtyFileCount })}
                   </AlertDescription>
                 </Alert>
@@ -139,12 +133,9 @@ function WorktreeDeleteDialogInstance({
             </>
           ) : (
             // Worktree warning fallback (no status fetched — e.g. no worktreePath)
-            <Alert
-              variant="destructive"
-              className="border-status-warning/30 bg-status-warning/10 text-status-warning [&>svg]:text-status-warning"
-            >
+            <Alert variant="warning">
               <AlertTriangle className="icon-base" />
-              <AlertDescription className="text-xs">{t('dialog.worktreeWarning')}</AlertDescription>
+              <AlertDescription size="xs">{t('dialog.worktreeWarning')}</AlertDescription>
             </Alert>
           )}
 
@@ -176,7 +167,7 @@ function WorktreeDeleteDialogInstance({
           </AlertDialogCancel>
           <AlertDialogAction
             data-testid="worktree-delete-confirm"
-            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            variant="destructive"
             onClick={handleConfirm}
             disabled={loading}
           >

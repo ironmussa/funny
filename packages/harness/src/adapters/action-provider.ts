@@ -1,3 +1,5 @@
+import type { JsonObject } from '@funny/shared/json';
+
 import { HarnessError } from '../errors.js';
 import type {
   HarnessAgentRequest,
@@ -14,7 +16,7 @@ export interface ActionResultLike {
   ok: boolean;
   output?: string;
   error?: string;
-  metadata?: Record<string, unknown>;
+  metadata?: JsonObject;
 }
 
 export interface ActionProviderLike {

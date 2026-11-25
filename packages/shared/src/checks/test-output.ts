@@ -88,6 +88,13 @@ function placeAt(failure: TestFailure, frame: RegExpExecArray): void {
   Object.assign(failure, { file: frame[1], line: Number(frame[2]) });
 }
 
+/** The error bun printed before a test's `(fail)` line. */
+interface LastError {
+  message?: string;
+  file?: string;
+  line?: number;
+}
+
 interface Pending {
   failure: TestFailure;
   linesLeft: number;
@@ -111,7 +118,7 @@ class Counter {
   /** A failure whose heading was printed, waiting for its message / location. */
   private pending: Pending | null = null;
   /** bun prints a failure's error before its `(fail)` line. */
-  private lastError: { message?: string; file?: string; line?: number } = {};
+  private lastError: LastError = {};
   fromEvents = false;
   /**
    * Counts of the runs that already printed their summary: one command may
@@ -302,33 +309,35 @@ function summaryTotals(
   );
 }
 
-const STATE_OF: Record<string, TestState> = {
-  '✓': 'passed',
-  ok: 'passed',
-  '✘': 'failed',
-  x: 'failed',
-  '-': 'skipped',
-  '.': 'passed',
-  X: 'passed',
-  F: 'failed',
-  E: 'failed',
-  s: 'skipped',
-  PASSED: 'passed',
-  XPASS: 'passed',
-  FAILED: 'failed',
-  ERROR: 'failed',
-  SKIPPED: 'skipped',
-  XFAIL: 'skipped',
-  pass: 'passed',
-  fail: 'failed',
-  skip: 'skipped',
-  todo: 'skipped',
-  PASS: 'passed',
-  FAIL: 'failed',
-  SKIP: 'skipped',
-};
+const STATE_OF = new Map<string, TestState>(
+  Object.entries({
+    '✓': 'passed',
+    ok: 'passed',
+    '✘': 'failed',
+    x: 'failed',
+    '-': 'skipped',
+    '.': 'passed',
+    X: 'passed',
+    F: 'failed',
+    E: 'failed',
+    s: 'skipped',
+    PASSED: 'passed',
+    XPASS: 'passed',
+    FAILED: 'failed',
+    ERROR: 'failed',
+    SKIPPED: 'skipped',
+    XFAIL: 'skipped',
+    pass: 'passed',
+    fail: 'failed',
+    skip: 'skipped',
+    todo: 'skipped',
+    PASS: 'passed',
+    FAIL: 'failed',
+    SKIP: 'skipped',
+  } satisfies Record<string, TestState>),
+);
 
-const stateOf = (mark: string) => STATE_OF[mark] ?? 'skipped';
+const stateOf = (mark: string) => STATE_OF.get(mark) ?? 'skipped';
 
 const withMessage = (message: string | undefined) =>
   message ? { message: message.slice(0, MESSAGE_MAX) } : {};

@@ -129,7 +129,7 @@ function isObject<T>(value: T): value is T & (object | null) {
 }
 
 /** Normalize browser fire-and-forget payloads. Returns null when invalid. */
-export function parseObjectPayload(data: SocketIoArgument): Record<string, unknown> | null {
+export function parseObjectPayload(data: SocketIoArgument): SocketObjectPayload | null {
   if (data != null && (!isObject(data) || Array.isArray(data))) {
     return null;
   }

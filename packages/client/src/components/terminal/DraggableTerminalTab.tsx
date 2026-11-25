@@ -171,7 +171,8 @@ export function DraggableTerminalTab({
                 e.stopPropagation();
               }}
               onClick={(e) => e.stopPropagation()}
-              className="h-5 w-32 px-1 py-0 text-xs"
+              size="inline"
+              className="w-32"
               data-testid={`terminal-tab-rename-${tab.id}`}
             />
           ) : (
@@ -207,7 +208,7 @@ export function DraggableTerminalTab({
         {isPty && tab.alive && (
           <ContextMenuItem
             onSelect={() => onKill()}
-            className="text-destructive focus:text-destructive"
+            variant="destructive"
             data-testid={`terminal-tab-context-kill-${tab.id}`}
           >
             {t('terminal.kill')}

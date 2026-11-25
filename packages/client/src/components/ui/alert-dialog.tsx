@@ -1,4 +1,5 @@
 import * as AlertDialogPrimitive from '@radix-ui/react-alert-dialog';
+import type { VariantProps } from 'class-variance-authority';
 import * as React from 'react';
 
 import { buttonVariants } from '@/components/ui/button';
@@ -92,13 +93,20 @@ function AlertDialogDescription({
 }
 function AlertDialogAction({
   className,
+  variant,
   ref,
   ...props
 }: React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Action> & {
   ref?: React.Ref<React.ElementRef<typeof AlertDialogPrimitive.Action>>;
+  /** A Button variant: `destructive` for an action that deletes something. */
+  variant?: VariantProps<typeof buttonVariants>['variant'];
 }) {
   return (
-    <AlertDialogPrimitive.Action ref={ref} className={cn(buttonVariants(), className)} {...props} />
+    <AlertDialogPrimitive.Action
+      ref={ref}
+      className={cn(buttonVariants({ variant }), className)}
+      {...props}
+    />
   );
 }
 function AlertDialogCancel({

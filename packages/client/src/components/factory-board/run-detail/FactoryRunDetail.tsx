@@ -51,12 +51,12 @@ function RunHeader({
   const threadId = factoryRunCardThread(run);
   const thread = useThreadById(threadId);
   return (
-    <SheetHeader className="pr-8">
-      <SheetTitle data-testid="factory-run-detail-title">
+    <SheetHeader>
+      <SheetTitle className="mr-8" data-testid="factory-run-detail-title">
         {factoryRunTitle(t, run, thread?.title)}
       </SheetTitle>
       <SheetDescription asChild>
-        <div className="flex flex-wrap items-center gap-1.5 text-xs">
+        <div className="mr-8 flex flex-wrap items-center gap-1.5 text-xs">
           {projectName && <span>{projectName}</span>}
           <span data-testid="factory-run-detail-ref">{factoryRunRef(t, run)}</span>
           <LabelBadge tone="info" data-testid="factory-run-detail-state">
@@ -64,7 +64,7 @@ function RunHeader({
           </LabelBadge>
         </div>
       </SheetDescription>
-      <div className="flex flex-wrap items-center gap-1">
+      <div className="mr-8 flex flex-wrap items-center gap-1">
         <ThreadLink
           projectId={run.projectId}
           threadId={threadId}

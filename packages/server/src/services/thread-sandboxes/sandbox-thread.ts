@@ -24,6 +24,7 @@ import { z } from 'zod';
 
 import { log } from '../../lib/logger.js';
 import { metric } from '../../lib/telemetry.js';
+import type { CreationPayload, RunnerJson } from '../../modules/threads/index.js';
 import { sandboxMachineRequestSchema } from './launch-request-schema.js';
 import { sandboxErrorEventData, type SandboxErrorEventData } from './sandbox-events.js';
 import type {
@@ -164,7 +165,8 @@ export interface SandboxThreadDeps {
   ): Promise<{ connectionId: string; sizeId: string } | null>;
   prepare(req: SandboxLaunchRequest): Promise<Result<PreparedSandboxLaunch, SandboxLaunchRefusal>>;
   insertThread(row: NewSandboxThreadRow): Promise<void>;
-  loadThread(threadId: string): Promise<unknown>;
+  /** The thread as stored, sent back to the caller as the created thread (undefined when absent). */
+  loadThread(threadId: string): Promise<RunnerJson | undefined>;
   /** The caller's own thread, or null (another user's thread is not found). */
   findOwnedThread(userId: string, threadId: string): Promise<RetryableSandboxThread | null>;
   /** The machine the thread's last sandbox used, so a retry provisions the same. */
@@ -196,6 +198,15 @@ export interface SandboxThreadDeps {
 
 type SandboxThreadInput = z.infer<typeof createSandboxThreadSchema>;
 
+/** A follow-up on a failed sandbox thread, as the route parsed it (re-checked here). */
+export type SandboxRetryPayload = z.input<typeof retrySandboxThreadSchema>;
+
+/** A started sandbox thread: the stored row, and when its agent was started. */
+export interface StartedSandboxThread {
+  thread: RunnerJson | undefined;
+  started: Promise<void>;
+}
+
 export interface FirstMessage {
   userId: string;
   threadId: string;
@@ -207,7 +218,9 @@ export interface FirstMessage {
   effort?: string;
 }
 
-function parseSandboxThread(payload: unknown): Result<SandboxThreadInput, SandboxThreadFailure> {
+function parseSandboxThread(
+  payload: CreationPayload,
+): Result<SandboxThreadInput, SandboxThreadFailure> {
   const parsed = createSandboxThreadSchema.safeParse(payload);
   if (parsed.success) return ok(parsed.data);
   return err({
@@ -457,8 +470,8 @@ export function createSandboxThreadLauncher(deps: SandboxThreadDeps) {
   async function prepareRetry(
     userId: string,
     threadId: string,
-    payload: unknown,
-  ): Promise<Result<{ thread: unknown; started: Promise<void> }, SandboxThreadFailure>> {
+    payload: SandboxRetryPayload,
+  ): Promise<Result<StartedSandboxThread, SandboxThreadFailure>> {
     const parsed = retrySandboxThreadSchema.safeParse(payload);
     if (!parsed.success) {
       return err({
@@ -503,8 +516,8 @@ export function createSandboxThreadLauncher(deps: SandboxThreadDeps) {
     async retry(
       userId: string,
       threadId: string,
-      payload: unknown,
-    ): Promise<Result<{ thread: unknown; started: Promise<void> }, SandboxThreadFailure>> {
+      payload: SandboxRetryPayload,
+    ): Promise<Result<StartedSandboxThread, SandboxThreadFailure>> {
       if (retriesInFlight.has(threadId)) {
         return err({
           status: 409,
@@ -527,8 +540,8 @@ export function createSandboxThreadLauncher(deps: SandboxThreadDeps) {
      */
     async create(
       userId: string,
-      payload: unknown,
-    ): Promise<Result<{ thread: unknown; started: Promise<void> }, SandboxThreadFailure>> {
+      payload: CreationPayload,
+    ): Promise<Result<StartedSandboxThread, SandboxThreadFailure>> {
       const parsed = parseSandboxThread(payload);
       if (parsed.isErr()) return err(parsed.error);
       const input = parsed.value;

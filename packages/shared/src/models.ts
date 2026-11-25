@@ -289,9 +289,14 @@ export const DEFAULT_MODEL: AgentModel = 'opus-4.8';
 
 // ── Per-provider defaults ─────────────────────────────────────
 
+/** A value per provider id: the bespoke providers, plus one per bundled ACP manifest. */
+interface ByProvider<V> {
+  [providerId: string]: V;
+}
+
 // ACP defaults derive from each manifest's `models.defaultModel`; non-ACP
 // providers (Claude SDK, DeepAgent) are listed explicitly.
-const PROVIDER_DEFAULT_MODEL: Record<string, AgentModel> = {
+const PROVIDER_DEFAULT_MODEL: ByProvider<AgentModel> = {
   claude: DEFAULT_MODEL,
   codex: 'gpt-5.6-sol',
   deepagent: 'minimax-m2.7',
@@ -316,7 +321,7 @@ const MB = 1024 * 1024;
 // gemini / cursor / opencode ceilings come from their manifests.
 // Non-ACP providers route through multiple upstream providers — use the
 // smallest common ceiling so we never exceed the weakest backend.
-const PROVIDER_ATTACHMENT_LIMITS: Record<string, AttachmentLimits> = {
+const PROVIDER_ATTACHMENT_LIMITS: ByProvider<AttachmentLimits> = {
   codex: { inlineMaxBytes: 100 * KB, uploadMaxBytes: 20 * MB, hardMaxBytes: 25 * MB },
   claude: { inlineMaxBytes: 100 * KB, uploadMaxBytes: 25 * MB, hardMaxBytes: 30 * MB },
   deepagent: { inlineMaxBytes: 100 * KB, uploadMaxBytes: 10 * MB, hardMaxBytes: 15 * MB },
@@ -334,7 +339,7 @@ export interface ModelInfo {
 }
 
 // gemini / cursor / opencode labels come from their manifests.
-export const PROVIDER_LABELS: Record<string, string> = {
+export const PROVIDER_LABELS: ByProvider<string> = {
   claude: 'Claude',
   codex: 'Codex',
   deepagent: 'Deep Agent',
@@ -648,7 +653,7 @@ export function providerModelProblem(
   if (getManifest(provider)?.models.kind === 'dynamic') return null;
   if (!(provider in MODEL_REGISTRY)) return null;
   // SAFETY: the `in` check above proved `provider` names a MODEL_REGISTRY entry.
-  const bucket: Record<string, unknown> = MODEL_REGISTRY[provider as keyof typeof MODEL_REGISTRY];
+  const bucket: object = MODEL_REGISTRY[provider as keyof typeof MODEL_REGISTRY];
   return model in bucket ? null : `Invalid model "${model}" for provider "${provider}"`;
 }
 

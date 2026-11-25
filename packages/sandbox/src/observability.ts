@@ -4,7 +4,8 @@
  * passes its own, and without one the reports are dropped.
  */
 
-export type SandboxLogFields = Record<string, unknown>;
+/** The fields of a sandbox log line: identifiers, versions and error messages. */
+export type SandboxLogFields = Record<string, string | number | boolean | null | undefined>;
 
 export interface SandboxLogger {
   info(message: string, fields?: SandboxLogFields): void;

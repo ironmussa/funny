@@ -14,7 +14,6 @@ export interface ModelGroup {
   /** Availability tagging (model-picker-availability) — set by useRunnerProviderGroups. */
   disabled?: boolean;
   disabledReason?: 'not-installed' | 'no-runner' | 'sandbox-unsupported';
-  [key: string]: unknown;
 }
 
 const DYNAMIC_PROVIDERS = new Set<string>(DYNAMIC_MODEL_PROVIDER_IDS);

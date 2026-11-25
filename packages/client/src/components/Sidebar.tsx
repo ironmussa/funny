@@ -141,77 +141,79 @@ function AppSidebarBody({ singleProjectId }: { singleProjectId?: string | null }
   );
 
   return (
-    <Sidebar collapsible="none" className="sidebar-focus-scope h-full w-full select-none">
-      {/* Project settings nav — rendered alongside the projects tree so the
+    <div className="sidebar-focus-scope contents">
+      <Sidebar collapsible="none" className="h-full w-full select-none">
+        {/* Project settings nav — rendered alongside the projects tree so the
           tree stays mounted (avoiding a costly remount when returning). */}
-      {settingsOpen && <SettingsPanelBody />}
-      {generalSettingsOpen && <PreferencesPanelBody />}
+        {settingsOpen && <SettingsPanelBody />}
+        {generalSettingsOpen && <PreferencesPanelBody />}
 
-      {/* Projects/threads tree — always mounted; hidden via display:none
+        {/* Projects/threads tree — always mounted; hidden via display:none
           when settings nav is open so toggling is instant. Uses
           `display:contents` so the wrapper is layout-transparent inside
           the Sidebar's flex column. */}
-      <div className={cn(settingsNavOpen ? 'hidden' : 'contents')}>
-        <SidebarTopBar />
+        <div className={cn(settingsNavOpen ? 'hidden' : 'contents')}>
+          <SidebarTopBar />
 
-        <SidebarThreadsSection
-          scrollRef={threadsScrollRef}
-          onRenameThread={handleRenameThread}
-          onArchiveThread={handleArchiveThreadFromList}
-          onDeleteThread={handleDeleteThreadFromList}
+          <SidebarThreadsSection
+            scrollRef={threadsScrollRef}
+            onRenameThread={handleRenameThread}
+            onArchiveThread={handleArchiveThreadFromList}
+            onDeleteThread={handleDeleteThreadFromList}
+          />
+
+          <SidebarProjectsSection
+            projects={projects}
+            projectsInitialized={projectsInitialized}
+            selectedProjectId={selectedProjectId}
+            expandedProjects={expandedProjects}
+            threadsByProject={threadsByProject}
+            scrollRef={projectsScrollRef}
+            onToggle={handleToggleProject}
+            onSelectProject={handleSelectProject}
+            onNewThread={handleNewThread}
+            onRenameProject={handleRenameProject}
+            onDeleteProject={handleDeleteProject}
+            onCloseProject={handleCloseProject}
+            onReopenProject={handleReopenProject}
+            onSelectThread={handleSelectThread}
+            onRenameThread={handleRenameThread}
+            onArchiveThread={handleArchiveThread}
+            onPinThread={handlePinThread}
+            onDeleteThread={handleDeleteThread}
+            onShowAllThreads={handleShowAllThreads}
+            onShowIssues={handleShowIssues}
+          />
+
+          <SidebarScratchSection
+            onRenameThread={handleRenameThread}
+            onDeleteThread={handleDeleteThreadFromList}
+          />
+
+          <SidebarSharedSection />
+
+          <SidebarFooter />
+        </div>
+
+        <SidebarDialogs
+          archiveConfirm={archiveConfirm}
+          setArchiveConfirm={setArchiveConfirm}
+          handleArchiveConfirm={handleArchiveConfirm}
+          deleteThreadConfirm={deleteThreadConfirm}
+          setDeleteThreadConfirm={setDeleteThreadConfirm}
+          handleDeleteThreadConfirm={handleDeleteThreadConfirm}
+          renameProjectState={renameProjectState}
+          setRenameProjectState={setRenameProjectState}
+          handleRenameProjectConfirm={handleRenameProjectConfirm}
+          deleteProjectConfirm={deleteProjectConfirm}
+          setDeleteProjectConfirm={setDeleteProjectConfirm}
+          handleDeleteProjectConfirm={handleDeleteProjectConfirm}
+          issuesProjectId={issuesProjectId}
+          setIssuesProjectId={setIssuesProjectId}
+          actionLoading={actionLoading}
         />
-
-        <SidebarProjectsSection
-          projects={projects}
-          projectsInitialized={projectsInitialized}
-          selectedProjectId={selectedProjectId}
-          expandedProjects={expandedProjects}
-          threadsByProject={threadsByProject}
-          scrollRef={projectsScrollRef}
-          onToggle={handleToggleProject}
-          onSelectProject={handleSelectProject}
-          onNewThread={handleNewThread}
-          onRenameProject={handleRenameProject}
-          onDeleteProject={handleDeleteProject}
-          onCloseProject={handleCloseProject}
-          onReopenProject={handleReopenProject}
-          onSelectThread={handleSelectThread}
-          onRenameThread={handleRenameThread}
-          onArchiveThread={handleArchiveThread}
-          onPinThread={handlePinThread}
-          onDeleteThread={handleDeleteThread}
-          onShowAllThreads={handleShowAllThreads}
-          onShowIssues={handleShowIssues}
-        />
-
-        <SidebarScratchSection
-          onRenameThread={handleRenameThread}
-          onDeleteThread={handleDeleteThreadFromList}
-        />
-
-        <SidebarSharedSection />
-
-        <SidebarFooter />
-      </div>
-
-      <SidebarDialogs
-        archiveConfirm={archiveConfirm}
-        setArchiveConfirm={setArchiveConfirm}
-        handleArchiveConfirm={handleArchiveConfirm}
-        deleteThreadConfirm={deleteThreadConfirm}
-        setDeleteThreadConfirm={setDeleteThreadConfirm}
-        handleDeleteThreadConfirm={handleDeleteThreadConfirm}
-        renameProjectState={renameProjectState}
-        setRenameProjectState={setRenameProjectState}
-        handleRenameProjectConfirm={handleRenameProjectConfirm}
-        deleteProjectConfirm={deleteProjectConfirm}
-        setDeleteProjectConfirm={setDeleteProjectConfirm}
-        handleDeleteProjectConfirm={handleDeleteProjectConfirm}
-        issuesProjectId={issuesProjectId}
-        setIssuesProjectId={setIssuesProjectId}
-        actionLoading={actionLoading}
-      />
-    </Sidebar>
+      </Sidebar>
+    </div>
   );
 }
 

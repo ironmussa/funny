@@ -10,6 +10,10 @@
  * can use these to emit correctly-formatted tool call data.
  */
 
+import type { JsonObject, JsonValue } from '@funny/shared/json';
+
+import { isJsonPayloadObject } from './json-payload.js';
+
 /** ACP tool call event data available when building the input. */
 export interface ACPToolCallData {
   kind?: string; // ACP ToolKind: "read" | "edit" | "search" | "execute" | etc.
@@ -41,10 +45,8 @@ function isTodoToolName(name: string): boolean {
 
 function inferTodoToolFromRawInput(call: Pick<ACPToolCallData, 'rawInput'> | undefined): boolean {
   const rawInput = call?.rawInput;
-  if (rawInput == null || !isObject(rawInput)) return false;
-  // SAFETY: `rawInput` is a non-null object (checked above); the name fields are read
-  // optionally and only a string one is used.
-  const raw = rawInput as Record<string, unknown>;
+  if (!isJsonPayloadObject(rawInput)) return false;
+  const raw = rawInput;
   const rawName = raw._toolName ?? raw._TOOLNAME ?? raw.toolName ?? raw.tool_name ?? raw.toolname;
   return isString(rawName) && isTodoToolName(rawName);
 }
@@ -115,18 +117,10 @@ export function inferACPToolName(
  *   Task            → description
  *   Think           → content
  */
-export function buildACPToolInput(
-  toolName: string,
-  data: ACPToolCallData,
-): Record<string, unknown> {
-  // SAFETY: `rawInput` is spread only when it is a non-null object; its fields are
-  // treated as unknown values by every filler below.
-  const raw: Record<string, unknown> =
-    data.rawInput != null && isObject(data.rawInput)
-      ? { ...(data.rawInput as Record<string, unknown>) }
-      : {};
+export function buildACPToolInput(toolName: string, data: ACPToolCallData): JsonObject {
+  const raw: JsonObject = isJsonPayloadObject(data.rawInput) ? { ...data.rawInput } : {};
 
-  const input: Record<string, unknown> = { ...raw };
+  const input: JsonObject = { ...raw };
 
   const replacement = TOOL_INPUT_FILLERS.get(toolName)?.(input, data, toolName);
   if (replacement) return replacement;
@@ -145,16 +139,16 @@ export function buildACPToolInput(
  * the description fallback) — used by TodoWrite.
  */
 type ToolInputFiller = (
-  input: Record<string, unknown>,
+  input: JsonObject,
   data: ACPToolCallData,
   toolName: string,
-) => Record<string, unknown> | undefined;
+) => JsonObject | undefined;
 
 /** First value among `keys` that is not null/undefined (mirrors a `??` chain), boxed; undefined when none. */
 function firstDefined(
-  input: Record<string, unknown>,
+  input: JsonObject,
   keys: readonly string[],
-): { value: unknown } | undefined {
+): { value: JsonValue } | undefined {
   for (const key of keys) {
     if (input[key] != null) return { value: input[key] };
   }
@@ -178,11 +172,7 @@ const FILE_PATH_ALIASES = [
 type DiffBlock = { path?: string; oldText?: string; newText?: string };
 
 /** Set `file_path` (when missing) from the first source that resolves one. */
-function fillFilePath(
-  input: Record<string, unknown>,
-  data: ACPToolCallData,
-  diff: DiffBlock | null,
-): void {
+function fillFilePath(input: JsonObject, data: ACPToolCallData, diff: DiffBlock | null): void {
   if (input.file_path) return;
   const resolved = resolveFilePath(input, data, diff);
   if (resolved) input.file_path = resolved.value;
@@ -193,10 +183,10 @@ function fillFilePath(
  * title. Boxed so a location is used as-is even when its path is empty.
  */
 function resolveFilePath(
-  input: Record<string, unknown>,
+  input: JsonObject,
   data: ACPToolCallData,
   diff: DiffBlock | null,
-): { value: unknown } | null {
+): { value: JsonValue } | null {
   const alias = firstDefined(input, FILE_PATH_ALIASES)?.value;
   if (alias) return { value: alias };
   if (data.locations?.length) return { value: data.locations[0].path };
@@ -209,7 +199,7 @@ function resolveFilePath(
  * Surface the diff's before/after text so the EditFileCard can render an
  * inline diff (it needs file_path + old_string + new_string).
  */
-function fillDiffText(input: Record<string, unknown>, diff: DiffBlock): void {
+function fillDiffText(input: JsonObject, diff: DiffBlock): void {
   if (input.old_string == null && isString(diff.oldText)) {
     input.old_string = diff.oldText;
   }
@@ -294,16 +284,16 @@ const TOOL_INPUT_FILLERS = new Map<string, ToolInputFiller>([
 ]);
 
 /** True when a built TodoWrite input has a non-empty checklist for the client card. */
-export function hasRenderableTodoInput(input: Record<string, unknown>): boolean {
+export function hasRenderableTodoInput(input: JsonObject): boolean {
   const built = buildTodoWriteInputFromRaw(input);
   return built != null && built.todos.length > 0;
 }
 
 /** A single todo as the client's TodoList card expects it. */
-export interface ACPTodoItem {
+export type ACPTodoItem = {
   content: string;
   status: 'pending' | 'in_progress' | 'completed';
-}
+};
 
 /**
  * Convert an ACP `plan` update's entries into a `TodoWrite` tool input.
@@ -317,10 +307,8 @@ export interface ACPTodoItem {
 function parseTodoItemsFromArray(entries: unknown[] | undefined): ACPTodoItem[] {
   const todos: ACPTodoItem[] = [];
   for (const raw of entries ?? []) {
-    if (!raw || !isObject(raw)) continue;
-    // SAFETY: `raw` is a non-null object (checked above); each field is checked with
-    // `typeof` or compared to a literal before use.
-    const e = raw as Record<string, unknown>;
+    if (!raw || !isJsonPayloadObject(raw)) continue;
+    const e = raw;
     const content =
       (isString(e.content) && e.content) ||
       (isString(e.title) && e.title) ||
@@ -338,9 +326,12 @@ function parseTodoItemsFromArray(entries: unknown[] | undefined): ACPTodoItem[] 
   return todos;
 }
 
-export function buildTodoWriteInputFromPlanEntries(entries: unknown[] | undefined): {
+/** A `TodoWrite` tool input: the checklist the client's TodoList card renders. */
+export interface TodoWriteInput {
   todos: ACPTodoItem[];
-} {
+}
+
+export function buildTodoWriteInputFromPlanEntries(entries: unknown[] | undefined): TodoWriteInput {
   return { todos: parseTodoItemsFromArray(entries) };
 }
 
@@ -348,9 +339,7 @@ export function buildTodoWriteInputFromPlanEntries(entries: unknown[] | undefine
  * Normalize Cursor `cursor/update_todos`, plan entries, or tool-result payloads
  * into the `{ todos: [{ content, status }] }` shape the client TodoList expects.
  */
-export function buildTodoWriteInputFromRaw(
-  raw: Record<string, unknown>,
-): { todos: ACPTodoItem[] } | null {
+export function buildTodoWriteInputFromRaw(raw: JsonObject): TodoWriteInput | null {
   for (const key of ['todos', 'entries', 'items'] as const) {
     const arr = raw[key];
     if (Array.isArray(arr)) {
@@ -359,10 +348,8 @@ export function buildTodoWriteInputFromRaw(
     }
   }
   const outcome = raw.outcome;
-  if (outcome && isObject(outcome)) {
-    // SAFETY: `outcome` is a non-null object (checked above); `outcome` and `todos`
-    // are checked before use.
-    const o = outcome as Record<string, unknown>;
+  if (outcome && isJsonPayloadObject(outcome)) {
+    const o = outcome;
     if (o.outcome === 'accepted' && Array.isArray(o.todos)) {
       const todos = parseTodoItemsFromArray(o.todos);
       if (todos.length > 0) return { todos };
@@ -373,25 +360,21 @@ export function buildTodoWriteInputFromRaw(
 
 /** Merge todos from a completed tool result when the initial tool_call lacked rawInput. */
 export function enrichTodoWriteInputFromOutput(
-  input: Record<string, unknown>,
+  input: JsonObject,
   result: Pick<ACPToolResultData, 'rawOutput'>,
-): Record<string, unknown> {
+): JsonObject {
   if (hasRenderableTodoInput(input)) return input;
   const rawOutput = result.rawOutput;
-  if (rawOutput != null && isObject(rawOutput)) {
-    // SAFETY: `rawOutput` is a non-null object (checked above), and
-    // `buildTodoWriteInputFromRaw` checks every field it reads.
-    const built = buildTodoWriteInputFromRaw(rawOutput as Record<string, unknown>);
+  if (isJsonPayloadObject(rawOutput)) {
+    const built = buildTodoWriteInputFromRaw(rawOutput);
     if (built) return { todos: built.todos };
   }
   if (isString(rawOutput)) {
     try {
       // SAFETY: widening to `unknown` only; the value is narrowed below.
       const parsed = JSON.parse(rawOutput) as unknown;
-      if (parsed && isObject(parsed)) {
-        // SAFETY: `parsed` is a non-null object (checked above), and
-        // `buildTodoWriteInputFromRaw` checks every field it reads.
-        const built = buildTodoWriteInputFromRaw(parsed as Record<string, unknown>);
+      if (isJsonPayloadObject(parsed)) {
+        const built = buildTodoWriteInputFromRaw(parsed);
         if (built) return { todos: built.todos };
       }
     } catch {
@@ -415,10 +398,8 @@ export function extractACPToolOutput(result: ACPToolResultData, fallbackTitle: s
     if (isString(rawOutput)) return rawOutput;
     // Cursor read_file returns `{ content: "<file text>" }`; unwrap so the
     // ReadFileCard sees the actual file contents instead of a JSON blob.
-    if (isObject(rawOutput)) {
-      // SAFETY: `rawOutput` is a non-null object here (null and strings returned
-      // above); only string fields are used.
-      const obj = rawOutput as Record<string, unknown>;
+    if (isJsonPayloadObject(rawOutput)) {
+      const obj = rawOutput;
       const inner =
         (isString(obj.content) && obj.content) ||
         (isString(obj.text) && obj.text) ||

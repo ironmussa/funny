@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 
+import { useAdjustOnChange } from '@/hooks/use-resettable-state';
 import { useDraftStore } from '@/stores/draft-store';
 
 export interface UseCommitDraftResult {
@@ -24,11 +25,24 @@ function isUpdater(value: string | ((prev: string) => string)): value is (prev: 
  * Extracted from ReviewPane.tsx as part of the god-file split — see
  * .claude/plans/reviewpane-split.md.
  */
+function readDraft(draftId: string | null | undefined) {
+  return draftId ? useDraftStore.getState().drafts[draftId] : undefined;
+}
+
 export function useCommitDraft(draftId: string | null | undefined): UseCommitDraftResult {
   const { setCommitDraft } = useDraftStore();
 
-  const [commitTitle, setCommitTitleRaw] = useState('');
-  const [commitBody, setCommitBodyRaw] = useState('');
+  const [commitTitle, setCommitTitleRaw] = useState(() => readDraft(draftId)?.commitTitle ?? '');
+  const [commitBody, setCommitBodyRaw] = useState(() => readDraft(draftId)?.commitBody ?? '');
+
+  // Restore the draft (or clear) whenever the git context changes. Adjusted
+  // during render (react.dev "adjusting state when a prop changes"), so the
+  // previous context's draft is never painted for the new one.
+  useAdjustOnChange([draftId], () => {
+    const draft = readDraft(draftId);
+    setCommitTitleRaw(draft?.commitTitle ?? '');
+    setCommitBodyRaw(draft?.commitBody ?? '');
+  });
 
   // Always-current refs so the auto-persist setters can read the *other*
   // field's latest value without nesting setStates.
@@ -64,13 +78,6 @@ export function useCommitDraft(draftId: string | null | undefined): UseCommitDra
     },
     [draftId, setCommitDraft],
   );
-
-  // Restore the draft (or clear) whenever the git context changes.
-  useEffect(() => {
-    const draft = draftId ? useDraftStore.getState().drafts[draftId] : undefined;
-    setCommitTitleRaw(draft?.commitTitle ?? '');
-    setCommitBodyRaw(draft?.commitBody ?? '');
-  }, [draftId]);
 
   return {
     commitTitle,

@@ -1,6 +1,8 @@
 import type { ResultAsync } from 'neverthrow';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { useAdjustOnChange } from '@/hooks/use-resettable-state';
+
 export interface GitHubListPage<T> {
   items: T[];
   hasMore: boolean;
@@ -41,27 +43,34 @@ export function usePagedGitHubList<T>({
   errorFallback: string;
 }) {
   const [items, setItems] = useState<T[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(() => !!(visible && fetchPage));
   const [error, setError] = useState<string | null>(null);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [repoInfo, setRepoInfo] = useState<{ owner: string; repo: string } | null>(null);
+  /** The query the current rows came from. */
+  const [itemsQuery, setItemsQuery] = useState<{ fetchPage: FetchGitHubListPage<T> | null }>({
+    fetchPage: null,
+  });
 
   const nextCursor = useRef<string | undefined>(undefined);
-  /** The query the current rows came from. */
-  const itemsQuery = useRef<FetchGitHubListPage<T> | null>(null);
   const pendingRequest = useRef<AbortController | null>(null);
   useEffect(() => () => pendingRequest.current?.abort(), [visible]);
 
-  const load = useCallback(
+  /** The state a request shows while it runs. */
+  const beginLoad = (pageNum: number) => {
+    setPage(pageNum);
+    setLoading(true);
+    setError(null);
+  };
+
+  /** Runs one request; every state write waits for its answer. */
+  const fetchInto = useCallback(
     async (pageNum: number, append: boolean) => {
       if (!fetchPage) return;
       pendingRequest.current?.abort();
       const controller = new AbortController();
       pendingRequest.current = controller;
-      setPage(pageNum);
-      setLoading(true);
-      setError(null);
 
       const cursor = append ? nextCursor.current : undefined;
       const result = await fetchPage(pageNum, controller.signal, cursor);
@@ -69,7 +78,7 @@ export function usePagedGitHubList<T>({
       if (result.isOk()) {
         const data = result.value;
         nextCursor.current = data.nextCursor ?? undefined;
-        itemsQuery.current = fetchPage;
+        setItemsQuery({ fetchPage });
         setItems((prev) => (append ? [...prev, ...data.items] : data.items));
         setHasMore(data.hasMore);
         setRepoInfo({ owner: data.owner, repo: data.repo });
@@ -81,15 +90,30 @@ export function usePagedGitHubList<T>({
     [fetchPage, errorFallback],
   );
 
+  const load = (pageNum: number, append: boolean) => {
+    if (!fetchPage) return;
+    beginLoad(pageNum);
+    void fetchInto(pageNum, append);
+  };
+
+  // Showing the tab or changing the query reloads page 1. The state it shows
+  // while loading is set during render (react.dev "adjusting state when a prop
+  // changes"); the effect below only sends the request.
+  useAdjustOnChange([visible, fetchPage, errorFallback], () => {
+    if (visible && fetchPage) {
+      if (itemsQuery.fetchPage !== fetchPage) {
+        setItemsQuery({ fetchPage: null });
+        setItems([]);
+        setHasMore(false);
+      }
+      beginLoad(1);
+    }
+  });
+
   useEffect(() => {
     if (!visible || !fetchPage) return;
-    if (itemsQuery.current !== fetchPage) {
-      itemsQuery.current = null;
-      setItems([]);
-      setHasMore(false);
-    }
-    void load(1, false);
-  }, [visible, fetchPage, load]);
+    void fetchInto(1, false);
+  }, [visible, fetchPage, fetchInto]);
 
   return {
     items,
@@ -97,7 +121,7 @@ export function usePagedGitHubList<T>({
     error,
     hasMore,
     repoInfo,
-    loadMore: () => void load(page + 1, true),
-    refresh: () => void load(1, false),
+    loadMore: () => load(page + 1, true),
+    refresh: () => load(1, false),
   };
 }

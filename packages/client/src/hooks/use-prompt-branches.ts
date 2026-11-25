@@ -1,7 +1,8 @@
 import type { Project } from '@funny/shared';
-import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
+import { useCallback, useEffect, useState, type ReactElement } from 'react';
 
 import { useBranchSwitch } from '@/hooks/use-branch-switch';
+import { useAdjustOnChange } from '@/hooks/use-resettable-state';
 import { useStableCallback } from '@/hooks/use-stable-callback';
 import { api } from '@/lib/api';
 import { useBranchPickerStore } from '@/stores/branch-picker-store';
@@ -48,7 +49,8 @@ function useFollowUpBranches({
   const [followUpDefaultBranch, setFollowUpDefaultBranch] = useState<string | null>(null);
   const [followUpCurrentBranch, setFollowUpCurrentBranch] = useState<string | null>(null);
   const [followUpSelectedBranch, setFollowUpSelectedBranch] = useState<string>('');
-  const followUpBranchCacheRef = useRef<FollowUpBranchData | null>(null);
+  /** The last list fetched, reused when the thread returns to its project. */
+  const [branchCache, setBranchCache] = useState<FollowUpBranchData | null>(null);
 
   const applyBranchData = useCallback((data: FollowUpBranchData) => {
     setFollowUpBranches(data.branches);
@@ -61,45 +63,50 @@ function useFollowUpBranches({
     setFollowUpCurrentBranch(null);
   }, []);
 
+  // The project whose branches a follow-up offers (none for a new thread).
+  // Leaving it clears the list, and returning to the cached project restores
+  // it, during render (react.dev "adjusting state when a prop changes").
+  const branchProjectId = isNewThread || !selectedProjectId ? null : selectedProjectId;
+  useAdjustOnChange([branchProjectId], () => {
+    if (!branchProjectId) {
+      resetBranches();
+      setBranchCache(null);
+    } else if (branchCache?.projectId === branchProjectId) {
+      applyBranchData(branchCache);
+    }
+  });
+
   // Fetch follow-up branches — only refetch when the project changes.
   // Branch selection is updated separately when activeThreadBaseBranch changes.
+  const cachedProjectId = branchCache?.projectId;
   useEffect(() => {
+    if (!branchProjectId || cachedProjectId === branchProjectId) return;
     let cancelled = false;
-    if (isNewThread || !selectedProjectId) {
-      resetBranches();
-      followUpBranchCacheRef.current = null;
-      return;
-    }
-    const cached = followUpBranchCacheRef.current;
-    if (cached?.projectId === selectedProjectId) {
-      applyBranchData(cached);
-      return;
-    }
-    void api.listBranches(selectedProjectId).then((result) => {
+    void api.listBranches(branchProjectId).then((result) => {
       if (cancelled) return;
       if (result.isErr()) {
         resetBranches();
         return;
       }
       const data: FollowUpBranchData = {
-        projectId: selectedProjectId,
+        projectId: branchProjectId,
         branches: result.value.branches,
         remoteBranches: result.value.remoteBranches ?? [],
         defaultBranch: result.value.defaultBranch,
         currentBranch: result.value.currentBranch,
       };
-      followUpBranchCacheRef.current = data;
+      setBranchCache(data);
       applyBranchData(data);
     });
     return () => {
       cancelled = true;
     };
-  }, [isNewThread, selectedProjectId, applyBranchData, resetBranches]);
+  }, [branchProjectId, cachedProjectId, applyBranchData, resetBranches]);
 
   // Update selection when the active thread's base branch changes (no network call)
   const syncSelectedBranch = useStableCallback(() => {
     if (isNewThread || !selectedProjectId) return;
-    const cache = followUpBranchCacheRef.current;
+    const cache = branchCache;
     const next =
       activeThreadBaseBranch ||
       pickFollowUpBranch(

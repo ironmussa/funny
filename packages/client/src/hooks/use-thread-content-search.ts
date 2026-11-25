@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 
+import { useAdjustOnChange } from '@/hooks/use-resettable-state';
 import { api } from '@/lib/api';
+
+/** Most cached searches kept; the oldest is evicted first. */
+const SEARCH_CACHE_LIMIT = 50;
 
 export function useThreadContentSearch(
   search: string,
@@ -12,24 +16,27 @@ export function useThreadContentSearch(
   const [contentMatches, setContentMatches] = useState<Map<string, string>>(new Map());
   const searchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   // Cache: key = "query|projectId|cs" → Map<threadId, snippet>
-  const searchCacheRef = useRef<Map<string, Map<string, string>>>(new Map());
+  const [searchCache, setSearchCache] = useState<Map<string, Map<string, string>>>(new Map());
 
+  const q = search.trim();
+  const cacheKey = q ? `${q}|${projectFilter || ''}|${caseSensitive ? '1' : '0'}` : '';
+
+  // An empty or already cached search shows its matches during render
+  // (react.dev "adjusting state when a prop changes"); others wait for the server.
+  useAdjustOnChange([search, cacheKey], () => {
+    if (!q) {
+      setContentMatches(new Map());
+    } else {
+      const cached = searchCache.get(cacheKey);
+      if (cached) setContentMatches(cached);
+    }
+  });
+
+  const isCached = searchCache.has(cacheKey);
   useEffect(() => {
     // Clear previous timer
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-
-    const q = search.trim();
-    if (!q) {
-      setContentMatches(new Map());
-      return;
-    }
-
-    const cacheKey = `${q}|${projectFilter || ''}|${caseSensitive ? '1' : '0'}`;
-    const cached = searchCacheRef.current.get(cacheKey);
-    if (cached) {
-      setContentMatches(cached);
-      return;
-    }
+    if (!q || isCached) return;
 
     // Debounce 300ms to avoid hammering the server on every keystroke
     searchTimerRef.current = setTimeout(() => {
@@ -41,12 +48,12 @@ export function useThreadContentSearch(
           for (const id of threadIds) {
             map.set(id, snippets[id] || '');
           }
-          searchCacheRef.current.set(cacheKey, map);
-          // Evict old entries to prevent unbounded growth
-          if (searchCacheRef.current.size > 50) {
-            const firstKey = searchCacheRef.current.keys().next().value!;
-            searchCacheRef.current.delete(firstKey);
-          }
+          setSearchCache((previous) => {
+            const next = new Map(previous).set(cacheKey, map);
+            // Evict old entries to prevent unbounded growth
+            if (next.size > SEARCH_CACHE_LIMIT) next.delete(next.keys().next().value!);
+            return next;
+          });
           setContentMatches(map);
         }
       });
@@ -55,6 +62,7 @@ export function useThreadContentSearch(
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     };
-  }, [search, projectFilter, caseSensitive]);
+    // `search` restarts the debounce on every keystroke, as before.
+  }, [search, q, cacheKey, isCached, projectFilter, caseSensitive]);
   return contentMatches;
 }

@@ -18,12 +18,14 @@ export function useDisplayThreadId(): string | null {
 
   const [displayThreadId, setDisplayThreadId] = useState<string | null>(activeThreadId);
 
+  // Leaving every thread clears the pane at once: adjusted during render, no
+  // payload to wait for.
+  if (!activeThreadId && displayThreadId !== null) {
+    setDisplayThreadId(null);
+  }
+
   useEffect(() => {
-    if (!activeThreadId) {
-      setDisplayThreadId(null);
-      return;
-    }
-    if (!isPayloadReady) return;
+    if (!activeThreadId || !isPayloadReady) return;
     startTransition(() => {
       setDisplayThreadId(activeThreadId);
     });

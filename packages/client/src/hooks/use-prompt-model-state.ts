@@ -4,7 +4,9 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import { useProjectSandbox } from '@/data/runner/hooks';
+import { useAdjustOnChange } from '@/hooks/use-resettable-state';
 import { applySandboxModelGroups } from '@/hooks/use-runner-provider-groups';
+import { useStableCallback } from '@/hooks/use-stable-callback';
 import { useUnifiedPromptModelGroups } from '@/hooks/use-unified-prompt-model-groups';
 import {
   filterVisibleModelGroups,
@@ -236,11 +238,16 @@ function usePromptModelSelection(args: ModelSelectionArgs) {
     [currentProvider, notifyProviderChange],
   );
   // Choosing a sandbox moves a selection it can't run to its first usable model.
-  useEffect(() => {
-    if (!targetsSandbox) return;
-    const fallback = findSandboxFallbackModel(unifiedModelGroups, unifiedModel);
-    if (fallback) setUnifiedModel(fallback);
-  }, [targetsSandbox, unifiedModelGroups, unifiedModel, setUnifiedModel]);
+  // Adjusted during render; the provider notifier reports the new provider
+  // from its effect. The fallback is usable, so this settles in one pass.
+  const sandboxFallback = targetsSandbox
+    ? findSandboxFallbackModel(unifiedModelGroups, unifiedModel)
+    : undefined;
+  if (sandboxFallback) {
+    const { provider: fallbackProvider, model: fallbackModel } = parseUnifiedModel(sandboxFallback);
+    setEffort((currentEffort) => normalizeEffort(fallbackModel, fallbackProvider, currentEffort));
+    setUnifiedModelRaw(sandboxFallback);
+  }
   const effortOptions = useMemo(
     () => getEffortLevels(currentModel, currentProvider),
     [currentProvider, currentModel],
@@ -282,6 +289,20 @@ function usePermissionModeOptions(currentProvider: string) {
   }, [t, currentProvider]);
 }
 
+/** The mode the composer shows for the thread, or undefined to keep the current one. */
+function syncedPermissionMode({
+  isNewThread,
+  activeThreadPermissionMode,
+  defaultPermissionMode,
+}: {
+  isNewThread: boolean;
+  activeThreadPermissionMode: string | null | undefined;
+  defaultPermissionMode: string;
+}): string | undefined {
+  if (isNewThread) return defaultPermissionMode;
+  return activeThreadPermissionMode || undefined;
+}
+
 /**
  * Permission mode for the composer. On an existing thread, picking a mode
  * persists it to the thread (rolling back the picker on failure).
@@ -302,13 +323,16 @@ function usePromptPermissionMode({
   updateThreadPermissionMode: (threadId: string, mode: PermissionMode) => Promise<boolean>;
 }) {
   const { t } = useTranslation();
-  const [mode, setMode] = useState<string>(defaultPermissionMode);
+  const modeSource = { isNewThread, activeThreadPermissionMode, defaultPermissionMode };
+  const [mode, setMode] = useState<string>(
+    () => syncedPermissionMode(modeSource) ?? defaultPermissionMode,
+  );
   const modeMutationRef = useRef(0);
   const modes = usePermissionModeOptions(currentProvider);
 
-  const applyPersistedMode = useCallback(
+  /** Saves a picked mode on an existing thread, rolling the picker back on failure. */
+  const persistMode = useCallback(
     (nextMode: string) => {
-      setMode(() => nextMode);
       if (isNewThread || !effectiveThreadId || nextMode === activeThreadPermissionMode) return;
 
       const mutation = ++modeMutationRef.current;
@@ -333,22 +357,33 @@ function usePromptPermissionMode({
     ],
   );
 
-  // Auto mode is Claude-only — fall back to autoEdit when switching providers.
-  // Existing threads persist that provider-imposed fallback as well.
-  useEffect(() => {
-    if (mode === 'auto' && currentProvider !== 'claude') {
-      applyPersistedMode('autoEdit');
-    }
-  }, [applyPersistedMode, currentProvider, mode]);
+  const applyPersistedMode = useCallback(
+    (nextMode: string) => {
+      setMode(() => nextMode);
+      persistMode(nextMode);
+    },
+    [persistMode],
+  );
 
-  // Sync mode with the active thread (or project default for a new thread).
+  // Sync mode with the active thread (or project default for a new thread),
+  // adjusted during render when those inputs change.
+  useAdjustOnChange([isNewThread, activeThreadPermissionMode, defaultPermissionMode], () => {
+    const synced = syncedPermissionMode(modeSource);
+    if (synced !== undefined) setMode(synced);
+  });
+
+  // Auto mode is Claude-only — fall back to autoEdit when switching providers,
+  // during render. Existing threads persist that provider-imposed fallback as
+  // well, from the effect below (each fallback bumps `autoFallbacks`).
+  const [autoFallbacks, setAutoFallbacks] = useState(0);
+  if (mode === 'auto' && currentProvider !== 'claude') {
+    setMode('autoEdit');
+    setAutoFallbacks((n) => n + 1);
+  }
+  const persistAutoFallback = useStableCallback(() => persistMode('autoEdit'));
   useEffect(() => {
-    if (!isNewThread && activeThreadPermissionMode) {
-      setMode(activeThreadPermissionMode);
-    } else if (isNewThread) {
-      setMode(defaultPermissionMode);
-    }
-  }, [isNewThread, activeThreadPermissionMode, defaultPermissionMode]);
+    if (autoFallbacks > 0) persistAutoFallback();
+  }, [autoFallbacks, persistAutoFallback]);
 
   return { mode, setMode: applyPersistedMode, modes };
 }

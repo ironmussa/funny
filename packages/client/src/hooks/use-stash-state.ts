@@ -2,6 +2,7 @@ import type { FileDiffSummary } from '@funny/shared';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
+import { useAdjustOnChange } from '@/hooks/use-resettable-state';
 import { useStableCallback } from '@/hooks/use-stable-callback';
 import { gitApi } from '@/lib/api/git';
 import { whilePending, withCleanup } from '@/lib/while-pending';
@@ -226,20 +227,25 @@ export function useStashState({
     if (reviewPaneOpen && reviewSubTab === 'stash') loadVisibleStashList();
   }, [gitContextKey, reviewPaneOpen, reviewSubTab, loadVisibleStashList]);
 
-  // When a stash is selected, load its file list + first diff.
-  // All post-await updates are ignored after this stash selection is cleaned up.
-  // react-doctor-disable-next-line react-doctor/no-set-state-after-await-in-effect
-  useEffect(() => {
+  // A new stash selection clears the dialog (or shows its loading state) during
+  // render (react.dev "adjusting state when a prop changes").
+  useAdjustOnChange([selectedStashIndex, hasGitContext, effectiveThreadId, projectModeId], () => {
+    setStashFileSearch('');
     if (!selectedStashIndex || !hasGitContext) {
       setStashFiles([]);
       setStashDialogFile(null);
       setStashDialogDiff(null);
-      setStashFileSearch('');
-      return;
+    } else {
+      setStashFilesLoading(true);
     }
+  });
+
+  // When a stash is selected, load its file list + first diff.
+  // All post-await updates are ignored after this stash selection is cleaned up.
+  // react-doctor-disable-next-line react-doctor/no-set-state-after-await-in-effect
+  useEffect(() => {
+    if (!selectedStashIndex || !hasGitContext) return;
     let cancelled = false;
-    setStashFilesLoading(true);
-    setStashFileSearch('');
     const load = () =>
       withCleanup(
         async () => {

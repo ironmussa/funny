@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 import { fetchProjectStatus } from '@/data/git-status/actions';
+import { useAdjustOnChange } from '@/hooks/use-resettable-state';
 import { gitApi } from '@/lib/api/git';
 
 interface UsePublishStateArgs {
@@ -32,22 +33,32 @@ export interface UsePublishStateResult {
  * Extracted from ReviewPane.tsx as part of the god-file split — see
  * .claude/plans/reviewpane-split.md.
  */
+/** `'exists'` when the branch has a remote, `undefined` when unknown or no project. */
+function knownRemoteUrl(
+  remoteCheckProjectId: string | null,
+  hasRemoteBranch: boolean | undefined,
+): 'exists' | undefined {
+  return remoteCheckProjectId && hasRemoteBranch ? 'exists' : undefined;
+}
+
 export function usePublishState({
   remoteCheckProjectId,
   hasRemoteBranch,
 }: UsePublishStateArgs): UsePublishStateResult {
-  const [remoteUrl, setRemoteUrl] = useState<string | null | undefined>(undefined);
+  const [remoteUrl, setRemoteUrl] = useState<string | null | undefined>(() =>
+    knownRemoteUrl(remoteCheckProjectId, hasRemoteBranch),
+  );
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
 
+  // What is known without a lookup is set during render when the inputs change
+  // (react.dev "adjusting state when a prop changes"); the effect only looks up.
+  useAdjustOnChange([remoteCheckProjectId, hasRemoteBranch], () => {
+    const known = knownRemoteUrl(remoteCheckProjectId, hasRemoteBranch);
+    if (known !== undefined || !remoteCheckProjectId) setRemoteUrl(known);
+  });
+
   useEffect(() => {
-    if (!remoteCheckProjectId) {
-      setRemoteUrl(undefined);
-      return;
-    }
-    if (hasRemoteBranch) {
-      setRemoteUrl('exists');
-      return;
-    }
+    if (!remoteCheckProjectId || hasRemoteBranch) return;
     const controller = new AbortController();
     gitApi.projectGetRemoteUrl(remoteCheckProjectId, controller.signal).then((r) => {
       if (!controller.signal.aborted && r.isOk()) {

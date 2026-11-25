@@ -2,6 +2,7 @@ import type { Project } from '@funny/shared';
 import type { WorkflowSummary } from '@funny/shared/types/workflows';
 import { useEffect, useMemo, useState } from 'react';
 
+import { useAdjustOnChange } from '@/hooks/use-resettable-state';
 import { useSlashSkills } from '@/hooks/use-slash-skills';
 import { api } from '@/lib/api';
 
@@ -12,17 +13,22 @@ function useWorkflowSuggestions(projectId: string | null | undefined) {
   const [workflowSuggestions, setWorkflowSuggestions] = useState<WorkflowSummary[]>(
     EMPTY_WORKFLOW_SUGGESTIONS,
   );
-  const [workflowSuggestionsLoading, setWorkflowSuggestionsLoading] = useState(false);
+  const [workflowSuggestionsLoading, setWorkflowSuggestionsLoading] = useState(!!projectId);
 
-  useEffect(() => {
-    let cancelled = false;
-    if (!projectId) {
+  // A project change shows its loading state (or the empty list) during render
+  // (react.dev "adjusting state when a prop changes"); the effect only fetches.
+  useAdjustOnChange([projectId], () => {
+    if (projectId) {
+      setWorkflowSuggestionsLoading(true);
+    } else {
       setWorkflowSuggestions(EMPTY_WORKFLOW_SUGGESTIONS);
       setWorkflowSuggestionsLoading(false);
-      return;
     }
+  });
 
-    setWorkflowSuggestionsLoading(true);
+  useEffect(() => {
+    if (!projectId) return;
+    let cancelled = false;
     void api.listWorkflows(projectId).then((result) => {
       if (cancelled) return;
       setWorkflowSuggestions(result.isOk() ? result.value.workflows : EMPTY_WORKFLOW_SUGGESTIONS);

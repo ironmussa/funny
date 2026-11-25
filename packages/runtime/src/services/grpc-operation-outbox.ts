@@ -2,7 +2,7 @@ import { Database } from 'bun:sqlite';
 import { chmodSync, mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 
-import { parseStoredJson } from '@funny/shared/json-validation';
+import { parseStoredJson, type JsonValue } from '@funny/shared/json-validation';
 import { canonicalJson } from '@funny/shared/lib/canonical-json';
 import { z } from 'zod';
 
@@ -11,7 +11,7 @@ import { DATA_DIR } from '../lib/data-dir.js';
 export interface GrpcOutboxOperation {
   idempotencyKey: string;
   operationKind: string;
-  payload: unknown;
+  payload: JsonValue;
   createdAt: string;
   attemptCount: number;
   lastAttemptAt: string | null;
@@ -30,7 +30,7 @@ function assertDurableJson(
   value: unknown,
   path = 'payload',
   ancestors = new WeakSet<object>(),
-): void {
+): asserts value is JsonValue {
   if (value === null || typeof value === 'string' || typeof value === 'boolean') {
     return;
   }
@@ -112,7 +112,7 @@ function readRow(row: OutboxRow): { operation: GrpcOutboxOperation } | OutboxDro
 }
 
 function serialize(row: OutboxRow): GrpcOutboxOperation {
-  const payload = parseStoredJson(z.unknown(), row.payload_json, 'gRPC outbox payload');
+  const payload = parseStoredJson(z.json(), row.payload_json, 'gRPC outbox payload');
   if (!payload.ok) throw new Error(payload.error);
   return {
     idempotencyKey: row.idempotency_key,

@@ -9,7 +9,7 @@
 
 import { isAbsolute } from 'node:path';
 
-import type { CLIMessage } from '@funny/core/agents';
+import type { CLIAssistantMessage, CLIMessage } from '@funny/core/agents';
 import {
   getStatusSummary,
   deriveGitSyncState,
@@ -17,13 +17,21 @@ import {
   getIgnoredFileStats,
   getExternalRepoFileStats,
 } from '@funny/core/git';
-import type { FileDiffSummary, ThreadStatus, WaitingReason, WSEvent } from '@funny/shared';
+import type {
+  FileDiffSummary,
+  ThreadStage,
+  ThreadStatus,
+  WaitingReason,
+  WSEvent,
+} from '@funny/shared';
 import { latestSessionChanges } from '@funny/shared';
+import { THREAD_STAGE_VALUES } from '@funny/shared/contracts/threads';
 import { parseStoredJson } from '@funny/shared/json-validation';
 import { z } from 'zod';
 
 import { log } from '../lib/logger.js';
 import { computeBranchKey } from '../utils/git-status-helpers.js';
+import type { WSEventData } from './agent-event-router.js';
 import { redactDeep } from './agent-startup/project-secrets.js';
 import type { AgentStateTracker } from './agent-state.js';
 import { recordBashCheck } from './checks/bash-check-metric.js';
@@ -43,6 +51,26 @@ function decodeUnicodeEscapes(str: string): string {
   return str.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
 }
 
+/** A tool_use block of an assistant message, as the CLI protocol carries it. */
+type ToolUseBlock = Extract<
+  CLIAssistantMessage['message']['content'][number],
+  { type: 'tool_use' }
+>;
+
+/** A tool's input: the protocol leaves it opaque, so every reader checks its shape. */
+type ToolInput = ToolUseBlock['input'];
+
+/** One part of a tool_result's content: text, or an SDK content block. */
+type ToolResultContentPart = string | { type?: string; text?: string } | null;
+
+/** A tool_result's `content`: the CLI sends text, the SDK may send content blocks. */
+type ToolResultContent = string | readonly ToolResultContentPart[] | undefined;
+
+/** A stored stage, when it is one of the stages the client draws. */
+function knownStage(stage: string | null | undefined): ThreadStage | undefined {
+  return THREAD_STAGE_VALUES.find((value) => value === stage);
+}
+
 /**
  * Normalize a tool_result `content` field to a string. The Anthropic SDK may
  * deliver it as a plain string or as an array of content blocks
@@ -50,7 +78,7 @@ function decodeUnicodeEscapes(str: string): string {
  * as a placeholder so callers always see a non-empty string when there is
  * any payload at all.
  */
-function normalizeToolResultContent(content: unknown): string {
+function normalizeToolResultContent(content: ToolResultContent): string {
   if (typeof content === 'string') return content;
   if (Array.isArray(content)) {
     return content
@@ -72,7 +100,7 @@ function normalizeToolResultContent(content: unknown): string {
  * permission approval card. Bash gets its raw command; other tools get
  * a truncated JSON representation.
  */
-function serializeToolInput(toolName: string, input: unknown): string | undefined {
+function serializeToolInput(toolName: string, input: ToolInput): string | undefined {
   if (!input || typeof input !== 'object') return undefined;
   if (toolName === 'Bash' && 'command' in input && typeof (input as any).command === 'string') {
     return (input as any).command as string;
@@ -181,7 +209,11 @@ export class AgentMessageHandler {
     return thread?.permissionMode === 'confirmEdit';
   }
 
-  private async emitWS(threadId: string, type: WSEvent['type'], data: unknown): Promise<void> {
+  private async emitWS<T extends WSEvent['type']>(
+    threadId: string,
+    type: T,
+    data: WSEventData<T>,
+  ): Promise<void> {
     const event = { type, threadId, data } as WSEvent;
 
     // Fast path: use cached userId to avoid a DB read on every emission
@@ -675,7 +707,7 @@ export class AgentMessageHandler {
           ...(await this.threadCtx(threadId)),
           tool: block.name,
         });
-        recordBashCheck(threadId, block.name, block.input);
+        recordBashCheck(threadId, block);
         log.debug('tool_use input', {
           namespace: 'agent',
           threadId,
@@ -738,7 +770,7 @@ export class AgentMessageHandler {
             messageId: parentMsgId,
             name: block.name,
             input: block.input,
-            parentToolCallId,
+            parentToolCallId: parentToolCallId ?? undefined,
           });
         }
 
@@ -750,7 +782,7 @@ export class AgentMessageHandler {
           log.info('ProviderError detected — marking thread for provider-error failure', {
             ...(await this.threadCtx(threadId)),
           });
-          this.recordProviderError(threadId, block.input);
+          this.recordProviderError(threadId, block);
         } else {
           this.state.providerErrorPending.delete(threadId);
         }
@@ -960,7 +992,7 @@ export class AgentMessageHandler {
               tc.input ??
               (needsRow ? null : (await this.threadManager.getToolCall(toolCallId))?.input);
             const parsed = input ? parseStoredJson(z.unknown(), input, 'tool input') : null;
-            const parsedInput: unknown = parsed?.ok ? parsed.value : undefined;
+            const parsedInput: ToolInput = parsed?.ok ? parsed.value : undefined;
             this.state.pendingPermissionRequest.set(threadId, {
               toolName: tc.name,
               toolUseId: block.tool_use_id,
@@ -1001,8 +1033,8 @@ export class AgentMessageHandler {
   // ── Result handling ────────────────────────────────────────────
 
   /** Remember the provider's error text until the agent recovers or the run ends. */
-  private recordProviderError(threadId: string, input: unknown): void {
-    const errorInput = (input ?? {}) as { error?: unknown };
+  private recordProviderError(threadId: string, block: ToolUseBlock): void {
+    const errorInput = (block.input ?? {}) as { error?: unknown };
     this.state.providerErrorPending.set(
       threadId,
       typeof errorInput.error === 'string' ? errorInput.error : 'Provider error',
@@ -1169,7 +1201,7 @@ export class AgentMessageHandler {
       cost: msg.total_cost_usd,
       duration: msg.duration_ms,
       status: finalStatus,
-      stage: threadWithStage?.stage,
+      stage: knownStage(threadWithStage?.stage),
       ...(finalStatus === 'failed' ? resultErrorFields(msg, providerError) : null),
       waitingReason: waitingReason || undefined,
       permissionRequest: permReq

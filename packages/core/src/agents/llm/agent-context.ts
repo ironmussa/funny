@@ -6,6 +6,8 @@
  * each agent produces an AgentResult that accumulates in previousResults.
  */
 
+import type { JsonObject } from '@funny/shared/json';
+
 // ── Agent Role Definition ─────────────────────────────────────
 
 export interface AgentRole {
@@ -53,8 +55,8 @@ export interface AgentContext {
   previousResults: AgentResult[];
   /** Base branch for diff comparison */
   baseBranch: string;
-  /** Additional metadata passed through the pipeline */
-  metadata?: Record<string, unknown>;
+  /** Additional metadata passed through the pipeline (part of the JSON prompt payload) */
+  metadata?: JsonObject;
 }
 
 // ── Agent Result ──────────────────────────────────────────────

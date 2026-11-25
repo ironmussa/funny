@@ -1,11 +1,14 @@
 import Mention from '@tiptap/extension-mention';
 import { TextSelection } from '@tiptap/pm/state';
 
+/** A chip node's attributes: the suggestion item's ids, labels, paths and line numbers. */
+type InlineNodeAttrs = { [attr: string]: string | number | undefined };
+
 export function insertInlineNodeWithTrailingSpace(
   editor: any,
   range: { from: number; to: number },
   typeName: string,
-  attrs: Record<string, unknown>,
+  attrs: InlineNodeAttrs,
 ) {
   const docSize = editor.state.doc.content.size;
   const safeFrom = Math.min(range.from, docSize);

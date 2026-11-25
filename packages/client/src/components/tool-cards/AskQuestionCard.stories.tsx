@@ -1,3 +1,4 @@
+import type { JsonObject } from '@funny/shared/json';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 
@@ -115,13 +116,7 @@ const RAW_ANSWER_OUTPUT =
 /*  Interactive wrapper for stories that need onRespond                       */
 /* -------------------------------------------------------------------------- */
 
-function InteractiveWrapper({
-  parsed,
-  hideLabel,
-}: {
-  parsed: Record<string, unknown>;
-  hideLabel?: boolean;
-}) {
+function InteractiveWrapper({ parsed, hideLabel }: { parsed: JsonObject; hideLabel?: boolean }) {
   const [output, setOutput] = useState<string | undefined>(undefined);
 
   return (

@@ -40,9 +40,8 @@ interface Element {
   // Angular
   __ngContext__?: unknown[];
 
-  // Svelte
+  // Svelte (its other `__svelte*` keys are only detected by name, never read)
   __svelte_meta?: { loc?: { file?: string } };
-  [key: `__svelte${string}`]: unknown;
 }
 
 // ---------------------------------------------------------------------------

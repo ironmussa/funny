@@ -19,6 +19,7 @@
 import { spawn, type ChildProcess } from 'child_process';
 import { randomUUID } from 'crypto';
 
+import type { JsonObject } from '@funny/shared/json';
 import type { ProviderManifest } from '@funny/shared/provider-manifest';
 import { resolveSpawnCommand, type SpawnCommand } from '@funny/shared/provider-manifest';
 
@@ -36,7 +37,6 @@ import {
   inferACPToolName,
   parseACPPreambleTitle,
   type ACPToolResultData,
-  type ToolInput,
 } from './acp-tool-input.js';
 import { BaseAgentProcess, killProcessTree, type ResultSubtype } from './base-process.js';
 import { buildAgentChildEnv } from './reap-orphaned-agents.js';
@@ -44,6 +44,24 @@ import type { CLIMessage, ClaudeProcessOptions } from './types.js';
 
 // Lazy-loaded SDK types (avoid crash if not installed). `/unstable` keeps the
 // full v1 surface the 1.x default import exposed (prompt `usage`, `usage_update`,
+// session config options); the wire protocol is still ACP v1.
+
+/**
+ * GenericACPProcess — one manifest-parameterized adapter that wraps any
+ * communicating via the Agent Client Protocol (ACP) over stdio.
+ *
+ * This is the hoist of the ~700-line skeleton that was duplicated across the
+ * five per-provider adapters (codex/gemini/pi/cursor/opencode). All of the
+ * model-select, mode-set, the prompt turn loop, permission handling, and the
+ * `translateUpdate` switch — lives here ONCE, parameterized by a
+ * {@link ProviderManifest}. The small per-provider divergences are toggled by
+ * the manifest's {@link QuirkFlags} (the Phase-0 audited set).
+ *
+ * Each provider becomes a zero-logic constructor shim that binds its manifest
+ * (see `opencode-acp.ts`), so the existing per-provider test suites pass
+ * unchanged.
+ */
+// Lazy-loaded SDK types (avoid crash if not installed). `/unstable` keeps the
 // session config options); the wire protocol is still ACP v1.
 type ACPSDK = typeof import('@agentclientprotocol/sdk/unstable');
 type ACPSessionUpdate = import('@agentclientprotocol/sdk/unstable').SessionUpdate;
@@ -78,6 +96,23 @@ interface ACPToolCallFields {
   rawInput: unknown;
   locations: Array<{ path: string; line?: number | null }> | undefined;
   content: unknown[] | undefined;
+}
+
+/** What a model-selection fallback logs besides the requested model. */
+interface ModelFallbackDetail {
+  available?: string[];
+  error?: string;
+}
+
+/**
+ * A plan entry as `planRender: 'text'` reads it: ACP's `content`, or the
+ * `title` / `description` some providers send instead.
+ */
+interface PlanTextEntry {
+  status?: string;
+  content?: string;
+  title?: string;
+  description?: string;
 }
 
 export class GenericACPProcess extends BaseAgentProcess {
@@ -129,7 +164,7 @@ export class GenericACPProcess extends BaseAgentProcess {
    * Buffered until an update carries the missing field, or dropped at terminal
    * status. Only used when `quirks.deferUnrenderableToolInput`.
    */
-  private deferredToolInputs = new Map<string, { name: string; input: Record<string, unknown> }>();
+  private deferredToolInputs = new Map<string, { name: string; input: JsonObject }>();
 
   /** True while loadSession is replaying historical events. */
   private replayingHistory = false;
@@ -281,8 +316,7 @@ export class GenericACPProcess extends BaseAgentProcess {
 
       const supportsLoadSession = initResult.agentCapabilities?.loadSession === true;
       this.supportsImages = initResult.agentCapabilities?.promptCapabilities?.image === true;
-      const mcpCaps = (initResult.agentCapabilities as Record<string, any> | undefined)
-        ?.mcpCapabilities;
+      const mcpCaps = initResult.agentCapabilities?.mcpCapabilities;
       const supportsHttp = mcpCaps?.http === true;
       const supportsSse = mcpCaps?.sse === true;
 
@@ -420,7 +454,7 @@ export class GenericACPProcess extends BaseAgentProcess {
   private notifyModelFallback(
     requestedModel: string,
     logMessage: string,
-    detail: Record<string, unknown> = {},
+    detail: ModelFallbackDetail = {},
   ): void {
     this.dlog.warn(logMessage, { modelId: requestedModel, ...detail });
     if (this.modelFallbackNotified) return;
@@ -544,10 +578,10 @@ export class GenericACPProcess extends BaseAgentProcess {
     const collect = (entries: ACPSessionConfigSelectOptions | undefined): void => {
       if (!Array.isArray(entries)) return;
       for (const e of entries) {
-        const entry = e as Record<string, unknown> | null;
-        if (!entry) continue;
-        if (isString(entry.value)) valueIds.add(entry.value);
-        if (Array.isArray(entry.options)) collect(entry.options);
+        if (!e || !isObject(e)) continue;
+        // A select option carries `value`; a group carries its own `options`.
+        if ('value' in e && isString(e.value)) valueIds.add(e.value);
+        if ('options' in e && Array.isArray(e.options)) collect(e.options);
       }
     };
     collect(options);
@@ -830,7 +864,7 @@ export class GenericACPProcess extends BaseAgentProcess {
    * seen. Resets the per-turn assistant-text accumulator so any following
    * agent text starts a fresh bubble.
    */
-  private emitToolUse(toolCallId: string, toolName: string, input: Record<string, unknown>): void {
+  private emitToolUse(toolCallId: string, toolName: string, input: JsonObject): void {
     this.deferredToolInputs.delete(toolCallId);
     this.toolCallsSeen.set(toolCallId, toolName);
     this.emitMessage({
@@ -1068,7 +1102,7 @@ export class GenericACPProcess extends BaseAgentProcess {
   private deferIfUnrenderable(
     toolCallId: string,
     toolName: string,
-    input: Record<string, unknown>,
+    input: JsonObject,
     isTerminal: boolean,
   ): boolean {
     if (!this.manifest.quirks.deferUnrenderableToolInput) return false;
@@ -1086,7 +1120,7 @@ export class GenericACPProcess extends BaseAgentProcess {
     if (this.manifest.quirks.planRender === 'todoCard') {
       this.emitPlanAsTodoCard(update.entries);
     } else {
-      this.emitPlanAsText(((update as any).entries ?? []) as Array<Record<string, any>>);
+      this.emitPlanAsText(update.entries ?? []);
     }
   }
 
@@ -1122,7 +1156,7 @@ export class GenericACPProcess extends BaseAgentProcess {
    * `**Plan:**` header (completed → [x], in_progress → [~], else [ ]).
    * Reuses the live assistant message id; does NOT rotate it.
    */
-  private emitPlanAsText(entries: Array<Record<string, any>>): void {
+  private emitPlanAsText(entries: readonly PlanTextEntry[]): void {
     if (entries.length === 0) return;
     const planText = formatPlanChecklist(
       entries.map((e) => [e.status, e.content ?? e.title ?? e.description ?? 'Task']),
@@ -1174,9 +1208,9 @@ function isTerminalToolStatus(status: ACPToolCallStatus | null | undefined): boo
 /** TodoWrite: pull todos from the tool output when missing and normalize to `{ todos }`. */
 function finalizeTodoInput(
   toolName: string,
-  input: Record<string, unknown>,
+  input: JsonObject,
   result: Pick<ACPToolResultData, 'rawOutput'>,
-): Record<string, unknown> {
+): JsonObject {
   if (toolName !== 'TodoWrite') return input;
   const enriched = enrichTodoWriteInputFromOutput(input, result);
   const clean = buildTodoWriteInputFromRaw(enriched);
@@ -1199,7 +1233,7 @@ function formatPlanChecklist(items: Array<[string | undefined, unknown]>): strin
  * Whether a built tool input has the primary field its client card needs to
  * render a meaningful summary. Used by `deferUnrenderableToolInput` providers.
  */
-function isRenderableToolInput(toolName: string, input: Record<string, unknown>): boolean {
+function isRenderableToolInput(toolName: string, input: JsonObject): boolean {
   const has = (key: string) => isString(input[key]) && (input[key] as string).length > 0;
   switch (toolName) {
     case 'Read':
@@ -1222,7 +1256,7 @@ function isRenderableToolInput(toolName: string, input: Record<string, unknown>)
  * Merge a buffered tool input with a freshly built one, preferring non-empty
  * values from `next` (e.g. a file_path the initial deferred event was missing).
  */
-function mergeToolInput(prev: Record<string, unknown>, next: Record<string, unknown>): ToolInput {
+function mergeToolInput(prev: JsonObject, next: JsonObject): JsonObject {
   const merged = { ...prev };
   for (const [key, value] of Object.entries(next)) {
     if (value !== undefined && value !== null && value !== '') {
@@ -1238,7 +1272,7 @@ function mergeToolInput(prev: Record<string, unknown>, next: Record<string, unkn
  */
 function serializeToolInputForRule(
   toolName: string,
-  toolInput: Record<string, unknown> | undefined,
+  toolInput: JsonObject | undefined,
 ): string | undefined {
   if (!toolInput || !isObject(toolInput)) return undefined;
   if (toolName === 'Bash' && isString(toolInput.command)) {

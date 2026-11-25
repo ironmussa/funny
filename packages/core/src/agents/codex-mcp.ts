@@ -17,6 +17,8 @@
  * synchronous `funny_run_checks` ≤ 30 min), so they get `FUNNY_TOOL_TIMEOUT_SEC`.
  */
 
+import type { McpServerEntry, McpServerMap, McpStringPairs } from './mcp-server-map.js';
+
 export interface CodexMcpConfig {
   /** Value for Codex `mcp_servers`. */
   mcpServers: Record<
@@ -44,15 +46,8 @@ function tokenEnvVar(name: string): string {
 
 type CodexEntry = CodexMcpConfig['mcpServers'][string];
 
-/** One entry of the internal MCP server map; `type` and `url` are checked before use. */
-interface InternalMcpEntry {
-  type?: unknown;
-  url?: unknown;
-  headers?: Readonly<Record<string, unknown>> | null;
-}
-
 /** The bearer token in an entry's `Authorization` header, if any. */
-function bearerToken(headers: InternalMcpEntry['headers']): string | undefined {
+function bearerToken(headers: McpStringPairs | undefined): string | undefined {
   const authorization = Object.entries(headers ?? {}).find(
     ([key]) => key.toLowerCase() === 'authorization',
   )?.[1];
@@ -62,7 +57,7 @@ function bearerToken(headers: InternalMcpEntry['headers']): string | undefined {
 /** One streamable-HTTP server as a Codex entry, its token moved to `env`; null for others. */
 function codexEntry(
   name: string,
-  raw: InternalMcpEntry | null | undefined,
+  raw: McpServerEntry,
   extra: Partial<CodexEntry>,
   env: Record<string, string>,
 ): CodexEntry | null {
@@ -78,7 +73,7 @@ function codexEntry(
 }
 
 export function toCodexMcpConfig(
-  mcpServers: Record<string, any> | undefined,
+  mcpServers: McpServerMap | undefined,
   options: { approveTools?: boolean } = {},
 ): CodexMcpConfig {
   const config: CodexMcpConfig = { mcpServers: {}, env: {} };
@@ -102,7 +97,7 @@ export interface CodexMcpSettings {
  * except in read-only plan mode.
  */
 export function codexMcpSettings(
-  mcpServers: Record<string, any> | undefined,
+  mcpServers: McpServerMap | undefined,
   permissionMode: string | undefined,
 ): CodexMcpSettings {
   const mcp = toCodexMcpConfig(mcpServers, { approveTools: permissionMode !== 'plan' });

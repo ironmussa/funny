@@ -105,8 +105,7 @@ export function mergeIncomingThread(
 
   let next = incoming;
   if (fenced.size > 0) {
-    const kept: Partial<Record<keyof Thread, unknown>> = {};
-    for (const field of fenced) kept[field] = prev[field];
+    const kept = Object.fromEntries([...fenced].map((field) => [field, prev[field]]));
     next = { ...incoming, ...kept } as Thread;
   }
   return shallowEqual(prev, next) ? prev : next;

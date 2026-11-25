@@ -1,3 +1,5 @@
+import type { JsonObject } from '@funny/shared/json';
+
 import { HarnessError } from './errors.js';
 
 export type SandboxBackend = 'local' | 'process' | 'runner';
@@ -14,14 +16,14 @@ export interface ProcessSandboxIntent {
   readonly requestId?: string;
   readonly worktreePath?: string;
   readonly env?: Record<string, string>;
-  readonly metadata?: Record<string, unknown>;
+  readonly metadata?: JsonObject;
 }
 
 export interface RunnerSandboxIntent {
   readonly kind: 'runner';
   readonly provider?: 'default' | (string & {});
   readonly threadId?: string;
-  readonly metadata?: Record<string, unknown>;
+  readonly metadata?: JsonObject;
 }
 
 export interface SandboxExecutionRequest {
@@ -29,14 +31,14 @@ export interface SandboxExecutionRequest {
   cwd: string;
   sessionId?: string;
   workflowName?: string;
-  metadata?: Record<string, unknown>;
+  metadata?: JsonObject;
 }
 
 export interface SandboxExecutionHandle {
   id?: string;
   kind: SandboxBackend;
   cwd?: string;
-  metadata?: Record<string, unknown>;
+  metadata?: JsonObject;
   spawnClaudeCodeProcess?: (options: {
     command: string;
     args: string[];

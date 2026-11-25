@@ -4,10 +4,11 @@ import type { MessageRole, Thread, ThreadStatus } from '@funny/shared';
 import { toast } from 'sonner';
 
 import { readThreadIndex, readThreadRow } from '@/data/threads/read';
-import { isScratch } from '@/lib/thread-variant';
+import { isFactoryThread, isScratch } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 
 import { settlePreSendState } from '../optimistic-run-state';
+import { useSidebarFilterStore } from '../sidebar-filter-store';
 import { useThreadActiveToolStore } from '../thread-active-tool-store';
 import {
   invalidateThreadData,
@@ -282,6 +283,15 @@ function notifyThreadResult(
   // where the thread was never loaded into the sidebar.
   const state = get();
   const t = readThreadRow(threadId);
+  // A user who hides factory threads from the sidebar does not want to hear
+  // each time one of their steps completes either. Failures still show.
+  if (
+    resultStatus === 'completed' &&
+    useSidebarFilterStore.getState().hideFactoryThreads &&
+    isFactoryThread(t ?? state.threadDataById[threadId])
+  ) {
+    return;
+  }
   if (t) {
     threadTitle = t.title ?? threadTitle;
     // Scratch threads keep projectId = null, so downstream notification

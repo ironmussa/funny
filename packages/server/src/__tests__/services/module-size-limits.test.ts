@@ -48,6 +48,7 @@ function stripComments(source: string): string {
       if (ch === '}') templateDepth.pop();
       else out += 'T';
       i++;
+      let opensExpression = false;
       while (i < source.length && source[i] !== '`') {
         if (source[i] === '\\') {
           i += 2;
@@ -56,13 +57,15 @@ function stripComments(source: string): string {
         if (source[i] === '$' && source[i + 1] === '{') {
           templateDepth.push(braceDepth);
           i += 2;
+          opensExpression = true;
           break;
         }
         // A template line is code, like the rule counts it.
         out += source[i] === '\n' ? '\nT' : '';
         i++;
       }
-      if (source[i] === '`') i++;
+      // Skip the closing backtick only: after `${` the next one opens a nested template.
+      if (!opensExpression && source[i] === '`') i++;
       continue;
     }
     if (ch === '{') braceDepth++;
@@ -137,6 +140,14 @@ describe('server module size limits (#491)', () => {
     ].join('\n');
     expect(codeLines(stripComments(sample))).toBe(4);
     expect(functionLines(stripComments(sample), /function f\(/)).toBe(1);
+  });
+
+  test('a template nested in a template expression does not swallow the code after it', () => {
+    const sample = ['const a = sql`x(${`f:${id}`})`;', 'function g() {', '  return 1;', '}'].join(
+      '\n',
+    );
+    expect(codeLines(stripComments(sample))).toBe(4);
+    expect(functionLines(stripComments(sample), /function g\(/)).toBe(3);
   });
 
   test.each([...FILES_IN_SCOPE, ...SPLIT_OUT])('%s stays within max-lines', (path) => {

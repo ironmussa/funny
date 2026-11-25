@@ -9,7 +9,8 @@ mock.module('@/stores/thread-store', () => ({
   useThreadStore: { getState: () => ({ revertOptimisticRun, rollbackOptimisticMessage }) },
 }));
 
-import { handleSendResult, reportSendFailure } from '@/components/thread/use-thread-handlers';
+// A namespace import: the file still loads where `handleSendResult` is not exported.
+import * as handlers from '@/components/thread/use-thread-handlers';
 import { getQueueStore, readQueuedCount } from '@/data/queue/store';
 import type { SendMessageResponse } from '@/lib/api/threads';
 
@@ -25,19 +26,21 @@ afterEach(() => resetTestDataLayer());
 
 describe('reportSendFailure', () => {
   test('undoes the running mark of the send that set it', () => {
-    reportSendFailure({ type: 'INTERNAL', message: 'x' }, 't1', t);
+    handlers.reportSendFailure({ type: 'INTERNAL', message: 'x' }, 't1', t);
     expect(revertOptimisticRun).toHaveBeenCalledWith('t1');
   });
 
   test('leaves a run alone when this send did not mark it (the thread was already running)', () => {
-    reportSendFailure({ type: 'INTERNAL', message: 'x' }, 't1', t, false);
+    handlers.reportSendFailure({ type: 'INTERNAL', message: 'x' }, 't1', t, false);
     expect(revertOptimisticRun).not.toHaveBeenCalled();
   });
 });
 
 describe('handleSendResult, queued send', () => {
-  const send = (value: SendMessageResponse, rollbackOnQueue = true) =>
-    handleSendResult(ok(value), 't1', { rollbackOnQueue }, t);
+  const send = (value: SendMessageResponse, rollbackOnQueue = true) => {
+    expect(handlers.handleSendResult).toBeInstanceOf(Function);
+    handlers.handleSendResult(ok(value), 't1', { rollbackOnQueue }, t);
+  };
 
   test('a numeric queuedCount updates the queue count and drops the optimistic bubble', () => {
     send({ ok: true, queued: true, queuedCount: 3, queuedMessageId: 'q1' });

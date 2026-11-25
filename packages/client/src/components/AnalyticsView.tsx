@@ -48,7 +48,9 @@ export function AnalyticsView() {
   const [timeRange, setTimeRange] = useState<TimeRange>('month');
   const [overview, setOverview] = useState<OverviewData | null>(null);
   const [timeline, setTimeline] = useState<TimelineData | null>(null);
-  const [loading, setLoading] = useState(false);
+  // The filters of the last request that settled. Loading is derived from it, so
+  // a filter change shows the spinner in the same render.
+  const [settledKey, setSettledKey] = useState<string | null>(null);
 
   const selectedProject = useMemo(
     () => projects.find((p) => p.id === projectId),
@@ -66,9 +68,10 @@ export function AnalyticsView() {
           ? 'week'
           : 'month';
 
-  useEffect(() => {
-    setLoading(true);
+  const requestKey = `${projectId}|${timeRange}|${groupBy}`;
+  const loading = settledKey !== requestKey;
 
+  useEffect(() => {
     Promise.all([
       api.analyticsOverview(projectId === '__all__' ? undefined : projectId, timeRange),
       api.analyticsTimeline(projectId === '__all__' ? undefined : projectId, timeRange, groupBy),
@@ -78,8 +81,8 @@ export function AnalyticsView() {
         if (timelineRes.isOk()) setTimeline(timelineRes.value);
       })
       .catch(console.error)
-      .finally(() => setLoading(false));
-  }, [projectId, timeRange, groupBy]);
+      .finally(() => setSettledKey(requestKey));
+  }, [projectId, timeRange, groupBy, requestKey]);
 
   return (
     <div className="flex h-full min-w-0 flex-1 flex-col">

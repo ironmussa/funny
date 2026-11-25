@@ -28,21 +28,30 @@ export function ExternalClaudeSessionView({ sessionId }: { sessionId: string }) 
   const [state, setState] = useState<LoadState>({ status: 'loading', transcript: null });
   const projects = useProjects();
 
-  const loadTranscript = useCallback(async () => {
-    const result = await api.getExternalClaudeTranscript(sessionId);
-    if (result.isErr()) {
-      setState({
-        status: 'error',
-        transcript: null,
-        message: result.error.friendlyMessage ?? result.error.message,
-      });
-      return;
-    }
-    setState({ status: 'ready', transcript: result.value.transcript });
-  }, [sessionId]);
+  const loadTranscript = useCallback(
+    () =>
+      api.getExternalClaudeTranscript(sessionId).then((result) => {
+        if (result.isErr()) {
+          setState({
+            status: 'error',
+            transcript: null,
+            message: result.error.friendlyMessage ?? result.error.message,
+          });
+          return;
+        }
+        setState({ status: 'ready', transcript: result.value.transcript });
+      }),
+    [sessionId],
+  );
+
+  // A new session starts from the loading state, set in the render that sees it.
+  const [loadedSessionId, setLoadedSessionId] = useState(sessionId);
+  if (loadedSessionId !== sessionId) {
+    setLoadedSessionId(sessionId);
+    setState({ status: 'loading', transcript: null });
+  }
 
   useEffect(() => {
-    setState({ status: 'loading', transcript: null });
     void loadTranscript();
   }, [loadTranscript]);
 

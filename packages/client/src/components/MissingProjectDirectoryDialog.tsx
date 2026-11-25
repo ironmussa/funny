@@ -29,8 +29,15 @@ export function MissingProjectDirectoryDialog() {
   const inSettings =
     pathname.includes('/settings') || new URLSearchParams(search).get('view') === 'settings';
 
-  useEffect(() => {
+  // Every new check starts hidden: the dialog shows only what this check found.
+  const checkKey = `${projectId}|${projectPath}|${revealNonce}|${inSettings}`;
+  const [prevCheckKey, setPrevCheckKey] = useState(checkKey);
+  if (prevCheckKey !== checkKey) {
+    setPrevCheckKey(checkKey);
     setMissing(null);
+  }
+
+  useEffect(() => {
     if (!projectId || !projectPath || inSettings) return;
     const controller = new AbortController();
     void projectsApi.listBranches(projectId, controller.signal).then((result) => {

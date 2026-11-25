@@ -350,20 +350,38 @@ export function PRDetailDialog({
   const [fileSearchCaseSensitive, setFileSearchCaseSensitive] = useState(false);
   const [activeTab, setActiveTab] = useState<'info' | 'conversation'>('info');
 
+  // Reset the view (and show the loaders) each time the dialog opens on a pull request.
+  const openKey = open ? `${projectId}:${prNumber}` : null;
+  const [loadedOpenKey, setLoadedOpenKey] = useState<string | null>(null);
+  if (openKey !== loadedOpenKey) {
+    setLoadedOpenKey(openKey);
+    if (openKey !== null) {
+      setError(null);
+      setSelectedFile(null);
+      setSelectedCommit('all');
+      setCommitFiles(null);
+      setActiveTab('info');
+      setLoadingFiles(true);
+      setLoadingCommits(true);
+    }
+  }
+
+  // Clear the commit's files (for "all") or show the loader each time the commit changes.
+  const commitKey = `${projectId}:${prNumber}:${selectedCommit}`;
+  const [loadedCommitKey, setLoadedCommitKey] = useState(commitKey);
+  if (commitKey !== loadedCommitKey) {
+    setLoadedCommitKey(commitKey);
+    if (selectedCommit === 'all') setCommitFiles(null);
+    else setLoadingCommitFiles(true);
+  }
+
   // Fetch data when dialog opens
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
     void fetchPRDetail(projectId, prNumber);
-    setError(null);
-    setSelectedFile(null);
-    setSelectedCommit('all');
-    setCommitFiles(null);
-    setActiveTab('info');
 
     const loadData = async () => {
-      setLoadingFiles(true);
-      setLoadingCommits(true);
       return withCleanup(
         async () => {
           const [filesResult, commitsResult] = await Promise.all([
@@ -404,13 +422,9 @@ export function PRDetailDialog({
 
   // Fetch files for a specific commit
   useEffect(() => {
-    if (selectedCommit === 'all') {
-      setCommitFiles(null);
-      return;
-    }
+    if (selectedCommit === 'all') return;
 
     let cancelled = false;
-    setLoadingCommitFiles(true);
     api.githubPRFiles(projectId, prNumber, selectedCommit).then((result) => {
       if (cancelled) return;
       if (result.isOk()) {

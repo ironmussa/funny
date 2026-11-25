@@ -153,31 +153,45 @@ function runFailedState(s: TestState, file: string): Partial<TestState> {
   };
 }
 
+/** Fields an update may carry as `0` / `false`; they are kept when not null. */
+const NULLABLE_NETWORK_FIELDS = ['status', 'size', 'responseBodyBase64'] as const;
+/** Fields an update carries only when set; empty values are ignored. */
+const TRUTHY_NETWORK_FIELDS = [
+  'statusText',
+  'mimeType',
+  'resourceType',
+  'method',
+  'url',
+  'failed',
+  'errorText',
+  'requestHeaders',
+  'responseHeaders',
+  'postData',
+  'responseBody',
+] as const;
+
 /**
  * Update an existing network entry with response/completed/failure info.
  * Only overwrite fields that have actual values to avoid clobbering.
  */
 function mergeNetworkEntry(e: TestNetworkEntry, update: TestNetworkEntry): TestNetworkEntry {
   const merged = { ...e };
-  if (update.status != null) merged.status = update.status;
-  if (update.statusText) merged.statusText = update.statusText;
-  if (update.mimeType) merged.mimeType = update.mimeType;
-  if (update.resourceType) merged.resourceType = update.resourceType;
-  if (update.method) merged.method = update.method;
-  if (update.url) merged.url = update.url;
-  if (update.size != null) merged.size = update.size;
-  if (update.failed) merged.failed = update.failed;
-  if (update.errorText) merged.errorText = update.errorText;
-  if (update.requestHeaders) merged.requestHeaders = update.requestHeaders;
-  if (update.responseHeaders) merged.responseHeaders = update.responseHeaders;
-  if (update.postData) merged.postData = update.postData;
-  if (update.responseBody) merged.responseBody = update.responseBody;
-  if (update.responseBodyBase64 != null) merged.responseBodyBase64 = update.responseBodyBase64;
+  for (const key of NULLABLE_NETWORK_FIELDS)
+    if (update[key] != null) copyField(merged, update, key);
+  for (const key of TRUTHY_NETWORK_FIELDS) if (update[key]) copyField(merged, update, key);
   if (update.endTime) {
     merged.endTime = update.endTime;
     if (merged.startTime) merged.duration = update.endTime - merged.startTime;
   }
   return merged;
+}
+
+function copyField<K extends keyof TestNetworkEntry>(
+  target: TestNetworkEntry,
+  source: TestNetworkEntry,
+  key: K,
+): void {
+  target[key] = source[key];
 }
 
 export const useTestStore = create<TestState>((set, get) => ({

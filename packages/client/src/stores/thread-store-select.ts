@@ -218,6 +218,18 @@ async function fetchSelectedThread(
   }
 }
 
+/** The message window a fetched snapshot covers. */
+function snapshotWindow(
+  thread: Omit<ThreadSnapshot['thread'], 'queuedCount' | 'queuedNextMessage'>,
+): Pick<ThreadWithMessages, 'hasMore' | 'hasMoreAfter' | 'totalMessages' | 'windowStart'> {
+  return {
+    hasMore: thread.hasMore ?? false,
+    hasMoreAfter: thread.hasMoreAfter ?? false,
+    totalMessages: thread.total ?? thread.messages?.length ?? 0,
+    windowStart: thread.windowStart ?? 0,
+  };
+}
+
 /** Build the loaded payload from a fetched snapshot, restoring the per-thread
  *  state kept outside it (context usage, agent accounts, queue summary). */
 function hydrateSnapshot(
@@ -246,10 +258,7 @@ function hydrateSnapshot(
 
   return {
     ...thread,
-    hasMore: thread.hasMore ?? false,
-    hasMoreAfter: thread.hasMoreAfter ?? false,
-    totalMessages: thread.total ?? thread.messages?.length ?? 0,
-    windowStart: thread.windowStart ?? 0,
+    ...snapshotWindow(thread),
     leadingUserMessage: thread.leadingUserMessage,
     threadEvents,
     initInfo: thread.initInfo || buffered || undefined,
@@ -327,17 +336,43 @@ function landSelectedThread(
   flushWSBuffer(threadId, get());
 }
 
+/** A select call with nothing to do: already deselected (avoids no-op state
+ *  churn), or this exact thread is already loading (StrictMode double-fire). */
+function isRedundantSelect(get: Get, threadId: string | null): boolean {
+  if (!threadId) return !get().selectedThreadId && !get().activeThread;
+  return threadId === getSelectingThreadId();
+}
+
+/** True when a newer selection started while this one loaded; its buffered
+ *  WS events are dropped unless that newer selection is of this same thread. */
+function dropIfSuperseded(threadId: string, gen: number): boolean {
+  if (getSelectGeneration() === gen) return false;
+  // A newer selection of this same thread (A → B → A) owns the buffer:
+  // its load is still in flight and will replay the events when it
+  // settles, so clearing here would lose them.
+  if (getSelectingThreadId() !== threadId) clearWSBuffer(threadId);
+  return true;
+}
+
+/**
+ * Clear the in-flight tracker so future selectThread calls for this thread can
+ * proceed. The generation check keeps us from clearing the lock of a newer
+ * selectThread call to the *same* threadId that started while we were waiting
+ * (e.g. A -> B -> A rapid clicks).
+ */
+function releaseSelectLock(threadId: string | null, gen: number): void {
+  if (getSelectGeneration() === gen && getSelectingThreadId() === threadId) {
+    setSelectingThreadId(null);
+  }
+}
+
 export function createSelectActions(
   set: Set,
   get: Get,
 ): Pick<ThreadState, 'selectThread' | 'prefetchThread'> {
   return {
     selectThread: async (threadId) => {
-      // Short-circuit when already deselected to avoid no-op state churn
-      if (!threadId && !get().selectedThreadId && !get().activeThread) return;
-
-      // Skip if already loading this exact thread (prevents StrictMode double-fire)
-      if (threadId && threadId === getSelectingThreadId()) return;
+      if (isRedundantSelect(get, threadId)) return;
 
       if (threadId) traceSelectCaller(threadId, get());
 
@@ -360,25 +395,13 @@ export function createSelectActions(
         const snapshot = await fetchSelectedThread(get, set, threadId, gen, startMs);
         if (!snapshot) return;
 
-        if (getSelectGeneration() !== gen) {
-          // A newer selection of this same thread (A → B → A) owns the buffer:
-          // its load is still in flight and will replay the events when it
-          // settles, so clearing here would lose them.
-          if (getSelectingThreadId() !== threadId) clearWSBuffer(threadId);
-          return;
-        }
+        if (dropIfSuperseded(threadId, gen)) return;
 
         landSelectedThread(get, set, threadId, snapshot, swap);
         metric('thread.select.total_ms', Date.now() - startMs);
       } finally {
         span?.end();
-        // Clear in-flight tracker so future selectThread calls for this thread can proceed.
-        // We check getSelectGeneration() === gen to ensure we don't accidentally clear
-        // the lock for a newer selectThread call to the *same* threadId that started
-        // while we were waiting (e.g. A -> B -> A rapid clicks).
-        if (getSelectGeneration() === gen && getSelectingThreadId() === threadId) {
-          setSelectingThreadId(null);
-        }
+        releaseSelectLock(threadId, gen);
       }
     },
 

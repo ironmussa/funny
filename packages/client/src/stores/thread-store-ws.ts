@@ -34,6 +34,28 @@ type WSActions = Pick<
 
 type WorktreeSetupData = Parameters<ThreadState['handleWSWorktreeSetup']>[1];
 
+const isFinished = (status: GitProgressStep['status'] | undefined) =>
+  status === 'completed' || status === 'failed';
+
+/** A step's start and end times after `data`, kept across component remounts. */
+function stepTimes(
+  existing: GitProgressStep | undefined,
+  status: WorktreeSetupData['status'],
+  now: number,
+): Pick<GitProgressStep, 'startedAt' | 'completedAt'> {
+  // A finished step that runs again is a new attempt (a retried setup):
+  // it starts now and has not finished, instead of showing as running
+  // with the previous attempt's end time.
+  const prev: Partial<GitProgressStep> = existing ?? {};
+  if (status === 'running' && isFinished(prev.status)) {
+    return { startedAt: now, completedAt: undefined };
+  }
+  const times = { startedAt: prev.startedAt, completedAt: prev.completedAt };
+  if (status === 'running') times.startedAt ||= now;
+  if (isFinished(status)) times.completedAt ||= now;
+  return times;
+}
+
 /** Fold one worktree setup event into a thread's step list, with timestamps
  *  that survive component remounts. */
 function nextSetupProgress(
@@ -47,26 +69,8 @@ function nextSetupProgress(
     label: data.label,
     status: data.status,
     error: data.error,
-    startedAt: existing?.startedAt,
-    completedAt: existing?.completedAt,
+    ...stepTimes(existing, data.status, now),
   };
-  // A finished step that runs again is a new attempt (a retried setup):
-  // it starts now and has not finished, instead of showing as running
-  // with the previous attempt's end time.
-  const rerun =
-    data.status === 'running' &&
-    (existing?.status === 'completed' || existing?.status === 'failed');
-  if (rerun) {
-    step.startedAt = now;
-    step.completedAt = undefined;
-  }
-  if (data.status === 'running' && !existing?.startedAt) {
-    step.startedAt = now;
-  }
-  if ((data.status === 'completed' || data.status === 'failed') && !existing?.completedAt) {
-    step.completedAt = now;
-  }
-
   const idx = existing ? prev.indexOf(existing) : -1;
   return idx >= 0 ? prev.map((s, i) => (i === idx ? { ...s, ...step } : s)) : [...prev, step];
 }

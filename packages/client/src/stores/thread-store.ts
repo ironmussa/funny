@@ -70,12 +70,7 @@ export {
 // `./thread-state.ts`, so peer modules can reference the shapes without
 // importing this file (which imports them — would close a cycle).
 // Re-exported here for back-compat with existing call sites.
-export type {
-  AgentInitInfo,
-  AgentResultInfo,
-  CompactionEvent,
-  ThreadWithMessages,
-} from './thread-types';
+export type { AgentInitInfo, CompactionEvent, ThreadWithMessages } from './thread-types';
 export type { ThreadState } from './thread-state';
 
 // ── Store ────────────────────────────────────────────────────────

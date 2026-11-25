@@ -21,6 +21,7 @@ import { loadThreadScrollFetchOptions } from '@/lib/thread-scroll-position';
 
 import { settlePreSendStateFromFetch } from './optimistic-run-state';
 import * as mutations from './thread-mutations';
+import { reconstructCompactionEvents } from './thread-select-helpers';
 import type { ThreadState } from './thread-state';
 import { dropLiveRef } from './thread-store-live-refs';
 import { mergeMessagesById, type LocalMessage } from './thread-store-messages';
@@ -34,38 +35,17 @@ const refreshLog = createClientLogger('thread-refresh');
 type FetchedThread =
   Awaited<ReturnType<typeof api.getThread>> extends Result<infer T, unknown> ? T : never;
 
-/** True for a string value. */
-function isString(value: unknown): value is string {
-  return typeof value === 'string';
-}
-
-/** Reconstruct compactionEvents from persisted thread events. */
-function persistedCompactionEvents(threadEvents: ThreadEvent[] | undefined): CompactionEvent[] {
-  return (threadEvents ?? []).flatMap((event) => {
-    if (event.type !== 'compact_boundary') return [];
-    const data = isString(event.data) ? JSON.parse(event.data) : event.data;
-    return [
-      {
-        trigger: data.trigger ?? 'auto',
-        preTokens: data.preTokens ?? 0,
-        timestamp: data.timestamp ?? event.createdAt,
-      },
-    ];
-  });
-}
-
-/** Merge a refetched thread into its loaded payload. */
-function mergeRefreshedPayload(
+/**
+ * Merge messages — recovers any agent:message / agent:tool_call events that
+ * were emitted by the server while the WebSocket was disconnected. The
+ * server is source of truth for the recent window; older paginated
+ * messages already loaded by the client are preserved.
+ */
+function recoverMessages(
   threadId: string,
   current: ThreadWithMessages,
   thread: FetchedThread,
-  threadEvents: ThreadEvent[] | undefined,
-  persistedCompaction: CompactionEvent[],
-): ThreadWithMessages {
-  // Merge messages — recovers any agent:message / agent:tool_call events that
-  // were emitted by the server while the WebSocket was disconnected. The
-  // server is source of truth for the recent window; older paginated
-  // messages already loaded by the client are preserved.
+): LocalMessage[] {
   const freshMessages = (thread.messages ?? []) as LocalMessage[];
   const mergedMessages = mergeMessagesById(current.messages, freshMessages);
   const recovered = mergedMessages.length - current.messages.length;
@@ -81,19 +61,47 @@ function mergeRefreshedPayload(
       attributes: { 'thread.id': threadId },
     });
   }
-  const resultInfo =
-    current.resultInfo ??
-    (thread.status === 'completed' || thread.status === 'failed'
-      ? {
-          status: thread.status as 'completed' | 'failed',
-          cost: thread.cost,
-          duration: 0,
-          error: (thread as any).error,
-        }
-      : undefined);
-  // Clear waitingReason/pendingPermission if server status is no longer waiting
-  // (handles case where agent:result WS event was lost during disconnect)
-  const isServerWaiting = thread.status === 'waiting';
+  return mergedMessages;
+}
+
+function refreshedResultInfo(
+  current: ThreadWithMessages,
+  thread: FetchedThread,
+): ThreadWithMessages['resultInfo'] {
+  if (current.resultInfo) return current.resultInfo;
+  if (thread.status !== 'completed' && thread.status !== 'failed') return undefined;
+  return {
+    status: thread.status as 'completed' | 'failed',
+    cost: thread.cost,
+    duration: 0,
+    error: (thread as any).error,
+  };
+}
+
+/**
+ * Clear waitingReason/pendingPermission if server status is no longer waiting
+ * (handles case where agent:result WS event was lost during disconnect).
+ */
+function refreshedWaitingFields(
+  current: ThreadWithMessages,
+  thread: FetchedThread,
+): Pick<ThreadWithMessages, 'waitingReason' | 'pendingPermission'> {
+  if (thread.status !== 'waiting')
+    return { waitingReason: undefined, pendingPermission: undefined };
+  return {
+    waitingReason: thread.waitingReason ?? current.waitingReason,
+    pendingPermission: thread.pendingPermission ?? current.pendingPermission,
+  };
+}
+
+/** Merge a refetched thread into its loaded payload. */
+function mergeRefreshedPayload(
+  threadId: string,
+  current: ThreadWithMessages,
+  thread: FetchedThread,
+  threadEvents: ThreadEvent[] | undefined,
+  persistedCompaction: CompactionEvent[],
+): ThreadWithMessages {
   return {
     ...current,
     status: thread.status,
@@ -107,17 +115,14 @@ function mergeRefreshedPayload(
     worktreePath: thread.worktreePath,
     baseBranch: thread.baseBranch,
     initInfo: current.initInfo,
-    resultInfo,
+    resultInfo: refreshedResultInfo(current, thread),
     threadEvents,
-    messages: mergedMessages,
+    messages: recoverMessages(threadId, current, thread),
     lastUserMessage: thread.lastUserMessage ?? current.lastUserMessage,
     hasMore: thread.hasMore ?? current.hasMore,
     compactionEvents:
       persistedCompaction.length > 0 ? persistedCompaction : current.compactionEvents,
-    waitingReason: isServerWaiting ? (thread.waitingReason ?? current.waitingReason) : undefined,
-    pendingPermission: isServerWaiting
-      ? (thread.pendingPermission ?? current.pendingPermission)
-      : undefined,
+    ...refreshedWaitingFields(current, thread),
   };
 }
 
@@ -145,7 +150,7 @@ export function createRefreshActions(
       settlePreSendStateFromFetch(threadId, thread.status);
       const eventsFallback = active.threadEvents;
       const threadEvents = eventsResult.isOk() ? eventsResult.value.events : eventsFallback;
-      const persistedCompaction = persistedCompactionEvents(threadEvents);
+      const persistedCompaction = reconstructCompactionEvents(threadEvents ?? []);
 
       // Use the functional set() form so the merge base + spread base read the
       // freshest payload from the map. Without this, a WS agent:message that

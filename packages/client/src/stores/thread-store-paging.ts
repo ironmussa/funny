@@ -37,6 +37,53 @@ function setLoadingMore(set: Set, threadId: string, loadingMore: boolean): void 
 
 /** Fetch one page older than the thread's first loaded message and prepend it.
  *  Resolves false when the thread was evicted meanwhile or the fetch failed. */
+/**
+ * Fetch the page of messages before `before`, flagging the thread as loading.
+ * Null when the request failed (the flag is cleared) or the thread was evicted
+ * while it ran (the user switched away).
+ */
+async function requestOlderPage(
+  get: Get,
+  set: Set,
+  threadId: string,
+  before: string,
+  pageSize: number,
+) {
+  setLoadingMore(set, threadId, true);
+  const result = await api.getThreadMessages(threadId, before, pageSize);
+  if (!get().threadDataById[threadId]) return null;
+  if (result.isErr()) {
+    setLoadingMore(set, threadId, false);
+    return null;
+  }
+  return result.value;
+}
+
+type OlderPage = NonNullable<Awaited<ReturnType<typeof requestOlderPage>>>;
+
+/** Prepend a fetched older page to the loaded thread and clear its loading
+ *  flag; `windowFields` adds the window bookkeeping the caller tracks. */
+function prependPage(
+  set: Set,
+  threadId: string,
+  page: OlderPage,
+  windowFields: (t: ThreadWithMessages, added: number) => Partial<ThreadWithMessages>,
+): void {
+  set((state) =>
+    mutations.applyThreadDataPatch(state, threadId, (t) => {
+      const merged = prependOlderMessages(t, page.messages, page.leadingUserMessage);
+      return {
+        ...t,
+        messages: merged.messages,
+        hasMore: page.hasMore,
+        ...windowFields(t, merged.added),
+        leadingUserMessage: merged.leadingUserMessage,
+        loadingMore: false,
+      };
+    }),
+  );
+}
+
 async function fetchOlderPage(
   get: Get,
   set: Set,
@@ -44,33 +91,14 @@ async function fetchOlderPage(
   before: string,
   pageSize: number,
 ): Promise<boolean> {
-  setLoadingMore(set, threadId, true);
-  const result = await api.getThreadMessages(threadId, before, pageSize);
+  const page = await requestOlderPage(get, set, threadId, before, pageSize);
+  if (!page) return false;
 
-  // Bail if user switched away. The map entry might be evicted by now.
-  if (!get().threadDataById[threadId]) return false;
-
-  if (result.isErr()) {
-    setLoadingMore(set, threadId, false);
-    return false;
-  }
-
-  const { messages: olderMessages, hasMore, total, leadingUserMessage } = result.value;
-  set((state) =>
-    mutations.applyThreadDataPatch(state, threadId, (t) => {
-      const merged = prependOlderMessages(t, olderMessages, leadingUserMessage);
-      return {
-        ...t,
-        messages: merged.messages,
-        hasMore,
-        hasMoreAfter: result.value.hasMoreAfter ?? t.hasMoreAfter,
-        totalMessages: total ?? t.totalMessages,
-        windowStart: result.value.windowStart ?? Math.max(0, (t.windowStart ?? 0) - merged.added),
-        leadingUserMessage: merged.leadingUserMessage,
-        loadingMore: false,
-      };
-    }),
-  );
+  prependPage(set, threadId, page, (t, added) => ({
+    hasMoreAfter: page.hasMoreAfter ?? t.hasMoreAfter,
+    totalMessages: page.total ?? t.totalMessages,
+    windowStart: page.windowStart ?? Math.max(0, (t.windowStart ?? 0) - added),
+  }));
   return true;
 }
 
@@ -95,30 +123,10 @@ async function stepMessagesUntil(
   }
 
   const oldestMessage = entry.messages[0];
-  setLoadingMore(set, threadId, true);
-  const result = await api.getThreadMessages(threadId, oldestMessage.timestamp, pageSize);
+  const page = await requestOlderPage(get, set, threadId, oldestMessage.timestamp, pageSize);
+  if (!page) return false;
 
-  // Bail if the thread was evicted while we were fetching.
-  if (!get().threadDataById[threadId]) return false;
-
-  if (result.isErr()) {
-    setLoadingMore(set, threadId, false);
-    return false;
-  }
-
-  const { messages: olderMessages, hasMore, leadingUserMessage } = result.value;
-  set((state) =>
-    mutations.applyThreadDataPatch(state, threadId, (t) => {
-      const merged = prependOlderMessages(t, olderMessages, leadingUserMessage);
-      return {
-        ...t,
-        messages: merged.messages,
-        hasMore,
-        leadingUserMessage: merged.leadingUserMessage,
-        loadingMore: false,
-      };
-    }),
-  );
+  prependPage(set, threadId, page, () => ({}));
   return null;
 }
 

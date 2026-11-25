@@ -525,10 +525,9 @@ function GraphRefChip({
 
   return (
     <div
-      className={cn(
-        'inline-flex max-w-full min-w-0 shrink-0 items-center gap-0.5 rounded-full px-1 py-px transition-[filter] hover:brightness-90',
-        isMergedRef(gitRef) && 'opacity-60',
-      )}
+      // A merged PR is told by its badge and tooltip, not by fading the chip:
+      // opacity would also fade the name and let the row show through.
+      className="inline-flex max-w-full min-w-0 shrink-0 items-center gap-0.5 rounded-full px-1 py-px transition-[filter] hover:brightness-90"
       style={{
         height: GRAPH_REF_CHIP_HEIGHT_PX,
         backgroundColor: color,

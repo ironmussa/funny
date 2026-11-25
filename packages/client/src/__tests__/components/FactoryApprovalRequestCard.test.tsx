@@ -17,38 +17,23 @@ import type { FactoryRun } from '@/lib/api/factory';
 interface CardMocks {
   runs: FactoryRun[] | undefined;
   requests: FactoryApprovalRequest[];
-  settings: object | null;
-  thread: { id: string; projectId: string; source: string; isScratch?: boolean } | undefined;
   canSteer: boolean;
   approve: Mock<(...args: any[]) => any>;
   decline: Mock<(...args: any[]) => any>;
-  asked: Array<{ projectId: string | undefined; threadId: string | undefined; enabled: boolean }>;
 }
 
 const mocks = ((): CardMocks => ({
   runs: [],
   requests: [],
-  settings: {},
-  thread: undefined,
   canSteer: true,
   approve: vi.fn(),
   decline: vi.fn(),
-  asked: [],
 }))();
 
 mock.module('@/data/factory/hooks', () => ({
   useFactoryRuns: () => mocks.runs,
-  useFactorySettings: () => mocks.settings,
-  usePendingApprovalRequestsOfThread: (
-    projectId: string | undefined,
-    threadId: string | undefined,
-    enabled: boolean,
-  ) => {
-    mocks.asked.push({ projectId, threadId, enabled });
-    return enabled ? mocks.requests.filter((request) => request.threadId === threadId) : [];
-  },
+  useFactoryApprovalRequests: () => mocks.requests,
 }));
-mock.module('@/lib/thread-selectors', () => ({ useThreadById: () => mocks.thread }));
 mock.module('@/data/projects/hooks', () => ({ useCanSteerProject: () => mocks.canSteer }));
 mock.module('@/data/factory/actions', () => ({
   controlFactoryRun: () => okAsync(null),
@@ -70,7 +55,7 @@ mock.module('react-i18next', () => ({
   }),
 }));
 
-import { FactoryApprovalRequestCards } from '@/components/thread/FactoryApprovalRequestCard';
+import { FactoryApprovalRequestCard } from '@/components/thread/FactoryApprovalRequestCard';
 
 const A = 'c2b585c51b2e' + 'a'.repeat(28);
 const B = 'd'.repeat(40);
@@ -105,27 +90,27 @@ const request = (over: Partial<FactoryApprovalRequest> = {}): FactoryApprovalReq
   ...over,
 });
 
-const renderCards = () =>
-  render(<FactoryApprovalRequestCards threadId="t1" />, { wrapper: TooltipProvider });
+const renderCard = () =>
+  render(<FactoryApprovalRequestCard projectId="p1" requestId="q1" />, {
+    wrapper: TooltipProvider,
+  });
 
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.runs = [heldRun()];
   mocks.requests = [request()];
-  mocks.settings = {};
-  mocks.thread = { id: 't1', projectId: 'p1', source: 'web' };
   mocks.canSteer = true;
-  mocks.asked = [];
   mocks.approve.mockImplementation(() => okAsync(heldRun()));
   mocks.decline.mockImplementation(() => okAsync(request({ state: 'declined' })));
 });
 
-describe('FactoryApprovalRequestCards', () => {
-  test('shows what the server knows about the run: issue, pull request, commit, size, reasons', () => {
-    renderCards();
+describe('FactoryApprovalRequestCard', () => {
+  test('a pending request shows the run: title, pull request, commit, size, reasons', () => {
+    renderCard();
     const card = screen.getByTestId('factory-approval-card-q1');
-    expect(card).toHaveTextContent('An agent asks you to approve this merge');
-    expect(card).toHaveTextContent('Issue #451');
+    expect(card).toHaveAttribute('data-outcome', 'pending');
+    expect(card).toHaveTextContent('Approval needed to merge #451');
+    expect(card).toHaveTextContent('High risk');
     expect(screen.getByTestId('factory-approval-pr-q1')).toHaveTextContent('#469');
     expect(screen.getByTestId('factory-approval-sha-q1')).toHaveTextContent('c2b585c');
     expect(card).toHaveTextContent('680 changed lines');
@@ -140,7 +125,7 @@ describe('FactoryApprovalRequestCards', () => {
   });
 
   test('approving confirms first, then approves the commit the card shows', async () => {
-    renderCards();
+    renderCard();
     fireEvent.click(screen.getByTestId('factory-approval-approve-q1'));
     expect(mocks.approve).not.toHaveBeenCalled();
     fireEvent.click(await screen.findByTestId('confirm-dialog-confirm'));
@@ -149,57 +134,76 @@ describe('FactoryApprovalRequestCards', () => {
   });
 
   test('declining closes the request and approves nothing', () => {
-    renderCards();
+    renderCard();
     fireEvent.click(screen.getByTestId('factory-approval-decline-q1'));
     expect(mocks.decline).toHaveBeenCalledWith('p1', 'q1');
     expect(mocks.approve).not.toHaveBeenCalled();
   });
 
+  test('an approved request stays, and says the run waits its turn', () => {
+    // Run 08bc291e (#480, 2026-11-24): approved from the card, then queued
+    // behind #450, which changes the same files. The card vanished and the
+    // approval looked lost.
+    mocks.requests = [request({ state: 'approved', resolvedAt: '2026-11-25T00:45:19.082Z' })];
+    mocks.runs = [
+      {
+        ...heldRun(),
+        state: 'requested',
+        failureReason: null,
+        waitReason: { kind: 'paths-overlap', blockers: [450] },
+        mergeApproval: { sha: A, userId: 'alice', at: '2026-11-25T00:45:19.059Z' },
+      },
+    ];
+    renderCard();
+    const card = screen.getByTestId('factory-approval-card-q1');
+    expect(card).toHaveAttribute('data-outcome', 'approved');
+    expect(card).toHaveTextContent('You approved merging #451');
+    expect(screen.getByTestId('factory-approval-sha-q1')).toHaveTextContent('c2b585c');
+    const now = screen.getByTestId('factory-approval-run-now-q1');
+    expect(now).toHaveTextContent('The run now:');
+    expect(now).toHaveTextContent('#450');
+    expect(screen.queryByTestId('factory-approval-approve-q1')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('factory-approval-decline-q1')).not.toBeInTheDocument();
+  });
+
+  test('a declined request stays as a record with no buttons', () => {
+    mocks.requests = [request({ state: 'declined' })];
+    renderCard();
+    const card = screen.getByTestId('factory-approval-card-q1');
+    expect(card).toHaveAttribute('data-outcome', 'declined');
+    expect(card).toHaveTextContent('You declined to approve #451');
+    expect(card).toHaveTextContent('Nothing was approved');
+    expect(screen.queryByTestId('factory-approval-approve-q1')).not.toBeInTheDocument();
+  });
+
   test('a request for a commit the run is no longer held on offers no approval', () => {
     mocks.runs = [heldRun(B)];
-    renderCards();
+    renderCard();
+    expect(screen.getByTestId('factory-approval-card-q1')).toHaveAttribute(
+      'data-outcome',
+      'expired',
+    );
     expect(screen.getByTestId('factory-approval-stale-q1')).toBeInTheDocument();
     expect(screen.queryByTestId('factory-approval-approve-q1')).not.toBeInTheDocument();
     expect(screen.queryByTestId('factory-approval-decline-q1')).not.toBeInTheDocument();
   });
 
-  test('a run that left the hold offers no approval either', () => {
+  test('a pending request whose run left the hold offers no approval either', () => {
     mocks.runs = [{ ...heldRun(), state: 'working', failureReason: null }];
-    renderCards();
+    renderCard();
     expect(screen.queryByTestId('factory-approval-approve-q1')).not.toBeInTheDocument();
   });
 
   test('a member who cannot steer sees the facts and no buttons', () => {
     mocks.canSteer = false;
-    renderCards();
+    renderCard();
     expect(screen.getByTestId('factory-approval-card-q1')).toBeInTheDocument();
     expect(screen.queryByTestId('factory-approval-approve-q1')).not.toBeInTheDocument();
   });
 
-  test("another thread's request is not shown here", () => {
-    mocks.requests = [request({ threadId: 't-other' })];
-    renderCards();
+  test('an unknown request renders nothing', () => {
+    mocks.requests = [];
+    renderCard();
     expect(screen.queryByTestId('factory-approval-card-q1')).not.toBeInTheDocument();
-  });
-
-  test('nothing is asked without a factory, in a scratch thread or in a factory thread', () => {
-    mocks.settings = null;
-    const { unmount } = renderCards();
-    expect(mocks.asked.every((call) => !call.enabled)).toBe(true);
-    expect(screen.queryByTestId('factory-approval-card-q1')).not.toBeInTheDocument();
-    unmount();
-
-    mocks.settings = {};
-    mocks.asked = [];
-    for (const thread of [
-      { id: 't1', projectId: 'p1', source: 'factory' },
-      { id: 't1', projectId: '', source: 'web', isScratch: true },
-    ]) {
-      mocks.thread = thread;
-      const view = renderCards();
-      expect(screen.queryByTestId('factory-approval-card-q1')).not.toBeInTheDocument();
-      view.unmount();
-    }
-    expect(mocks.asked).toEqual([]);
   });
 });

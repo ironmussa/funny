@@ -20,6 +20,7 @@ import {
   activeFactoryRunsQuery,
   factoryApprovalRequestsQuery,
   NO_FACTORY_APPROVAL_REQUESTS,
+  NO_FACTORY_SETTINGS,
   NO_ACTIVE_FACTORY_RUNS,
   NO_PROJECT_FACTORY_RUNS,
   factoryBlockersQuery,
@@ -188,17 +189,12 @@ export function useFactoryApprovalRequests(
   ).data;
 }
 
-/** The pending requests the agent of `threadId` made, oldest first. */
-export function usePendingApprovalRequestsOfThread(
-  projectId: string | undefined,
-  threadId: string | undefined,
-  enabled = true,
-): FactoryApprovalRequest[] {
-  const requests = useFactoryApprovalRequests(projectId, enabled && !!threadId);
-  if (!requests || !threadId) return [];
-  return requests
-    .filter((request) => request.threadId === threadId && request.state === 'pending')
-    .reverse();
+/**
+ * Whether the caller has a factory in the project, without asking for a
+ * project that is not there (a scratch thread).
+ */
+export function useHasFactory(projectId: string | undefined): boolean {
+  return !!useDataQuery(projectId ? factorySettingsQuery(projectId) : NO_FACTORY_SETTINGS).data;
 }
 
 /** The pending request an agent made for `runId`, or null. */

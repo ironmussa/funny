@@ -109,6 +109,13 @@ and leave the run held.
 - **WHEN** the member declines a pending request
 - **THEN** the request is closed as declined and the run stays held with no approval
 
+#### Scenario: The answer stays in the thread
+
+- **WHEN** the member approves a request and the run then waits for another run that changes the
+  same files
+- **THEN** the card stays in the thread, says the request was approved, and shows the run's state
+  and why it waits
+
 #### Scenario: Another member answers
 
 - **WHEN** a member who is not the factory's owner opens the thread

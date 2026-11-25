@@ -443,7 +443,8 @@ audited (`factory.agent_tool_refused`) and answered to the agent as a tool error
 
 An approval request is a row of `factory_approval_requests`, bound to one run and one commit, at
 most one pending per run. It carries no text: the card in the thread
-(`FactoryApprovalRequestCard.tsx`) and the marker on the board read the run. Its states are
+(`FactoryApprovalRequestCard.tsx`, a timeline card placed at the time the agent asked, kept after
+the answer with the run's current state) and the marker on the board read the run. Its states are
 `pending → approved | declined | expired` (`factory-approval-requests.ts`): approving the run
 closes it as approved, `factory.declineApprovalRequest` declines it and leaves the run held, and
 it expires when the run is held on another commit or leaves the hold. The server brings a request

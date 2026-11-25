@@ -57,6 +57,13 @@ export function factorySettingsQuery(projectId: string) {
   };
 }
 
+/** What a reader with no project reads instead of its factory settings: never fetched. */
+export const NO_FACTORY_SETTINGS = {
+  queryKey: ['factory', 'settings', 'none'] as const,
+  queryFn: (): Promise<FactorySettings | null> => Promise.resolve(null),
+  enabled: false,
+};
+
 /** Read the settings again now (the Issues tab's retry after a failed read). */
 export function refetchFactorySettings(
   projectId: string,

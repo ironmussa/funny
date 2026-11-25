@@ -195,8 +195,14 @@ export function getContextWindow(provider: string, model: string): number {
   return found?.contextWindow ?? DEFAULT_CONTEXT_WINDOW;
 }
 
+/** A `provider:model` combined key, split into its parts. */
+interface UnifiedModel {
+  provider: string;
+  model: string;
+}
+
 /** Parse a `provider:model` combined key back into its parts. */
-export function parseUnifiedModel(combined: string): { provider: string; model: string } {
+export function parseUnifiedModel(combined: string): UnifiedModel {
   const idx = combined.indexOf(':');
   if (idx === -1) return { provider: 'claude', model: combined };
   return { provider: combined.slice(0, idx), model: combined.slice(idx + 1) };

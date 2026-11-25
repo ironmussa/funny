@@ -28,14 +28,17 @@ export function useRunnerProviders(): RunnerProviders {
   return data ?? UNKNOWN_RUNNER_PROVIDERS;
 }
 
+/** What `useSandboxConnections` returns. */
+interface SandboxConnectionsRead {
+  connections: InfraConnection[];
+  loading: boolean;
+}
+
 /**
  * The user's sandbox provider connections. With `enabled: false` the cached
  * list is returned without requesting it.
  */
-export function useSandboxConnections(options: { enabled?: boolean } = {}): {
-  connections: InfraConnection[];
-  loading: boolean;
-} {
+export function useSandboxConnections(options: { enabled?: boolean } = {}): SandboxConnectionsRead {
   const { data, isFetching } = useDataQuery({ ...sandboxConnectionsQuery, ...options });
   return { connections: data ?? NO_CONNECTIONS, loading: isFetching };
 }
@@ -52,14 +55,17 @@ export interface ProjectSandbox {
   connection: InfraConnection | undefined;
 }
 
+/** What `useProjectSandbox` returns. */
+interface ProjectSandboxRead {
+  sandbox: ProjectSandbox | null;
+  loading: boolean;
+}
+
 /**
  * The current user's sandbox for a project (change project-sandboxes), with
  * its connection. `null` when none is configured or there is no project.
  */
-export function useProjectSandbox(projectId: string | null | undefined): {
-  sandbox: ProjectSandbox | null;
-  loading: boolean;
-} {
+export function useProjectSandbox(projectId: string | null | undefined): ProjectSandboxRead {
   const query = projectSandboxQuery(projectId ?? '');
   const { data, isFetching } = useDataQuery({ ...query, enabled: !!projectId });
   // Always enabled: the observer is shared per key, so readers must agree on options.

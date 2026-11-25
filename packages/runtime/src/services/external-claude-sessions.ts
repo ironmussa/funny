@@ -29,6 +29,7 @@ import {
   type SessionMetadata,
 } from './external-claude-sessions/transcript-entries.js';
 import { readFileLines } from './file-lines.js';
+import type { RuntimeThreadInsert, RuntimeThreadRecord } from './server-interfaces.js';
 import { getServices } from './service-registry.js';
 
 const CLAUDE_PROJECTS_DIR = '.claude/projects';
@@ -137,8 +138,12 @@ export function dismissExternalClaudeSession(sessionId: string): boolean {
   return true;
 }
 
+/** The thread a session is imported into: a `threads` row, found or created here. */
+type ExternalSessionThread = Pick<RuntimeThreadRecord, 'id' | 'userId'> &
+  Partial<RuntimeThreadInsert>;
+
 export type ImportExternalClaudeSessionResult =
-  | { ok: true; imported: boolean; thread: Record<string, any> }
+  | { ok: true; imported: boolean; thread: ExternalSessionThread }
   | { ok: false; status: number; error: string };
 
 export async function importExternalClaudeSession(
@@ -247,7 +252,7 @@ async function ensureExternalClaudeThreadShell(params: {
   projects: ClaudeProject[];
   userId: string;
   projectId?: string | null;
-}): Promise<Record<string, any> | null> {
+}): Promise<ExternalSessionThread | null> {
   const { session, projects, userId } = params;
   if (!session.sessionId) return null;
 
@@ -306,7 +311,7 @@ async function ensureExternalClaudeThreadShell(params: {
 }
 
 async function hydrateExternalClaudeThread(params: {
-  thread: Record<string, any>;
+  thread: ExternalSessionThread;
   sessionId: string;
   userId: string;
   homeDir?: string;

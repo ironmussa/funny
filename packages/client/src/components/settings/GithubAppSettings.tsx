@@ -328,8 +328,11 @@ function targetView(accounts: GithubAppAccount[], choice: Choice, search: string
   const orgs = accounts.filter((a) => a.type === 'org');
   const personalLabel = personal ? `${personal.login} (personal account)` : 'Personal account';
   const otherLabel = orgs.length > 0 ? 'Another organization…' : 'An organization…';
-  const labels: Record<string, string> = { user: personalLabel, other: otherLabel };
-  const label = labels[choice] ?? choice.slice(4);
+  const labels = new Map([
+    ['user', personalLabel],
+    ['other', otherLabel],
+  ]);
+  const label = labels.get(choice) ?? choice.slice(4);
   const typed = search.trim();
   const typedIsListed = orgs.some((a) => a.login.toLowerCase() === typed.toLowerCase());
   const offerTyped = typed !== '' && !typedIsListed && personal?.login !== typed;

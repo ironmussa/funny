@@ -1,0 +1,246 @@
+import {
+  FileText,
+  FolderOpen,
+  Zap,
+  Loader2,
+  Code2,
+  Box,
+  FileType,
+  List,
+  Variable,
+  Sparkles,
+  Workflow as WorkflowIcon,
+} from 'lucide-react';
+import { useEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
+import { useTranslation } from 'react-i18next';
+
+import { HighlightText } from '@/components/ui/highlight-text';
+import { middleTruncate } from '@/lib/text-truncate';
+import { cn } from '@/lib/utils';
+
+import { getSuggestionLoadingLabel } from './suggestion-items';
+import type { SuggestionItem, SuggestionMenuType } from './types';
+
+interface SuggestionPopupProps {
+  items: SuggestionItem[];
+  selectedIndex: number;
+  loading?: boolean;
+  truncated?: boolean;
+  onSelect: (item: SuggestionItem) => void;
+  onHover: (index: number) => void;
+  rect: (() => DOMRect | null) | null;
+  type: SuggestionMenuType;
+  /** Current search query for highlighting matches */
+  query?: string;
+  /** Ref to a container element — the popup will match its width and left edge */
+  containerRef?: React.RefObject<HTMLElement | null>;
+}
+
+/** Icon for a symbol kind */
+function SymbolKindIcon({ kind, className }: { kind?: string; className?: string }) {
+  switch (kind) {
+    case 'class':
+      return <Box className={className} />;
+    case 'interface':
+    case 'type':
+      return <FileType className={className} />;
+    case 'enum':
+      return <List className={className} />;
+    case 'variable':
+    case 'property':
+      return <Variable className={className} />;
+    default: // function, method, module
+      return <Code2 className={className} />;
+  }
+}
+
+export function SuggestionPopup({
+  items,
+  selectedIndex,
+  loading,
+  truncated,
+  onSelect,
+  onHover,
+  rect,
+  type,
+  query = '',
+  containerRef,
+}: SuggestionPopupProps) {
+  const { t } = useTranslation();
+  const popupRef = useRef<HTMLDivElement>(null);
+
+  // Compute position synchronously to avoid flash/jump.
+  // We recalculate on every render that changes rect or items.
+  const style = useMemo<React.CSSProperties>(() => {
+    if (!rect) return { position: 'fixed', visibility: 'hidden' as const, zIndex: 50 };
+    const r = rect();
+    if (!r) return { position: 'fixed', visibility: 'hidden' as const, zIndex: 50 };
+    // If a container ref is provided, match its left edge and width
+    const container = containerRef?.current;
+    const containerRect = container?.getBoundingClientRect();
+    return {
+      position: 'fixed',
+      left: containerRect ? containerRect.left : r.left,
+      width: containerRect ? containerRect.width : undefined,
+      // Align the popup's bottom edge to the top of the container (or cursor)
+      bottom: window.innerHeight - (containerRect ? containerRect.top : r.top) + 4,
+      zIndex: 50,
+    };
+  }, [rect, containerRef]);
+
+  // Scroll selected into view — use scrollTop manipulation instead of
+  // scrollIntoView which can scroll parent containers and cause jumps.
+  useEffect(() => {
+    const container = popupRef.current;
+    if (!container) return;
+    const el = container.children[selectedIndex] as HTMLElement | undefined;
+    if (!el) return;
+    const elTop = el.offsetTop;
+    const elBottom = elTop + el.offsetHeight;
+    if (elTop < container.scrollTop) {
+      container.scrollTop = elTop;
+    } else if (elBottom > container.scrollTop + container.clientHeight) {
+      container.scrollTop = elBottom - container.clientHeight;
+    }
+  }, [selectedIndex]);
+
+  if (loading && items.length === 0) {
+    const loadingLabel = getSuggestionLoadingLabel(type);
+    return createPortal(
+      <div
+        data-suggestion-popup
+        style={style}
+        className={cn(
+          'max-h-52 overflow-y-auto rounded-md border border-border bg-popover text-popover-foreground shadow-md',
+          !containerRef?.current && 'w-80',
+        )}
+      >
+        <div className="text-muted-foreground flex items-center gap-2 px-3 py-2 text-xs">
+          <Loader2 className="icon-xs animate-spin" />
+          {t(loadingLabel.key, loadingLabel.fallback)}
+        </div>
+      </div>,
+      document.body,
+    );
+  }
+
+  if (items.length === 0) {
+    return createPortal(
+      <div
+        data-suggestion-popup
+        style={style}
+        className={cn(
+          'max-h-52 overflow-y-auto rounded-md border border-border bg-popover text-popover-foreground shadow-md',
+          !containerRef?.current && 'w-80',
+        )}
+      >
+        <div className="text-muted-foreground px-3 py-2 text-xs">
+          {
+            // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
+            type === 'file'
+              ? t('prompt.noFilesMatch', 'No files match')
+              : type === 'symbol'
+                ? t('prompt.noSymbolsMatch', 'No symbols match')
+                : type === 'workflow'
+                  ? t('prompt.noWorkflowsMatch', 'No workflows match')
+                  : t('skills.noSkillsFound', 'No skills found')
+          }
+        </div>
+      </div>,
+      document.body,
+    );
+  }
+
+  return createPortal(
+    <div
+      ref={popupRef}
+      data-suggestion-popup
+      style={style}
+      className={cn(
+        'max-h-52 overflow-y-auto rounded-md border border-border bg-popover text-popover-foreground shadow-md',
+        !containerRef?.current && 'w-80',
+      )}
+    >
+      {items.map((item, i) => (
+        <button
+          type="button"
+          key={`${item.type}:${item.id}`}
+          data-testid={
+            // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
+            type === 'symbol'
+              ? `symbol-item-${item.id}`
+              : type === 'file'
+                ? `mention-item-${item.id}`
+                : type === 'workflow'
+                  ? `workflow-item-${item.id}`
+                  : `slash-item-${item.id}`
+          }
+          className={cn(
+            'flex w-full items-start gap-2 px-3 py-1.5 text-left text-sm transition-colors hover:bg-accent',
+            i === selectedIndex && 'bg-accent',
+          )}
+          onMouseDown={(e) => {
+            e.preventDefault();
+            onSelect(item);
+          }}
+          onMouseEnter={() => onHover(i)}
+        >
+          {type === 'symbol' ? (
+            <SymbolKindIcon
+              kind={item.symbolKind}
+              className="icon-sm text-muted-foreground mt-0.5 shrink-0"
+            />
+          ) : type === 'file' ? (
+            item.fileType === 'folder' ? (
+              <FolderOpen className="icon-sm text-muted-foreground mt-0.5 shrink-0" />
+            ) : (
+              <FileText className="icon-sm text-muted-foreground mt-0.5 shrink-0" />
+            )
+          ) : item.type === 'workflow' ? (
+            <WorkflowIcon className="icon-base text-muted-foreground mt-0.5 shrink-0" />
+          ) : item.type === 'skill' ? (
+            <Sparkles className="icon-base text-muted-foreground mt-0.5 shrink-0" />
+          ) : (
+            <Zap className="icon-base text-muted-foreground mt-0.5 shrink-0" />
+          )}
+          <div className="min-w-0">
+            <HighlightText
+              text={
+                // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
+                type === 'slash'
+                  ? `/${item.label}`
+                  : type === 'workflow'
+                    ? `>> ${item.label}`
+                    : type === 'symbol'
+                      ? item.label
+                      : middleTruncate(item.label)
+              }
+              query={query}
+              className="block truncate font-mono text-xs font-medium"
+            />
+            {type === 'symbol' && item.path && (
+              <span className="text-muted-foreground block truncate text-xs">
+                {middleTruncate(item.path, 50)}
+                {item.symbolLine ? `:${item.symbolLine}` : ''}
+              </span>
+            )}
+            {item.description && (
+              <HighlightText
+                text={item.description}
+                query={query}
+                className="text-muted-foreground block truncate text-xs"
+              />
+            )}
+          </div>
+        </button>
+      ))}
+      {truncated && (
+        <div className="border-border text-muted-foreground border-t px-3 py-1.5 text-xs">
+          {t('prompt.moreFilesHint', 'Type to narrow results\u2026')}
+        </div>
+      )}
+    </div>,
+    document.body,
+  );
+}

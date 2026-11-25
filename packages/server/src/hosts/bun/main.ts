@@ -12,6 +12,7 @@ import { callerAddress } from '../../lib/client-ip.js';
 import { resolveCorsOrigins } from '../../lib/cors-origins.js';
 import { ensureDataDir } from '../../lib/data-dir.js';
 import { attachFileLogTransport, log } from '../../lib/logger.js';
+import type { BrowserEvent } from '../../services/runner-ports.js';
 import { mountBunAssets } from './assets.js';
 import { serveExclusive } from './listen.js';
 
@@ -380,7 +381,7 @@ export async function startBunServer(opts: BunHostOptions) {
  */
 async function startIssueFactory(
   ports: import('../../services/runner-thread-launcher.js').RunnerPorts,
-  browserEvents: { toUser(userId: string, event: Record<string, unknown>): void },
+  browserEvents: { toUser(userId: string, event: BrowserEvent): void },
 ): Promise<void> {
   const { startFactoryWatcher } = await import('../../services/factory/factory-watcher.js');
   const { createFactoryGithub } = await import('../../services/factory/factory-github.js');

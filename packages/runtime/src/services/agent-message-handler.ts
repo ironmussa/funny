@@ -39,6 +39,21 @@ import { getServices } from './service-registry.js';
 import { threadEventBus } from './thread-event-bus.js';
 import { transitionStatus } from './thread-status-machine.js';
 
+/** Token usage on an assistant message, under the field names each provider reports. */
+interface AssistantMessageUsage {
+  input_tokens?: number;
+  inputTokens?: number;
+  used?: number;
+  cache_read_input_tokens?: number;
+  cachedReadTokens?: number;
+  cacheReadTokens?: number;
+  cache_creation_input_tokens?: number;
+  cachedWriteTokens?: number;
+  cacheWriteTokens?: number;
+  output_tokens?: number;
+  outputTokens?: number;
+}
+
 /**
  * Handles all CLI messages from Claude processes — system init,
  * assistant text/tool_use, user tool_result, and result.
@@ -507,26 +522,16 @@ export class AgentMessageHandler {
     const isCompactionSummary = msg.message.content.some(
       (b: any) => b && typeof b === 'object' && 'type' in b && b.type === 'compaction',
     );
-    const usage = isCompactionSummary
+    const usage: AssistantMessageUsage | undefined = isCompactionSummary
       ? undefined
-      : (msg.message.usage as Record<string, unknown> | undefined);
+      : msg.message.usage;
     if (usage) {
-      const inputTokens =
-        (usage.input_tokens as number) ??
-        (usage.inputTokens as number) ??
-        (usage.used as number) ??
-        0;
+      const inputTokens = usage.input_tokens ?? usage.inputTokens ?? usage.used ?? 0;
       const cacheRead =
-        (usage.cache_read_input_tokens as number) ??
-        (usage.cachedReadTokens as number) ??
-        (usage.cacheReadTokens as number) ??
-        0;
+        usage.cache_read_input_tokens ?? usage.cachedReadTokens ?? usage.cacheReadTokens ?? 0;
       const cacheCreation =
-        (usage.cache_creation_input_tokens as number) ??
-        (usage.cachedWriteTokens as number) ??
-        (usage.cacheWriteTokens as number) ??
-        0;
-      const outputTokens = (usage.output_tokens as number) ?? (usage.outputTokens as number) ?? 0;
+        usage.cache_creation_input_tokens ?? usage.cachedWriteTokens ?? usage.cacheWriteTokens ?? 0;
+      const outputTokens = usage.output_tokens ?? usage.outputTokens ?? 0;
       const totalInputTokens = inputTokens + cacheRead + cacheCreation;
 
       log.info('Assistant message usage (DEBUG)', {

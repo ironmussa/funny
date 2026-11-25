@@ -54,15 +54,13 @@ function assertDurableJson(
     if (prototype !== Object.prototype && prototype !== null) {
       throw new Error(`${path} must contain only plain JSON objects`);
     }
-    for (const key of Reflect.ownKeys(value)) {
-      if (typeof key !== 'string') {
-        if (Object.prototype.propertyIsEnumerable.call(value, key)) {
-          throw new Error(`${path} must not contain symbol keys`);
-        }
-        continue;
-      }
+    // Own enumerable string keys first, then symbols: the order of Reflect.ownKeys.
+    for (const [key, item] of Object.entries(value)) {
+      assertDurableJson(item, `${path}.${key}`, ancestors);
+    }
+    for (const key of Object.getOwnPropertySymbols(value)) {
       if (Object.prototype.propertyIsEnumerable.call(value, key)) {
-        assertDurableJson((value as Record<string, unknown>)[key], `${path}.${key}`, ancestors);
+        throw new Error(`${path} must not contain symbol keys`);
       }
     }
   }

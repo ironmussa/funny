@@ -13,6 +13,7 @@ import { errAsync, ResultAsync } from 'neverthrow';
 import { log } from '../../lib/logger.js';
 import { metric } from '../../lib/telemetry.js';
 import { removeRunner } from '../runner-manager.js';
+import type { BrowserEvent } from '../runner-ports.js';
 import { sandboxRunnerIdForThread } from '../runner-scope.js';
 import { createSandboxIdleSweeper, DEFAULT_SANDBOX_IDLE_MS } from './idle-sweeper.js';
 import { createInfraConnectionService } from './infra-connections.js';
@@ -131,7 +132,7 @@ function idleWindowMs(): number {
 
 export function startSandboxLifecycle(deps: {
   presence: { isAvailable(runnerId: string): Promise<boolean> } | undefined;
-  browserEvents?: { toUser(userId: string, event: Record<string, unknown>): void };
+  browserEvents?: { toUser(userId: string, event: BrowserEvent): void };
   /** The server's reverse-link listener; absent: no reverse links are dialed. */
   reverseLinkTarget?: { hostname: string; port: number };
 }): void {

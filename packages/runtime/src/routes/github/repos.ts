@@ -236,6 +236,13 @@ interface CloneJob {
   userId: string;
 }
 
+/** Extra log fields of a failed clone: the git exit or the step that failed. */
+interface CloneFailureDetails {
+  exitCode?: number;
+  durationMs?: number;
+  stage?: 'create-project';
+}
+
 /**
  * Runs the clone and registers the project, reporting every step as a
  * `clone:progress` event. The last event has `status: 'done'` with the
@@ -256,7 +263,7 @@ async function runClone(
       data: { cloneId, ...data },
     });
   };
-  const fail = (error: string, extra: Record<string, unknown> = {}) => {
+  const fail = (error: string, extra: CloneFailureDetails = {}) => {
     log.error('Clone failed', {
       namespace: 'github-routes',
       cloneId,

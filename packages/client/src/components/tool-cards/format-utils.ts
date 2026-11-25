@@ -69,6 +69,13 @@ function isInputText(input: string | Record<string, unknown>): input is string {
   return typeof input === 'string';
 }
 
+/** A tool input that is not JSON, kept as its text. */
+type UnparsedToolInput = { value: string };
+
+function unparsedToolInput(text: string): UnparsedToolInput {
+  return { value: text };
+}
+
 export function formatInput(
   input: string | Record<string, unknown> | null | undefined,
 ): Record<string, unknown> {
@@ -77,7 +84,7 @@ export function formatInput(
     try {
       return JSON.parse(input);
     } catch {
-      return { value: input };
+      return unparsedToolInput(input);
     }
   }
   return input;
@@ -165,49 +172,51 @@ function backgroundSummary(parsed: Record<string, unknown>): string | null {
 
 const filePathSummary = field('file_path');
 
-const SUMMARIES: Record<string, SummaryFn> = {
-  Read: filePathSummary,
-  Write: filePathSummary,
-  Edit: filePathSummary,
-  Bash: (parsed) =>
-    isString(parsed.command)
-      ? unwrapShellCommand(parsed.command)
-      : ((parsed.command as string) ?? null),
-  Glob: field('pattern'),
-  Grep: field('pattern'),
-  Task: field('description'),
-  Agent: field('description'),
-  WebSearch: field('query'),
-  WebFetch: field('url'),
-  NotebookEdit: field('notebook_path'),
-  TodoWrite: todoSummary,
-  updateTodos: todoSummary,
-  todo_write: todoSummary,
-  AskUserQuestion: questionSummary,
-  Think: thinkSummary,
-  ProviderError: field('error'),
-  ToolSearch: (parsed) =>
-    isString(parsed.query) ? parsed.query.replace(/^select:/, '').replace(/,/g, ', ') : null,
-  Skill: field('skill'),
-  TaskCreate: field('subject'),
-  TaskUpdate: taskUpdateSummary,
-  TaskOutput: (parsed) => (parsed.task_id ? String(parsed.task_id) : null),
-  TaskStop: (parsed) => (parsed.task_id ? String(parsed.task_id) : null),
-  ScheduleWakeup: field('reason'),
-  Monitor: (parsed) => (parsed.description as string) ?? (parsed.command as string) ?? null,
-  SendMessage: (parsed) => (parsed.summary as string) ?? (parsed.to as string) ?? null,
-  apply_patch: (parsed) => patchSummary(parsed),
-  ApplyPatch: (parsed) => patchSummary(parsed),
-  update_plan: (parsed) =>
-    isString(parsed.explanation)
-      ? (parsed.explanation.split('\n').find((l) => l.trim()) ?? null)
-      : null,
-  Tool: (parsed) =>
-    parsed.server && parsed.tool
-      ? `${String(parsed.server)} · ${String(parsed.tool)}`
-      : ((parsed.description as string) ?? null),
-  Background: backgroundSummary,
-};
+const SUMMARIES = new Map<string, SummaryFn>(
+  Object.entries({
+    Read: filePathSummary,
+    Write: filePathSummary,
+    Edit: filePathSummary,
+    Bash: (parsed) =>
+      isString(parsed.command)
+        ? unwrapShellCommand(parsed.command)
+        : ((parsed.command as string) ?? null),
+    Glob: field('pattern'),
+    Grep: field('pattern'),
+    Task: field('description'),
+    Agent: field('description'),
+    WebSearch: field('query'),
+    WebFetch: field('url'),
+    NotebookEdit: field('notebook_path'),
+    TodoWrite: todoSummary,
+    updateTodos: todoSummary,
+    todo_write: todoSummary,
+    AskUserQuestion: questionSummary,
+    Think: thinkSummary,
+    ProviderError: field('error'),
+    ToolSearch: (parsed) =>
+      isString(parsed.query) ? parsed.query.replace(/^select:/, '').replace(/,/g, ', ') : null,
+    Skill: field('skill'),
+    TaskCreate: field('subject'),
+    TaskUpdate: taskUpdateSummary,
+    TaskOutput: (parsed) => (parsed.task_id ? String(parsed.task_id) : null),
+    TaskStop: (parsed) => (parsed.task_id ? String(parsed.task_id) : null),
+    ScheduleWakeup: field('reason'),
+    Monitor: (parsed) => (parsed.description as string) ?? (parsed.command as string) ?? null,
+    SendMessage: (parsed) => (parsed.summary as string) ?? (parsed.to as string) ?? null,
+    apply_patch: (parsed) => patchSummary(parsed),
+    ApplyPatch: (parsed) => patchSummary(parsed),
+    update_plan: (parsed) =>
+      isString(parsed.explanation)
+        ? (parsed.explanation.split('\n').find((l) => l.trim()) ?? null)
+        : null,
+    Tool: (parsed) =>
+      parsed.server && parsed.tool
+        ? `${String(parsed.server)} · ${String(parsed.tool)}`
+        : ((parsed.description as string) ?? null),
+    Background: backgroundSummary,
+  } satisfies Record<string, SummaryFn>),
+);
 
 // For Gemini ACP tool calls, the description field contains the
 // human-readable title from the ACP protocol (e.g. file path or search query)
@@ -218,7 +227,7 @@ export function getSummary(
   parsed: Record<string, unknown>,
   t: (key: string) => string,
 ): string | null {
-  const summarize = Object.hasOwn(SUMMARIES, name) ? SUMMARIES[name] : defaultSummary;
+  const summarize = SUMMARIES.get(name) ?? defaultSummary;
   return summarize(parsed, t);
 }
 
@@ -255,41 +264,43 @@ function patchSummary(parsed: Record<string, unknown>): string | null {
 export function getToolLabel(name: string, t: (key: string) => string): string {
   const mcp = parseMcpToolName(name);
   if (mcp) return mcpToolTitle(mcp, t);
-  const labels: Record<string, string> = {
-    Read: t('tools.readFile'),
-    Write: t('tools.writeFile'),
-    Edit: t('tools.editFile'),
-    Bash: t('tools.runCommand'),
-    Glob: t('tools.findFiles'),
-    Grep: t('tools.searchCode'),
-    WebFetch: t('tools.fetchUrl'),
-    WebSearch: t('tools.webSearch'),
-    Task: t('tools.subagent'),
-    Agent: t('tools.subagent'),
-    TodoWrite: t('tools.todos'),
-    updateTodos: t('tools.todos'),
-    todo_write: t('tools.todos'),
-    NotebookEdit: t('tools.editNotebook'),
-    AskUserQuestion: t('tools.question'),
-    Think: t('tools.thinking'),
-    ProviderError: t('tools.providerError'),
-    Background: t('tools.background'),
-    Tool: t('tools.tool'),
-    ToolSearch: t('tools.loadTools'),
-    Skill: t('tools.skill'),
-    TaskCreate: t('tools.newTask'),
-    TaskUpdate: t('tools.updateTask'),
-    TaskOutput: t('tools.taskOutput'),
-    TaskStop: t('tools.stopTask'),
-    ScheduleWakeup: t('tools.scheduleWakeup'),
-    Monitor: t('tools.monitor'),
-    SendMessage: t('tools.sendMessage'),
-    apply_patch: t('tools.applyPatch'),
-    ApplyPatch: t('tools.applyPatch'),
-    update_plan: t('tools.updatePlan'),
-    EnterPlanMode: t('tools.planMode'),
-  };
-  return labels[name] ?? name;
+  const labels = new Map<string, string>(
+    Object.entries({
+      Read: t('tools.readFile'),
+      Write: t('tools.writeFile'),
+      Edit: t('tools.editFile'),
+      Bash: t('tools.runCommand'),
+      Glob: t('tools.findFiles'),
+      Grep: t('tools.searchCode'),
+      WebFetch: t('tools.fetchUrl'),
+      WebSearch: t('tools.webSearch'),
+      Task: t('tools.subagent'),
+      Agent: t('tools.subagent'),
+      TodoWrite: t('tools.todos'),
+      updateTodos: t('tools.todos'),
+      todo_write: t('tools.todos'),
+      NotebookEdit: t('tools.editNotebook'),
+      AskUserQuestion: t('tools.question'),
+      Think: t('tools.thinking'),
+      ProviderError: t('tools.providerError'),
+      Background: t('tools.background'),
+      Tool: t('tools.tool'),
+      ToolSearch: t('tools.loadTools'),
+      Skill: t('tools.skill'),
+      TaskCreate: t('tools.newTask'),
+      TaskUpdate: t('tools.updateTask'),
+      TaskOutput: t('tools.taskOutput'),
+      TaskStop: t('tools.stopTask'),
+      ScheduleWakeup: t('tools.scheduleWakeup'),
+      Monitor: t('tools.monitor'),
+      SendMessage: t('tools.sendMessage'),
+      apply_patch: t('tools.applyPatch'),
+      ApplyPatch: t('tools.applyPatch'),
+      update_plan: t('tools.updatePlan'),
+      EnterPlanMode: t('tools.planMode'),
+    } satisfies Record<string, string>),
+  );
+  return labels.get(name) ?? name;
 }
 
 export { toEditorUri, openFileInEditor, getEditorLabel } from '@/lib/editor-utils';

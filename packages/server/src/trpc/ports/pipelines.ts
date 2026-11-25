@@ -10,34 +10,54 @@ import { err, ok } from 'neverthrow';
 
 import { toPipeline, toPipelineRun } from '../../lib/pipeline-response.js';
 import * as pipelineRepo from '../../services/pipeline-repository.js';
+import { definedFields } from './defined-fields.js';
 import { requireVisibleProject } from './project-gate.js';
 
-/** Column name → the value a PATCH writes to it. */
-interface PipelineColumnUpdates {
-  [column: string]: unknown;
-}
-
 /** Column writes for a PATCH body: flags become integers, empty prompts become null. */
-function pipelineUpdates(body: UpdatePipelineRequest): PipelineColumnUpdates {
-  const updates: PipelineColumnUpdates = {};
-  for (const [key, value] of Object.entries(body)) {
-    if (value === undefined) continue;
-    if (FLAG_COLUMNS.has(key)) updates[key] = value ? 1 : 0;
-    else if (NULLABLE_TEXT_COLUMNS.has(key)) updates[key] = value || null;
-    else updates[key] = value;
+function pipelineUpdates(body: UpdatePipelineRequest): pipelineRepo.PipelineUpdate {
+  const {
+    enabled,
+    precommitFixEnabled,
+    testEnabled,
+    testFixEnabled,
+    reviewerPrompt,
+    correctorPrompt,
+    precommitFixerPrompt,
+    commitMessagePrompt,
+    testCommand,
+    testFixerPrompt,
+    ...plain
+  } = body;
+  const updates: pipelineRepo.PipelineUpdate = definedFields(plain);
+  const flags = { enabled, precommitFixEnabled, testEnabled, testFixEnabled };
+  for (const column of FLAG_COLUMNS) {
+    const value = flags[column];
+    if (value !== undefined) updates[column] = value ? 1 : 0;
+  }
+  const texts = {
+    reviewerPrompt,
+    correctorPrompt,
+    precommitFixerPrompt,
+    commitMessagePrompt,
+    testCommand,
+    testFixerPrompt,
+  };
+  for (const column of NULLABLE_TEXT_COLUMNS) {
+    const value = texts[column];
+    if (value !== undefined) updates[column] = value || null;
   }
   return updates;
 }
 
-const FLAG_COLUMNS = new Set(['enabled', 'precommitFixEnabled', 'testEnabled', 'testFixEnabled']);
-const NULLABLE_TEXT_COLUMNS = new Set([
+const FLAG_COLUMNS = ['enabled', 'precommitFixEnabled', 'testEnabled', 'testFixEnabled'] as const;
+const NULLABLE_TEXT_COLUMNS = [
   'reviewerPrompt',
   'correctorPrompt',
   'precommitFixerPrompt',
   'commitMessagePrompt',
   'testCommand',
   'testFixerPrompt',
-]);
+] as const;
 
 const notFound = () => err(failure(404, 'Pipeline not found'));
 

@@ -93,17 +93,20 @@ export function trailingAssistantScaffoldStart(
   return index;
 }
 
-export function buildDequeuedUserMessage(
-  threadId: string,
-  dequeuedMsg: DequeuedMessageBuffer,
-): {
+/** The synthetic user message shown for a dequeued follow-up. */
+interface DequeuedUserMessage {
   id: string;
   threadId: string;
   role: MessageRole;
   content: string;
   images?: ImageAttachment[];
   timestamp: string;
-} {
+}
+
+export function buildDequeuedUserMessage(
+  threadId: string,
+  dequeuedMsg: DequeuedMessageBuffer,
+): DequeuedUserMessage {
   return {
     id: `${DEQUEUED_MESSAGE_ID_PREFIX}${crypto.randomUUID()}`,
     threadId,

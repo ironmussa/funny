@@ -26,7 +26,7 @@ const TITLES: Record<NonNullable<SandboxErrorData['phase']>, string> = {
 };
 
 /** True for a string value. */
-function isString(value: unknown): value is string {
+function isString(value: ThreadEvent['data']): value is string {
   return typeof value === 'string';
 }
 

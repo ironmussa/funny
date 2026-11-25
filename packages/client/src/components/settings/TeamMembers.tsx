@@ -1,6 +1,6 @@
 import type { TeamRole } from '@funny/shared';
 import { Copy, Check, Link, MailWarning, Send, Trash2, UserMinus, X } from 'lucide-react';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, type Dispatch, type SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
@@ -73,28 +73,19 @@ interface InviteLink {
   createdAt: string;
 }
 
-export function TeamMembers() {
-  const { t } = useTranslation();
-  const now = useMinuteTick();
+/** Loads the organization's members, pending invitations, invite links and SMTP state. */
+function useTeamMembersData() {
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
-  const [removeConfirm, setRemoveConfirm] = useState<Member | null>(null);
-  const currentUser = useAuthStore((s) => s.user);
 
   // Invitation state
   const [invitations, setInvitations] = useState<PendingInvitation[]>([]);
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<InviteRole>('member');
-  const [sending, setSending] = useState(false);
 
   // SMTP config state
   const [smtpConfigured, setSmtpConfigured] = useState<boolean | null>(null);
 
   // Invite link state
   const [inviteLinks, setInviteLinks] = useState<InviteLink[]>([]);
-  const [linkRole, setLinkRole] = useState<InviteRole>('member');
-  const [creatingLink, setCreatingLink] = useState(false);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const loadMembers = useCallback(async () => {
     return withCleanup(
@@ -152,18 +143,48 @@ export function TeamMembers() {
     checkSmtpConfig();
   }, [loadMembers, loadInvitations, loadInviteLinks, checkSmtpConfig]);
 
-  const handleRoleChange = useCallback(async (memberId: string, newRole: TeamRole) => {
-    try {
-      await authClient.organization.updateMemberRole({
-        memberId,
-        role: newRole,
-      });
-      setMembers((prev) => prev.map((m) => (m.id === memberId ? { ...m, role: newRole } : m)));
-      toast.success('Role updated');
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to update role');
-    }
-  }, []);
+  return {
+    members,
+    setMembers,
+    loading,
+    invitations,
+    setInvitations,
+    loadInvitations,
+    smtpConfigured,
+    inviteLinks,
+    setInviteLinks,
+  };
+}
+
+export function TeamMembers() {
+  const {
+    members,
+    setMembers,
+    loading,
+    invitations,
+    setInvitations,
+    loadInvitations,
+    smtpConfigured,
+    inviteLinks,
+    setInviteLinks,
+  } = useTeamMembersData();
+  const [removeConfirm, setRemoveConfirm] = useState<Member | null>(null);
+
+  const handleRoleChange = useCallback(
+    async (memberId: string, newRole: TeamRole) => {
+      try {
+        await authClient.organization.updateMemberRole({
+          memberId,
+          role: newRole,
+        });
+        setMembers((prev) => prev.map((m) => (m.id === memberId ? { ...m, role: newRole } : m)));
+        toast.success('Role updated');
+      } catch (err: any) {
+        toast.error(err.message || 'Failed to update role');
+      }
+    },
+    [setMembers],
+  );
 
   const handleRemove = useCallback(async () => {
     if (!removeConfirm) return;
@@ -177,7 +198,68 @@ export function TeamMembers() {
       toast.error(err.message || 'Failed to remove member');
     }
     setRemoveConfirm(null);
-  }, [removeConfirm]);
+  }, [removeConfirm, setMembers]);
+
+  const handleCancelInvitation = useCallback(
+    async (invitationId: string) => {
+      try {
+        await authClient.organization.cancelInvitation({ invitationId });
+        setInvitations((prev) => prev.filter((i) => i.id !== invitationId));
+        toast.success('Invitation cancelled');
+      } catch (err: any) {
+        toast.error(err.message || 'Failed to cancel invitation');
+      }
+    },
+    [setInvitations],
+  );
+
+  if (loading) {
+    return <LoadingState padding="lg" fill={false} label="Loading members…" />;
+  }
+
+  return (
+    <>
+      <InviteMemberSection smtpConfigured={smtpConfigured} onInvited={loadInvitations} />
+
+      <InviteLinkSection inviteLinks={inviteLinks} setInviteLinks={setInviteLinks} />
+
+      <MembersSection
+        members={members}
+        onRoleChange={handleRoleChange}
+        onRemove={setRemoveConfirm}
+      />
+
+      <PendingInvitationsSection
+        invitations={invitations}
+        onCancelInvitation={handleCancelInvitation}
+      />
+
+      <ConfirmDialog
+        open={!!removeConfirm}
+        onOpenChange={(open) => {
+          if (!open) setRemoveConfirm(null);
+        }}
+        title="Remove Member"
+        description={`Remove ${removeConfirm?.user.name} from this organization? They will lose access to all team projects.`}
+        cancelLabel="Cancel"
+        confirmLabel="Remove"
+        onCancel={() => setRemoveConfirm(null)}
+        onConfirm={handleRemove}
+      />
+    </>
+  );
+}
+
+function InviteMemberSection({
+  smtpConfigured,
+  onInvited,
+}: {
+  smtpConfigured: boolean | null;
+  onInvited: () => Promise<void>;
+}) {
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<InviteRole>('member');
+  const [sending, setSending] = useState(false);
 
   const handleInvite = useCallback(async () => {
     if (!inviteEmail.trim()) return;
@@ -189,62 +271,12 @@ export function TeamMembers() {
         });
         toast.success(`Invitation sent to ${inviteEmail.trim()}`);
         setInviteEmail('');
-        await loadInvitations();
+        await onInvited();
       } catch (err: any) {
         toast.error(err.message || 'Failed to send invitation');
       }
     });
-  }, [inviteEmail, inviteRole, loadInvitations]);
-
-  const handleCreateLink = useCallback(async () => {
-    await whilePending(setCreatingLink, async () => {
-      try {
-        const result = await api.createInviteLink({ role: linkRole, expiresInDays: 7 });
-        if (result.isOk()) {
-          setInviteLinks((prev) => [result.value, ...prev]);
-          toast.success('Invite link created');
-        } else {
-          toast.error('Failed to create invite link');
-        }
-      } catch {
-        toast.error('Failed to create invite link');
-      }
-    });
-  }, [linkRole]);
-
-  const handleRevokeLink = useCallback(async (linkId: string) => {
-    const result = await api.revokeInviteLink(linkId);
-    if (result.isOk()) {
-      setInviteLinks((prev) => prev.filter((l) => l.id !== linkId));
-      toast.success('Invite link revoked');
-    } else {
-      toast.error('Failed to revoke invite link');
-    }
-  }, []);
-
-  const handleCopyLink = useCallback((link: InviteLink) => {
-    const url = `${window.location.origin}/invite/${link.token}`;
-    navigator.clipboard.writeText(url);
-    setCopiedId(link.id);
-    toast.success('Link copied to clipboard');
-    setTimeout(() => setCopiedId(null), 2000);
-  }, []);
-
-  const handleCancelInvitation = useCallback(async (invitationId: string) => {
-    try {
-      await authClient.organization.cancelInvitation({ invitationId });
-      setInvitations((prev) => prev.filter((i) => i.id !== invitationId));
-      toast.success('Invitation cancelled');
-    } catch (err: any) {
-      toast.error(err.message || 'Failed to cancel invitation');
-    }
-  }, []);
-
-  const ownerCount = members.filter((m) => m.role === 'owner').length;
-
-  if (loading) {
-    return <LoadingState padding="lg" fill={false} label="Loading members…" />;
-  }
+  }, [inviteEmail, inviteRole, onInvited]);
 
   return (
     <>
@@ -308,7 +340,62 @@ export function TeamMembers() {
           </div>
         </div>
       </div>
+    </>
+  );
+}
 
+function InviteLinkSection({
+  inviteLinks,
+  setInviteLinks,
+}: {
+  inviteLinks: InviteLink[];
+  setInviteLinks: Dispatch<SetStateAction<InviteLink[]>>;
+}) {
+  const { t } = useTranslation();
+  const now = useMinuteTick();
+  const [linkRole, setLinkRole] = useState<InviteRole>('member');
+  const [creatingLink, setCreatingLink] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const handleCreateLink = useCallback(async () => {
+    await whilePending(setCreatingLink, async () => {
+      try {
+        const result = await api.createInviteLink({ role: linkRole, expiresInDays: 7 });
+        if (result.isOk()) {
+          setInviteLinks((prev) => [result.value, ...prev]);
+          toast.success('Invite link created');
+        } else {
+          toast.error('Failed to create invite link');
+        }
+      } catch {
+        toast.error('Failed to create invite link');
+      }
+    });
+  }, [linkRole, setInviteLinks]);
+
+  const handleRevokeLink = useCallback(
+    async (linkId: string) => {
+      const result = await api.revokeInviteLink(linkId);
+      if (result.isOk()) {
+        setInviteLinks((prev) => prev.filter((l) => l.id !== linkId));
+        toast.success('Invite link revoked');
+      } else {
+        toast.error('Failed to revoke invite link');
+      }
+    },
+    [setInviteLinks],
+  );
+
+  const handleCopyLink = useCallback((link: InviteLink) => {
+    const url = `${window.location.origin}/invite/${link.token}`;
+    navigator.clipboard.writeText(url);
+    setCopiedId(link.id);
+    toast.success('Link copied to clipboard');
+    setTimeout(() => setCopiedId(null), 2000);
+  }, []);
+
+  return (
+    <>
       {/* Invite link */}
       <SettingsSection settingId="team-members.invite-link">Invite Link</SettingsSection>
       <div className="settings-card">
@@ -398,7 +485,24 @@ export function TeamMembers() {
           )}
         </div>
       </div>
+    </>
+  );
+}
 
+function MembersSection({
+  members,
+  onRoleChange,
+  onRemove,
+}: {
+  members: Member[];
+  onRoleChange: (memberId: string, newRole: TeamRole) => void;
+  onRemove: (member: Member) => void;
+}) {
+  const currentUser = useAuthStore((s) => s.user);
+  const ownerCount = members.filter((m) => m.role === 'owner').length;
+
+  return (
+    <>
       {/* Members list */}
       <SettingsSection settingId="team-members.members">Members ({members.length})</SettingsSection>
       <div className="settings-card">
@@ -436,7 +540,7 @@ export function TeamMembers() {
               <div className="flex items-center gap-2">
                 <Select
                   value={member.role}
-                  onValueChange={(v) => handleRoleChange(member.id, v as TeamRole)}
+                  onValueChange={(v) => onRoleChange(member.id, v as TeamRole)}
                   disabled={isLastOwner && member.role === 'owner'}
                 >
                   <SelectTrigger
@@ -457,7 +561,7 @@ export function TeamMembers() {
                   variant="muted-destructive"
                   size="icon"
                   className="size-8"
-                  onClick={() => setRemoveConfirm(member)}
+                  onClick={() => onRemove(member)}
                   disabled={isLastOwner}
                   data-testid={`team-member-remove-${member.userId}`}
                 >
@@ -468,52 +572,47 @@ export function TeamMembers() {
           );
         })}
       </div>
+    </>
+  );
+}
 
-      {/* Pending invitations */}
-      {invitations.length > 0 && (
-        <>
-          <SettingsSection settingId="team-members.pending">
-            Pending Invitations ({invitations.length})
-          </SettingsSection>
-          <div className="settings-card">
-            {invitations.map((inv) => (
-              <div key={inv.id} className="settings-row" data-testid={`team-invitation-${inv.id}`}>
-                <div className="min-w-0">
-                  <p className="text-foreground truncate text-sm">{inv.email}</p>
-                  <p className="text-muted-foreground text-xs">
-                    Expires {new Date(inv.expiresAt).toLocaleDateString()}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Badge variant="secondary">{inv.role}</Badge>
-                  <Button
-                    variant="muted-destructive"
-                    size="icon"
-                    className="size-7"
-                    onClick={() => handleCancelInvitation(inv.id)}
-                    data-testid={`team-invitation-cancel-${inv.id}`}
-                  >
-                    <X className="icon-sm" />
-                  </Button>
-                </div>
-              </div>
-            ))}
+function PendingInvitationsSection({
+  invitations,
+  onCancelInvitation,
+}: {
+  invitations: PendingInvitation[];
+  onCancelInvitation: (invitationId: string) => void;
+}) {
+  if (invitations.length === 0) return null;
+  return (
+    <>
+      <SettingsSection settingId="team-members.pending">
+        Pending Invitations ({invitations.length})
+      </SettingsSection>
+      <div className="settings-card">
+        {invitations.map((inv) => (
+          <div key={inv.id} className="settings-row" data-testid={`team-invitation-${inv.id}`}>
+            <div className="min-w-0">
+              <p className="text-foreground truncate text-sm">{inv.email}</p>
+              <p className="text-muted-foreground text-xs">
+                Expires {new Date(inv.expiresAt).toLocaleDateString()}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary">{inv.role}</Badge>
+              <Button
+                variant="muted-destructive"
+                size="icon"
+                className="size-7"
+                onClick={() => onCancelInvitation(inv.id)}
+                data-testid={`team-invitation-cancel-${inv.id}`}
+              >
+                <X className="icon-sm" />
+              </Button>
+            </div>
           </div>
-        </>
-      )}
-
-      <ConfirmDialog
-        open={!!removeConfirm}
-        onOpenChange={(open) => {
-          if (!open) setRemoveConfirm(null);
-        }}
-        title="Remove Member"
-        description={`Remove ${removeConfirm?.user.name} from this organization? They will lose access to all team projects.`}
-        cancelLabel="Cancel"
-        confirmLabel="Remove"
-        onCancel={() => setRemoveConfirm(null)}
-        onConfirm={handleRemove}
-      />
+        ))}
+      </div>
     </>
   );
 }

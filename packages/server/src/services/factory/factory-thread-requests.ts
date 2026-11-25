@@ -24,6 +24,7 @@ import { z } from 'zod';
 import { db } from '../../db/index.js';
 import { threads } from '../../db/schema.js';
 import { log } from '../../lib/logger.js';
+import type { BrowserEvent } from '../runner-ports.js';
 import type { RunnerPorts } from '../runner-thread-launcher.js';
 import { sendToThreadRunner, type ThreadRunnerError } from '../thread-runner-requests.js';
 import { sandboxWaker } from '../thread-sandboxes/sandbox-lifecycle.js';
@@ -31,13 +32,20 @@ import {
   clearThreadWorkspace,
   requestThreadWorkspaceCleanup,
 } from '../thread-workspace-cleanup.js';
-import { cancelRunnerJob, pollRunnerJob, startRunnerJob } from './factory-runner-jobs.js';
+import type { StepAgentBody } from './factory-action-provider.js';
+import {
+  cancelRunnerJob,
+  pollRunnerJob,
+  startRunnerJob,
+  type FactoryStepJobBody,
+  type RegressionProofJobBody,
+} from './factory-runner-jobs.js';
 
 const ACTIVE_STATUSES = ['running', 'waiting', 'pending', 'setting_up'];
 
 /** Where the cleanup announces a changed thread row to its owner's browsers. */
 export interface BrowserEventsPort {
-  toUser(userId: string, event: Record<string, unknown>): void;
+  toUser(userId: string, event: BrowserEvent): void;
 }
 
 /** POST `path` (a thread route) to the thread's runner, as `userId`. */
@@ -58,7 +66,7 @@ export function startRegressionProofOnRunner(
   ports: RunnerPorts,
   userId: string,
   threadId: string,
-  body: Record<string, unknown>,
+  body: RegressionProofJobBody,
 ): Promise<Result<{ proofId: string; state: string }, string>> {
   return startRunnerJob(
     ports,
@@ -91,7 +99,7 @@ export function startFactoryStepOnRunner(
   ports: RunnerPorts,
   userId: string,
   threadId: string,
-  body: Record<string, unknown>,
+  body: FactoryStepJobBody,
 ): Promise<Result<{ stepId: string; state: string }, string>> {
   return startRunnerJob(
     ports,
@@ -163,9 +171,10 @@ export async function stopFactoryThreads(
   }
 }
 
-/** Field → value of a follow-up message body sent to the runner. */
-interface FollowUpMessageBody {
-  [field: string]: unknown;
+/** The runner's `POST /api/threads/:id/message` body a factory follow-up sends (`sendMessageSchema`). */
+interface FollowUpMessageBody extends Partial<StepAgentBody> {
+  content: string;
+  expectedBranch?: string;
 }
 
 /**
@@ -184,7 +193,7 @@ export async function sendFactoryFollowUp(
    * The step's agent options (provider, model, permission mode, effort, tool
    * lists): every step sends its own, so one step's never carry to the next.
    */
-  options?: Record<string, unknown>,
+  options?: Partial<StepAgentBody>,
 ): Promise<Result<void, string>> {
   const [thread] = await db
     .select({ id: threads.id })

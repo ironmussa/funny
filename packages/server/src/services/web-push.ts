@@ -4,6 +4,7 @@ import webpush from 'web-push';
 
 import { db, dbAll, dbGet, dbRun } from '../db/index.js';
 import { pushSubscriptions, threads } from '../db/schema.js';
+import type { BrowserEvent } from './runner-ports.js';
 
 // The endpoint check is shared with the tRPC inputs (`@funny/shared/contracts/push`).
 export { isPushEndpoint };
@@ -78,7 +79,7 @@ export async function sendPush(
   return sent;
 }
 
-export async function pushAgentResult(userId: string, event: Record<string, unknown>) {
+export async function pushAgentResult(userId: string, event: BrowserEvent) {
   if (!pushConfig() || event.type !== 'agent:result' || typeof event.threadId !== 'string') return;
   // SAFETY: data is read only as `data?.status` and compared by includes() with string
   // literals below, which accepts any value.

@@ -38,6 +38,7 @@ import {
 } from '../agent-runner-control.js';
 import { cleanupExternalThread } from '../ingest-mapper.js';
 import { invalidateThreadCache } from '../remote-thread-data-client.js';
+import type { RuntimeThreadUpdate } from '../server-interfaces.js';
 import { getServices } from '../service-registry.js';
 import { resolveThreadCwd } from '../thread-context.js';
 import * as tm from '../thread-manager.js';
@@ -334,8 +335,8 @@ function isChanged(next: string | undefined, current: string | null | undefined)
 function collectThreadSettingUpdates(
   params: SendMessageParams,
   thread: SendThread,
-): Record<string, any> {
-  const updates: Record<string, any> = {};
+): RuntimeThreadUpdate {
+  const updates: RuntimeThreadUpdate = {};
   const modelChanged = isChanged(params.model, thread.model);
   const providerChanged = isChanged(params.provider, thread.provider);
 
@@ -381,7 +382,7 @@ async function promoteIdleThread(
 ): Promise<{ hasDraft: boolean; draftImages?: ImageAttachment[] }> {
   if (thread.status !== 'idle') return { hasDraft: false };
 
-  const stageUpdates: Record<string, any> = {};
+  const stageUpdates: RuntimeThreadUpdate = {};
   if (thread.stage !== 'in_progress') stageUpdates.stage = 'in_progress';
   if (!thread.initialPrompt || params.content !== thread.initialPrompt) {
     stageUpdates.title = params.content.slice(0, 200);
@@ -681,7 +682,7 @@ async function upgradePlanToAutoEdit(threadId: string, userId: string): Promise<
 
 async function handleShellEscapeMessage(
   params: SendMessageParams,
-  thread: Record<string, any>,
+  thread: SendThread,
   cwd: string,
   command: string,
 ): Promise<SendMessageResult> {

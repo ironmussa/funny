@@ -8,6 +8,7 @@
  * Persists git operation events to the database and broadcasts thread:event WS events.
  */
 
+import type { ThreadEventData } from '../server-interfaces.js';
 import type {
   GitCommittedEvent,
   GitPushedEvent,
@@ -28,7 +29,7 @@ function broadcastThreadEvent(
   userId: string,
   threadId: string,
   type: string,
-  data: Record<string, unknown>,
+  data: ThreadEventData,
 ) {
   const id = crypto.randomUUID();
   const createdAt = new Date().toISOString();

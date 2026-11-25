@@ -21,9 +21,15 @@ export interface WorkerCounters {
   live: number;
 }
 
-const byKind = new Map<string, { created: number; terminated: number }>();
+/** Workers created and terminated so far, for one worker kind. */
+interface WorkerBucket {
+  created: number;
+  terminated: number;
+}
 
-function bucket(kind: string): { created: number; terminated: number } {
+const byKind = new Map<string, WorkerBucket>();
+
+function bucket(kind: string): WorkerBucket {
   const existing = byKind.get(kind);
   if (existing) return existing;
   const fresh = { created: 0, terminated: 0 };

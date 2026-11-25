@@ -27,6 +27,25 @@ import type { GitPipelineContext } from './context.js';
 import { unwrapGit } from './node-helpers.js';
 import { attemptPrecommitAutoFix, HookFailedError } from './precommit-autofix.js';
 
+/** A hook of a `workflow:hooks` failure event. */
+type FailedHookEventItem = {
+  label: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  error?: string;
+};
+
+/** An absent error is left out of the event, as the JSON payload always did. */
+function failedHookEventItem(
+  hook: Omit<FailedHookEventItem, 'error'> & { error: string | undefined },
+): FailedHookEventItem {
+  const item: FailedHookEventItem = {
+    label: hook.label,
+    status: hook.status,
+  };
+  if (hook.error !== undefined) item.error = hook.error;
+  return item;
+}
+
 // ── Stage nodes ──────────────────────────────────────────────
 
 async function unstageNode(ctx: GitPipelineContext): Promise<GitPipelineContext> {
@@ -145,11 +164,7 @@ async function hooksNode(ctx: GitPipelineContext): Promise<GitPipelineContext> {
           await emitWorkflowEvent(ctx.userId, ctx.threadId, 'workflow:hooks', {
             workflowId: ctx.workflowId,
             status: 'failed',
-            hooks: failedSubItems.map((s) => ({
-              label: s.label,
-              status: s.status,
-              error: s.error,
-            })),
+            hooks: failedSubItems.map(failedHookEventItem),
             failedHook: ctx.hooks[i].label,
           });
         }

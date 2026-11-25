@@ -27,7 +27,12 @@ import {
 import type { Server as SocketIOServer } from 'socket.io';
 
 import { log } from '../lib/logger.js';
-import type { BrowserDeliveryClass, BrowserEventSink, BrowserPublication } from './runner-ports.js';
+import type {
+  BrowserDeliveryClass,
+  BrowserEvent,
+  BrowserEventSink,
+  BrowserPublication,
+} from './runner-ports.js';
 import {
   SocketIoBrowserEventSink,
   threadPresenceRoom,
@@ -61,7 +66,7 @@ export function setBrowserEventSink(sink: BrowserEventSink | null): void {
  * Relay an event from a runner to all browser clients of a specific user.
  * Uses Socket.IO rooms for delivery.
  */
-export function relayToUser(userId: string, event: Record<string, unknown>): void {
+export function relayToUser(userId: string, event: BrowserEvent): void {
   if (event.type === 'agent:result') {
     void pushAgentResult(userId, event).catch(() => log.warn('Web Push result delivery failed'));
   }
@@ -70,7 +75,7 @@ export function relayToUser(userId: string, event: Record<string, unknown>): voi
     browserEvents?.publish(terminal);
     return;
   }
-  if (typeof event.type === 'string' && event.type.startsWith('browser-session:')) {
+  if (event.type.startsWith('browser-session:')) {
     // Browser-session events travel only as browser.v1; one without a typed
     // mapping is dropped, never sent as a legacy event.
     const browserSession = browserSessionPublication(userId, event);
@@ -101,7 +106,8 @@ function jsonValue(value: unknown, seen: WeakSet<object>): JsonValue {
   );
 }
 
-type BrowserSessionData = Record<string, unknown>;
+/** A runner's browser-session event data: a decoded protobuf `Struct`. */
+type BrowserSessionData = JsonObject;
 
 interface BrowserSessionDelivery {
   deliveryClass: DeliveryClass;
@@ -175,7 +181,7 @@ function optionalPixel(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? Math.round(value) : undefined;
 }
 
-function agentActionValue(data: Record<string, unknown>) {
+function agentActionValue(data: BrowserSessionData) {
   return {
     kind: AGENT_ACTION_KINDS[String(data.kind)] ?? BrowserSessionAgentActionKind.UNSPECIFIED,
     x: optionalPixel(data.x),
@@ -256,8 +262,10 @@ function frameMapping({ userId, sessionId, data }: BrowserSessionContext): Brows
   );
 }
 
-function dialogValue(dialog: BrowserSessionData | null | undefined) {
-  if (!dialog) return undefined;
+function dialogValue(value: JsonValue | undefined) {
+  if (!value) return undefined;
+  const dialog: BrowserSessionData =
+    typeof value === 'object' && !Array.isArray(value) ? value : {};
   return {
     type: String(dialog.type ?? ''),
     message: String(dialog.message ?? ''),
@@ -321,9 +329,7 @@ const BROWSER_SESSION_MAPPERS = new Map<string, BrowserSessionMapper>([
     ({ data }) =>
       sessionMapping({
         case: 'dialog',
-        // SAFETY: dialogValue returns undefined for a falsy dialog and reads its fields only
-        // through String() / stringOrUndefined, which accept a field of any value.
-        value: { dialog: dialogValue(data.dialog as BrowserSessionData | null | undefined) },
+        value: { dialog: dialogValue(data.dialog) },
       }),
   ],
   [
@@ -403,16 +409,14 @@ const BROWSER_SESSION_MAPPERS = new Map<string, BrowserSessionMapper>([
   ],
 ]);
 
-function eventData(event: Record<string, unknown>): BrowserSessionData {
-  // SAFETY: the typeof check proves event.data is a non-null object; its fields stay unknown.
+function eventData(event: BrowserEvent): BrowserSessionData {
+  // SAFETY: a `browser-session:*` event reaches the relay only from a runner
+  // (`isRunnerUserEventType`), whose event data is a decoded protobuf Struct.
   return event.data && typeof event.data === 'object' ? (event.data as BrowserSessionData) : {};
 }
 
-function browserSessionPublication(
-  userId: string,
-  event: Record<string, unknown>,
-): BrowserPublication | null {
-  const type = typeof event.type === 'string' ? event.type : '';
+function browserSessionPublication(userId: string, event: BrowserEvent): BrowserPublication | null {
+  const { type } = event;
   const mapper = BROWSER_SESSION_MAPPERS.get(type);
   if (!mapper) return null;
   const data = eventData(event);
@@ -440,13 +444,21 @@ function browserSessionPublication(
   };
 }
 
-function terminalPublication(
-  userId: string,
-  event: Record<string, unknown>,
-): import('./runner-ports.js').BrowserPublication | null {
-  const type = typeof event.type === 'string' ? event.type : '';
+/**
+ * The data of a `pty:data` / `pty:exit` / `pty:error` event: the server's
+ * terminal dispatcher sends `WSPty*Data` with a bigint output sequence, a
+ * runner's agent event a decoded protobuf Struct.
+ */
+type TerminalEventData = Partial<
+  Record<'ptyId' | 'data' | 'sequence' | 'exitCode' | 'error', JsonValue | bigint | Uint8Array>
+>;
+
+function terminalPublication(userId: string, event: BrowserEvent): BrowserPublication | null {
+  const { type } = event;
   if (type !== 'pty:data' && type !== 'pty:exit' && type !== 'pty:error') return null;
-  const data = eventData(event);
+  const data: TerminalEventData =
+    // SAFETY: see TerminalEventData; every field it names is read with a type check.
+    event.data && typeof event.data === 'object' ? (event.data as TerminalEventData) : {};
   const terminalId = typeof data.ptyId === 'string' ? data.ptyId : '';
   if (!terminalId) return null;
   const payload =
@@ -490,7 +502,7 @@ function terminalPublication(
     // Keep the exact sequence in protobuf and use a decimal string for JSON.
     legacyEvent:
       typeof data.sequence === 'bigint'
-        ? { ...event, data: { ...data, sequence: data.sequence.toString() } }
+        ? { ...event, data: { ...event.data, sequence: data.sequence.toString() } }
         : event,
     browserV1Interactive: create(InteractiveEnvelopeSchema, {
       delivery: create(DeliveryMetadataSchema, { deliveryClass: DeliveryClass.DURABLE }),
@@ -502,7 +514,7 @@ function terminalPublication(
 /**
  * Relay an event to all browser clients (broadcast).
  */
-export function broadcast(event: Record<string, unknown>): void {
+export function broadcast(event: BrowserEvent): void {
   browserEvents?.toAll(event);
 }
 
@@ -521,7 +533,7 @@ export function broadcast(event: Record<string, unknown>): void {
 //                          presence (awareness) events, never the agent stream.
 
 /** Mirror an in-thread agent event to the sharee-only stream room. */
-export function relayToThreadStream(threadId: string, event: Record<string, unknown>): void {
+export function relayToThreadStream(threadId: string, event: BrowserEvent): void {
   browserEvents?.toThreadStream(threadId, event);
 }
 

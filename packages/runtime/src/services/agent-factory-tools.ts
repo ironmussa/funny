@@ -125,6 +125,12 @@ export function describeRun(run: RunSummary): string {
   return lines.join('\n');
 }
 
+/** The run fields a factory tool sends; the thread id comes from the tool's context. */
+interface FactoryToolPayload {
+  runId?: string;
+  action?: 'retry' | 'stop';
+}
+
 /** The server's refusal as a tool error, or null when it answered. */
 function refusal(response: any, fallback: string): AgentToolResult | null {
   if (response && typeof response === 'object' && !response.error && response.success !== false) {
@@ -143,7 +149,7 @@ export function factoryToolDefinitions(
   /** Send one factory message for this thread; a transport failure is a tool error. */
   const ask = async (
     type: string,
-    payload: Record<string, unknown>,
+    payload: FactoryToolPayload,
     fallback: string,
   ): Promise<{ response: any; error: AgentToolResult | null }> => {
     try {

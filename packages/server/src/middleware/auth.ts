@@ -353,9 +353,7 @@ async function sessionStep(c: Context<ServerEnv>, path: string): Promise<AuthSte
  * least-privileged role instead of being stored verbatim.
  */
 function resolveSessionRole(user: any) {
-  const rawRole: unknown =
-    // SAFETY: the typeof check on the left guarantees `user` is a non-null object.
-    user && typeof user === 'object' ? (user as Record<string, unknown>).role : undefined;
+  const rawRole: unknown = user && typeof user === 'object' ? user.role : undefined;
   const role = normalizeUserRole(rawRole);
   if (rawRole !== undefined && typeof rawRole === 'string' && rawRole !== role) {
     log.warn('Unknown session role — coerced to user', {

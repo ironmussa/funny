@@ -105,11 +105,6 @@ export async function getRunnerForThread(
   return { runnerId: row.runnerId };
 }
 
-/** Thread column → the value a status report writes to it. */
-interface ThreadStatusUpdates {
-  [column: string]: unknown;
-}
-
 /**
  * Update thread status (called when runner reports agent status changes).
  */
@@ -118,7 +113,7 @@ export async function updateThreadStatus(
   status: string,
   stage?: string,
 ): Promise<void> {
-  const updates: ThreadStatusUpdates = { status };
+  const updates: Partial<typeof threads.$inferInsert> = { status };
   if (stage) updates.stage = stage;
   if (status === 'completed' || status === 'error') {
     updates.completedAt = new Date().toISOString();

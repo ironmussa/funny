@@ -16,16 +16,26 @@ import {
   getIgnoredFileStats,
   getExternalRepoFileStats,
 } from '@funny/core/git';
-import type { FileDiffSummary } from '@funny/shared';
+import type { ChangedFilesSummaryEventData, FileDiffSummary } from '@funny/shared';
 import { latestSessionChanges } from '@funny/shared';
 
 import { log } from '../../lib/logger.js';
 import { computeBranchKey } from '../../utils/git-status-helpers.js';
+import type { ThreadEventData } from '../server-interfaces.js';
 import { getServices } from '../service-registry.js';
 import { canDoGitOps } from '../thread-context.js';
 import type { MessageHandlerContext } from './context.js';
 import { backfillStats } from './helpers.js';
 
+/** `summary` as a thread event payload: the same fields, as plain JSON objects. */
+function changedFilesSummaryEventData(summary: ChangedFilesSummaryEventData): ThreadEventData {
+  return {
+    userMessageId: summary.userMessageId,
+    files: summary.files.map(({ nestedDirty, ...file }) =>
+      nestedDirty ? { ...file, nestedDirty: { ...nestedDirty } } : { ...file },
+    ),
+  };
+}
 /** How many of the newest messages `loadLatestTurn` reads first. */
 export const LATEST_TURN_WINDOW = 100;
 
@@ -147,8 +157,7 @@ export async function persistChangedFilesSummary(
   await getServices().threadEvents.saveThreadEvent(
     threadId,
     'changed_files_summary',
-    // A spread copy has the same fields and, unlike the interface, satisfies the record type.
-    { ...summary },
+    changedFilesSummaryEventData(summary),
   );
 
   await ctx.emitWS(threadId, 'thread:event', {

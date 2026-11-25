@@ -26,8 +26,12 @@ import type {
   BrowserSessionClosedReason,
   BrowserSessionAgentAction,
   BrowserSessionPointerKind,
+  WSBrowserSessionConsoleData,
+  WSBrowserSessionErrorData,
   WSBrowserSessionInputData,
+  WSBrowserSessionReadyData,
   WSBrowserSessionResultData,
+  WSEvent,
 } from '@funny/shared';
 import { threadBrowserSessionId, threadIdFromBrowserSessionId } from '@funny/shared';
 import type { Page } from 'playwright';
@@ -68,6 +72,9 @@ import { wsBroker } from './ws-broker.js';
 export { panelViewportSize } from './browser-session/panel-input.js';
 export type { BrowserSession } from './browser-session/session-record.js';
 
+/** The realtime events a browser session sends to its user. */
+type BrowserSessionWSEvent = Extract<WSEvent, { type: `browser-session:${string}` }>;
+
 class BrowserSessionManager {
   private sessions = new Map<string, BrowserSession>();
   /** In-flight first opens, keyed by session id — see `open()`. */
@@ -80,10 +87,11 @@ class BrowserSessionManager {
   });
   private reaperTimer: ReturnType<typeof setInterval> | null = null;
 
-  private emit(
+  private emit<T extends BrowserSessionWSEvent['type']>(
     s: { userId: string; threadId: string | null },
-    type: string,
-    data: Record<string, unknown>,
+    type: T,
+    // The session's thread binding is added below.
+    data: Omit<Extract<BrowserSessionWSEvent, { type: T }>['data'], 'threadId'>,
   ): void {
     // The envelope keeps `threadId: ''` (browser-session events are user-scoped);
     // the thread binding travels inside `data` for the panel to route on.
@@ -99,13 +107,16 @@ class BrowserSessionManager {
    * only carries the URL, so the viewport must also travel on its own.
    */
   private emitReady(s: BrowserSession): void {
-    this.emit(s, 'browser-session:ready', {
+    // The panel also reads who controls the page and the audio state on attach.
+    const ready: Omit<WSBrowserSessionReadyData, 'threadId'> &
+      Pick<BrowserSession, 'controller' | 'audioMuted'> = {
       sessionId: s.sessionId,
       url: s.url,
       viewport: s.viewport,
       controller: s.controller,
       audioMuted: s.audioMuted,
-    });
+    };
+    this.emit(s, 'browser-session:ready', ready);
     this.emit(s, 'browser-session:viewport', { sessionId: s.sessionId, ...s.viewport });
     // A re-attaching panel starts from defaults: restate who controls the page
     // and any dialog still waiting for an answer.
@@ -452,11 +463,11 @@ class BrowserSessionManager {
         timestamp: frame.timestamp,
       });
     });
-    chromeSession.on('console', (entry: Record<string, unknown>) => {
+    chromeSession.on('console', (entry: Omit<WSBrowserSessionConsoleData, 'sessionId'>) => {
       if (s.chromeSession !== chromeSession) return;
       this.emit(s, 'browser-session:console', { sessionId: s.sessionId, ...entry });
     });
-    chromeSession.on('error', (err: { message: string } & Record<string, unknown>) => {
+    chromeSession.on('error', (err: Omit<WSBrowserSessionErrorData, 'sessionId'>) => {
       if (s.chromeSession !== chromeSession) return;
       this.emit(s, 'browser-session:error', { sessionId: s.sessionId, ...err });
     });

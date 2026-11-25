@@ -39,6 +39,12 @@ type TitleReferenceMatch =
       reference: GitHubPullRequestReference;
     };
 
+/** A thread title to display, and the files attached to it. */
+interface CleanThreadTitle {
+  displayTitle: string;
+  attachedFiles: ReferencedItem[];
+}
+
 /**
  * Strip the leading `<referenced-files>` XML block (added when files are
  * attached via the paperclip) from a thread title and surface the attached
@@ -49,10 +55,7 @@ type TitleReferenceMatch =
  * - Title with a malformed/unterminated block → falls back to a sanitized
  *   single-line preview so we never render raw XML to users.
  */
-export function cleanThreadTitle(title: string): {
-  displayTitle: string;
-  attachedFiles: ReferencedItem[];
-} {
+export function cleanThreadTitle(title: string): CleanThreadTitle {
   const { files, cleanContent } = parseReferencedFiles(title);
   const cleaned = cleanContent.trim();
   const containsRawXml = /<referenced-files\b|<file\s+path=/i.test(cleaned);
@@ -251,6 +254,12 @@ export function parseThreadTitleForDisplay(title: string): ParsedThreadTitle {
   };
 }
 
+/** A title's leading slash command (if any), and the rest of the title. */
+interface LeadingSlashCommand {
+  command: string | null;
+  rest: string;
+}
+
 /**
  * Detect a leading `/slash-command` at the very start of a (already cleaned)
  * thread title. Returns the command name (without the leading slash) and the
@@ -260,10 +269,7 @@ export function parseThreadTitleForDisplay(title: string): ParsedThreadTitle {
  * Mirrors the slash-command grammar used by the prompt editor / UserMessageCard
  * (word chars, colons, dots, hyphens — e.g. `/skill-creator:skill-creator`).
  */
-export function parseLeadingSlashCommand(title: string): {
-  command: string | null;
-  rest: string;
-} {
+export function parseLeadingSlashCommand(title: string): LeadingSlashCommand {
   const parsed = parseLeadingPromptCommand(title);
   if (parsed.kind !== 'slash') return { command: null, rest: title };
   return { command: parsed.command, rest: parsed.rest };
@@ -271,17 +277,20 @@ export function parseLeadingSlashCommand(title: string): {
 
 export type LeadingPromptCommandKind = 'slash' | 'shell' | null;
 
+/** A title's leading command (if any), its kind, and the rest of the title. */
+interface LeadingPromptCommand {
+  kind: LeadingPromptCommandKind;
+  command: string | null;
+  rest: string;
+}
+
 /**
  * Detect leading command-like prefixes in a thread title.
  *
  * `/name rest` is a slash/skill command. `! command` is a command-line prompt
  * and consumes the rest of the title as the shell command.
  */
-export function parseLeadingPromptCommand(title: string): {
-  kind: LeadingPromptCommandKind;
-  command: string | null;
-  rest: string;
-} {
+export function parseLeadingPromptCommand(title: string): LeadingPromptCommand {
   const shellMatch = /^!\s*(\S.*)$/.exec(title);
   if (shellMatch) return { kind: 'shell', command: shellMatch[1].trim(), rest: '' };
 

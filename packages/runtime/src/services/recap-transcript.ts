@@ -14,6 +14,7 @@
  * produce a bounded input.
  */
 
+import type { JsonObject } from '@bufbuild/protobuf';
 import { parseStoredJson, type JsonValue } from '@funny/shared/json-validation';
 import { z } from 'zod';
 
@@ -113,9 +114,10 @@ export function summarizeToolInput(raw: string | null | undefined): string {
   if (input && typeof input === 'object' && !Array.isArray(input)) {
     const question = questionText(input);
     if (question) return clip(oneLine(question), TOOL_INPUT_SUMMARY_CHARS);
-    const record = input as Record<string, unknown>;
+    // SAFETY: `input` is parsed JSON (parseInput) and a non-array object.
+    const fields = input as JsonObject;
     for (const key of INPUT_SUMMARY_KEYS) {
-      const value = record[key];
+      const value = fields[key];
       if (typeof value === 'string' && value.trim()) {
         return clip(oneLine(value), TOOL_INPUT_SUMMARY_CHARS);
       }

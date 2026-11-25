@@ -50,6 +50,23 @@ function passesBranches(branch: string, patterns: string[]): boolean {
   return passes;
 }
 
+/** The filters of a workflow's `push` trigger this check reads. */
+interface PushFilters {
+  readonly branches?: unknown;
+  readonly 'branches-ignore'?: unknown;
+  readonly tags?: unknown;
+}
+
+/** Whether a `push` trigger's branch filters let a push to a queue branch run it. */
+function pushFiltersRunOnQueueBranch(filters: PushFilters): boolean {
+  const ignored = asList('branches-ignore' in filters ? filters['branches-ignore'] : undefined);
+  if (ignored.some((pattern) => matchesFilter(QUEUE_BRANCH, pattern))) return false;
+  const branches = asList('branches' in filters ? filters.branches : undefined);
+  // Only tags: no branch push runs it.
+  if (branches.length === 0) return !('tags' in filters) || 'branches-ignore' in filters;
+  return passesBranches(QUEUE_BRANCH, branches);
+}
+
 /** Whether one workflow file runs on a push to a queue branch. */
 export function workflowRunsOnQueueBranches(text: string): boolean {
   let workflow: unknown;
@@ -60,23 +77,16 @@ export function workflowRunsOnQueueBranches(text: string): boolean {
   }
   if (!workflow || typeof workflow !== 'object') return false;
   // YAML 1.1 readers turn the key `on` into `true`.
-  // SAFETY: the check above made workflow a non-null object; its keys are only read as unknown.
-  const record = workflow as Record<string, unknown>;
-  const on = record.on ?? record.true;
+  const on =
+    ('on' in workflow ? workflow.on : undefined) ??
+    ('true' in workflow ? workflow.true : undefined);
   if (on === 'push') return true;
   if (Array.isArray(on)) return on.includes('push');
   if (!on || typeof on !== 'object') return false;
   if (!('push' in on)) return false;
-  const push = on.push;
-  if (!push || typeof push !== 'object') return true;
-  // SAFETY: the check above made push a non-null object; its keys are only read as unknown.
-  const filters = push as Record<string, unknown>;
-  const ignored = asList(filters['branches-ignore']);
-  if (ignored.some((pattern) => matchesFilter(QUEUE_BRANCH, pattern))) return false;
-  const branches = asList(filters.branches);
-  // Only tags: no branch push runs it.
-  if (branches.length === 0) return !('tags' in filters) || 'branches-ignore' in filters;
-  return passesBranches(QUEUE_BRANCH, branches);
+  const filters = on.push;
+  if (!filters || typeof filters !== 'object') return true;
+  return pushFiltersRunOnQueueBranch(filters);
 }
 
 /** Whether any of the repository's workflows runs on a push to a queue branch. */

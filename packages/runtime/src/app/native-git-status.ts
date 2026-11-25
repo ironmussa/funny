@@ -1,8 +1,8 @@
 import type { NativeGitStatus } from '@funny/core/git';
 
 interface StatusLogger {
-  info(message: string, meta: Record<string, unknown>): unknown;
-  warn(message: string, meta: Record<string, unknown>): unknown;
+  info(message: string, meta: Record<string, unknown>): void;
+  warn(message: string, meta: Record<string, unknown>): void;
 }
 
 /**

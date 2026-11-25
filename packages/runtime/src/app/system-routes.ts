@@ -73,6 +73,14 @@ async function withExternalSession(
   return handler({ sessionId: c.req.param('sessionId') as string, userId });
 }
 
+/** The realtime events a native-git build sends to the user who started it. */
+type NativeGitBuildEventType = 'native-git:build_status' | 'native-git:build_output';
+
+type NativeGitBuildEventData =
+  | { status: 'building' }
+  | { status: 'completed' | 'failed'; exitCode: number }
+  | { text: string; channel: string };
+
 export function registerSystemRoutes(app: Hono<HonoEnv>): void {
   app.get('/api/health', (c) => {
     return c.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -422,7 +430,7 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
       return c.json({ error: 'Rust toolchain not available' }, 400);
     }
 
-    const emitBuild = (type: string, data: unknown) => {
+    const emitBuild = (type: NativeGitBuildEventType, data: NativeGitBuildEventData) => {
       wsBroker.emitToUser(userId, { type, threadId: '', data } as any);
     };
 

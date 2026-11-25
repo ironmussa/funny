@@ -3,6 +3,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { SearchBar } from '@/components/ui/search-bar';
+import { useAdjustOnChange } from '@/hooks/use-resettable-state';
 import { useStableCallback } from '@/hooks/use-stable-callback';
 import { api } from '@/lib/api';
 import { withCleanup } from '@/lib/while-pending';
@@ -45,6 +46,15 @@ function countOccurrences(haystack: string, needle: string, caseSensitive: boole
 
 function isPromise(value: void | Promise<void>): value is Promise<void> {
   return !!value && typeof value.then === 'function';
+}
+
+/** Takes the search handoff the list/board views left for `threadId`, if any. */
+function takePendingThreadSearch(threadId: string) {
+  const ui = useUIStore.getState();
+  const pending = ui.pendingThreadSearch;
+  if (pending?.threadId !== threadId) return null;
+  ui.setPendingThreadSearch(null);
+  return pending;
 }
 
 export function ThreadSearchBar({
@@ -134,18 +144,15 @@ export function ThreadSearchBar({
   }, [current, occurrences]);
 
   // Reset state when the bar closes (or the thread changes while it is closed)
-  const [prevBar, setPrevBar] = useState({ open, threadId });
-  if (prevBar.open !== open || prevBar.threadId !== threadId) {
-    setPrevBar({ open, threadId });
-    if (!open) {
-      setQuery('');
-      setCaseSensitive(false);
-      setResults([]);
-      setCurrent(null);
-      setMarkCounts(new Map());
-      setLoading(false);
-    }
-  }
+  useAdjustOnChange([open, threadId], () => {
+    if (open) return;
+    setQuery('');
+    setCaseSensitive(false);
+    setResults([]);
+    setCurrent(null);
+    setMarkCounts(new Map());
+    setLoading(false);
+  });
 
   const doSearch = useCallback(
     async (q: string, cs: boolean) => {
@@ -210,10 +217,8 @@ export function ThreadSearchBar({
   // The handoff lives in the UI store (outside React); the effect event reads
   // it with the latest `doSearch` when the bar opens or the thread changes.
   const consumePendingSearch = useStableCallback(() => {
-    const ui = useUIStore.getState();
-    const pending = ui.pendingThreadSearch;
-    if (!pending || pending.threadId !== threadId) return;
-    ui.setPendingThreadSearch(null);
+    const pending = takePendingThreadSearch(threadId);
+    if (!pending) return;
     setQuery(pending.query);
     setCaseSensitive(pending.caseSensitive);
     doSearch(pending.query, pending.caseSensitive);

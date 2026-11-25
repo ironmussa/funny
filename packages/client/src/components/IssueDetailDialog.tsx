@@ -36,20 +36,17 @@ type CommentsState =
 const NO_COMMENTS: CommentsState = { status: 'ready', comments: [] };
 const LOADING_COMMENTS: CommentsState = { status: 'loading' };
 
-/** Issue detail popup: description and comment thread, like the PR detail dialog. */
-export function IssueDetailDialog({
-  open,
-  onOpenChange,
-  projectId,
-  issue,
-  onCreateThread,
-}: IssueDetailDialogProps) {
-  const { t } = useTranslation();
-  const now = useMinuteTick();
-  const issueNumber = issue.number;
-  const commentCount = issue.comments;
-  // The comments are derived during render: an issue without comments needs no
-  // request, and a response only counts for the issue it was fetched for.
+/**
+ * The issue's comments while the dialog is open. They are derived during
+ * render: an issue without comments needs no request, and a response only
+ * counts for the issue it was fetched for.
+ */
+function useIssueComments(
+  open: boolean,
+  projectId: string,
+  issueNumber: number,
+  commentCount: number,
+): CommentsState {
   const requestKey = `${projectId}#${issueNumber}#${commentCount}`;
   const [fetched, setFetched] = useState<{ key: string; state: CommentsState } | null>(null);
   // Each opening starts from the loading state, as the dialog refetches.
@@ -86,6 +83,21 @@ export function IssueDetailDialog({
       cancelled = true;
     };
   }, [open, projectId, issueNumber, commentCount]);
+
+  return comments;
+}
+
+/** Issue detail popup: description and comment thread, like the PR detail dialog. */
+export function IssueDetailDialog({
+  open,
+  onOpenChange,
+  projectId,
+  issue,
+  onCreateThread,
+}: IssueDetailDialogProps) {
+  const { t } = useTranslation();
+  const now = useMinuteTick();
+  const comments = useIssueComments(open, projectId, issue.number, issue.comments);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

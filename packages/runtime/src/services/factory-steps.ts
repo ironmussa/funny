@@ -360,7 +360,8 @@ async function checkAndPush(
  * lane) or a push from elsewhere. Merging the base on the stale head would make
  * a commit that does not contain the branch's tip, and its push is refused as
  * non-fast-forward (found on issue #458). A branch not on origin yet is left
- * alone; one that diverged from it is refused, never overwritten.
+ * alone. One that diverged from it is refused, with one exception: a branch
+ * rewritten on origin (`rewrittenOnOrigin`), which the checkout then follows.
  */
 async function followRemoteBranch(
   cwd: string,
@@ -386,9 +387,7 @@ async function followRemoteBranch(
     cwd,
     reject: false,
   });
-  if (forward.exitCode !== 0) {
-    return `The checkout and origin/${request.branch} have diverged: the branch moved on GitHub while this checkout has commits it does not.`;
-  }
+  if (forward.exitCode !== 0) return followRewrittenBranch(cwd, request, remote, env);
   const moved = await gitWrite(['merge', '--ff-only', '--no-verify', remote], {
     cwd,
     env,
@@ -397,6 +396,61 @@ async function followRemoteBranch(
   if (moved.exitCode !== 0) {
     return `Could not fast-forward to origin/${request.branch}: ${moved.stderr.trim()}`;
   }
+  return null;
+}
+
+/**
+ * Whether the checkout holds nothing origin never had: its head is, or is
+ * behind, a commit the branch pointed at on origin before. Read from the
+ * remote-tracking ref's reflog, which keeps each value a fetch or a push gave
+ * it, so it holds whichever checkout of the repository fetched the rewrite.
+ */
+async function rewrittenOnOrigin(cwd: string, remote: string): Promise<boolean> {
+  const log = await gitRead(['log', '-g', '--format=%H', remote], { cwd, reject: false });
+  if (log.exitCode !== 0) return false;
+  for (const earlier of new Set(lines(log.stdout))) {
+    const held = await gitRead(['merge-base', '--is-ancestor', 'HEAD', earlier], {
+      cwd,
+      reject: false,
+    });
+    if (held.exitCode === 0) return true;
+  }
+  return false;
+}
+
+/**
+ * The checkout and origin diverged. When every commit of the checkout was on
+ * origin once, the branch was rewritten there (a rebase and a force push, seen
+ * on issue #479) and the checkout only holds the history origin dropped: it
+ * moves to origin's. A commit origin never had, or an uncommitted change, is
+ * work only this checkout has, and it is refused as before.
+ */
+async function followRewrittenBranch(
+  cwd: string,
+  request: IntegrateRequest,
+  remote: string,
+  env: Record<string, string>,
+): Promise<string | null> {
+  const diverged = `The checkout and origin/${request.branch} have diverged: the branch moved on GitHub while this checkout has`;
+  if (!(await rewrittenOnOrigin(cwd, remote))) return `${diverged} commits it does not.`;
+  const dirty = await gitRead(['status', '--porcelain', '--untracked-files=no'], {
+    cwd,
+    reject: false,
+  });
+  if (dirty.exitCode !== 0 || dirty.stdout.trim() !== '') {
+    return `${diverged} uncommitted changes.`;
+  }
+  const dropped = await headOf(cwd);
+  const moved = await gitWrite(['reset', '--hard', remote], { cwd, env, reject: false });
+  if (moved.exitCode !== 0) {
+    return `Could not move to origin/${request.branch}: ${moved.stderr.trim()}`;
+  }
+  log.warn('integrate followed a branch rewritten on origin', {
+    namespace: ns,
+    branch: request.branch,
+    droppedHead: dropped,
+    head: await headOf(cwd),
+  });
   return null;
 }
 

@@ -34,6 +34,13 @@ export interface StepProgressData {
   metadata?: { [key: string]: JsonValue };
 }
 
+/** Data payload for pipeline-level events. */
+export interface PipelineEventData {
+  workflowName?: string;
+  nodeName?: string;
+  error?: string;
+}
+
 /**
  * The ProgressReporter is the bridge for pipeline → UI communication.
  *
@@ -47,7 +54,7 @@ export interface ProgressReporter {
   /** Report that a step's status changed. */
   onStepProgress(stepId: string, data: StepProgressData): void;
   /** Report a pipeline-level event (started, completed, failed, etc.). */
-  onPipelineEvent(event: string, data: Record<string, unknown>): void;
+  onPipelineEvent(event: string, data: PipelineEventData): void;
 }
 
 /**

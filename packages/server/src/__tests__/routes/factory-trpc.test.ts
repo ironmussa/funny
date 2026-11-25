@@ -254,6 +254,44 @@ describe('factory over tRPC', () => {
     ).toBe(409);
   });
 
+  test('triage proposing a lint cleanup counts until a member says it is not one', async () => {
+    const { createFactoryRunsRepository } = await import('../../services/factory/factory-runs.js');
+    const { lintCleanupSource } = await import('@funny/shared/contracts/factory');
+    const run = await seededRun('working');
+    const runs = createFactoryRunsRepository();
+    await runs.update(run.id, {
+      triage: {
+        decision: 'ready',
+        at: '2026-11-25T00:00:00.000Z',
+        contract: {
+          acceptanceCriteria: ['no warnings'],
+          likelyPaths: [],
+          riskHints: [],
+          lintCleanup: true,
+        },
+      },
+    });
+    const proposed = (await runs.get(run.id))._unsafeUnwrap()!;
+    expect(proposed.riskWaiver).toBeNull();
+    expect(lintCleanupSource(proposed)).toBe('triage');
+
+    // The member overrules triage: stored, so the proposal stops counting.
+    const off = await mutate('alice', 'setLintCleanup', {
+      projectId: 'p1',
+      runId: run.id,
+      lintCleanup: false,
+    });
+    expect(off).toMatchObject({
+      status: 200,
+      body: { riskWaiver: { kind: 'not-lint-cleanup', userId: 'alice' } },
+    });
+    expect(lintCleanupSource((await runs.get(run.id))._unsafeUnwrap()!)).toBeNull();
+
+    // And back: the member's own word.
+    await mutate('alice', 'setLintCleanup', { projectId: 'p1', runId: run.id, lintCleanup: true });
+    expect(lintCleanupSource((await runs.get(run.id))._unsafeUnwrap()!)).toBe('member');
+  });
+
   test('a run that ended cannot be marked', async () => {
     const ended = await seededRun('merged');
     const marked = await mutate('alice', 'setLintCleanup', {

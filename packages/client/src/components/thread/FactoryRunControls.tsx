@@ -5,6 +5,7 @@
  * project's run list, the footer indicator's popover and the failure card in
  * the thread. Renders the buttons only; the caller lays them out.
  */
+import { lintCleanupSource } from '@funny/shared/contracts/factory';
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -89,7 +90,7 @@ function useLintCleanupAction(
     />
   );
   if (ENDED_FACTORY_STATES.has(run.state)) return { action: null, dialog: null };
-  if (run.riskWaiver) {
+  if (lintCleanupSource(run) !== null) {
     return {
       action: {
         id: 'lint-cleanup-off',

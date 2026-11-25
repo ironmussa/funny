@@ -37,6 +37,7 @@ import {
   type ConcurrencyGate,
   type MemoryGateOptions,
 } from '@funny/pipelines';
+import { lintCleanupSource } from '@funny/shared/contracts/factory';
 import type { NodeOutput, YamlPipelineContext } from '@funny/workflows/compiler';
 import { and, asc, desc, eq, gte, like } from 'drizzle-orm';
 import { err, ok, type Result } from 'neverthrow';
@@ -966,7 +967,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       maxLowRiskLines: job.factory.maxLowRiskLines,
       lintCleanup: async () => {
         const run = await deps.runs.get(job.run.id);
-        return run.isOk() && run.value?.riskWaiver?.kind === 'lint-cleanup';
+        return run.isOk() && run.value !== null && lintCleanupSource(run.value) !== null;
       },
       approvalAdjustMaxLines: job.factory.approvalAdjustMaxLines,
       sizeIgnoredPaths: job.factory.sizeIgnoredPaths,

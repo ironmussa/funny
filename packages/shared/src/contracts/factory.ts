@@ -57,7 +57,8 @@ export const factoryLintCleanupInput = z
  * Weakened tests and sensitive paths still do.
  */
 export const factoryRiskWaiverSchema = z.object({
-  kind: z.literal('lint-cleanup'),
+  /** `not-lint-cleanup`: the member overrules triage, which proposed it as one. */
+  kind: z.enum(['lint-cleanup', 'not-lint-cleanup']),
   /** Who marked it. */
   userId: z.string(),
   at: z.string(),
@@ -966,6 +967,12 @@ export const factoryContractSchema = z.object({
   likelyPaths: z.array(z.string().trim().min(1).max(200)).max(50).default([]),
   /** Why the change may be risky; any hint makes it high risk. */
   riskHints: z.array(contractLine).max(10).default([]),
+  /**
+   * Triage read the issue as asking only to clear lint or type-check warnings,
+   * with no change in behavior. A proposal: the factory still checks the diff
+   * (`lintCleanupRefusals`), and a member can say otherwise.
+   */
+  lintCleanup: z.boolean().optional(),
 });
 export type FactoryContract = z.infer<typeof factoryContractSchema>;
 
@@ -1012,6 +1019,18 @@ export type FactoryTriage = z.infer<typeof factoryTriageSchema>;
 /** The run's contract, when triage wrote one. */
 export const contractOf = (run: { triage: FactoryTriage | null }): FactoryContract | null =>
   run.triage?.decision === 'ready' ? (run.triage.contract ?? null) : null;
+
+/**
+ * Who says a run is a lint cleanup: a member's word first, either way, then
+ * triage's proposal in its contract. Null when nobody does.
+ */
+export function lintCleanupSource(run: {
+  triage: FactoryTriage | null;
+  riskWaiver: FactoryRiskWaiver | null;
+}): 'member' | 'triage' | null {
+  if (run.riskWaiver) return run.riskWaiver.kind === 'lint-cleanup' ? 'member' : null;
+  return contractOf(run)?.lintCleanup === true ? 'triage' : null;
+}
 
 /**
  * The sentinel (change factory-agent-roles, D10): a read-only agent that looks

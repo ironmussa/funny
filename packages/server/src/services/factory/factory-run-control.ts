@@ -33,7 +33,11 @@
  * theirs; here a run must belong to that factory.
  */
 
-import { implementingThreadOf } from '@funny/shared/contracts/factory';
+import {
+  contractOf,
+  implementingThreadOf,
+  type FactoryRiskWaiver,
+} from '@funny/shared/contracts/factory';
 import { and, eq, inArray } from 'drizzle-orm';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
@@ -117,6 +121,21 @@ function reopenRefused(error: { message: string }): FactoryRunControlError {
   return /unique|duplicate/i.test(error.message)
     ? { kind: 'conflict', message: 'Another run of this issue is already in flight.' }
     : storage(error);
+}
+
+/**
+ * What is stored when a member says a run is, or is not, a lint cleanup. "Not"
+ * is stored only where triage proposed it as one: there it overrules triage,
+ * elsewhere there is nothing to overrule.
+ */
+function lintCleanupWord(
+  run: FactoryRunView,
+  userId: string,
+  on: boolean,
+): FactoryRiskWaiver | null {
+  const at = new Date().toISOString();
+  if (on) return { kind: 'lint-cleanup', userId, at };
+  return contractOf(run)?.lintCleanup === true ? { kind: 'not-lint-cleanup', userId, at } : null;
 }
 
 /**
@@ -270,10 +289,7 @@ export function createFactoryRunControl(runs = createFactoryRunsRepository()) {
     ): ResultAsync<FactoryRunView, FactoryRunControlError> {
       return runOf(factoryId, runId).andThen((run) =>
         runs
-          .setRiskWaiver(
-            run.id,
-            on ? { kind: 'lint-cleanup', userId, at: new Date().toISOString() } : null,
-          )
+          .setRiskWaiver(run.id, lintCleanupWord(run, userId, on))
           .mapErr(storage)
           .andThen((written) =>
             written

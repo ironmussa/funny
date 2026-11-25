@@ -2104,6 +2104,7 @@
   },
   "factoryRunDetail": {
     "lintCleanup": "Um membro a marcou como limpeza de lint: o tamanho e os riscos do contrato não a retêm.",
+    "lintCleanupTriage": "A triagem a classificou como limpeza de lint: o tamanho e os riscos do contrato não a retêm. Você pode indicar que não é.",
     "approvalAdjustment": "{{lines}} linhas diferem em {{files}} arquivos",
     "approvalMovedTo": "movido para",
     "approvalSameChange": "mesma alteração",

@@ -436,6 +436,12 @@ reads the role's prose as a decision:
   warnings were not hidden, not that the change does nothing else: tests, review and proof
   answer that. Marking a run held for its risk puts it back in flight; with no risk reason left
   it has no approval to lose when its head moves.
+  Triage may propose the same thing: its contract's `lintCleanup` (the prompt says when: the
+  issue asks for nothing but clearing lint or type-check warnings). `lintCleanupSource` in
+  `@funny/shared/contracts/factory` decides who is believed: a member's word first, either way
+  (`risk_waiver.kind` is `lint-cleanup` or `not-lint-cleanup`), then triage's proposal. Triage
+  is an agent that read the issue's text, so its proposal can be wrong or steered by that text;
+  the diff checks above are the same for both, and "Not a lint cleanup" overrules it.
   **No change.** A run that ended as `no_change` stays on the board for a person: the member can
   retry it, or agree with the agent through "Mark as done" (`factory.markRunDone`, a
   compare-and-set from `no_change` to `done`). The issue on GitHub is left as it is.

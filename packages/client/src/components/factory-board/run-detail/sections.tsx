@@ -2,10 +2,11 @@
  * The sections of a run's detail panel (openspec factory-run-detail, D3), in
  * pipeline order. Each one shows only what the run has reached.
  */
-import type {
-  FactoryMergeApproval,
-  FactoryReviewVerdict,
-  FactoryTriage,
+import {
+  lintCleanupSource,
+  type FactoryMergeApproval,
+  type FactoryReviewVerdict,
+  type FactoryTriage,
 } from '@funny/shared/contracts/factory';
 import { ExternalLink } from 'lucide-react';
 import type { ReactNode } from 'react';
@@ -287,13 +288,18 @@ export function RunRiskCi({ run }: { run: FactoryQueueRun }) {
             : t('factoryRunDetail.riskLow', 'Low risk')}
         </p>
       )}
-      {run.riskWaiver && (
+      {lintCleanupSource(run) !== null && (
         <div className="flex flex-col gap-0.5" data-testid="factory-run-detail-lint-cleanup">
           <p>
-            {t(
-              'factoryRunDetail.lintCleanup',
-              'A member marked it as a lint cleanup: its size and its contract risks do not hold it.',
-            )}
+            {lintCleanupSource(run) === 'triage'
+              ? t(
+                  'factoryRunDetail.lintCleanupTriage',
+                  'Triage classed it as a lint cleanup: its size and its contract risks do not hold it. You can say it is not one.',
+                )
+              : t(
+                  'factoryRunDetail.lintCleanup',
+                  'A member marked it as a lint cleanup: its size and its contract risks do not hold it.',
+                )}
           </p>
           {(run.risk?.waived ?? []).length > 0 && (
             <ul className="text-muted-foreground flex flex-col gap-0.5 border-l pl-2">

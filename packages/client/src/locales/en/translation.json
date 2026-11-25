@@ -2145,6 +2145,7 @@
   },
   "factoryRunDetail": {
     "lintCleanup": "A member marked it as a lint cleanup: its size and its contract risks do not hold it.",
+    "lintCleanupTriage": "Triage classed it as a lint cleanup: its size and its contract risks do not hold it. You can say it is not one.",
     "approvalAdjustment": "{{lines}} lines differ in {{files}} files",
     "approvalMovedTo": "moved to",
     "approvalSameChange": "same change",

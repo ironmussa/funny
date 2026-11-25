@@ -662,6 +662,8 @@ function getCommitFilesUnchecked(
       native.getCommitFiles(cwd, hash).then((files) =>
         files.map((f) => ({
           path: f.path,
+          // SAFETY: the native getCommitFiles (native-git/src/commit_info.rs)
+          // only emits 'added', 'deleted' or 'modified'; napi types it as string.
           status: (f.status as CommitFileEntry['status']) || 'modified',
           additions: f.additions,
           deletions: f.deletions,

@@ -27,15 +27,21 @@ async function ensureParser(): Promise<TreeSitterParserConstructor> {
 
   parserInitPromise = (async () => {
     const mod = requireFromCore('web-tree-sitter');
+    // SAFETY: `require` is untyped; web-tree-sitter exports `Parser` and
+    // `Language` (newer builds) or the Parser class itself as the module /
+    // `default` (older ones). Each member is optional and probed below.
     const moduleExports = mod as {
       Parser?: TreeSitterParserConstructor;
       Language?: { load: (path: string) => Promise<any> };
       default?: TreeSitterParserConstructor;
     };
+    // SAFETY: with neither named export, the module itself is the Parser
+    // class (older web-tree-sitter builds); `init()` below fails if it is not.
     const parser =
       moduleExports.Parser ?? moduleExports.default ?? (mod as TreeSitterParserConstructor);
     await parser.init();
 
+    // SAFETY: the same module-as-Parser fallback as `parser` above.
     Parser = moduleExports.Parser ?? moduleExports.default ?? (mod as TreeSitterParserConstructor);
     LanguageLoader = moduleExports.Language ?? Parser.Language ?? null;
     if (!LanguageLoader) {

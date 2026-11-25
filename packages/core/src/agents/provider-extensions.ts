@@ -81,7 +81,7 @@ export interface ProviderSpawnRef {
 export function getActiveProviderSpawnRefs(): ProviderSpawnRef[] {
   const refs: ProviderSpawnRef[] = [];
   for (const id of getActiveBuiltinProviders()) {
-    const m = ACP_MANIFESTS[id as keyof typeof ACP_MANIFESTS];
+    const m = ACP_MANIFESTS[id];
     if (m) refs.push({ id, spawn: m.spawn });
   }
   for (const m of runnerManifests.values()) {
@@ -189,7 +189,7 @@ function makeExternalProcessClass(manifest: ProviderManifest): ProcessConstructo
     constructor(opts: AgentProcessOptions) {
       super(opts, manifest);
     }
-  } as ProcessConstructor;
+  };
 }
 
 /**

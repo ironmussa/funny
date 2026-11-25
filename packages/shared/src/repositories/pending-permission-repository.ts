@@ -27,7 +27,7 @@ function serialize(row: any): PermissionRequestRecord {
     resolvedDecision: row.resolvedDecision || undefined,
     resolvedAt: row.resolvedAt || undefined,
     expiredAt: row.expiredAt || undefined,
-  } as PermissionRequestRecord;
+  };
 }
 
 /** DB-agnostic storage for structured, live provider permission requests. */

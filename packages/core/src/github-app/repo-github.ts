@@ -101,7 +101,13 @@ export function createRepoGithub(deps: {
   return {
     json: <T>(repo: string, method: string, path: string, body?: GithubRequestBody) =>
       request(repo, method, path, body).andThen((res): ResultAsync<T, GithubCallError> => {
-        if (res.status === 204) return okAsync(undefined as T);
+        if (res.status === 204) {
+          // SAFETY: as documented on RepoGithub.json, a 204 answers `undefined`;
+          // callers that expect a body name a T for an endpoint that returns one.
+          return okAsync(undefined as T);
+        }
+        // SAFETY: the caller names T after the GitHub REST response of the
+        // endpoint it calls; the body is not validated here.
         return ResultAsync.fromPromise(res.json() as Promise<T>, () =>
           fail(`unreadable answer to ${method} ${path}`),
         );

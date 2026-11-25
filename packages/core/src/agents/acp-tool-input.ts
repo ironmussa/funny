@@ -19,7 +19,7 @@ export interface ACPToolCallData {
   kind?: string; // ACP ToolKind: "read" | "edit" | "search" | "execute" | etc.
   title: string; // Human-readable description from ACP
   rawInput?: unknown; // Opaque input from the provider (often empty)
-  locations?: Array<{ path: string; line?: number | null }>; // File paths
+  locations?: Array<{ path: string; line?: number | null }> | null; // File paths (ACP may send null)
   content?: unknown[]; // ACP ToolCallContent blocks (resource / resource_link can carry a file path)
 }
 
@@ -371,6 +371,7 @@ export function enrichTodoWriteInputFromOutput(
   }
   if (isString(rawOutput)) {
     try {
+      // SAFETY: widening to `unknown` only; the value is narrowed below.
       const parsed = JSON.parse(rawOutput) as unknown;
       if (isJsonPayloadObject(parsed)) {
         const built = buildTodoWriteInputFromRaw(parsed);
@@ -410,6 +411,8 @@ export function extractACPToolOutput(result: ACPToolResultData, fallbackTitle: s
   }
 
   if (content?.length) {
+    // SAFETY: ACP ToolCallContent blocks are unvalidated provider payloads; each is
+    // read by its `type` with optional fields, and an unknown shape yields ''.
     const output = (content as any[])
       .map((c: any) => {
         if (c.type === 'content' && c.content) {
@@ -446,6 +449,8 @@ export function extractACPToolOutput(result: ACPToolResultData, fallbackTitle: s
  */
 function extractPathFromContent(content: unknown[] | undefined): string | null {
   if (!content?.length) return null;
+  // SAFETY: ACP ToolCallContent blocks are unvalidated provider payloads; each block
+  // and nested item is checked to be an object and its `uri` to be a string.
   for (const c of content as any[]) {
     if (!c || !isObject(c)) continue;
     if (c.type === 'content' && c.content) {
@@ -477,6 +482,8 @@ function extractDiffBlock(
   content: unknown[] | undefined,
 ): { path?: string; oldText?: string; newText?: string } | null {
   if (!content?.length) return null;
+  // SAFETY: ACP ToolCallContent blocks are unvalidated provider payloads; a block is
+  // used only when it is an object of type 'diff', and its fields only when strings.
   for (const c of content as any[]) {
     if (c && isObject(c) && c.type === 'diff') {
       return {

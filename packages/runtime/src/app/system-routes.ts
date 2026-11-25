@@ -82,6 +82,17 @@ type NativeGitBuildEventData =
   | { text: string; channel: string };
 
 export function registerSystemRoutes(app: Hono<HonoEnv>): void {
+  registerHealthRoutes(app);
+  registerExternalSessionRoutes(app);
+  registerModelDiscoveryRoutes(app);
+  registerProviderSetupRoutes(app);
+  registerProviderExtensionRoutes(app);
+  registerSetupStatusRoute(app);
+  registerNativeGitBuildRoute(app);
+  registerBootstrapRoute(app);
+}
+
+function registerHealthRoutes(app: Hono<HonoEnv>): void {
   app.get('/api/health', (c) => {
     return c.json({ status: 'ok', timestamp: new Date().toISOString() });
   });
@@ -91,7 +102,9 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
       require('../services/shell-detector.js') as typeof import('../services/shell-detector.js');
     return c.json({ shells: detectShells() });
   });
+}
 
+function registerExternalSessionRoutes(app: Hono<HonoEnv>): void {
   app.get('/api/system/claude-code/external-sessions', async (c) => {
     const userId = c.get('userId');
     if (!userId) return c.json({ error: 'Unauthorized' }, 401);
@@ -147,7 +160,9 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
       return c.json({ ok: true });
     }),
   );
+}
 
+function registerModelDiscoveryRoutes(app: Hono<HonoEnv>): void {
   // Dynamic model discovery. Pi uses its native SDK; dynamic ACP providers use
   // manifest-driven ACP probing. The `:provider` param keeps existing URLs
   // (`/api/system/pi/models`, etc.) working unchanged. Static-catalog and
@@ -208,7 +223,9 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
 
   // (opencode model discovery is served by the generic `/api/system/:provider/models`
   // route above — master's separate opencode route was dropped in the merge.)
+}
 
+function registerProviderSetupRoutes(app: Hono<HonoEnv>): void {
   app.get('/api/system/providers/:provider/setup', async (c) => {
     if (!c.get('userId')) return c.json({ error: 'Unauthorized' }, 401);
     const provider = c.req.param('provider');
@@ -244,7 +261,9 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
     }
     return c.json(await providerSetupStatus(provider, false, profileOptions), 202);
   });
+}
 
+function registerProviderExtensionRoutes(app: Hono<HonoEnv>): void {
   // ── Provider extensions (runner-owned; provider-install-ui §2) ─────────────
   // Install / remove an ACP provider extension into THIS runner's extensions
   // dir. The server proxies `/api/*` here, so a UI install lands on the runner
@@ -352,7 +371,9 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
 
   app.post('/api/system/providers/enable-builtin', (c) => toggleBuiltin(c, true));
   app.post('/api/system/providers/disable-builtin', (c) => toggleBuiltin(c, false));
+}
 
+function registerSetupStatusRoute(app: Hono<HonoEnv>): void {
   app.get('/api/setup/status', async (c) => {
     resetProviderCache();
     resetBinaryCache();
@@ -407,7 +428,9 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
       },
     });
   });
+}
 
+function registerNativeGitBuildRoute(app: Hono<HonoEnv>): void {
   let nativeGitBuildInProgress = false;
   app.post('/api/system/build-native-git', async (c) => {
     const userId = c.get('userId');
@@ -473,7 +496,9 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
 
     return c.json({ status: 'started' });
   });
+}
 
+function registerBootstrapRoute(app: Hono<HonoEnv>): void {
   app.get('/api/bootstrap', (c) => {
     c.header('Cache-Control', 'no-store, no-cache, must-revalidate');
     c.header('Pragma', 'no-cache');

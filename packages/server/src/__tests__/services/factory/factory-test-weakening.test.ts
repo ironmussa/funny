@@ -422,6 +422,35 @@ describe('classifyRisk', () => {
       expect(silenced.keys).toContain('lint-cleanup:suppression');
     });
 
+    // #489: splitting a long file moves its suppressions to the new files.
+    test('a suppression moved from one file to another is not an added one', () => {
+      const disable = '// oxlint-disable-next-line anti-slop/no-chained-type-assertions -- why';
+      const moved = risk(
+        [
+          file('src/long.ts', [...big, `-    ${disable}`, `-  ${disable}`]),
+          file('src/part-a.ts', [`+      ${disable}`]),
+          file('src/part-b.ts', [`+${disable}`]),
+        ],
+        { lintCleanup: true },
+      );
+      expect(moved.level).toBe('low');
+      expect(moved.keys).not.toContain('lint-cleanup:suppression');
+
+      // One more than was removed, or a different rule, is still added.
+      const extra = risk(
+        [
+          file('src/long.ts', [...big, `-${disable}`]),
+          file('src/part-a.ts', [`+${disable}`, `+${disable}`]),
+          file('src/part-b.ts', ['+// eslint-disable-next-line max-lines']),
+        ],
+        { lintCleanup: true },
+      );
+      expect(extra.level).toBe('high');
+      expect(extra.reasons.at(-1)).toBe(
+        'marked as a lint cleanup, but it adds a lint or type-check suppression (src/part-a.ts, src/part-b.ts)',
+      );
+    });
+
     test('a change to the lint configuration is not a cleanup', () => {
       const loosened = risk([file('src/long.ts', big), file('oxlint.config.ts', ['+x'])], {
         lintCleanup: true,

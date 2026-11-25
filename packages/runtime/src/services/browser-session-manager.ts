@@ -18,12 +18,10 @@
  *   __funnyLog.setNamespaceLevel('browser-session', 'debug')
  */
 
-import { EventEmitter } from 'events';
 import { readdir, rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
-import type { ChromeSession } from '@funny/core/chrome';
 import type {
   BrowserSessionClosedReason,
   BrowserSessionAgentAction,
@@ -32,274 +30,54 @@ import type {
   WSBrowserSessionResultData,
 } from '@funny/shared';
 import { threadBrowserSessionId, threadIdFromBrowserSessionId } from '@funny/shared';
-import {
-  cssSelector,
-  detectFrameworkComponent,
-  extractElementInfo,
-  pickStyles,
-} from '@funny/shared/dom/extract';
-import type { Dialog, Page } from 'playwright';
+import type { Page } from 'playwright';
 
 import { log } from '../lib/logger.js';
 import { metric, startSpan } from '../lib/telemetry.js';
 import {
-  BrowserHost,
   profileDirFor,
-  resolveChromiumBinary,
+  type BrowserHost,
   type BrowserProfileKind,
   type BrowserTab,
 } from './browser-automation/browser-host.js';
 import { applyPageAudio, installPageAudio } from './browser-automation/page-audio.js';
-import type { ViewportRecorder } from './browser-automation/recorder.js';
-import { RefGenerations } from './browser-automation/snapshot-refs.js';
+import { BrowserHostPool } from './browser-session/host-pool.js';
+import { inspectAtExpression, inspectRectExpression } from './browser-session/inspect-scripts.js';
+import { PANEL_INPUT, panelViewportSize } from './browser-session/panel-input.js';
+import {
+  chromeOf,
+  errorMessage,
+  HEARTBEAT_INTERVAL_MS,
+  HEARTBEAT_TIMEOUT_MS,
+  INSPECT_HELPERS,
+  MAX_CONSOLE_ERRORS,
+  MAX_SESSIONS,
+  newSessionRecord,
+  NS,
+  THREAD_IDLE_TIMEOUT_MS,
+  VIEWPORT_HEIGHT,
+  VIEWPORT_WIDTH,
+  type BrowserController,
+  type BrowserSession,
+  type OpenSessionOptions,
+  type PageValue,
+} from './browser-session/session-record.js';
 import { shutdownManager, ShutdownPhase } from './shutdown-manager.js';
 import { wsBroker } from './ws-broker.js';
 
-const NS = 'browser-session';
-const BASE_PORT = 9300; // test-runner uses 9223; keep us out of that range
-const MAX_SESSIONS = 8; // tabs per runner
-const HEARTBEAT_INTERVAL_MS = 30_000;
-const HEARTBEAT_TIMEOUT_MS = 90_000;
-/** Thread-bound sessions with no agent call and no panel for this long close. */
-const THREAD_IDLE_TIMEOUT_MS = 15 * 60_000;
-/** Keep Chromium warm briefly after its last tab closes. */
-const HOST_GRACE_MS = 30_000;
-// Keep in sync with packages/client/src/lib/browser-session-viewport.ts
-const VIEWPORT_WIDTH = 1920;
-const VIEWPORT_HEIGHT = 1080;
-const MAX_CONSOLE_ERRORS = 20;
-
-/**
- * Per-session inspect helpers — injected into Runtime.evaluate calls.
- *
- * Source of truth: `@funny/shared/dom/extract`. We serialize the TS functions
- * with `Function.prototype.toString()` (Bun strips type annotations, returning
- * post-transpile JS) and wrap them in an IIFE that exposes them as window
- * globals. The same code runs in the client (iframe path) via direct import —
- * eliminating drift between the two paths.
- */
-const INSPECT_HELPERS = `
-(() => {
-  if (window.__funnyInspectInstalled) return;
-  window.__funnyInspectInstalled = true;
-  ${cssSelector.toString()}
-  ${pickStyles.toString()}
-  ${detectFrameworkComponent.toString()}
-  ${extractElementInfo.toString()}
-  window.__funnyCssSelector = cssSelector;
-  window.__funnyPickStyles = pickStyles;
-  window.__funnyDetectFramework = detectFrameworkComponent;
-  window.__funnyElementInfo = extractElementInfo;
-})();
-`.trim();
-
-export type BrowserController = 'agent' | 'user';
-
-/** A JavaScript dialog waiting for an answer from the agent or the user. */
-export interface PendingDialog {
-  type: string;
-  message: string;
-  defaultValue: string;
-  dialog: Dialog;
-}
-
-export interface BrowserSession {
-  sessionId: string;
-  userId: string;
-  /** Set for thread-bound sessions. */
-  threadId: string | null;
-  owner: 'panel' | 'thread';
-  profile: BrowserProfileKind;
-  url: string;
-  host: BrowserHost;
-  tab: BrowserTab;
-  /** Background tabs left behind when the session followed a popup. */
-  backgroundTabs: BrowserTab[];
-  /** Panel-side CDP client; `null` only while (re)attaching or after close. */
-  chromeSession: ChromeSession | null;
-  viewport: { width: number; height: number };
-  lastHeartbeat: number;
-  panelAttached: boolean;
-  lastAgentActivity: number;
-  controller: BrowserController;
-  /** Page audio is held muted until the user unmutes it (see `page-audio.ts`). */
-  audioMuted: boolean;
-  refs: RefGenerations;
-  /** The open JavaScript dialog; the page is frozen until it is answered. */
-  pendingDialog: PendingDialog | null;
-  /** Active viewport recording, if any. */
-  recorder: ViewportRecorder | null;
-  /** Session-local signals (`dialog`) that in-flight agent actions wait on. */
-  signals: EventEmitter;
-  consoleErrors: string[];
-  /** Serialises panel input and agent actions on this tab. */
-  queue: Promise<unknown>;
-}
-
-interface OpenSessionOptions {
-  threadId?: string | null;
-  profile?: BrowserProfileKind;
-  origin: 'panel' | 'agent';
-}
-
-interface HostEntry {
-  host: BrowserHost | null;
-  launching: Promise<BrowserHost> | null;
-  graceTimer: ReturnType<typeof setTimeout> | null;
-}
-
-/** The JSON value CDP returns for a page evaluation (`returnByValue`). */
-type PageValue = Awaited<ReturnType<ChromeSession['execute']>>;
-
-function errorMessage(cause: unknown): string {
-  return cause instanceof Error ? cause.message : String(cause);
-}
-
-function newSessionRecord(init: {
-  sessionId: string;
-  userId: string;
-  threadId: string | null;
-  profile: BrowserProfileKind;
-  url: string;
-  host: BrowserHost;
-  tab: BrowserTab;
-  origin: OpenSessionOptions['origin'];
-}): BrowserSession {
-  const now = Date.now();
-  return {
-    sessionId: init.sessionId,
-    userId: init.userId,
-    threadId: init.threadId,
-    owner: init.threadId ? 'thread' : 'panel',
-    profile: init.profile,
-    url: init.url || 'about:blank',
-    host: init.host,
-    tab: init.tab,
-    backgroundTabs: [],
-    chromeSession: null,
-    viewport: { width: VIEWPORT_WIDTH, height: VIEWPORT_HEIGHT },
-    lastHeartbeat: now,
-    panelAttached: init.origin === 'panel',
-    lastAgentActivity: init.origin === 'agent' ? now : 0,
-    controller: 'agent',
-    audioMuted: true,
-    refs: new RefGenerations(),
-    pendingDialog: null,
-    recorder: null,
-    signals: new EventEmitter(),
-    consoleErrors: [],
-    queue: Promise.resolve(),
-  };
-}
-
-/** The session's panel CDP client; a missing one means the session is gone. */
-function chromeOf(s: BrowserSession): ChromeSession {
-  if (!s.chromeSession) throw new Error('no-session');
-  return s.chromeSession;
-}
-
-type MouseButton = 'left' | 'middle' | 'right';
-type PanelInputHandler = (cs: ChromeSession, input: WSBrowserSessionInputData) => Promise<void>;
-
-/** The button a move reports while `buttons` are held (a drag or a text selection). */
-function heldButton(buttons: number | undefined): MouseButton | undefined {
-  if (!buttons) return undefined;
-  if (buttons & 1) return 'left';
-  if (buttons & 2) return 'right';
-  if (buttons & 4) return 'middle';
-  return undefined;
-}
-
-function mouse(type: 'mouseMoved' | 'mousePressed' | 'mouseReleased'): PanelInputHandler {
-  return (cs, input) => {
-    const held = heldButton(input.buttons);
-    const event: Parameters<typeof cs.dispatchMouseEvent>[0] = {
-      type,
-      x: input.x ?? 0,
-      y: input.y ?? 0,
-      modifiers: input.modifiers ?? 0,
-      buttons: input.buttons !== undefined ? input.buttons : undefined,
-    };
-    if (type === 'mouseMoved') {
-      if (held) event.button = held;
-    } else {
-      event.button = (input.button ?? 'left') as MouseButton;
-      event.clickCount = input.clickCount ?? 1;
-    }
-    return cs.dispatchMouseEvent(event);
-  };
-}
-
-/** Text a key produces when the panel did not send one (Enter submits forms). */
-const KEY_TEXT: Record<string, string> = { Enter: '\r' };
-
-/**
- * Panel keystroke → CDP. Chrome acts on non-text keys (arrows, Shift,
- * Backspace, Tab…) only with a `windowsVirtualKeyCode`, and a key that types
- * nothing is a `rawKeyDown` (as Puppeteer and Playwright send it).
- */
-function panelKeyEvent(
-  type: 'keyDown' | 'keyUp',
-  input: WSBrowserSessionInputData,
-): Parameters<ChromeSession['dispatchKeyEvent']>[0] {
-  const key = input.key ?? '';
-  const text = type === 'keyDown' ? (input.text ?? KEY_TEXT[key]) : undefined;
-  const cdpType = type === 'keyUp' ? 'keyUp' : text ? 'keyDown' : 'rawKeyDown';
-  // Undefined fields are left out of the CDP message.
-  return {
-    type: cdpType,
-    key,
-    code: input.code ?? '',
-    text,
-    unmodifiedText: text,
-    modifiers: input.modifiers ?? 0,
-    windowsVirtualKeyCode: input.keyCode,
-    nativeVirtualKeyCode: input.keyCode,
-    location: input.location,
-  };
-}
-
-function key(type: 'keyDown' | 'keyUp'): PanelInputHandler {
-  return (cs, input) => cs.dispatchKeyEvent(panelKeyEvent(type, input));
-}
-
-/** Panel input event → CDP dispatch on the session's tab. */
-type PointerOrKeyKind = Exclude<
-  WSBrowserSessionInputData['kind'],
-  'takeControl' | 'releaseControl' | 'dialog' | 'audio' | 'viewport'
->;
-
-/** Viewport bounds a panel resize may ask for (the same as `browser_resize`). */
-const PANEL_VIEWPORT_LIMITS = { minWidth: 200, maxWidth: 3840, minHeight: 200, maxHeight: 2160 };
-
-/** The size a panel `viewport` input asks for, or null when it is not a valid size. */
-export function panelViewportSize(
-  input: Pick<WSBrowserSessionInputData, 'width' | 'height'>,
-): { width: number; height: number } | null {
-  const { width, height } = input;
-  if (!Number.isInteger(width) || !Number.isInteger(height)) return null;
-  const w = width as number;
-  const h = height as number;
-  const l = PANEL_VIEWPORT_LIMITS;
-  if (w < l.minWidth || w > l.maxWidth || h < l.minHeight || h > l.maxHeight) return null;
-  return { width: w, height: h };
-}
-
-const PANEL_INPUT: Record<PointerOrKeyKind, PanelInputHandler> = {
-  mouseMove: mouse('mouseMoved'),
-  mouseDown: mouse('mousePressed'),
-  mouseUp: mouse('mouseReleased'),
-  wheel: (cs, input) =>
-    cs.dispatchScroll(input.x ?? 0, input.y ?? 0, input.deltaX ?? 0, input.deltaY ?? 0),
-  keyDown: key('keyDown'),
-  keyUp: key('keyUp'),
-};
+export { panelViewportSize } from './browser-session/panel-input.js';
+export type { BrowserSession } from './browser-session/session-record.js';
 
 class BrowserSessionManager {
   private sessions = new Map<string, BrowserSession>();
   /** In-flight first opens, keyed by session id — see `open()`. */
   private opening = new Map<string, Promise<BrowserSession | null>>();
-  private hosts = new Map<string, HostEntry>();
+  private hosts = new BrowserHostPool({
+    onHostExit: (userId, detail) => this.onHostExit(userId, detail),
+    pageAudioMuted: (page) => this.pageAudioMuted(page),
+    userHasSessions: (userId) =>
+      Array.from(this.sessions.values()).some((s) => s.userId === userId),
+  });
   private reaperTimer: ReturnType<typeof setInterval> | null = null;
 
   private emit(
@@ -414,59 +192,7 @@ class BrowserSessionManager {
 
   // ── Hosts ────────────────────────────────────────────────────────────────
 
-  private async allocatePort(): Promise<number> {
-    const { findAvailablePort } = await import('@funny/core/ports');
-    const used = new Set<number>();
-    for (const entry of this.hosts.values()) if (entry.host) used.add(entry.host.port);
-    return findAvailablePort(BASE_PORT, used);
-  }
-
-  /** The user's Chromium host, launching it if needed (concurrent callers share one launch). */
-  private async hostFor(userId: string): Promise<BrowserHost> {
-    let entry = this.hosts.get(userId);
-    if (!entry) {
-      entry = { host: null, launching: null, graceTimer: null };
-      this.hosts.set(userId, entry);
-    }
-    if (entry.graceTimer) {
-      clearTimeout(entry.graceTimer);
-      entry.graceTimer = null;
-    }
-    if (entry.host?.alive) return entry.host;
-    if (entry.launching) return entry.launching;
-
-    const launching = (async () => {
-      const binary = await resolveChromiumBinary();
-      const port = await this.allocatePort();
-      const result = await BrowserHost.launch({
-        binary,
-        port,
-        profileDir: profileDirFor(userId),
-        windowWidth: VIEWPORT_WIDTH,
-        windowHeight: VIEWPORT_HEIGHT,
-        onExit: (detail) => this.onHostExit(userId, detail),
-      });
-      if (result.isErr()) throw result.error;
-      // Safety net: every page of the profile is held muted from its first
-      // script, even one no session tracks (it would play on the runner host).
-      result.value.browser.contexts()[0]?.on('page', (page) => {
-        void installPageAudio(page, () => this.pageAudioMuted(page)).catch(() => {});
-      });
-      return result.value;
-    })();
-    entry.launching = launching;
-    try {
-      const host = await launching;
-      entry.host = host;
-      return host;
-    } finally {
-      entry.launching = null;
-    }
-  }
-
   private onHostExit(userId: string, detail: string): void {
-    const entry = this.hosts.get(userId);
-    if (entry) entry.host = null;
     for (const s of this.sessions.values()) {
       if (s.userId === userId) {
         log.warn('Chromium host died; closing session', {
@@ -477,23 +203,6 @@ class BrowserSessionManager {
         this.closeAndLog(s.sessionId, 'error');
       }
     }
-  }
-
-  private scheduleHostShutdownIfUnused(userId: string): void {
-    const entry = this.hosts.get(userId);
-    if (!entry?.host) return;
-    const inUse = Array.from(this.sessions.values()).some((s) => s.userId === userId);
-    if (inUse || entry.graceTimer) return;
-    entry.graceTimer = setTimeout(() => {
-      entry.graceTimer = null;
-      const stillUnused = !Array.from(this.sessions.values()).some((s) => s.userId === userId);
-      if (stillUnused && entry.host) {
-        const host = entry.host;
-        entry.host = null;
-        void host.shutdown();
-      }
-    }, HOST_GRACE_MS);
-    entry.graceTimer.unref?.();
   }
 
   // ── Lookup / ownership ───────────────────────────────────────────────────
@@ -662,7 +371,7 @@ class BrowserSessionManager {
     profile: BrowserProfileKind,
   ): Promise<{ host: BrowserHost; tab: BrowserTab }> {
     try {
-      const host = await this.hostFor(userId);
+      const host = await this.hosts.hostFor(userId);
       const tabResult = await host.newTab(profile);
       if (tabResult.isErr()) throw tabResult.error;
       return { host, tab: tabResult.value };
@@ -674,7 +383,7 @@ class BrowserSessionManager {
         reason: 'error',
         message: msg,
       });
-      this.scheduleHostShutdownIfUnused(userId);
+      this.hosts.scheduleShutdownIfUnused(userId);
       throw err;
     }
   }
@@ -1066,11 +775,7 @@ class BrowserSessionManager {
   async inspectAt(userId: string, sessionId: string, x: number, y: number): Promise<PageValue> {
     const span = startSpan('browser_session.inspect', { attributes: { kind: 'point' } });
     try {
-      const result = await this.execute(
-        userId,
-        sessionId,
-        `(() => { const el = document.elementFromPoint(${x}, ${y}); return window.__funnyElementInfo ? window.__funnyElementInfo(el) : null; })()`,
-      );
+      const result = await this.execute(userId, sessionId, inspectAtExpression(x, y));
       span.end('ok');
       return result;
     } catch (err) {
@@ -1089,36 +794,7 @@ class BrowserSessionManager {
   ): Promise<PageValue> {
     const span = startSpan('browser_session.inspect', { attributes: { kind: 'rect' } });
     try {
-      // Sample a sparse grid inside the rect (5×5 = 25 points), dedupe by
-      // element identity, return up to 10 by area-of-intersection desc.
-      const result = await this.execute(
-        userId,
-        sessionId,
-        `
-        (() => {
-          const X=${x}, Y=${y}, W=${w}, H=${h};
-          const found = new Map();
-          const stepX = W / 4, stepY = H / 4;
-          for (let i = 0; i <= 4; i++) {
-            for (let j = 0; j <= 4; j++) {
-              const el = document.elementFromPoint(X + i * stepX, Y + j * stepY);
-              if (el && !found.has(el)) found.set(el, true);
-            }
-          }
-          const elements = [];
-          for (const el of found.keys()) {
-            const info = window.__funnyElementInfo(el);
-            if (!info) continue;
-            const ix = Math.max(0, Math.min(X + W, info.boundingBox.x + info.boundingBox.w) - Math.max(X, info.boundingBox.x));
-            const iy = Math.max(0, Math.min(Y + H, info.boundingBox.y + info.boundingBox.h) - Math.max(Y, info.boundingBox.y));
-            const inter = ix * iy;
-            if (inter <= 0) continue;
-            elements.push({ ...info, intersectionArea: inter });
-          }
-          return elements.sort((a, b) => b.intersectionArea - a.intersectionArea).slice(0, 10);
-        })()
-        `,
-      );
+      const result = await this.execute(userId, sessionId, inspectRectExpression(x, y, w, h));
       span.end('ok');
       return result;
     } catch (err) {
@@ -1231,7 +907,7 @@ class BrowserSessionManager {
       closeId: closeId || undefined,
     });
 
-    this.scheduleHostShutdownIfUnused(s.userId);
+    this.hosts.scheduleShutdownIfUnused(s.userId);
     this.stopReaperIfIdle();
   }
 
@@ -1246,11 +922,7 @@ class BrowserSessionManager {
       .filter((s) => s.userId === userId)
       .map((s) => s.sessionId);
     await Promise.all(ids.map((id) => this.close(id, 'user')));
-    const entry = this.hosts.get(userId);
-    if (entry?.launching) await entry.launching.catch(() => {});
-    if (entry?.graceTimer) clearTimeout(entry.graceTimer);
-    if (entry?.host) await entry.host.shutdown();
-    this.hosts.delete(userId);
+    await this.hosts.shutdownFor(userId);
     await rm(profileDirFor(userId), { recursive: true, force: true });
     metric('browser_session.profile_cleared', 1, { type: 'sum' });
     log.info('Browser profile cleared', { namespace: NS, userId });
@@ -1260,14 +932,7 @@ class BrowserSessionManager {
   async closeAll(): Promise<void> {
     const ids = Array.from(this.sessions.keys());
     await Promise.all(ids.map((id) => this.close(id, 'runner_shutdown')));
-    const hosts = Array.from(this.hosts.values());
-    this.hosts.clear();
-    await Promise.all(
-      hosts.map(async (entry) => {
-        if (entry.graceTimer) clearTimeout(entry.graceTimer);
-        await entry.host?.shutdown();
-      }),
-    );
+    await this.hosts.shutdownAll();
   }
 
   /** Remove temp profiles left by the pre-host process-per-session model. */

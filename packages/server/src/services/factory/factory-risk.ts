@@ -106,10 +106,6 @@ const named = (paths: string[]) =>
     ? `${paths.slice(0, MAX_NAMED_FILES).join(', ')} and ${paths.length - MAX_NAMED_FILES} more`
     : paths.join(', ');
 
-/** The lines a patch adds, without the diff's own `+++` header. */
-const addedLines = (patch: string) =>
-  patch.split('\n').filter((line) => line.startsWith('+') && !line.startsWith('+++'));
-
 /**
  * Why a change marked as a lint cleanup cannot be taken as one, from the diff
  * alone: it touches what the linter is configured with, it adds a suppression,
@@ -131,7 +127,7 @@ function lintCleanupRefusals(input: RiskInput): RiskReason[] {
     },
     {
       key: 'suppression',
-      paths: pathsOf(code.filter(addsSuppression)),
+      paths: suppressingFiles(files, code),
       text: (paths) => `it adds a lint or type-check suppression (${paths})`,
     },
     {
@@ -154,8 +150,42 @@ function lintCleanupRefusals(input: RiskInput): RiskReason[] {
 }
 
 /** Whether the file's patch adds a comment that silences a linter or the type checker. */
-function addsSuppression(file: PullRequestFiles['files'][number]): boolean {
-  return file.patch !== undefined && addedLines(file.patch).some((line) => SUPPRESSION.test(line));
+/** A patch's suppression lines of one sign, without the sign and the indentation. */
+const suppressionsIn = (patch: string, sign: '+' | '-') =>
+  patch
+    .split('\n')
+    .filter((line) => line.startsWith(sign) && !line.startsWith(sign.repeat(3)))
+    .map((line) => line.slice(1).trim())
+    .filter((line) => SUPPRESSION.test(line));
+
+/**
+ * The code files that add a suppression the change did not remove elsewhere.
+ * Splitting a long file moves its suppressions to the new files, word for
+ * word: each one removed (from any file) pays for one added with the same
+ * text, so only the net new ones count (seen on #489, whose split of
+ * PromptEditor.tsx moved six).
+ */
+function suppressingFiles(
+  files: PullRequestFiles['files'],
+  code: PullRequestFiles['files'],
+): string[] {
+  const removed = new Map<string, number>();
+  for (const file of files) {
+    for (const line of suppressionsIn(file.patch ?? '', '-')) {
+      removed.set(line, (removed.get(line) ?? 0) + 1);
+    }
+  }
+  return code
+    .filter((file) => {
+      let adds = false;
+      for (const line of suppressionsIn(file.patch ?? '', '+')) {
+        const left = removed.get(line) ?? 0;
+        if (left > 0) removed.set(line, left - 1);
+        else adds = true;
+      }
+      return adds;
+    })
+    .map((file) => file.path);
 }
 
 /** Whether `path` matches `glob`; a glob that cannot be compiled matches nothing. */

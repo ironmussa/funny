@@ -1,4 +1,5 @@
 import type {
+  FactoryApprovalRequest,
   FactoryFlowDefinition,
   FactoryFlowValidation,
   FactoryFlowOption,
@@ -17,6 +18,8 @@ import { hasLaterRunOfIssue } from '@/lib/thread-activity';
 import { useDataQuery } from '../hooks';
 import {
   activeFactoryRunsQuery,
+  factoryApprovalRequestsQuery,
+  NO_FACTORY_APPROVAL_REQUESTS,
   NO_ACTIVE_FACTORY_RUNS,
   NO_PROJECT_FACTORY_RUNS,
   factoryBlockersQuery,
@@ -168,4 +171,44 @@ export function useFactoryIssuelessFlow(
 ): { flow: FactoryIssuelessFlow | undefined; error: Error | null; loading: boolean } {
   const { data, error, isFetching } = useDataQuery(factoryIssuelessFlowQuery(projectId, flowName));
   return { flow: data, error: error ?? null, loading: isFetching };
+}
+
+/**
+ * What agents asked the caller to approve in a project, newest first;
+ * `undefined` while loading. With `enabled` false nothing is requested: a
+ * reader with no factory, or no run waiting for an approval, never polls.
+ */
+export function useFactoryApprovalRequests(
+  projectId: string | undefined,
+  enabled = true,
+): FactoryApprovalRequest[] | undefined {
+  const ask = enabled && !!projectId;
+  return useDataQuery(
+    ask && projectId ? factoryApprovalRequestsQuery(projectId) : NO_FACTORY_APPROVAL_REQUESTS,
+  ).data;
+}
+
+/** The pending requests the agent of `threadId` made, oldest first. */
+export function usePendingApprovalRequestsOfThread(
+  projectId: string | undefined,
+  threadId: string | undefined,
+  enabled = true,
+): FactoryApprovalRequest[] {
+  const requests = useFactoryApprovalRequests(projectId, enabled && !!threadId);
+  if (!requests || !threadId) return [];
+  return requests
+    .filter((request) => request.threadId === threadId && request.state === 'pending')
+    .reverse();
+}
+
+/** The pending request an agent made for `runId`, or null. */
+export function usePendingApprovalRequestOfRun(
+  projectId: string | undefined,
+  runId: string,
+  enabled = true,
+): FactoryApprovalRequest | null {
+  const requests = useFactoryApprovalRequests(projectId, enabled);
+  return (
+    requests?.find((request) => request.runId === runId && request.state === 'pending') ?? null
+  );
 }

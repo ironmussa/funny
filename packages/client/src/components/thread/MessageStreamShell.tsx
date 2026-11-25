@@ -5,6 +5,7 @@ import type { ReactNode, RefObject } from 'react';
 import { LoadingState } from '@/components/ui/loading-state';
 import { cn } from '@/lib/utils';
 
+import { FactoryApprovalRequestCards } from './FactoryApprovalRequestCard';
 import { TrailingFactoryCards } from './FactoryTimelineCards';
 import type { MessageStreamProps } from './message-stream-types';
 import { MessageStreamStatusTail } from './MessageStreamStatusTail';
@@ -165,6 +166,9 @@ export function MessageStreamShell({
           messages={messages}
           agentRunning={isRunning}
         />
+
+        {/* What the agent of this thread asked the member to approve on the factory. */}
+        <FactoryApprovalRequestCards threadId={copyThreadId} />
 
         {/* Prompt pin spacer (full mode only) */}
         <PromptPinSpacer compact={compact} height={promptPinSpacerHeight} />

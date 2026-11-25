@@ -1,3 +1,4 @@
+import type { FactoryApprovalRequest } from '@funny/shared/contracts/factory';
 import type { DomainError } from '@funny/shared/errors';
 import type { ResultAsync } from 'neverthrow';
 
@@ -16,9 +17,11 @@ import type { DataLayer } from '../data-layer';
 import { getDataLayer } from '../runtime';
 import {
   refetchFactorySettings,
+  refreshFactoryApprovalRequests,
   refreshFactoryReadiness,
   refreshFactoryRuns,
   refreshFactoryTriggers,
+  writeFactoryApprovalRequest,
   writeFactoryRun,
   writeFactorySettings,
 } from './queries';
@@ -78,7 +81,25 @@ export function approveFactoryMerge(
 ): ResultAsync<FactoryRun, DomainError> {
   return factoryApi.approveMerge(projectId, runId, expectedSha).map((run) => {
     writeFactoryRun(projectId, run, layer);
+    // An approval closes the request an agent made for this commit.
+    refreshFactoryApprovalRequests(projectId, layer);
     return run;
+  });
+}
+
+/**
+ * Decline an agent's request to approve a held merge. The run stays held and
+ * nothing is approved. Not optimistic: the server says whether the request was
+ * still pending. The caller shows the error.
+ */
+export function declineFactoryApprovalRequest(
+  projectId: string,
+  requestId: string,
+  layer: DataLayer = getDataLayer(),
+): ResultAsync<FactoryApprovalRequest, DomainError> {
+  return factoryApi.declineApprovalRequest(projectId, requestId).map((request) => {
+    writeFactoryApprovalRequest(projectId, request, layer);
+    return request;
   });
 }
 

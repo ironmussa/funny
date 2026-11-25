@@ -1877,7 +1877,22 @@
     },
     "approveMerge": "Aprovar e fazer merge",
     "approveMergeTitle": "Fazer merge desta mudança de risco alto?",
-    "approveMergeBody": "O factory fará o merge do commit {{sha}} da issue #{{issue}} se os checks, o review e a prova de regressão ainda passarem. Um commit novo na branch precisa de uma nova aprovação."
+    "approveMergeBody": "O factory fará o merge do commit {{sha}} da issue #{{issue}} se os checks, o review e a prova de regressão ainda passarem. Um commit novo na branch precisa de uma nova aprovação.",
+    "approvalRequest": {
+      "title": "Um agente pede que você aprove este merge",
+      "asked": "O agente desta conversa pediu. Nada é aprovado até você aprovar aqui ou no quadro da fábrica.",
+      "issue": "Issue #{{issue}}",
+      "noIssue": "Execução sem issue",
+      "commit": "Commit",
+      "size": "{{count}} linhas alteradas",
+      "reasons": "Por que a fábrica o retém",
+      "pullRequest": "Pull request",
+      "decline": "Recusar",
+      "declined": "Pedido recusado. A execução continua retida.",
+      "loading": "Lendo a execução…",
+      "stale": "O pull request mudou depois que o agente pediu. Este pedido não se aplica mais.",
+      "boardMarker": "Um agente pediu sua aprovação"
+    }
   },
   "projectSecrets": {
     "title": "Segredos",

@@ -32,10 +32,10 @@
 
 ## 5. Client: the card
 
-- [ ] 5.1 Add the requests query, the decline action and the `factory:approval_request` realtime apply to `data/factory/`, plus a `testing.ts` seed; verify with data-layer tests (event invalidates the query, decline rolls back on failure)
-- [ ] 5.2 Build the approval card (shadcn, `LabelBadge`, monospace commit, pull request link, `data-testid`s) and render it in the thread view for the open thread's pending requests; verify with a component test (facts from the run, approve sends `expectedSha`, decline, expired state offers no approval) and a story
-- [ ] 5.3 Add the "an agent asked" marker to `FactoryRunCard`; verify with a `FactoryBoard` test
-- [ ] 5.4 Add the strings to `en`, `es`, `pt`; verify `bun run lint` (i18n and `fitness:client-styling`) passes
+- [x] 5.1 Add the requests query (polled while shown, like the run list) and the decline action to `data/factory/`; verify with data-layer tests (nothing requested while disabled, a decline records the answer, a refused one changes nothing, an approval re-reads the requests)
+- [x] 5.2 Build the approval card (shadcn, `LabelBadge`, monospace commit, pull request link, `data-testid`s) and render it in the thread view for the open thread's pending requests; verify with a component test (facts from the run, approve sends `expectedSha`, decline, expired state offers no approval)
+- [x] 5.3 Add the "an agent asked" marker to `FactoryRunCard`; verify with a `FactoryBoard` test
+- [x] 5.4 Add the strings to `en`, `es`, `pt`; verify `bun run lint` (i18n and `fitness:client-styling`) passes
 
 ## 6. Docs and integration
 

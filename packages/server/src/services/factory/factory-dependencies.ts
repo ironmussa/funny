@@ -69,12 +69,18 @@ function statusOf(latest: FactoryRunState | undefined): BlockerStatus {
   return 'blocker-failed';
 }
 
+/** Open blocker issue numbers: in the issue's own repository, and in other ones. */
+interface UnfinishedBlockers {
+  sameRepo: number[];
+  otherRepo: number[];
+}
+
 /** The open blockers of the same repository that have no merged run here: what holds the issue. */
 export function unfinishedBlockers(
   repo: string,
   blockers: readonly IssueBlocker[],
   latestRuns: LatestRunState,
-): { sameRepo: number[]; otherRepo: number[] } {
+): UnfinishedBlockers {
   const sameRepo: number[] = [];
   const otherRepo: number[] = [];
   for (const blocker of blockers) {

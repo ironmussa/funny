@@ -97,7 +97,13 @@ async function reschedule(factoryId: string, projectId: string): Promise<void> {
 
 type RunControlAction = 'stop' | 'retry' | 'approve-merge';
 
-const withoutSha = (run: FactoryRunView): { run: FactoryRunView; sha: string | null } => ({
+/** A controlled run, and the commit the control was for (only an approval names one). */
+interface ControlledRun {
+  run: FactoryRunView;
+  sha: string | null;
+}
+
+const withoutSha = (run: FactoryRunView): ControlledRun => ({
   run,
   sha: null,
 });
@@ -175,6 +181,12 @@ interface RunControlOptions {
   askedByThread?: string;
 }
 
+/** The factory port, and the run controls an agent may use. */
+interface FactoryParts {
+  port: FactoryPort;
+  controlled: ControlRun;
+}
+
 function createFactoryParts(
   settings = createFactorySettingsService(),
   runs = createFactoryRunsRepository(),
@@ -182,7 +194,7 @@ function createFactoryParts(
   queue = createFactoryQueue({ runs, control }),
   incidents = createFactoryIncidentsRepository(),
   requests = createFactoryApprovalRequestsRepository(),
-): { port: FactoryPort; controlled: ControlRun } {
+): FactoryParts {
   /** The caller's factory for the project; 404 with `missing` when they have none. */
   const factoryOf = (userId: string, projectId: string, missing: string) =>
     settings

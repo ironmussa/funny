@@ -425,6 +425,16 @@ export interface FactoryContinuation {
   followUpOffBranch?(threadId: string, content: string): Promise<Result<void, string>>;
 }
 
+/** Field → value of the thread-creation body a step sends to the runner. */
+interface StepThreadBody {
+  [field: string]: unknown;
+}
+
+/** Field → value of the metadata a step's result carries. */
+interface StepMetadata {
+  [field: string]: unknown;
+}
+
 /** The thread an agent step waits on; `after` when a follow-up runs it again. */
 interface StepThread {
   threadId: string;
@@ -731,7 +741,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     await checkpoint({ phase: 'launching', since });
     await deps.record({ launchStartedAt: since });
     const own = options.thread === 'new';
-    const body: Record<string, unknown> = {
+    const body: StepThreadBody = {
       projectId: scope.projectId,
       title: titleOf(options),
       mode: scope.mode,
@@ -924,7 +934,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     const checkPublished = await publishCheck(proved, testRequired);
     const proofRecord = { ...proved, checkPublished };
     await deps.record({ regressionProof: proofRecord });
-    const meta: Record<string, unknown> = { ...proofRecord };
+    const meta: StepMetadata = { ...proofRecord };
     // What the merge gate holds: only a proof that names its commit.
     if (proofRecord.headSha) {
       lastProof = {
@@ -1597,7 +1607,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
       { ...metrics, mergeSentBack: metrics.mergeSentBack + 1 },
       { event: `merge_sent_back_${why}` },
     );
-    const metadata: Record<string, unknown> = { outcome: 'sent_back', why, feedback };
+    const metadata: StepMetadata = { outcome: 'sent_back', why, feedback };
     if (regenerate) metadata.regenerate = regenerate;
     return { ok: true, output: 'sent_back', metadata };
   }

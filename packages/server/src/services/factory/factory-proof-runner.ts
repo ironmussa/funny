@@ -69,6 +69,11 @@ export type ProofRun =
   /** It could not run or be read: no verdict. */
   | { kind: 'unavailable'; why: string };
 
+/** Field → value of the regression-proof request body sent to the runner. */
+interface ProofRequestBody {
+  [field: string]: unknown;
+}
+
 /**
  * Run the proof of `threadId`'s checkout on its runner and wait for it. The
  * runner resolves the commit and the default branch; `timeoutMs` bounds the
@@ -85,7 +90,7 @@ export async function proveOnRunner(
   fetchHead = false,
 ): Promise<ProofRun> {
   const timeoutMs = opts.timeoutMs ?? 600_000;
-  const body: Record<string, unknown> = {
+  const body: ProofRequestBody = {
     rules: opts.rules ?? [],
     supportGlobs: opts.supportGlobs ?? [],
     setupCommand: opts.setupCommand,

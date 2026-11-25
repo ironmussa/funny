@@ -12,9 +12,14 @@ import { toPipeline, toPipelineRun } from '../../lib/pipeline-response.js';
 import * as pipelineRepo from '../../services/pipeline-repository.js';
 import { requireVisibleProject } from './project-gate.js';
 
+/** Column name → the value a PATCH writes to it. */
+interface PipelineColumnUpdates {
+  [column: string]: unknown;
+}
+
 /** Column writes for a PATCH body: flags become integers, empty prompts become null. */
-function pipelineUpdates(body: UpdatePipelineRequest): Record<string, unknown> {
-  const updates: Record<string, unknown> = {};
+function pipelineUpdates(body: UpdatePipelineRequest): PipelineColumnUpdates {
+  const updates: PipelineColumnUpdates = {};
   for (const [key, value] of Object.entries(body)) {
     if (value === undefined) continue;
     if (FLAG_COLUMNS.has(key)) updates[key] = value ? 1 : 0;

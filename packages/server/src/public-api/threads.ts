@@ -37,7 +37,7 @@ import type { PublicApiContext } from './trpc.js';
 const threadRepo = repos.threads();
 
 /** The body the runner's thread-creation endpoint receives: only what v1 accepts. */
-function runnerBody(input: CreateThreadInput): Record<string, unknown> {
+function runnerBody(input: CreateThreadInput) {
   const source: ThreadSource = input.client === 'chrome_extension' ? 'chrome_extension' : 'api';
   return {
     projectId: input.projectId,

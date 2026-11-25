@@ -94,7 +94,13 @@ function parseUnsigned(value: unknown): bigint | null {
   }
 }
 
-function timestamp(epochMs: number): { seconds: string; nanos: number } {
+/** A protobuf `Timestamp` as JSON: whole seconds (int64 as a string) and nanoseconds. */
+interface WireTimestamp {
+  seconds: string;
+  nanos: number;
+}
+
+function timestamp(epochMs: number): WireTimestamp {
   return {
     seconds: String(Math.floor(epochMs / 1_000)),
     nanos: (epochMs % 1_000) * 1_000_000,

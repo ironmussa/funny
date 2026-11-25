@@ -21,6 +21,18 @@ import { BrowserV1OutboundQueue } from './browser-v1-outbound-queue.js';
 import { encodeSocketIoCarrier } from './browser-v1-wire.js';
 import { encodeSocketIoStatus } from './browser-v1-wire.js';
 
+/** How many browser sockets, and how many distinct users, are connected. */
+interface BrowserClientStats {
+  browserClients: number;
+  browserUsers: number;
+}
+
+/** What the outbound queue did with a browser.v1 event, and how deep its class's queue is. */
+interface BrowserV1Dispatch {
+  result: 'accepted' | 'coalesced' | 'dropped' | 'exhausted';
+  queueDepth: number;
+}
+
 type BrowserV1Event = NonNullable<BrowserPublication['browserV1']>;
 
 export const threadStreamRoom = (threadId: string): string => `thread:${threadId}:stream`;
@@ -204,7 +216,7 @@ export class SocketIoBrowserEventSink implements BrowserEventSink {
     return userIds;
   }
 
-  stats(): { browserClients: number; browserUsers: number } {
+  stats(): BrowserClientStats {
     return {
       browserClients: this.io.of('/').sockets.size,
       browserUsers: this.connectedUserIds().length,
@@ -337,10 +349,7 @@ export class SocketIoBrowserEventSink implements BrowserEventSink {
     socket: Socket,
     publication: BrowserPublication,
     payload: Buffer,
-  ): {
-    result: 'accepted' | 'coalesced' | 'dropped' | 'exhausted';
-    queueDepth: number;
-  } {
+  ): BrowserV1Dispatch {
     let queue = this.outbound.get(socket);
     if (!queue) {
       queue = new BrowserV1OutboundQueue({

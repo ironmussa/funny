@@ -152,13 +152,19 @@ function sessionHeadersFrom(signInHeaders: Headers): Headers {
   return new Headers({ cookie });
 }
 
+/** Why switching the active organization failed: the HTTP status or the thrown message. */
+interface SetActiveOrgFailure {
+  status?: number;
+  error?: string;
+}
+
 /**
  * Best-effort: make the org the active one of the session in `headers`, and
  * return the Set-Cookie values to forward (the refreshed session cache). The
  * membership already exists, so a failure only costs the user an org switch.
  */
 async function setActiveOrg(orgId: string, headers: Headers): Promise<string[]> {
-  let failure: Record<string, unknown>;
+  let failure: SetActiveOrgFailure;
   try {
     const res: Response = await orgApi().setActiveOrganization({
       headers,

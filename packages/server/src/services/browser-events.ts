@@ -139,14 +139,24 @@ const VOLATILE: BrowserSessionDelivery = {
   delivery: 'volatile',
 };
 
-const POINTER_KINDS: Record<string, BrowserSessionPointerKind> = {
+/** Pointer kind name (as the runner sends it) → its protobuf enum value. */
+interface PointerKinds {
+  [kind: string]: BrowserSessionPointerKind;
+}
+
+/** Agent action name (as the runner sends it) → its protobuf enum value. */
+interface AgentActionKinds {
+  [kind: string]: BrowserSessionAgentActionKind;
+}
+
+const POINTER_KINDS: PointerKinds = {
   move: BrowserSessionPointerKind.MOVE,
   click: BrowserSessionPointerKind.CLICK,
   down: BrowserSessionPointerKind.DOWN,
   up: BrowserSessionPointerKind.UP,
 };
 
-const AGENT_ACTION_KINDS: Record<string, BrowserSessionAgentActionKind> = {
+const AGENT_ACTION_KINDS: AgentActionKinds = {
   click: BrowserSessionAgentActionKind.CLICK,
   double_click: BrowserSessionAgentActionKind.DOUBLE_CLICK,
   hover: BrowserSessionAgentActionKind.HOVER,
@@ -523,13 +533,16 @@ export function getConnectedBrowserUserIds(): string[] {
   return socketIoBrowserEvents?.connectedUserIds() ?? [];
 }
 
+/** How many browser sockets, and how many distinct users, are connected. */
+interface RelayStats {
+  browserClients: number;
+  browserUsers: number;
+}
+
 /**
  * Get stats about connected clients.
  */
-export function getRelayStats(): {
-  browserClients: number;
-  browserUsers: number;
-} {
+export function getRelayStats(): RelayStats {
   const { browserClients, browserUsers } = socketIoBrowserEvents?.stats() ?? {
     browserClients: 0,
     browserUsers: 0,

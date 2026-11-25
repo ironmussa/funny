@@ -45,10 +45,20 @@ function serializeUtilityModel(setting: UtilityModelSetting | null): string | nu
   return setting ? JSON.stringify(setting) : null;
 }
 
+/** Provider id → whether a key is saved for it. */
+interface ProviderKeyPresence {
+  [provider: string]: boolean;
+}
+
+/** Column name → the value a profile update writes to it. */
+interface ProfileColumnUpdates {
+  [column: string]: any;
+}
+
 /** Build the providerKeys presence map (id → boolean) for the API response. */
-function buildPresenceMap(raw: string | null): Record<string, boolean> {
+function buildPresenceMap(raw: string | null): ProviderKeyPresence {
   const keys = parseProviderKeys(raw);
-  const map: Record<string, boolean> = {};
+  const map: ProviderKeyPresence = {};
   for (const k of Object.keys(keys)) {
     map[k] = true;
   }
@@ -195,7 +205,7 @@ export async function upsertProfile(
   const existing = await getProfile(userId);
 
   if (existing) {
-    const set: Record<string, any> = { updatedAt: now };
+    const set: ProfileColumnUpdates = { updatedAt: now };
     if (updates.gitName !== undefined) set.gitName = updates.gitName || null;
     if (updates.gitEmail !== undefined) set.gitEmail = updates.gitEmail || null;
     if (updates.setupCompleted !== undefined) set.setupCompleted = updates.setupCompleted ? 1 : 0;

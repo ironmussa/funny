@@ -261,17 +261,11 @@ function ErrorsTab({ entries }: { entries: WSTestErrorData[] }) {
 
 // ─── Tab: Source ───────────────────────────────────────────
 
-function SourceTab({
-  activeFile,
-  projectPath,
-}: {
-  activeFile: string | null;
-  projectPath: string | undefined;
-}) {
+/** The content of `fullPath`, read from the runner; null clears it. */
+function useSourceFile(fullPath: string | null) {
   const [code, setCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const fullPath = activeFile && projectPath ? `${projectPath}/${activeFile}` : null;
 
   // A new file starts loading; no file clears the view. Starts from null so a
   // file present on mount loads too.
@@ -294,6 +288,19 @@ function SourceTab({
       setLoading(false);
     });
   }, [fullPath]);
+
+  return { code, loading, error };
+}
+
+function SourceTab({
+  activeFile,
+  projectPath,
+}: {
+  activeFile: string | null;
+  projectPath: string | undefined;
+}) {
+  const fullPath = activeFile && projectPath ? `${projectPath}/${activeFile}` : null;
+  const { code, loading, error } = useSourceFile(fullPath);
 
   const language = useMemo(() => {
     if (!activeFile) return 'typescript';

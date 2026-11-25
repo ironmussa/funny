@@ -12,7 +12,9 @@
  * Issues sent from funny (change factory-manual-queue) wait in `requested`: a
  * non-terminal state, so the one-run-per-issue index already holds the issue,
  * but neither in flight (nothing drives it) nor holding a concurrency slot.
- * Leaving the queue is a compare-and-set (`QUEUE_TRANSITIONS`).
+ * Leaving the queue is a compare-and-set (`QUEUE_TRANSITIONS`), and so is
+ * every state a flow writes after that (`FLOW_TRANSITIONS`, `STAGE_TRANSITIONS`):
+ * no method writes a run's state by its id alone.
  */
 import {
   EMPTY_FACTORY_RUN_METRICS,
@@ -56,7 +58,7 @@ import {
   sql,
   type SQL,
 } from 'drizzle-orm';
-import { okAsync, ResultAsync } from 'neverthrow';
+import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import { z } from 'zod';
 
 import { db, dbDialect, withDatabaseTransaction } from '../../db/index.js';
@@ -212,6 +214,58 @@ const STAGE_TRANSITIONS = {
 
 export type FactoryRunStage = keyof typeof STAGE_TRANSITIONS;
 
+/** Every state a run has not ended in: waiting in line, in flight or parked. */
+const LIVE_STATES = [
+  ...WAITING_STATES,
+  ...IN_FLIGHT_STATES,
+  ...PARKED_STATES,
+] as const satisfies FactoryRunState[];
+
+/**
+ * The states a flow writes while it drives a run (`updateInFlight`), each
+ * with the stored states it may be written from: a compare-and-set. A state
+ * missing here (`requested`, `queued`) is written only by a queue transition.
+ *
+ * A flow is the repository's YAML, so its steps come in any order: the work
+ * states and the ends are reachable from any in-flight state. What the table
+ * refuses is a run going back to triage after its work started, a parked run
+ * put back to work by a flow still finishing (only a retry or take-over
+ * reopens it, through `reopen`), and any write over an ended run.
+ */
+const FLOW_TRANSITIONS = {
+  /** Triage runs before the work; a resumed run replays its decision. */
+  triaging: ['queued', 'triaging'],
+  /** Triage asked questions on the issue. */
+  needs_info: ['triaging'],
+  working: IN_FLIGHT_STATES,
+  pr_open: IN_FLIGHT_STATES,
+  waiting_ci: IN_FLIGHT_STATES,
+  fixing: IN_FLIGHT_STATES,
+  reviewing: IN_FLIGHT_STATES,
+  merging: IN_FLIGHT_STATES,
+  /** The flow parks the run when it ends, also after a step already parked it. */
+  waiting_human: [...IN_FLIGHT_STATES, 'waiting_human'],
+  /** The merge queue may land a member whose own flow parked it. */
+  merged: [...IN_FLIGHT_STATES, 'waiting_human'],
+  no_change: IN_FLIGHT_STATES,
+  done: IN_FLIGHT_STATES,
+  failed: IN_FLIGHT_STATES,
+  /** A member stops a run that has not ended, wherever it is. */
+  stopped: LIVE_STATES,
+} as const satisfies Partial<Record<FactoryRunState, readonly FactoryRunState[]>>;
+
+/** A state a flow may write (`FLOW_TRANSITIONS`). */
+export type FactoryFlowState = keyof typeof FLOW_TRANSITIONS;
+
+/**
+ * The stored states `to` may be written from, or null when no flow writes
+ * it. Pure: what `updateInFlight` checks in its `WHERE`.
+ */
+export function flowTransitionFrom(to: FactoryRunState): readonly FactoryRunState[] | null {
+  const byState: Partial<Record<FactoryRunState, readonly FactoryRunState[]>> = FLOW_TRANSITIONS;
+  return byState[to] ?? null;
+}
+
 /**
  * The `currentStep` of a run a retry or take-over put back in flight, until its
  * flow enters a step: such a run has a history, so a flow that cannot start
@@ -345,7 +399,13 @@ export function threadsOf(run: Pick<FactoryRunView, 'threadIds' | 'reviews' | 't
   return [...new Set([...run.threadIds, ...triage, ...reviewers])];
 }
 
-export type FactoryRunsError = { kind: 'storage'; message: string };
+export type FactoryRunsError =
+  | { kind: 'storage'; message: string }
+  /**
+   * A flow wrote a state the run's stored state does not lead to
+   * (`FLOW_TRANSITIONS`): nothing was written, and the run is still live.
+   */
+  | { kind: 'illegal-transition'; message: string; from: FactoryRunState; to: FactoryRunState };
 
 type Row = typeof factoryRuns.$inferSelect;
 
@@ -540,7 +600,8 @@ export interface StartRunInput {
 export type RegressionProofRecord = FactoryRegressionProof;
 
 export interface UpdateRunInput {
-  state?: FactoryRunState;
+  /** Written only along `FLOW_TRANSITIONS`. */
+  state?: FactoryFlowState;
   currentStep?: string | null;
   prUrl?: string | null;
   threadIds?: string[];
@@ -715,6 +776,46 @@ function writeLiveRun(
       .returning({ id: factoryRuns.id }),
     storage,
   ).map((rows) => rows.length > 0);
+}
+
+/** Write a flow's new state `to` only from the states it leads from: a compare-and-set. */
+function writeAlongFlow(
+  runId: string,
+  to: FactoryFlowState,
+  changes: Partial<Row>,
+): ResultAsync<boolean, FactoryRunsError> {
+  return ResultAsync.fromPromise(
+    db
+      .update(factoryRuns)
+      .set(changes)
+      .where(and(eq(factoryRuns.id, runId), inArray(factoryRuns.state, [...FLOW_TRANSITIONS[to]])))
+      .returning({ id: factoryRuns.id }),
+    storage,
+  ).map((rows) => rows.length > 0);
+}
+
+/**
+ * Why a flow's write of `to` changed nothing: the run ended (or is gone),
+ * `false` as before; or it is live in a state that does not lead to `to`.
+ */
+function refusedFlowWrite(
+  runId: string,
+  to: FactoryFlowState,
+): ResultAsync<boolean, FactoryRunsError> {
+  return ResultAsync.fromPromise(
+    db.select({ state: factoryRuns.state }).from(factoryRuns).where(eq(factoryRuns.id, runId)),
+    storage,
+  ).andThen((rows) => {
+    // SAFETY: `state` is written only from `FactoryRunState` values (the transitions above).
+    const from = rows[0]?.state as FactoryRunState | undefined;
+    if (from === undefined || TERMINAL.has(from)) return okAsync(false);
+    return errAsync<boolean, FactoryRunsError>({
+      kind: 'illegal-transition',
+      message: `A factory run in ${from} cannot move to ${to}.`,
+      from,
+      to,
+    });
+  });
 }
 
 /** A new run's row: every column empty, with `given` on top. */
@@ -1249,40 +1350,21 @@ export function createFactoryRunsRepository(
 
     ...queueOperations(deps.newId),
 
-    update(runId: string, input: UpdateRunInput): ResultAsync<void, FactoryRunsError> {
+    /**
+     * Record fields that are not the run's state, whatever the state is (the
+     * run it is stacked on). A state is written only along a transition:
+     * `updateInFlight`, `enterStage` or a queue transition.
+     */
+    update(
+      runId: string,
+      input: Omit<UpdateRunInput, 'state'>,
+    ): ResultAsync<void, FactoryRunsError> {
       const changes = changesFor(input);
       if (!changes) return okAsync(undefined);
       return ResultAsync.fromPromise(
         db.update(factoryRuns).set(changes).where(eq(factoryRuns.id, runId)),
         storage,
-      )
-        .andThen(() => afterStateWrite(runId, input, true))
-        .map(() => undefined);
-    },
-
-    /**
-     * Update a run only while it is still in `from` — so a late writer cannot
-     * overwrite a transition another path already made (e.g. the launch marking
-     * a run `working` after its thread already finished). Resolves whether the
-     * run was in `from` and changed.
-     */
-    advance(
-      runId: string,
-      from: FactoryRunState,
-      input: UpdateRunInput,
-    ): ResultAsync<boolean, FactoryRunsError> {
-      const changes = changesFor(input);
-      if (!changes) return okAsync(false);
-      return ResultAsync.fromPromise(
-        db
-          .update(factoryRuns)
-          .set(changes)
-          .where(and(eq(factoryRuns.id, runId), eq(factoryRuns.state, from)))
-          .returning({ id: factoryRuns.id }),
-        storage,
-      )
-        .map((rows) => rows.length > 0)
-        .andThen((moved) => afterStateWrite(runId, input, moved));
+      ).map(() => undefined);
     },
 
     /**
@@ -1312,13 +1394,20 @@ export function createFactoryRunsRepository(
 
     /**
      * Update a run unless it is already terminal (stopped, merged, failed), so
-     * a flow still finishing cannot revive a run someone stopped. Resolves
-     * whether the run was still in flight.
+     * a flow still finishing cannot revive a run someone stopped. A new state
+     * is written only from the stored states `FLOW_TRANSITIONS` allows, a
+     * compare-and-set. Resolves whether the run was still live; a live run
+     * whose state does not lead to the new one changes nothing and fails with
+     * `illegal-transition`.
      */
     updateInFlight(runId: string, input: UpdateRunInput): ResultAsync<boolean, FactoryRunsError> {
       const changes = changesFor(input);
       if (!changes) return okAsync(true);
-      return writeLiveRun(runId, changes).andThen((live) => afterStateWrite(runId, input, live));
+      const to = input.state;
+      if (to === undefined) return writeLiveRun(runId, changes);
+      return writeAlongFlow(runId, to, changes).andThen((moved) =>
+        moved ? afterStateWrite(runId, input, true) : refusedFlowWrite(runId, to),
+      );
     },
 
     /**

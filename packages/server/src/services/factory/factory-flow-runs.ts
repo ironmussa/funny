@@ -495,6 +495,20 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
         context,
       ));
 
+  /**
+   * `runs.updateInFlight`, with a state the run's stored state does not lead
+   * to (`FLOW_TRANSITIONS`) logged: nothing was written, the flow goes on.
+   */
+  const updateInFlight = (runId: string, input: UpdateRunInput) =>
+    deps.runs.updateInFlight(runId, input).mapErr((error) => {
+      if (error.kind !== 'illegal-transition') return error;
+      const details = { namespace: 'factory', runId, from: error.from, to: error.to };
+      // A resumed run replays its triage decision: past triage, it stays where it is.
+      if (error.to === 'triaging') log.debug('Issue factory run kept past triage', details);
+      else log.warn('Issue factory flow wrote a state its run does not lead to', details);
+      return error;
+    });
+
   /** A run whose flow could not be loaded: dropped when it never ran, failed when invalid. */
   async function flowUnavailable(job: FactoryRunJob, error: FactoryFlowError): Promise<void> {
     log.warn('Issue factory flow could not be loaded', {
@@ -510,7 +524,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       `The flow "${flowOf(job)}" could not be loaded: ${error.message}`,
     );
     if (error.kind === 'invalid') {
-      await deps.runs.updateInFlight(job.run.id, {
+      await updateInFlight(job.run.id, {
         state: 'failed',
         currentStep: null,
         failureReason: `The flow "${flowOf(job)}" could not be loaded: ${error.message}`,
@@ -554,7 +568,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
    * `failedStep`) with its pull request open — and tell them.
    */
   async function park(job: FactoryRunJob, failedStep: string | null, error?: string) {
-    const parked = await deps.runs.updateInFlight(job.run.id, {
+    const parked = await updateInFlight(job.run.id, {
       state: 'waiting_human',
       currentStep: failedStep,
       failureReason: failedStep ? failureReason(error) : null,
@@ -595,7 +609,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
     if (trace.ended) return;
     if (!trace.agentsRan && !wasReopened(job)) return dropUnstarted(job, error);
     if (trace.parked) {
-      await deps.runs.updateInFlight(run.id, { currentStep: trace.step });
+      await updateInFlight(run.id, { currentStep: trace.step });
       await noticeWaiting(job, error ?? 'It waits for you.');
       return;
     }
@@ -603,7 +617,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       await park(job, trace.step, error);
       return;
     }
-    await deps.runs.updateInFlight(run.id, {
+    await updateInFlight(run.id, {
       state: 'failed',
       currentStep: trace.step,
       failureReason: failureReason(error),
@@ -621,7 +635,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
     if (outcome === 'failed') await settleFailed(job, trace, error);
     // A run without an issue that opened no pull request has nothing left to follow.
     else if (job.issue === null && !trace.prOpen) {
-      await deps.runs.updateInFlight(run.id, { state: 'done', currentStep: null });
+      await updateInFlight(run.id, { state: 'done', currentStep: null });
     } else await park(job, null, error);
     log.info('Issue factory run ended', {
       namespace: 'factory',
@@ -675,7 +689,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       run,
       factory: getWatchedFactory,
       record: async (runId, input) => {
-        const live = await deps.runs.updateInFlight(runId, input);
+        const live = await updateInFlight(runId, input);
         if (!live.isOk() || !live.value || input.state !== 'merged' || !deps.cleanupMerged) return;
         const merged = await run(runId);
         const factory = merged ? await getWatchedFactory(merged.factoryId) : null;
@@ -860,7 +874,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
     if (job.issue !== null) return false;
     const problems = validateFlowForIssuelessRun(flow.workflow, Object.keys(job.run.inputs));
     if (problems.length === 0) return false;
-    await deps.runs.updateInFlight(job.run.id, {
+    await updateInFlight(job.run.id, {
       state: 'failed',
       currentStep: null,
       failureReason: formatFactoryFlowProblems(`The flow "${flowOf(job)}"`, problems),
@@ -902,7 +916,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
     const record = async (input: UpdateRunInput): Promise<void> => {
       // A stopped flow writes nothing more: its run may already be retried.
       if (controller.signal.aborted) return;
-      const live = await deps.runs.updateInFlight(job.run.id, input);
+      const live = await updateInFlight(job.run.id, input);
       // Stopped (or finished) elsewhere: stop driving it.
       if (live.isOk() && !live.value) controller.abort();
       if (live.isOk() && live.value && input.state === 'merged') cleanUpMerged(job);

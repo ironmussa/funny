@@ -521,7 +521,7 @@ describe('factory watcher', () => {
       threadIds: ['old'],
       currentStep: 'implement',
     });
-    await runs.update(first._unsafeUnwrap().id, { state: 'working' });
+    await runs.updateInFlight(first._unsafeUnwrap().id, { state: 'working' });
 
     const poll = fakePoll();
     const launcher = fakeLauncher();
@@ -644,7 +644,7 @@ describe('factory watcher', () => {
     const runs = createFactoryRunsRepository();
     for (let i = 0; i < MAX_ATTEMPTS; i++) {
       const run = (await runs.start({ factoryId, issueNumber: 7 }))._unsafeUnwrap();
-      await runs.update(run.id, { state: 'failed' });
+      await runs.updateInFlight(run.id, { state: 'failed' });
     }
     const poll = fakePoll();
     const launcher = fakeLauncher();
@@ -698,7 +698,7 @@ describe('factory watcher', () => {
     const factoryId = await enableFactory({ maxConcurrent: 1 });
     const runs = createFactoryRunsRepository();
     const parked = (await runs.start({ factoryId, issueNumber: 1 }))._unsafeUnwrap();
-    await runs.update(parked.id, { state: 'waiting_human' });
+    await runs.updateInFlight(parked.id, { state: 'waiting_human' });
     const poll = fakePoll();
     const launcher = fakeLauncher();
     await startWatcherWithProof({
@@ -841,7 +841,7 @@ describe('factory watcher', () => {
 
       // The first leaves those states: the second starts, with the contract it already has.
       const first = await runOf(factoryId, 1);
-      await createFactoryRunsRepository().update(first.id, { state: 'waiting_human' });
+      await createFactoryRunsRepository().updateInFlight(first.id, { state: 'waiting_human' });
       await poll.ticks[0]!();
       // Admitted from the queue, the second run's thread is named from the issue as it is now.
       expect(implementing(launcher)).toEqual(['[Factory] #1 a', '[Factory] #2 b']);
@@ -871,7 +871,7 @@ describe('factory watcher', () => {
       const factoryId = await enableFactory();
       const runs = createFactoryRunsRepository();
       const merged = (await runs.start({ factoryId, issueNumber: 1 }))._unsafeUnwrap();
-      await runs.update(merged.id, {
+      await runs.updateInFlight(merged.id, {
         state: 'merged',
         prUrl: 'https://github.com/acme/repo/pull/9',
       });
@@ -987,7 +987,7 @@ describe('factory watcher', () => {
     const runs = createFactoryRunsRepository();
     for (const issueNumber of [1, 2]) {
       const run = (await runs.start({ factoryId, issueNumber }))._unsafeUnwrap();
-      await runs.update(run.id, { state: 'merging' });
+      await runs.updateInFlight(run.id, { state: 'merging' });
     }
     const issues = [
       { number: 1, title: 'a', url: 'u/1' },
@@ -1014,7 +1014,7 @@ describe('factory watcher', () => {
     // One of them parks for a person: its slot is free and the next issue comes in.
     stopFactoryWatcher();
     const [first] = (await runs.inFlight(factoryId))._unsafeUnwrap();
-    await runs.update(first!.id, { state: 'waiting_human' });
+    await runs.updateInFlight(first!.id, { state: 'waiting_human' });
     expect(await start()).toContain('[Factory] #3 c');
   });
 
@@ -1950,7 +1950,7 @@ describe('factory operator controls', () => {
   /** A run that parked a minute ago (its `completedAt` is when it parked). */
   async function seedParkedRun(factoryId: string, threadIds: string[]) {
     const run = await seedRun(factoryId, 'working', threadIds);
-    await createFactoryRunsRepository().update(run.id, { state: 'waiting_human' });
+    await createFactoryRunsRepository().updateInFlight(run.id, { state: 'waiting_human' });
     const parked = new Date(Date.now() - 60_000).toISOString();
     testDb.sqlite
       .query('UPDATE factory_runs SET completed_at = ? WHERE id = ?')
@@ -2767,7 +2767,7 @@ describe('factory capacity between admission and run controls (#328)', () => {
     const run = (
       await runsRepo().start({ factoryId, issueNumber, threadIds: [threadId], state: 'working' })
     )._unsafeUnwrap();
-    await runsRepo().update(run.id, { state: 'waiting_human' });
+    await runsRepo().updateInFlight(run.id, { state: 'waiting_human' });
     return (await runsRepo().get(run.id))._unsafeUnwrap()!;
   }
 
@@ -2887,7 +2887,7 @@ describe('factory capacity between admission and run controls (#328)', () => {
     expect(await inFlightCount(factoryId)).toBe(1);
 
     // The working run ends: the queue admits it with its threads to replay.
-    await runsRepo().update(working.id, { state: 'merged' });
+    await runsRepo().updateInFlight(working.id, { state: 'merged' });
     expect((await runsRepo().admit(factoryId, parked.id))._unsafeUnwrap()).toBe('admitted');
     expect((await runsRepo().get(parked.id))._unsafeUnwrap()!.currentStep).toBe(REOPENED_STEP);
   });

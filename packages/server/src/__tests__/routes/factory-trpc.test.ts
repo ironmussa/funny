@@ -809,7 +809,7 @@ describe('factory over tRPC', () => {
       threadId: 'th-triage',
       items: ['Which endpoint is slow?'],
     };
-    await runs.update(run.id, { state: 'needs_info', triage });
+    await runs.updateInFlight(run.id, { state: 'needs_info', triage });
     expect((await query('alice', 'runs', { projectId: 'p1' })).body).toMatchObject([
       { state: 'needs_info', triage },
     ]);
@@ -824,11 +824,11 @@ describe('factory over tRPC', () => {
   test('a needs_info run goes back in line to be triaged again, only from needs_info', async () => {
     const { createFactoryRunsRepository } = await import('../../services/factory/factory-runs.js');
     const runs = createFactoryRunsRepository();
-    const run = await seededRun('working');
+    const run = await seededRun('triaging');
     expect((await runs.retriage(run))._unsafeUnwrap()).toBe(false);
 
     const asked = { decision: 'needs_info' as const, at: '2026-11-22T10:00:00.000Z', items: ['?'] };
-    await runs.update(run.id, { state: 'needs_info', triage: asked });
+    await runs.updateInFlight(run.id, { state: 'needs_info', triage: asked });
     const parked = (await runs.get(run.id))._unsafeUnwrap()!;
     expect((await runs.retriage(parked))._unsafeUnwrap()).toBe(true);
     const again = (await runs.get(run.id))._unsafeUnwrap()!;
@@ -844,7 +844,7 @@ describe('factory over tRPC', () => {
   test('a run whose paths overlap leaves its slot from triaging only, keeping its contract', async () => {
     const { createFactoryRunsRepository } = await import('../../services/factory/factory-runs.js');
     const runs = createFactoryRunsRepository();
-    const run = await seededRun('working');
+    const run = await seededRun('queued');
     expect((await runs.holdForPaths(run.id, [12]))._unsafeUnwrap()).toBe(false);
 
     const triage = {
@@ -856,7 +856,7 @@ describe('factory over tRPC', () => {
         riskHints: [],
       },
     };
-    await runs.update(run.id, { state: 'triaging', triage });
+    await runs.updateInFlight(run.id, { state: 'triaging', triage });
     expect((await runs.holdForPaths(run.id, [12]))._unsafeUnwrap()).toBe(true);
     expect((await runs.get(run.id))._unsafeUnwrap()).toMatchObject({
       state: 'requested',

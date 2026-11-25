@@ -26,8 +26,8 @@ interface BranchBadgeProps {
 }
 
 const sizeStyles = {
-  // `xs` is the History tab's chip size (15px tall, `text-2xs`).
-  xs: { icon: ICON_SIZE['2xs'], text: 'text-2xs leading-none', chip: 'h-[0.9375rem] px-1.5' },
+  // `xs` is the History tab's chip size (16px tall, `text-2xs`).
+  xs: { icon: ICON_SIZE['2xs'], text: 'text-2xs leading-none', chip: 'h-4 px-2' },
   sm: { icon: ICON_SIZE.xs, text: 'text-xs', chip: 'px-1.5 py-px' },
   md: { icon: ICON_SIZE.sm, text: 'text-sm', chip: 'px-2 py-0.5' },
 };

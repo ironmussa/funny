@@ -111,9 +111,9 @@ export interface PowerlineBarProps {
 const sizeConfig = {
   sm: {
     arrow: 6,
-    height: 'h-[15px]',
+    height: 'h-4',
     padding: 'px-1.5 py-0',
-    text: 'text-2xs leading-[15px]',
+    text: 'text-2xs leading-4',
     icon: ICON_SIZE['2xs'],
   },
   md: {

@@ -144,10 +144,13 @@ function isAlive(pid: number): boolean {
   }
 }
 
-export function deriveStatus(job: Pick<Job, 'pid' | 'exitPath'>): {
+/** A job's status read from its exit marker and process, with its exit code when it recorded one. */
+interface DerivedJobStatus {
   status: JobStatus;
   exitCode: number | null;
-} {
+}
+
+export function deriveStatus(job: Pick<Job, 'pid' | 'exitPath'>): DerivedJobStatus {
   if (existsSync(job.exitPath)) {
     const m = readFileSync(job.exitPath, 'utf8').match(/EXIT=(-?\d+)/);
     const code = m ? parseInt(m[1], 10) : null;

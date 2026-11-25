@@ -476,6 +476,12 @@ async function buildMessageContents(
   return { augmentedContent: withPrecedingPrompt(params, augmentedContent), persistedContent };
 }
 
+/** How a follow-up is delivered: queued behind the running turn, or steered into it. */
+interface FollowUpDelivery {
+  willQueue: boolean;
+  steer: boolean;
+}
+
 /**
  * Decide whether this send will be queued or steer the live turn. When
  * queued, the user message is deliberately NOT persisted to `messages` — it
@@ -489,7 +495,7 @@ function decideFollowUpDelivery(
   thread: SendThread,
   project: SendProject | null,
   effectiveProvider: AgentProvider,
-): { willQueue: boolean; steer: boolean } {
+): FollowUpDelivery {
   const followUpMode = followUpModeFor(project);
   const turnInFlight = isTurnInFlight(params.threadId, thread.status);
 

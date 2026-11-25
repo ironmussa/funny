@@ -2530,7 +2530,38 @@ const migrations: Migration[] = [
       await ctx().addColumn('factory_runs', 'issue_title', 'TEXT');
     },
   },
+  {
+    // Runs from before 130 have no issue title, and the board names a run by
+    // it whenever its thread is not among the threads the client loaded.
+    name: '131_factory_runs_issue_title_backfill',
+    async up() {
+      await backfillFactoryRunIssueTitles();
+    },
+  },
 ];
+
+/**
+ * Fill `factory_runs.issue_title` of the runs that have none from the title of
+ * their implementing thread, `[Factory] #<issue> <issue title>` (cut at 200
+ * characters, as the factory named it). Only the run's own threads count, and
+ * only a title with that exact prefix: review and `thread: new` step threads
+ * are named otherwise. Idempotent: it touches only rows still without a title.
+ */
+async function backfillFactoryRunIssueTitles(): Promise<void> {
+  await ctx().exec(sql`
+    UPDATE factory_runs SET issue_title = (
+      SELECT NULLIF(TRIM(SUBSTR(t.title, LENGTH('[Factory] #' || factory_runs.issue_number || ' ') + 1)), '')
+      FROM threads t
+      WHERE factory_runs.thread_ids LIKE '%"' || t.id || '"%'
+        AND t.title LIKE '[Factory] #' || factory_runs.issue_number || ' %'
+      ORDER BY t.created_at
+      LIMIT 1
+    )
+    WHERE issue_title IS NULL
+      AND issue_number > 0
+      AND thread_ids IS NOT NULL
+  `);
+}
 
 /**
  * Backfill `resource_grants` + `projects.organization_id` from the legacy

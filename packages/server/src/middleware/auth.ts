@@ -17,6 +17,7 @@ import { audit } from '../lib/audit.js';
 import { log } from '../lib/logger.js';
 import type { ServerEnv } from '../lib/types.js';
 import { normalizeUserRole } from '../lib/types.js';
+import { isObject, isString } from '../lib/value-guards.js';
 
 const PUBLIC_PATHS = new Set([
   '/api/health',
@@ -353,9 +354,9 @@ async function sessionStep(c: Context<ServerEnv>, path: string): Promise<AuthSte
  * least-privileged role instead of being stored verbatim.
  */
 function resolveSessionRole(user: any) {
-  const rawRole: unknown = user && typeof user === 'object' ? user.role : undefined;
+  const rawRole: unknown = isObject(user) && 'role' in user ? user.role : undefined;
   const role = normalizeUserRole(rawRole);
-  if (rawRole !== undefined && typeof rawRole === 'string' && rawRole !== role) {
+  if (rawRole !== undefined && isString(rawRole) && rawRole !== role) {
     log.warn('Unknown session role — coerced to user', {
       namespace: 'auth',
       rawRole,

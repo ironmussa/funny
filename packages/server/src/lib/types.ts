@@ -1,3 +1,4 @@
+import { isString } from './value-guards.js';
 /**
  * Known user roles. Any role not in this set is coerced to `'user'` by the
  * auth middleware so that a value leaking in from an untrusted source cannot
@@ -12,7 +13,7 @@ function isUserRole(value: string): value is UserRole {
 
 /** Narrow an untrusted value to a known UserRole, defaulting to 'user'. */
 export function normalizeUserRole(raw: unknown): UserRole {
-  return typeof raw === 'string' && isUserRole(raw) ? raw : 'user';
+  return isString(raw) && isUserRole(raw) ? raw : 'user';
 }
 
 /** Hono environment type for context variables set by auth middleware. */

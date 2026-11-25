@@ -5,6 +5,7 @@ import { FailureCode } from '@funny/shared/runner-v2/common';
 
 import { db } from '../../db/index.js';
 import { threadEvents } from '../../db/schema.js';
+import { isString } from '../../lib/value-guards.js';
 import { relayToThreadStream, relayToUser } from '../browser-events.js';
 import { canRunnerActOnThread } from '../data-scope.js';
 import {
@@ -188,7 +189,7 @@ export function createEventsHandler(
       const type = userEvent.eventType ?? '';
       if (!userId || !isRunnerUserEventType(type)) return;
       const data = decodeStruct(userEvent.data);
-      const threadId = typeof data.threadId === 'string' ? data.threadId : '';
+      const threadId = isString(data.threadId) ? data.threadId : '';
       if (threadId && !(await userEventThreadAllowed(threadId))) return;
       publishUserEvent(userId, { type, threadId: '', data });
     };

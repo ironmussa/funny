@@ -19,6 +19,7 @@ import { repos } from '../db/repos.js';
 import * as schema from '../db/schema.js';
 import { audit } from '../lib/audit.js';
 import { log } from '../lib/logger.js';
+import { isBoolean, isNumber, isObject, isString } from '../lib/value-guards.js';
 import {
   reconcileRunnerActivities,
   startActivityFromRunner,
@@ -55,7 +56,7 @@ function stripRunnerImmutableThreadFields(
   threadId: string,
   updates: unknown,
 ): JsonObject {
-  if (!updates || typeof updates !== 'object' || Array.isArray(updates)) return {};
+  if (!isObject(updates) || Array.isArray(updates)) return {};
   // The updates arrive as the decoded `Struct` of an `UpdateThread` operation.
   const allowed: JsonObject = {};
   const refused: string[] = [];
@@ -121,8 +122,8 @@ function notifyTerminalStatusPersisted(
   // SAFETY: `?.status` is defined for any value (a primitive yields undefined) and status
   // stays unknown until the typeof check below.
   const status = (updates as { status?: unknown } | null)?.status;
-  if (!runnerUserId || typeof threadId !== 'string') return;
-  if (typeof status !== 'string' || !TERMINAL_THREAD_STATUSES.has(status)) return;
+  if (!runnerUserId || !isString(threadId)) return;
+  if (!isString(status) || !TERMINAL_THREAD_STATUSES.has(status)) return;
   // A thread started by an automation completes its run here (durable signal).
   void onAutomationThreadTerminal(threadId, status).catch((error) =>
     log.error('Failed to complete automation run', {
@@ -164,7 +165,7 @@ async function resolveCreateProjectOrg(
   ownerId: string,
   rawOrgId: unknown,
 ): Promise<string | null | false> {
-  if (typeof rawOrgId !== 'string' || !rawOrgId) return null;
+  if (!isString(rawOrgId) || !rawOrgId) return null;
   return (await isOrgMember(ownerId, rawOrgId)) ? rawOrgId : false;
 }
 
@@ -177,7 +178,7 @@ async function findAgentTemplateForRunner(ownerId: string, templateId: unknown):
   const { BUILTIN_AGENT_TEMPLATES } = await import('@funny/shared');
   const builtin = BUILTIN_AGENT_TEMPLATES.find((t: { id: string }) => t.id === templateId);
   if (builtin) return builtin;
-  if (!ownerId || typeof templateId !== 'string') return null;
+  if (!ownerId || !isString(templateId)) return null;
   const row = await dbGet(
     db
       .select()
@@ -197,8 +198,7 @@ async function findAgentTemplateForRunner(ownerId: string, templateId: unknown):
 /** A runner-sent patch's own fields (the decoded `Struct` of a watcher / job update). */
 type PatchFields = ReadonlyMap<string, unknown>;
 
-const ownFields = (raw: unknown): PatchFields =>
-  new Map(raw && typeof raw === 'object' ? Object.entries(raw) : []);
+const ownFields = (raw: unknown): PatchFields => new Map(isObject(raw) ? Object.entries(raw) : []);
 
 /** Keep `patch[key]` when it passes `ok`; drop it otherwise. */
 function copyIf<K extends string, T>(
@@ -210,9 +210,9 @@ function copyIf<K extends string, T>(
   const value = patch.get(key);
   if (patch.has(key) && ok(value)) out[key] = value;
 }
-const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+const isNum = (v: unknown): v is number => isNumber(v) && Number.isFinite(v);
 const isNumOrNull = (v: unknown): v is number | null => v === null || isNum(v);
-const isStr = (v: unknown): v is string => typeof v === 'string';
+const isStr = (v: unknown): v is string => isString(v);
 
 /**
  * Fields a runner may change on its own watcher — never owner, thread, key,
@@ -343,12 +343,10 @@ const DATA_MESSAGE_HANDLERS: DataMessageHandlers = {
     const messageRepo = repos.messages();
     const thread = await messageRepo.getThreadWithMessages(
       data.threadId,
-      typeof data.messageLimit === 'number' ? data.messageLimit : undefined,
+      isNumber(data.messageLimit) ? data.messageLimit : undefined,
       {
-        messageProgress:
-          typeof data.messageProgress === 'number' ? data.messageProgress : undefined,
-        messageAnchorId:
-          typeof data.messageAnchorId === 'string' ? data.messageAnchorId : undefined,
+        messageProgress: isNumber(data.messageProgress) ? data.messageProgress : undefined,
+        messageAnchorId: isString(data.messageAnchorId) ? data.messageAnchorId : undefined,
       },
     );
     return {
@@ -360,8 +358,8 @@ const DATA_MESSAGE_HANDLERS: DataMessageHandlers = {
     const messageRepo = repos.messages();
     const result = await messageRepo.getThreadMessages({
       threadId: data.threadId,
-      cursor: typeof data.cursor === 'string' ? data.cursor : undefined,
-      limit: typeof data.limit === 'number' ? data.limit : 50,
+      cursor: isString(data.cursor) ? data.cursor : undefined,
+      limit: isNumber(data.limit) ? data.limit : 50,
       direction: data.direction === 'after' ? 'after' : 'before',
     });
     return {
@@ -391,13 +389,13 @@ const DATA_MESSAGE_HANDLERS: DataMessageHandlers = {
     const { searchThreadMessages } = await import('./search-repository.js');
     const results = await searchThreadMessages({
       userId: runnerUserId,
-      query: typeof data.query === 'string' ? data.query : undefined,
-      author: typeof data.author === 'string' ? data.author : undefined,
-      since: typeof data.since === 'string' ? data.since : undefined,
-      until: typeof data.until === 'string' ? data.until : undefined,
-      projectId: typeof data.projectId === 'string' ? data.projectId : undefined,
-      limit: typeof data.limit === 'number' ? data.limit : undefined,
-      caseSensitive: typeof data.caseSensitive === 'boolean' ? data.caseSensitive : undefined,
+      query: isString(data.query) ? data.query : undefined,
+      author: isString(data.author) ? data.author : undefined,
+      since: isString(data.since) ? data.since : undefined,
+      until: isString(data.until) ? data.until : undefined,
+      projectId: isString(data.projectId) ? data.projectId : undefined,
+      limit: isNumber(data.limit) ? data.limit : undefined,
+      caseSensitive: isBoolean(data.caseSensitive) ? data.caseSensitive : undefined,
     });
     return { type: 'data:search_threads_response', results };
   },
@@ -645,7 +643,7 @@ const DATA_MESSAGE_HANDLERS: DataMessageHandlers = {
     const token =
       (await resolveProjectGithubToken(
         runnerId,
-        typeof data.projectId === 'string' ? data.projectId : null,
+        isString(data.projectId) ? data.projectId : null,
       )) ?? (await getProviderKey(ownerId, 'github'));
     return { type: 'data:get_github_token_response', token: token ?? null };
   },
@@ -772,7 +770,7 @@ const DATA_MESSAGE_HANDLERS: DataMessageHandlers = {
     }
     const { setBuiltinProviderSettings } = await import('./profile-service.js');
     const active = Array.isArray(data.active)
-      ? data.active.filter((x: unknown): x is string => typeof x === 'string')
+      ? data.active.filter((x: unknown): x is string => isString(x))
       : null;
     await setBuiltinProviderSettings(runnerUserId, active);
     return { type: 'data:ack', success: true };

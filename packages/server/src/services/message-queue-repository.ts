@@ -63,7 +63,7 @@ export async function enqueue(
 }
 
 export async function peek(threadId: string): Promise<QueueEntry | null> {
-  const row = await dbGet(
+  const row = await dbGet<QueueEntry>(
     db
       .select()
       .from(messageQueue)
@@ -71,7 +71,7 @@ export async function peek(threadId: string): Promise<QueueEntry | null> {
       .orderBy(asc(messageQueue.sortOrder))
       .limit(1),
   );
-  return (row as QueueEntry) ?? null;
+  return row ?? null;
 }
 
 export async function dequeue(threadId: string): Promise<QueueEntry | null> {
@@ -83,9 +83,9 @@ export async function dequeue(threadId: string): Promise<QueueEntry | null> {
 }
 
 export async function cancel(messageId: string, threadId: string): Promise<boolean> {
-  const row = (await dbGet(
+  const row = await dbGet<QueueEntry>(
     db.select().from(messageQueue).where(eq(messageQueue.id, messageId)),
-  )) as QueueEntry | undefined;
+  );
   if (!row || row.threadId !== threadId) return false;
   await dbRun(db.delete(messageQueue).where(eq(messageQueue.id, messageId)));
   log.info('Queued message cancelled', { namespace: 'queue', messageId });
@@ -97,9 +97,9 @@ export async function update(
   threadId: string,
   content: string,
 ): Promise<QueueEntry | null> {
-  const row = (await dbGet(
+  const row = await dbGet<QueueEntry>(
     db.select().from(messageQueue).where(eq(messageQueue.id, messageId)),
-  )) as QueueEntry | undefined;
+  );
   if (!row || row.threadId !== threadId) return null;
 
   await dbRun(db.update(messageQueue).set({ content }).where(eq(messageQueue.id, messageId)));
@@ -108,13 +108,13 @@ export async function update(
 }
 
 export async function listQueue(threadId: string): Promise<QueueEntry[]> {
-  return dbAll(
+  return dbAll<QueueEntry>(
     db
       .select()
       .from(messageQueue)
       .where(eq(messageQueue.threadId, threadId))
       .orderBy(asc(messageQueue.sortOrder)),
-  ) as Promise<QueueEntry[]>;
+  );
 }
 
 export async function queueCount(threadId: string): Promise<number> {

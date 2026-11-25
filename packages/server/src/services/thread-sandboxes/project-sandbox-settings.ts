@@ -60,6 +60,7 @@ const toView = (row: Row): ProjectSandboxView => ({
   projectId: row.projectId,
   connectionId: row.connectionId,
   sizeId: row.sizeId,
+  // SAFETY: project_sandbox_settings.mode is written only in this module, from ThreadRuntimeMode values.
   mode: row.mode as ThreadRuntimeMode,
   updatedAt: row.updatedAt,
 });

@@ -2465,7 +2465,103 @@ const migrations: Migration[] = [
       await ctx().addColumn('factory_settings', 'too_big', 'TEXT');
     },
   },
+  {
+    // The largest adjustment a merge approval follows to a new commit, in
+    // lines (openspec factory-approval-survives-integration); null: 0, only
+    // the same change.
+    name: '126_factory_settings_approval_adjust',
+    async up() {
+      await ctx().addColumn('factory_settings', 'approval_adjust_max_lines', 'INTEGER');
+    },
+  },
+  {
+    // An agent's request that the member approve merging a held high-risk
+    // change (openspec factory-agent-tools). One pending request per run: the
+    // partial unique index is what makes asking twice return the same request.
+    name: '127_factory_approval_requests',
+    async up() {
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS factory_approval_requests (
+          id TEXT PRIMARY KEY,
+          run_id TEXT NOT NULL,
+          factory_id TEXT NOT NULL,
+          project_id TEXT NOT NULL,
+          thread_id TEXT NOT NULL,
+          sha TEXT NOT NULL,
+          state TEXT NOT NULL DEFAULT 'pending',
+          created_at TEXT NOT NULL,
+          resolved_at TEXT,
+          resolved_by TEXT
+        )
+      `);
+      await ctx().exec(sql`
+        CREATE UNIQUE INDEX IF NOT EXISTS factory_approval_requests_one_pending
+        ON factory_approval_requests (run_id)
+        WHERE state = 'pending'
+      `);
+      await ctx().exec(sql`
+        CREATE INDEX IF NOT EXISTS factory_approval_requests_factory
+        ON factory_approval_requests (factory_id, created_at)
+      `);
+    },
+  },
+  {
+    // Whether a run parked for a member's approval of a high-risk change keeps
+    // its likely paths (openspec factory-merge-fewer-bounces, D6); null: no.
+    name: '128_factory_settings_hold_paths_awaiting_approval',
+    async up() {
+      await ctx().addColumn('factory_settings', 'hold_paths_awaiting_approval', 'INTEGER');
+    },
+  },
+  {
+    // A member's statement that a run is a lint cleanup: its size and the
+    // contract's risk hints then do not make it high risk, as long as the
+    // change adds no suppression and touches no lint configuration.
+    name: '129_factory_runs_risk_waiver',
+    async up() {
+      await ctx().addColumn('factory_runs', 'risk_waiver', 'TEXT');
+    },
+  },
+  {
+    // The issue's title, so a run with no thread (still queued, or stopped
+    // before its flow started) is named by its issue on the factory board.
+    name: '130_factory_runs_issue_title',
+    async up() {
+      await ctx().addColumn('factory_runs', 'issue_title', 'TEXT');
+    },
+  },
+  {
+    // Runs from before 130 have no issue title, and the board names a run by
+    // it whenever its thread is not among the threads the client loaded.
+    name: '131_factory_runs_issue_title_backfill',
+    async up() {
+      await backfillFactoryRunIssueTitles();
+    },
+  },
 ];
+
+/**
+ * Fill `factory_runs.issue_title` of the runs that have none from the title of
+ * their implementing thread, `[Factory] #<issue> <issue title>` (cut at 200
+ * characters, as the factory named it). Only the run's own threads count, and
+ * only a title with that exact prefix: review and `thread: new` step threads
+ * are named otherwise. Idempotent: it touches only rows still without a title.
+ */
+async function backfillFactoryRunIssueTitles(): Promise<void> {
+  await ctx().exec(sql`
+    UPDATE factory_runs SET issue_title = (
+      SELECT NULLIF(TRIM(SUBSTR(t.title, LENGTH('[Factory] #' || factory_runs.issue_number || ' ') + 1)), '')
+      FROM threads t
+      WHERE factory_runs.thread_ids LIKE '%"' || t.id || '"%'
+        AND t.title LIKE '[Factory] #' || factory_runs.issue_number || ' %'
+      ORDER BY t.created_at
+      LIMIT 1
+    )
+    WHERE issue_title IS NULL
+      AND issue_number > 0
+      AND thread_ids IS NOT NULL
+  `);
+}
 
 /**
  * Backfill `resource_grants` + `projects.organization_id` from the legacy
@@ -2534,5 +2630,5 @@ export async function backfillResourceGrants<ExecResult>(
 }
 
 export async function autoMigrate() {
-  await runMigrations(db as any, migrations, log, 'central-db', dbDialect);
+  await runMigrations(db, migrations, log, 'central-db', dbDialect);
 }

@@ -17,10 +17,23 @@
  */
 type ACPMcpServer = import('@agentclientprotocol/sdk').McpServer;
 
+/** Name/value pairs as the internal map writes them: a plain object, or ACP's own pair list. */
+type PairSource = Readonly<Record<string, unknown>> | readonly unknown[];
+
+/** One entry of the internal MCP server map; every field is checked before use. */
+interface InternalMcpServer {
+  type?: unknown;
+  command?: unknown;
+  args?: unknown;
+  url?: unknown;
+  env?: PairSource;
+  headers?: PairSource;
+}
+
 export function toACPMcpServers(mcpServers: Record<string, any> | undefined): ACPMcpServer[] {
   if (!mcpServers) return [];
 
-  const recordToPairs = (rec: unknown): Array<{ name: string; value: string }> => {
+  const recordToPairs = (rec: PairSource | undefined): Array<{ name: string; value: string }> => {
     if (!rec) return [];
     if (Array.isArray(rec)) {
       return rec
@@ -42,7 +55,7 @@ export function toACPMcpServers(mcpServers: Record<string, any> | undefined): AC
   const out: ACPMcpServer[] = [];
   for (const [name, raw] of Object.entries(mcpServers)) {
     if (!raw || !isObject(raw)) continue;
-    const cfg = raw as Record<string, unknown>;
+    const cfg: InternalMcpServer = raw;
     const type = (cfg.type as string | undefined)?.toLowerCase();
 
     // In-process SDK MCP servers (createSdkMcpServer) run inside this process

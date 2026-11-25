@@ -40,7 +40,7 @@
  * `routes/threads.ts` and do not depend on this module. This is not full CQRS.
  */
 
-export { normalizeCreationRequest } from './domain/creation-target.js';
+export { normalizeCreationRequest, type CreationPayload } from './domain/creation-target.js';
 export { authenticatedUserId, authorizedThreadId } from './domain/ids.js';
 export { makeCreateThread } from './application/create-thread.js';
 export { makeForkThread, type ForkThread } from './application/fork-thread.js';

@@ -13,6 +13,7 @@
  * Interfaces are split by responsibility (ISP).
  */
 
+import type { JsonValue } from '@bufbuild/protobuf';
 import type {
   PendingPermissionRequest,
   WSEvent,
@@ -22,9 +23,12 @@ import type {
   Watcher,
   Job,
   ResolvedAgentExecutionProfileResponse,
+  ThreadWithMessages,
 } from '@funny/shared';
 import type { DomainError } from '@funny/shared/errors';
 import type { Result, ResultAsync } from 'neverthrow';
+
+import type { pipelineRuns, pipelines, threads } from '../db/schema.js';
 
 export interface RuntimeThreadRecord {
   id: string;
@@ -36,25 +40,66 @@ export interface RuntimeThreadRecord {
   readOnly?: number | boolean | null;
   /** Who started it (`threads.source`): `factory` for the issue factory's threads. */
   source?: string | null;
-  status?: string | null;
-  stage?: string | null;
-  mode?: string | null;
-  model?: string | null;
-  provider?: string | null;
-  permissionMode?: string | null;
+  status?: string;
+  stage?: string;
+  mode?: string;
+  model?: string;
+  provider?: string;
+  permissionMode?: string;
   branch?: string | null;
   baseBranch?: string | null;
   worktreePath?: string | null;
   mergedAt?: string | null;
   cost?: number | null;
-  [key: string]: any;
+  title?: string | null;
+  initialPrompt?: string | null;
+  /** `threads.runtime`: `local` or `sandbox`. */
+  runtime?: string | null;
+  /** SDK-reported tools (JSON `string[]`). */
+  initTools?: string | null;
+  initCwd?: string | null;
+  initSlashCommands?: string | null;
+  agentProfileId?: string | null;
+  agentProfileName?: string | null;
+  agentProfileProvider?: string | null;
+  agentTemplateId?: string | null;
+  /** The template's filled variable values: the column's JSON text, or already parsed. */
+  templateVariables?: string | Record<string, string> | null;
+  contextRecoveryReason?: string | null;
+  fileCheckpointingEnabled?: number | boolean | null;
+  completedAt?: string | null;
 }
+
+/** A thread record with a window of its messages (`data:get_thread_with_messages`). */
+export type RuntimeThreadWithMessages = RuntimeThreadRecord &
+  Pick<
+    ThreadWithMessages,
+    'hasMore' | 'hasMoreAfter' | 'total' | 'windowStart' | 'waitingReason' | 'pendingPermission'
+  > & { messages: any[] };
+
+/** A `threads` row the runtime creates (`data:create_thread`). */
+export type RuntimeThreadInsert = typeof threads.$inferInsert;
+
+/** Thread fields the runtime writes (`data:update_thread`): columns of the `threads` table. */
+export type RuntimeThreadUpdate = Partial<RuntimeThreadInsert>;
+
+/**
+ * Payload of a thread event: a protobuf `Struct` on the wire (`SaveThreadEvent.data`),
+ * stored as JSON. Fields left `undefined` are dropped when it is sent.
+ */
+export type ThreadEventData = { readonly [key: string]: JsonValue | undefined };
+
+/** Pipeline fields the runtime writes: columns of the `pipelines` table. */
+export type PipelineUpdate = Partial<typeof pipelines.$inferInsert>;
+
+/** Pipeline run fields the runtime writes: columns of the `pipeline_runs` table. */
+export type PipelineRunUpdate = Partial<typeof pipelineRuns.$inferInsert>;
 
 // ── Thread query / mutation ────────────────────────────────────
 
 export interface IThreadQuery {
   getThread(id: string): RuntimeThreadRecord | undefined | Promise<RuntimeThreadRecord | undefined>;
-  updateThread(id: string, updates: Record<string, any>): void | Promise<void>;
+  updateThread(id: string, updates: RuntimeThreadUpdate): void | Promise<void>;
   createPendingPermissionRequest?(request: PendingPermissionRequest): void | Promise<void>;
   /** Resolve only an active durable request. `false` means stale. */
   resolvePendingPermissionRequest?(
@@ -66,10 +111,7 @@ export interface IThreadQuery {
     id: string,
     messageLimit?: number,
     opts?: { messageProgress?: number },
-  ):
-    | (RuntimeThreadRecord & { messages: any[] })
-    | null
-    | Promise<(RuntimeThreadRecord & { messages: any[] }) | null>;
+  ): RuntimeThreadWithMessages | null | Promise<RuntimeThreadWithMessages | null>;
 }
 
 // ── Message repository ──────────────────────────────────────────
@@ -187,7 +229,7 @@ export interface IThreadRepository extends IThreadQuery, IMessageRepository, ITo
   listArchivedThreads(projectId: string, userId: string): Promise<any[]>;
   getThreadByExternalRequestId(externalRequestId: string): Promise<any | undefined>;
   getThreadBySessionId(sessionId: string): Promise<any | undefined>;
-  createThread(data: Record<string, any>): Promise<any>;
+  createThread(data: RuntimeThreadInsert): Promise<any>;
   deleteThread(id: string): Promise<void>;
   markStaleThreadsInterrupted(): Promise<void>;
   markStaleExternalThreadsStopped(): Promise<void>;
@@ -249,7 +291,7 @@ export interface IPipelineRepository {
   }): Promise<string>;
   getPipelineById(id: string): Promise<any | undefined>;
   getPipelinesByProject(projectId: string): Promise<any[]>;
-  updatePipeline(id: string, updates: Record<string, unknown>): Promise<void>;
+  updatePipeline(id: string, updates: PipelineUpdate): Promise<void>;
   deletePipeline(id: string): Promise<void>;
   createRun(data: {
     pipelineId: string;
@@ -257,7 +299,7 @@ export interface IPipelineRepository {
     maxIterations: number;
     commitSha?: string;
   }): Promise<string>;
-  updateRun(id: string, updates: Record<string, unknown>): Promise<void>;
+  updateRun(id: string, updates: PipelineRunUpdate): Promise<void>;
   getRunById(id: string): Promise<any | undefined>;
   getRunsForThread(threadId: string): Promise<any[]>;
 }
@@ -342,29 +384,32 @@ export interface IThreadEventService {
     id?: string;
     threadId: string;
     type: string;
-    data: Record<string, unknown>;
+    data: ThreadEventData;
     timestamp?: number;
   }): Promise<void>;
-  saveThreadEvent(threadId: string, type: string, data: Record<string, unknown>): Promise<void>;
+  saveThreadEvent(threadId: string, type: string, data: ThreadEventData): Promise<void>;
   getThreadEvents(threadId: string): Promise<any[]>;
   deleteThreadEvents(threadId: string): Promise<void>;
 }
 
 // ── Message queue service ───────────────────────────────────────
 
+/** A follow-up message to queue for a thread (`data:enqueue_message`). */
+export interface EnqueueMessageInput {
+  content: string;
+  provider?: string;
+  model?: string;
+  permissionMode?: string;
+  images?: string;
+  allowedTools?: string;
+  disallowedTools?: string;
+  fileReferences?: string;
+}
+
 export interface IMessageQueueService {
   enqueue(
     threadId: string,
-    entry: {
-      content: string;
-      provider?: string;
-      model?: string;
-      permissionMode?: string;
-      images?: string;
-      allowedTools?: string;
-      disallowedTools?: string;
-      fileReferences?: string;
-    },
+    entry: EnqueueMessageInput,
   ): Promise<{
     id: string;
     threadId: string;
@@ -437,7 +482,7 @@ export interface IWatcherRepository {
   /** Resolves false when a status in `patch` is not a legal transition from the stored one. */
   updateWatcher(
     id: string,
-    patch: Record<string, any>,
+    patch: Partial<Watcher>,
     /** Apply only while the watcher's `nextWakeAt` still equals this. */
     expect?: { expectedNextWakeAt?: number },
   ): Promise<boolean>;
@@ -453,6 +498,6 @@ export interface IJobRepository {
   listRunningJobs(): Promise<Job[]>;
   listJobsByUser(userId: string): Promise<Job[]>;
   /** Resolves false when a status in `patch` is not a legal transition from the stored one. */
-  updateJob(id: string, patch: Record<string, any>): Promise<boolean>;
+  updateJob(id: string, patch: Partial<Job>): Promise<boolean>;
   deleteJobsByThread(threadId: string): Promise<void>;
 }

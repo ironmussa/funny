@@ -282,6 +282,21 @@ describe('operations handler legacy request mapping', () => {
     }
   });
 
+  test('the factory tools carry the thread, the run and the action, and no user', async () => {
+    expect(await mapKind('factoryListRuns', { threadId: 't1' })).toEqual({
+      type: 'data:factory_list_runs',
+      threadId: 't1',
+    });
+    expect(
+      await mapKind('factoryControlRun', { threadId: 't1', runId: 'r1', action: 'stop' }),
+    ).toEqual({ type: 'data:factory_control_run', threadId: 't1', runId: 'r1', action: 'stop' });
+    expect(await mapKind('factoryRequestApproval', { threadId: 't1', runId: 'r1' })).toEqual({
+      type: 'data:factory_request_approval',
+      threadId: 't1',
+      runId: 'r1',
+    });
+  });
+
   test('restores proto3 defaults for sparse values', async () => {
     expect(await mapKind('getThreadMessages', { threadId: 't1' })).toEqual({
       type: 'data:get_thread_messages',

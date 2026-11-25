@@ -35,7 +35,7 @@ export interface OperationIdempotencyStore {
       runnerId: string;
       operationKind: string;
       idempotencyKey: string;
-      request: IdempotentRequest;
+      request: IdempotentRequest | undefined;
     },
     execute: () => Promise<T>,
   ): Promise<IdempotencyExecution<T>>;
@@ -56,7 +56,7 @@ export interface SqlOperationIdempotencyOptions {
   transaction?: <T>(work: () => Promise<T>) => Promise<T>;
 }
 
-function fingerprint(request: IdempotentRequest): string {
+function fingerprint(request: IdempotentRequest | undefined): string {
   return createHash('sha256').update(canonicalJson(request)).digest('hex');
 }
 
@@ -85,7 +85,7 @@ export class SqlOperationIdempotencyStore implements OperationIdempotencyStore {
       runnerId: string;
       operationKind: string;
       idempotencyKey: string;
-      request: IdempotentRequest;
+      request: IdempotentRequest | undefined;
     },
     execute: () => Promise<T>,
   ): Promise<IdempotencyExecution<T>> {
@@ -118,7 +118,7 @@ export class SqlOperationIdempotencyStore implements OperationIdempotencyStore {
       runnerId: string;
       operationKind: string;
       idempotencyKey: string;
-      request: IdempotentRequest;
+      request: IdempotentRequest | undefined;
     },
     execute: () => Promise<T>,
   ): Promise<IdempotencyExecution<T>> {
@@ -156,6 +156,8 @@ export class SqlOperationIdempotencyStore implements OperationIdempotencyStore {
         'runner operation idempotency outcome',
       );
       if (!outcome.ok) throw new Error(outcome.error);
+      // SAFETY: a completed row's outcomeJson is canonicalJson of execute()'s T result,
+      // written below for this same runner / operation kind / key scope.
       return { kind: 'replayed', outcome: outcome.value as T };
     }
     if (record) return { kind: 'in_progress' };

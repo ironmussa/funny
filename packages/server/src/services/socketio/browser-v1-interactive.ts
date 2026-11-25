@@ -47,7 +47,7 @@ export class BrowserV1AtMostOnceInputStore {
     const previous = this.ordinals.get(key)?.ordinal ?? 0n;
     if (ordinal <= previous) return false;
     while (this.ordinals.size >= this.maxEntries) {
-      const oldestKey = this.ordinals.keys().next().value as string | undefined;
+      const oldestKey: string | undefined = this.ordinals.keys().next().value;
       if (!oldestKey) break;
       this.ordinals.delete(oldestKey);
     }
@@ -240,6 +240,8 @@ export function setupBrowserV1Interactive(
         return;
       }
       const message = decoded.envelope.payload.value;
+      // SAFETY: socket.data.browserV1 is written only by browser-v1-negotiation.ts with a
+      // BrowserV1ConnectionState, which carries principalUserId and assignments.
       const state = socket.data.browserV1 as
         | {
             principalUserId?: string;

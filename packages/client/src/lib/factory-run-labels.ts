@@ -28,16 +28,37 @@ export function factoryRunRef(
   return run.triggerName ?? t('factory.runNow', 'Run now');
 }
 
-/** A run's title while it has no thread to take one from. */
+/** A run's title while it has no thread to take one from: its issue's title when the run read it. */
 export function factoryRunFallbackTitle(
   t: TFunction,
-  run: Pick<FactoryRun, 'issueNumber' | 'triggerName' | 'flowName'>,
+  run: Pick<FactoryRun, 'issueNumber' | 'issueTitle' | 'triggerName' | 'flowName'>,
 ): string {
+  if (run.issueNumber !== null && run.issueTitle) {
+    return t('factoryView.issueTitleNamed', '#{{number}} {{title}}', {
+      number: run.issueNumber,
+      title: run.issueTitle,
+      interpolation: { escapeValue: false },
+    });
+  }
   if (run.issueNumber !== null) {
     return t('factoryView.issueTitle', 'Issue #{{number}}', { number: run.issueNumber });
   }
   const ref = factoryRunRef(t, run);
   return run.flowName ? `${ref} · ${run.flowName}` : ref;
+}
+
+/**
+ * A run's title: its issue's (the ticket's) when the run read it, else its
+ * thread's, else the fallback. Not the thread's title first: that one carries
+ * the factory's `[Factory] #N` prefix and keeps the issue title it was created with.
+ */
+export function factoryRunTitle(
+  t: TFunction,
+  run: Pick<FactoryRun, 'issueNumber' | 'issueTitle' | 'triggerName' | 'flowName'>,
+  threadTitle: string | undefined,
+): string {
+  if (run.issueNumber !== null && run.issueTitle) return factoryRunFallbackTitle(t, run);
+  return threadTitle || factoryRunFallbackTitle(t, run);
 }
 
 /** "Factory · #225", or "Factory · Nightly audit" for a run without an issue. */
@@ -108,6 +129,12 @@ export function factoryWaitReasonText(t: TFunction, reason: FactoryWaitReason): 
       return t(
         'factory.wait.pathsOverlap',
         'Waiting for {{blockers}}: it works on the same files',
+        { blockers },
+      );
+    case 'paths-awaiting-approval':
+      return t(
+        'factory.wait.pathsAwaitingApproval',
+        'Waiting for {{blockers}}: it holds the same files while it waits for an approval',
         { blockers },
       );
     case 'no-free-slot':
@@ -373,6 +400,11 @@ export function factoryRunReasonDetail(
       return t(
         'factory.reasonDetail.mergeRounds',
         "The agent's rounds of fixes did not get the change to merge with its base branch. Look at the pull request and resolve it yourself.",
+      );
+    case 'base keeps moving':
+      return t(
+        'factory.reasonDetail.baseMoving',
+        'GitHub refused the merge several times because the base branch or the pull request kept changing. Retry the run when the branch is quiet.',
       );
     default:
       return run.failureReason;

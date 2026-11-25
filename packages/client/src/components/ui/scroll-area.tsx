@@ -3,8 +3,17 @@ import * as React from 'react';
 
 import { cn } from '@/lib/utils';
 
+/** Surface of the scroll box: none, a muted code well, or a rule above it (tool card output). */
+const SCROLL_AREA_VARIANT = {
+  default: '',
+  muted: 'rounded bg-muted',
+  'muted-outline': 'rounded border border-border bg-muted',
+  divided: 'border-t border-border/40',
+} as const;
+
 interface ScrollAreaProps extends React.ComponentPropsWithoutRef<typeof ScrollAreaPrimitive.Root> {
   edgeFade?: boolean;
+  variant?: keyof typeof SCROLL_AREA_VARIANT;
   viewportRef?: React.Ref<HTMLDivElement>;
   viewportProps?: Omit<
     React.ComponentPropsWithoutRef<typeof ScrollAreaPrimitive.Viewport>,
@@ -17,6 +26,7 @@ function ScrollArea({
   className,
   children,
   edgeFade: _edgeFade,
+  variant = 'default',
   viewportRef,
   viewportProps,
   ref,
@@ -35,7 +45,7 @@ function ScrollArea({
   return (
     <ScrollAreaPrimitive.Root
       ref={ref}
-      className={cn('relative overflow-hidden', className)}
+      className={cn('relative overflow-hidden', SCROLL_AREA_VARIANT[variant], className)}
       {...props}
     >
       <ScrollAreaPrimitive.Viewport

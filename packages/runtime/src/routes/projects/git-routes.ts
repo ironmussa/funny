@@ -14,6 +14,7 @@ import { createStaleWhileRevalidate } from '@funny/shared/stale-while-revalidate
 import { Hono, type Context } from 'hono';
 import { ok, type Result } from 'neverthrow';
 
+import type { TelemetryAttributes } from '../../lib/telemetry.js';
 import { requestSpan } from '../../middleware/tracing.js';
 import { recordCheckoutSwitch } from '../../services/checkout-activity.js';
 import { gitRuntimeService } from '../../services/git-runtime-service.js';
@@ -98,7 +99,7 @@ const branchListingCache = createStaleWhileRevalidate<BranchListing, never>({
 async function spanned<T, E extends { message: string }>(
   c: Context<HonoEnv>,
   name: string,
-  attrs: Record<string, unknown>,
+  attrs: TelemetryAttributes,
   run: () => PromiseLike<Result<T, E>>,
 ): Promise<Result<T, E>> {
   const span = requestSpan(c, name, attrs);

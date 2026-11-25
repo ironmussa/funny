@@ -9,7 +9,7 @@ interface Props {
   valueTestId?: string;
 }
 
-const colorClasses: Record<string, string> = {
+const colorClasses: Record<Props['color'], string> = {
   blue: 'bg-status-info/10 text-status-info/80',
   green: 'bg-status-success/10 text-status-success/80',
   amber: 'bg-status-warning/10 text-status-warning/80',

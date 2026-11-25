@@ -6,6 +6,7 @@
 
 import { WORKSPACE_CLEANUP_REASONS } from '@funny/shared/activities';
 import { validationErr, type DomainError } from '@funny/shared/errors';
+import type { JsonValue } from '@funny/shared/json-validation';
 import { DEFAULT_PROVIDER, MODEL_REGISTRY, providerModelProblem } from '@funny/shared/models';
 import { ok, err, type Result } from 'neverthrow';
 import { z } from 'zod';
@@ -677,6 +678,8 @@ const factoryBranchSchema = z
   .refine((s) => !s.startsWith('-'), 'branch must not start with "-"');
 
 /** A step timeout: 10 minutes by default, at most an hour. */
+/** A full or abbreviated commit id: never an option or a ref expression. */
+const factoryCommitSchema = z.string().regex(/^[0-9a-f]{7,64}$/, 'Invalid commit id');
 const factoryTimeoutSchema = z.number().int().positive().max(3_600_000).default(600_000);
 
 /** A factory step the runner runs in the thread's checkout (openspec factory-integration). */
@@ -703,12 +706,24 @@ export const startFactoryStepSchema = z.discriminatedUnion('kind', [
     checks: z.array(z.string().min(1).max(10_000)).max(20).default([]),
     timeoutMs: factoryTimeoutSchema,
   }),
+  // How the pull request's change differs at two commits (factory-approval-survives-integration).
+  z.object({
+    kind: z.literal('change-delta'),
+    from: factoryCommitSchema,
+    to: factoryCommitSchema,
+    baseBranch: factoryBranchSchema,
+    branch: factoryBranchSchema,
+    timeoutMs: factoryTimeoutSchema,
+  }),
 ]);
 
 // ── Helper ───────────────────────────────────────────────────────
 
+/** What a route hands to `validate`: a decoded JSON body, or a path / query value. */
+export type RequestInput = JsonValue | undefined;
+
 /** Validate request body; returns Result<T, DomainError> */
-export function validate<T>(schema: z.ZodType<T>, data: unknown): Result<T, DomainError> {
+export function validate<T>(schema: z.ZodType<T>, data: RequestInput): Result<T, DomainError> {
   const result = schema.safeParse(data);
   if (!result.success) {
     const firstIssue = result.error.issues[0];

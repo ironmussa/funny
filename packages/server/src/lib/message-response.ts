@@ -45,6 +45,9 @@ function toToolCall(row: ToolCallRow): ToolCall {
 }
 
 export function toMessage(row: EnrichedMessageRow): MessageWithToolCalls {
+  // SAFETY: role / model / permissionMode / effort are written by the runtime's
+  // message persistence (data:insert_message) from its typed values; the
+  // protocol and repository store them as plain text without re-checking.
   return {
     id: row.id,
     threadId: row.threadId,

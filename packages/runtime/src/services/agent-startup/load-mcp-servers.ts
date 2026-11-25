@@ -1,9 +1,24 @@
 import { resolve } from 'node:path';
 
+import type { McpServerConfig } from '@anthropic-ai/claude-agent-sdk';
 import { getProviderResourceDescriptor, type AgentProvider, type McpServer } from '@funny/shared';
 
 import { log } from '../../lib/logger.js';
 import { listConfiguredClaudeMcpServers, listMcpServers } from '../mcp-service.js';
+
+/** The fields of a configured server that are injected into an agent's `mcpServers` map. */
+export type ProjectMcpServerEntry = Pick<McpServer, 'type'> &
+  Partial<Pick<McpServer, 'url' | 'command' | 'args' | 'headers' | 'env'>>;
+
+/**
+ * One entry of an agent's `mcpServers` map: an SDK server config (funny's own
+ * loopback servers), a project server converted by `toSdkEntry`, or a Deep
+ * Agent template's stored server (an `McpServer`, which carries its `name`).
+ */
+export type AgentMcpServerEntry = McpServerConfig | ProjectMcpServerEntry | McpServer;
+
+/** An agent's MCP servers, keyed by server name, as handed to the orchestrator. */
+export type AgentMcpServers = Record<string, AgentMcpServerEntry>;
 
 /**
  * Claude.ai connectors (`claude.ai Gmail`, …) are loaded by the Claude CLI
@@ -45,7 +60,7 @@ export async function loadProjectMcpServers(
   mcpProjectPath: string,
   provider: AgentProvider,
   options: { claudeConfigDir?: string; cwd?: string } = {},
-): Promise<Record<string, any> | undefined> {
+): Promise<AgentMcpServers | undefined> {
   try {
     const descriptor = getProviderResourceDescriptor(provider);
     if (!descriptor.mcp.supported) return undefined;
@@ -119,14 +134,16 @@ function isInjectable(server: McpServer, transports: readonly McpServer['type'][
 }
 
 /** The SDK's `mcpServers` record entry for one server. */
-function toSdkEntry(srv: McpServer): Record<string, unknown> {
-  const location =
-    srv.type === 'http' || srv.type === 'sse'
-      ? { url: srv.url }
-      : { command: srv.command, args: srv.args };
-  const entry: Record<string, unknown> = { type: srv.type, ...location };
+function toSdkEntry(srv: McpServer): ProjectMcpServerEntry {
+  // Same shape as before: absent fields are omitted, not `undefined`.
+  const entry: ProjectMcpServerEntry = { type: srv.type };
+  if (srv.type === 'http' || srv.type === 'sse') {
+    if (srv.url !== undefined) entry.url = srv.url;
+  } else {
+    if (srv.command !== undefined) entry.command = srv.command;
+    if (srv.args !== undefined) entry.args = srv.args;
+  }
   if (srv.headers) entry.headers = srv.headers;
   if (srv.env) entry.env = srv.env;
-  // Same shape as before: absent fields are omitted, not `undefined`.
-  return Object.fromEntries(Object.entries(entry).filter(([, v]) => v !== undefined));
+  return entry;
 }

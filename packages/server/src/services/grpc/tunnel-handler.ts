@@ -11,7 +11,8 @@ import type {
 import type { RunnerGrpcSessionRegistry } from './session-registry.js';
 
 type Header = { name: string; value: string };
-type WireFrame = Record<string, any> & {
+/** A `TunnelRequest` as proto-loader decodes it. */
+interface WireFrame {
   session?: { sessionEpoch?: string | number | bigint };
   tunnelId?: string;
   responseStart?: { statusCode?: number; headers?: Header[] };
@@ -19,7 +20,7 @@ type WireFrame = Record<string, any> & {
   end?: { finalSequence?: string | number | bigint };
   failure?: { code?: FailureCode; message?: string; retryable?: boolean };
   ready?: Record<string, never>;
-};
+}
 
 export interface TunnelDispatchRequest {
   method: string;
@@ -72,32 +73,41 @@ interface TunnelState {
   chunks: Uint8Array[];
   readers: Array<{
     resolve(value: IteratorResult<Uint8Array>): void;
-    reject(error: TunnelDispatchError): void;
+    reject(error: unknown): void;
   }>;
   responseResolve(value: TunnelResponseHead): void;
-  responseReject(error: TunnelDispatchError): void;
+  responseReject(error: unknown): void;
   completedResolve(): void;
-  completedReject(error: TunnelDispatchError): void;
+  completedReject(error: unknown): void;
   settled: boolean;
   error?: TunnelDispatchError;
   timer: ReturnType<typeof setTimeout>;
   removeAbortListener?: () => void;
 }
 
-/** A wire uint64: the protobuf codec gives a bigint or string, the JSON codec a string or number. */
-type WireUnsigned = string | number | bigint;
-
-function parseUnsigned(value: WireUnsigned | undefined): bigint | null {
-  if (value === undefined) return null;
+function parseUnsigned(value: unknown): bigint | null {
   try {
-    const parsed = BigInt(value);
+    // SAFETY: BigInt throws on any value it cannot convert, and the catch below maps that to null.
+    const parsed = BigInt(value as string | number | bigint);
     return parsed >= 0n ? parsed : null;
   } catch {
     return null;
   }
 }
 
-function timestamp(epochMs: number): { seconds: string; nanos: number } {
+/** `google.protobuf.Timestamp` as proto-loader serializes it (`longs: String`). */
+interface WireTimestamp {
+  seconds: string;
+  nanos: number;
+}
+
+/** `RequestMetadata` sent on every frame of one tunnel. */
+interface WireRequestMetadata {
+  correlationId: string;
+  deadline: WireTimestamp;
+}
+
+function timestamp(epochMs: number): WireTimestamp {
   return {
     seconds: String(Math.floor(epochMs / 1_000)),
     nanos: (epochMs % 1_000) * 1_000_000,
@@ -115,9 +125,9 @@ function waitUntilWritable(call: RunnerGrpcCall): Promise<void> {
       cleanup();
       resolve();
     };
-    const onError = (cause: unknown) => {
+    const onError = (error: unknown) => {
       cleanup();
-      reject(cause);
+      reject(error);
     };
     const onClose = () => {
       cleanup();
@@ -250,7 +260,7 @@ export class RunnerGrpcTunnelDispatcher {
       if (request.signal.aborted) onAbort();
     }
 
-    const metadata = {
+    const metadata: WireRequestMetadata = {
       correlationId: request.correlationId || tunnelId,
       deadline: timestamp(request.deadlineAt),
     };
@@ -366,7 +376,7 @@ export class RunnerGrpcTunnelDispatcher {
   private async sendBody(
     state: TunnelState,
     body: TunnelDispatchRequest['body'],
-    metadata: Record<string, unknown>,
+    metadata: WireRequestMetadata,
     startBackpressure?: Promise<void>,
   ): Promise<void> {
     let sequence = 0n;

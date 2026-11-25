@@ -97,6 +97,12 @@ interface DiffLoad {
   staged: boolean;
 }
 
+/** The file a refresh selects, and the diffs it reloads. */
+interface DiffReloadPlan {
+  fileToLoad: string | null;
+  loads: DiffLoad[];
+}
+
 /**
  * What a refresh reloads: the selected file (or the first one when the
  * selection is gone) and the expanded file when it is a different one.
@@ -105,7 +111,7 @@ function planDiffReload(
   files: FileDiffSummary[],
   selectedFile: string | null,
   expandedFile: string | null,
-): { fileToLoad: string | null; loads: DiffLoad[] } {
+): DiffReloadPlan {
   const paths = new Set(files.map((f) => f.path));
   const fileToLoad = pickFileToLoad(files, paths, selectedFile);
   const expanded = pickExpandedFile(paths, expandedFile, fileToLoad);
@@ -160,6 +166,52 @@ function shouldCheckNewFiles(prev: Set<string>, fileCount: number): boolean {
   return prev.size === 0 || fileCount > prev.size;
 }
 
+interface DiffTarget {
+  effectiveThreadId: string | undefined;
+  projectModeId: string | null;
+}
+
+interface SubmoduleEntry {
+  submodulePath: string;
+  innerPath: string;
+  staged: boolean;
+}
+
+/**
+ * Fetch one file's diff for the thread (or project) in view. A file inside an
+ * expanded submodule is fetched through the submodule endpoint.
+ */
+function fetchEntryDiff(
+  { effectiveThreadId, projectModeId }: DiffTarget,
+  filePath: string,
+  entry: SubmoduleEntry | { staged: boolean },
+  signal: AbortSignal | undefined,
+  context?: 'full',
+) {
+  if ('submodulePath' in entry) {
+    return effectiveThreadId
+      ? gitApi.getSubmoduleFileDiff(
+          effectiveThreadId,
+          entry.submodulePath,
+          entry.innerPath,
+          entry.staged,
+          signal,
+          context,
+        )
+      : gitApi.projectSubmoduleFileDiff(
+          projectModeId!,
+          entry.submodulePath,
+          entry.innerPath,
+          entry.staged,
+          signal,
+          context,
+        );
+  }
+  return effectiveThreadId
+    ? gitApi.getFileDiff(effectiveThreadId, filePath, entry.staged, signal, context)
+    : gitApi.projectFileDiff(projectModeId!, filePath, entry.staged, signal, context);
+}
+
 export function useDiffData({
   hasGitContext,
   effectiveThreadId,
@@ -182,7 +234,7 @@ export function useDiffData({
   // needs `summaries` (from this hook) while this hook needs the resolver to
   // route diff requests for inner files of expanded submodules.
   const resolveSubmoduleEntry = useCallback(
-    (filePath: string): { submodulePath: string; innerPath: string; staged: boolean } | null => {
+    (filePath: string): SubmoduleEntry | null => {
       for (const [submodulePath, inner] of submoduleExpansions) {
         const prefix = `${submodulePath}/`;
         if (!filePath.startsWith(prefix)) continue;
@@ -357,25 +409,12 @@ export function useDiffData({
       if (!submoduleEntry && !summary) return;
       const signal = abortRef.current?.signal;
       setLoadingDiff(filePath);
-      const result = submoduleEntry
-        ? effectiveThreadId
-          ? await gitApi.getSubmoduleFileDiff(
-              effectiveThreadId,
-              submoduleEntry.submodulePath,
-              submoduleEntry.innerPath,
-              submoduleEntry.staged,
-              signal,
-            )
-          : await gitApi.projectSubmoduleFileDiff(
-              projectModeId!,
-              submoduleEntry.submodulePath,
-              submoduleEntry.innerPath,
-              submoduleEntry.staged,
-              signal,
-            )
-        : effectiveThreadId
-          ? await gitApi.getFileDiff(effectiveThreadId, filePath, summary!.staged, signal)
-          : await gitApi.projectFileDiff(projectModeId!, filePath, summary!.staged, signal);
+      const result = await fetchEntryDiff(
+        { effectiveThreadId, projectModeId },
+        filePath,
+        submoduleEntry ?? { staged: summary!.staged },
+        signal,
+      );
       if (result.isOk() && !signal?.aborted) {
         setDiffCache((prev) => new Map(prev).set(filePath, result.value.diff));
       }
@@ -392,27 +431,13 @@ export function useDiffData({
       const summary = submoduleEntry ? null : summaries.find((s) => s.path === path);
       if (!submoduleEntry && !summary) return null;
       const signal = abortRef.current?.signal;
-      const result = submoduleEntry
-        ? effectiveThreadId
-          ? await gitApi.getSubmoduleFileDiff(
-              effectiveThreadId,
-              submoduleEntry.submodulePath,
-              submoduleEntry.innerPath,
-              submoduleEntry.staged,
-              signal,
-              'full',
-            )
-          : await gitApi.projectSubmoduleFileDiff(
-              projectModeId!,
-              submoduleEntry.submodulePath,
-              submoduleEntry.innerPath,
-              submoduleEntry.staged,
-              signal,
-              'full',
-            )
-        : effectiveThreadId
-          ? await gitApi.getFileDiff(effectiveThreadId, path, summary!.staged, signal, 'full')
-          : await gitApi.projectFileDiff(projectModeId!, path, summary!.staged, signal, 'full');
+      const result = await fetchEntryDiff(
+        { effectiveThreadId, projectModeId },
+        path,
+        submoduleEntry ?? { staged: summary!.staged },
+        signal,
+        'full',
+      );
       if (result.isOk() && !signal?.aborted) {
         return {
           oldValue: parseDiffOld(result.value.diff),

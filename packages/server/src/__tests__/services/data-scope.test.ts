@@ -231,6 +231,40 @@ describe('dedicated runner data scope', () => {
     });
   });
 
+  test("the factory tools answer the thread owner's runner, and offer no approval", async () => {
+    const list = { type: 'data:factory_list_runs', threadId: 'tx' };
+    // No factory yet: an answer, not an error.
+    expect(await send('rx', list)).toEqual({
+      type: 'data:factory_list_runs_response',
+      factory: false,
+      runs: [],
+    });
+    // A runner outside the project's scope, and another user's runner, are refused.
+    expect(await send('laptop', list)).toEqual(FORBIDDEN);
+    seedRunner(db, { id: 'bob-laptop', userId: 'bob', token: 'tok-b', hostname: 'b' });
+    expect(await handleDataMessageWithAck('bob-laptop', 'bob', list)).toEqual(FORBIDDEN);
+
+    // The only actions are retry and stop: a runner cannot name an approval.
+    for (const action of ['approve-merge', 'approve', '']) {
+      const res = await send('rx', {
+        type: 'data:factory_control_run',
+        threadId: 'tx',
+        runId: 'r1',
+        action,
+        expectedSha: 'a'.repeat(40),
+      });
+      expect(res).toEqual({
+        type: 'data:factory_control_run_response',
+        error: 'refused',
+        message: 'The action must be retry or stop.',
+      });
+    }
+
+    // A scratch thread has no factory to reach.
+    const scratch = await send('laptop', { type: 'data:factory_list_runs', threadId: 'ts' });
+    expect(scratch).toMatchObject({ type: 'data:factory_list_runs_response', error: 'refused' });
+  });
+
   test('user-level settings stay available to dedicated runners', async () => {
     const res = await send('rx', { type: 'data:get_profile', userId: 'alice' });
     expect(res.type).toBe('data:get_profile_response');

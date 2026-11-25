@@ -15,18 +15,21 @@ export interface NativeAuthBootstrap {
   profile: Record<string, unknown>;
 }
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 function safeUser(value: Record<string, unknown>): SafeUser | null {
-  if (typeof value.id !== 'string') return null;
-  const username =
-    typeof value.username === 'string'
-      ? value.username
-      : typeof value.name === 'string'
-        ? value.name
-        : 'user';
+  if (!isString(value.id)) return null;
+  const username = isString(value.username)
+    ? value.username
+    : isString(value.name)
+      ? value.name
+      : 'user';
   return {
     id: value.id,
     username,
-    displayName: typeof value.name === 'string' ? value.name : username,
+    displayName: isString(value.name) ? value.name : username,
     role: value.role === 'admin' ? 'admin' : 'user',
   };
 }
@@ -128,7 +131,7 @@ export class NativeAuthService {
       .getState()
       .authenticate(
         user,
-        typeof activeOrgId === 'string' ? { id: activeOrgId, name: null, slug: null } : null,
+        isString(activeOrgId) ? { id: activeOrgId, name: null, slug: null } : null,
       );
     return { user, profile };
   }

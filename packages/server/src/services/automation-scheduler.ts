@@ -204,7 +204,7 @@ function tick(id: string): Promise<void> {
 function logFailure(
   work: Promise<void>,
   message: string,
-  fields: Record<string, unknown> = {},
+  fields: { automationId?: string } = {},
 ): Promise<void> {
   return work.catch((cause: unknown) => {
     log.error(message, {
@@ -407,7 +407,7 @@ async function recordFailedDispatch(
       completedAt: startedAt,
       createdAt: startedAt,
       updatedAt: startedAt,
-    } as any),
+    }),
   );
   const summary = `Run could not start: ${reason}`;
   await automationRepo.createRun({
@@ -437,7 +437,7 @@ const STALE_RUN_SUMMARY = 'No completion was reported for this run';
 /** Runs whose thread never reported a terminal status don't stay `running` forever. */
 async function failStaleRuns(): Promise<void> {
   const cutoff = new Date(now().getTime() - STALE_RUN_MS).toISOString();
-  const stale = (await dbAll(
+  const stale = await dbAll<{ id: string; threadId: string; automationId: string; userId: string }>(
     db
       .select({
         id: schema.automationRuns.id,
@@ -454,7 +454,7 @@ async function failStaleRuns(): Promise<void> {
         ),
       )
       .orderBy(asc(schema.automationRuns.startedAt)),
-  )) as { id: string; threadId: string; automationId: string; userId: string }[];
+  );
   let failed = 0;
   for (const run of stale) {
     // Only a run still `running`: a completion that landed after the select wins.

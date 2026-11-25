@@ -315,6 +315,7 @@ export const factorySettings = pgTable(
     sensitivePaths: text('sensitive_paths'),
     /** More counted lines than this make a change high risk (null: 400). */
     maxLowRiskLines: integer('max_low_risk_lines'),
+    approvalAdjustMaxLines: integer('approval_adjust_max_lines'),
     /** JSON array of globs whose lines do not count toward a change's size, besides the default list. */
     sizeIgnoredPaths: text('size_ignored_paths'),
     /** JSON object: runs inside a flow node at once, per node id. */
@@ -326,6 +327,8 @@ export const factorySettings = pgTable(
     dependencies: text('dependencies'),
     /** `split` (open a too-large issue's parts as issues) or `ask` (null): comment the split. */
     tooBig: text('too_big'),
+    /** 1: a run parked for a member's approval keeps its likely paths (null / 0: it holds none). */
+    holdPathsAwaitingApproval: integer('hold_paths_awaiting_approval'),
     /** JSON object of the factory's per-step overrides (`FactoryStepOverrides`), or null. */
     stepOverrides: text('step_overrides'),
     createdAt: text('created_at').notNull(),
@@ -348,6 +351,8 @@ export const factoryRuns = pgTable('factory_runs', {
     .references(() => factorySettings.id, { onDelete: 'cascade' }),
   /** The run's issue; `0` for a run without one (mapped to null in `factory-runs.ts`). */
   issueNumber: integer('issue_number').notNull(),
+  /** The issue's title when the run learned it (queued, or its flow read the issue); null before. */
+  issueTitle: text('issue_title'),
   prUrl: text('pr_url'),
   state: text('state').notNull().default('queued'),
   currentStep: text('current_step'),
@@ -397,6 +402,8 @@ export const factoryRuns = pgTable('factory_runs', {
   /** JSON: the run this one is stacked on (D10: run id, issue, branch, retargeted), or null. */
   stackedOn: text('stacked_on'),
   mergeApproval: text('merge_approval'),
+  /** JSON `FactoryRiskWaiver`: a member marked the run as a lint cleanup; null otherwise. */
+  riskWaiver: text('risk_waiver'),
   /** The schedule trigger that started the run (change flow-triggers); null otherwise. */
   triggerId: text('trigger_id'),
   /** The trigger's name when the run started, kept for display after an edit or a delete. */
@@ -460,6 +467,32 @@ export const factoryIncidents = pgTable('factory_incidents', {
   closedAt: text('closed_at'),
   /** Who closed it: a user id, or `green` when the base branch recovered. */
   closedBy: text('closed_by'),
+});
+
+/**
+ * An agent's request that the member approve merging a held high-risk change
+ * (openspec factory-agent-tools). Bound to one run and one commit; at most one
+ * `pending` request per run (the partial unique index
+ * `factory_approval_requests_one_pending`, migration 127). The request is never
+ * what is approved: the member approves the run's commit, and that closes it.
+ */
+// Dialect mirror: schema.pg.ts and schema.sqlite.ts must declare the same columns.
+// fallow-ignore-next-line code-duplication
+export const factoryApprovalRequests = pgTable('factory_approval_requests', {
+  id: text('id').primaryKey(),
+  runId: text('run_id').notNull(),
+  factoryId: text('factory_id').notNull(),
+  projectId: text('project_id').notNull(),
+  /** The thread whose agent asked. */
+  threadId: text('thread_id').notNull(),
+  /** The commit the run was held on when the agent asked. */
+  sha: text('sha').notNull(),
+  /** `pending` → `approved` | `declined` | `expired` (`factory-approval-requests.ts`). */
+  state: text('state').notNull().default('pending'),
+  createdAt: text('created_at').notNull(),
+  resolvedAt: text('resolved_at'),
+  /** Who declined or approved it; null when it expired. */
+  resolvedBy: text('resolved_by'),
 });
 
 /**

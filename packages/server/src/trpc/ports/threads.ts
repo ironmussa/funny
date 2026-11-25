@@ -15,6 +15,7 @@ import { errorMessage } from '@funny/shared/errors';
 import { ok, err } from 'neverthrow';
 
 import { repos } from '../../db/repos.js';
+import type { threads as threadsTable } from '../../db/schema.js';
 import { log } from '../../lib/logger.js';
 import { toMessage, toOptionalMessage } from '../../lib/message-response.js';
 import { authorizer } from '../../lib/server-authorizer.js';
@@ -27,6 +28,7 @@ import {
   cleanUpArchivedThread,
   workspaceToRemoveOnArchive,
 } from '../../services/thread-workspace-cleanup.js';
+import { definedFields } from './defined-fields.js';
 
 const stageHistoryRepo = repos.stageHistory();
 const threadRepo = repos.threads();
@@ -86,20 +88,21 @@ function permissionFields(
   };
 }
 
+/** The columns a thread PATCH writes: one per body field. */
+type ThreadColumnUpdates = Partial<
+  Pick<typeof threadsTable.$inferInsert, keyof ThreadPatchRequest>
+>;
+
 /**
  * The column writes for a PATCH body. Security CR-4: `worktreePath` is not in
  * the contract's body schema (see `threadPatchBody`), so it never gets here.
  */
-function threadPatchUpdates(body: ThreadPatchRequest): Record<string, unknown> {
+function threadPatchUpdates(body: ThreadPatchRequest): ThreadColumnUpdates {
   const { archived, pinned, ...fields } = body;
-  const updates: Record<string, unknown> = Object.fromEntries(
-    Object.entries(fields).filter(([, value]) => value !== undefined),
-  );
+  const updates: ThreadColumnUpdates = definedFields(fields);
   // The flag columns are integers.
-  const flags = { archived, pinned };
-  for (const [column, value] of Object.entries(flags)) {
-    if (value !== undefined) updates[column] = value ? 1 : 0;
-  }
+  if (archived !== undefined) updates.archived = archived ? 1 : 0;
+  if (pinned !== undefined) updates.pinned = pinned ? 1 : 0;
   return updates;
 }
 

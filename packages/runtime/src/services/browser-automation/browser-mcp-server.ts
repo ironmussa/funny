@@ -21,6 +21,7 @@ import type { ResultAsync } from 'neverthrow';
 import type {
   AgentMcpServerSpec,
   AgentToolDefinition,
+  AgentToolExtra,
   AgentToolResult,
 } from '../agent-mcp-http.js';
 import {
@@ -69,8 +70,8 @@ type ToolOutcome = ResultAsync<BrowserToolContent[], BrowserToolError>;
 
 type CallToolResult = AgentToolResult;
 
-function signalOf(extra: unknown): AbortSignal | undefined {
-  const signal = (extra as { signal?: unknown } | undefined)?.signal;
+function signalOf(extra: AgentToolExtra | undefined): AbortSignal | undefined {
+  const signal = extra?.signal;
   return signal instanceof AbortSignal ? signal : undefined;
 }
 
@@ -79,7 +80,10 @@ function signalOf(extra: unknown): AbortSignal | undefined {
  * interrupted) resolves immediately; the underlying browser action is bounded
  * by its own timeout.
  */
-async function respond(outcome: ToolOutcome, extra: unknown): Promise<CallToolResult> {
+async function respond(
+  outcome: ToolOutcome,
+  extra: AgentToolExtra | undefined,
+): Promise<CallToolResult> {
   const signal = signalOf(extra);
   const aborted = new Promise<CallToolResult>((resolve) => {
     if (!signal) return;

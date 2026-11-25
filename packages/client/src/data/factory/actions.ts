@@ -1,3 +1,4 @@
+import type { FactoryApprovalRequest } from '@funny/shared/contracts/factory';
 import type { DomainError } from '@funny/shared/errors';
 import type { ResultAsync } from 'neverthrow';
 
@@ -16,9 +17,11 @@ import type { DataLayer } from '../data-layer';
 import { getDataLayer } from '../runtime';
 import {
   refetchFactorySettings,
+  refreshFactoryApprovalRequests,
   refreshFactoryReadiness,
   refreshFactoryRuns,
   refreshFactoryTriggers,
+  writeFactoryApprovalRequest,
   writeFactoryRun,
   writeFactorySettings,
 } from './queries';
@@ -48,13 +51,12 @@ export function saveFactorySettings(
 }
 
 /**
- * Stop or retry one run of the caller's factory, or approve merging the
- * high-risk change it holds. Not optimistic: the server decides whether the
- * run can still be controlled, and its answer is recorded. The caller shows
- * the error.
+ * Stop, retry or split one run of the caller's factory. Not optimistic: the
+ * server decides whether the run can still be controlled, and its answer is
+ * recorded. The caller shows the error.
  */
 export function controlFactoryRun(
-  action: 'stop' | 'retry' | 'approve-merge',
+  action: 'stop' | 'retry' | 'split',
   projectId: string,
   runId: string,
   layer: DataLayer = getDataLayer(),
@@ -62,11 +64,80 @@ export function controlFactoryRun(
   const call = {
     stop: factoryApi.stopRun,
     retry: factoryApi.retryRun,
-    'approve-merge': factoryApi.approveMerge,
+    split: factoryApi.splitRun,
   }[action];
   return call(projectId, runId).map((run) => {
     writeFactoryRun(projectId, run, layer);
     return run;
+  });
+}
+
+/**
+ * Approve merging the high-risk change a run holds. `expectedSha` is the
+ * commit on screen: the server refuses when the run is held on another one.
+ * Not optimistic, like `controlFactoryRun`.
+ */
+export function approveFactoryMerge(
+  projectId: string,
+  runId: string,
+  expectedSha: string,
+  layer: DataLayer = getDataLayer(),
+): ResultAsync<FactoryRun, DomainError> {
+  return factoryApi.approveMerge(projectId, runId, expectedSha).map((run) => {
+    writeFactoryRun(projectId, run, layer);
+    // An approval closes the request an agent made for this commit.
+    refreshFactoryApprovalRequests(projectId, layer);
+    return run;
+  });
+}
+
+/**
+ * Mark a run that ended with no change as done: the member agrees nothing
+ * needs changing. Not optimistic: the server says whether the run was still
+ * in that state. The caller shows the error.
+ */
+export function markFactoryRunDone(
+  projectId: string,
+  runId: string,
+  layer: DataLayer = getDataLayer(),
+): ResultAsync<FactoryRun, DomainError> {
+  return factoryApi.markRunDone(projectId, runId).map((run) => {
+    writeFactoryRun(projectId, run, layer);
+    return run;
+  });
+}
+
+/**
+ * Mark (or unmark) a run as a lint cleanup: its size and its contract's risk
+ * hints then do not hold it, when the factory's own checks of the diff pass. A
+ * run held for its risk goes back in flight. Not optimistic: the server says
+ * what the run is doing now. The caller shows the error.
+ */
+export function setFactoryRunLintCleanup(
+  projectId: string,
+  runId: string,
+  lintCleanup: boolean,
+  layer: DataLayer = getDataLayer(),
+): ResultAsync<FactoryRun, DomainError> {
+  return factoryApi.setLintCleanup(projectId, runId, lintCleanup).map((run) => {
+    writeFactoryRun(projectId, run, layer);
+    return run;
+  });
+}
+
+/**
+ * Decline an agent's request to approve a held merge. The run stays held and
+ * nothing is approved. Not optimistic: the server says whether the request was
+ * still pending. The caller shows the error.
+ */
+export function declineFactoryApprovalRequest(
+  projectId: string,
+  requestId: string,
+  layer: DataLayer = getDataLayer(),
+): ResultAsync<FactoryApprovalRequest, DomainError> {
+  return factoryApi.declineApprovalRequest(projectId, requestId).map((request) => {
+    writeFactoryApprovalRequest(projectId, request, layer);
+    return request;
   });
 }
 

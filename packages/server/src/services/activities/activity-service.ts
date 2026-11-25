@@ -1,3 +1,4 @@
+import type { JsonObject } from '@bufbuild/protobuf';
 import type { Activity, ActivityResultRef } from '@funny/shared';
 /**
  * @domain subdomain: Activities
@@ -26,6 +27,19 @@ import { z } from 'zod';
 import { repos } from '../../db/repos.js';
 import { log } from '../../lib/logger.js';
 import { relayToUser } from '../browser-events.js';
+
+/**
+ * @domain subdomain: Activities
+ * @domain subdomain-type: supporting
+ * @domain type: app-service
+ * @domain layer: application
+ * @domain depends: ActivityRepository, BrowserEvents
+ *
+ * Background activities (track-background-activities): the runner reports the
+ * operations it runs through the data channel (`data:activity_*`), this module
+ * records them and tells the owner's browsers. The user and runner of a row
+ * always come from the authenticated runner session, never from the payload.
+ */
 
 const SNAPSHOT_REF = /^refs\/funny\/undo\/[A-Za-z0-9_-]{1,128}$/;
 const ID_PATTERN = /^[A-Za-z0-9_-][A-Za-z0-9._:-]{0,127}$/;
@@ -101,7 +115,8 @@ export type ActivityWriteResult = { ok: true; applied: boolean } | { ok: false; 
 export async function startActivityFromRunner(args: {
   runnerId: string;
   ownerId: string;
-  payload: Record<string, unknown>;
+  /** The runner's `ActivityStart.activity` Struct, decoded; checked field by field here. */
+  payload: JsonObject;
 }): Promise<ActivityWriteResult> {
   const { runnerId, ownerId, payload } = args;
   const id = optionalId.parse(payload.id);
@@ -109,7 +124,7 @@ export async function startActivityFromRunner(args: {
   const title = titleText.parse(payload.title);
   if (!id) return { ok: false, error: 'activity id is invalid' };
   if (!title) return { ok: false, error: 'activity title is required' };
-  const input = parseActivityInput(kind, payload.input);
+  const input = parseActivityInput({ kind, input: payload.input });
   if (!input) return { ok: false, error: `activity kind ${kind} or its input is invalid` };
 
   const finalStatus =
@@ -125,7 +140,7 @@ export async function startActivityFromRunner(args: {
     input,
     step: stepText.parse(payload.step),
     origin: isActivityOrigin(payload.origin) ? payload.origin : 'user',
-    effects: parseActivityEffects(payload.effects),
+    effects: parseActivityEffects(payload),
     startedAt: new Date().toISOString(),
   };
   if (finalStatus) {
@@ -151,7 +166,7 @@ function pickActivityPatch(value: RunnerFields): ActivityPatch {
   if ('error' in value) patch.error = errorText.parse(value.error);
   const resultRef = resultRefOf(resultRefInput.parse(value.resultRef));
   if (resultRef !== undefined) patch.resultRef = resultRef;
-  if ('effects' in value) patch.effects = parseActivityEffects(value.effects);
+  if ('effects' in value) patch.effects = parseActivityEffects(value);
   if (status && isFinalActivityStatus(status)) patch.endedAt = new Date().toISOString();
   return patch;
 }

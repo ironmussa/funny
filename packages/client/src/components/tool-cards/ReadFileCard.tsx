@@ -25,6 +25,10 @@ import {
   makeRelativePath,
 } from './utils';
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 const LINE_PREFIX_RE = /^(\s*)(\d+)([→\t])(.*)$/;
 
 interface ParsedLine {
@@ -139,7 +143,7 @@ export function ReadFileCard({
   const ext = filePath ? getFileExtension(filePath).toLowerCase() : '';
   const fileName = filePath ? getFileName(filePath) : 'unknown';
   const isMarkdown = filePath ? isMarkdownFile(filePath) : false;
-  const hasOutput = typeof output === 'string' && output.length > 0;
+  const hasOutput = isString(output) && output.length > 0;
 
   const [expanded, setExpanded] = useState(false);
   const [renderMarkdown, setRenderMarkdown] = useResettableState(isMarkdown, [
@@ -229,10 +233,7 @@ export function ReadFileCard({
         )}
       </div>
       {expanded && hasOutput && (
-        <ToolContentArea
-          className="border-border/40 border-t"
-          viewportProps={{ className: 'max-h-[50vh] scroll-fade-none' }}
-        >
+        <ToolContentArea viewportProps={{ className: 'max-h-[50vh] scroll-fade-none' }}>
           <div className="border-border/30 bg-background sticky top-0 z-10 flex items-center justify-between gap-2 border-b px-3 py-1 backdrop-blur-xs">
             <span className="text-muted-foreground truncate text-xs font-medium">{fileName}</span>
             <div className="flex shrink-0 items-center gap-1">

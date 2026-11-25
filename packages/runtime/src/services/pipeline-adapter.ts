@@ -50,6 +50,17 @@ import { updateThread as updateThreadService } from './thread-service/update.js'
 import { emitWorkflowEvent } from './workflow-event-helpers.js';
 import { wsBroker } from './ws-broker.js';
 
+/**
+ * What a pipeline-level event carries: `runWorkflow` (`@funny/harness`), the
+ * only caller, reports the workflow name, plus the node and its error when a
+ * node ends the run.
+ */
+export type PipelineEventData = {
+  workflowName?: string;
+  nodeName?: string;
+  error?: string;
+};
+
 // Canonical lifecycle enums — kept in sync with @funny/shared/primitives.
 // Duplicated here as plain arrays so we can validate at the action seam
 // without importing runtime values from a types-only package.
@@ -563,7 +574,7 @@ export class RuntimeProgressReporter implements ProgressReporter {
     }
   }
 
-  onPipelineEvent(event: string, data: Record<string, unknown>): void {
+  onPipelineEvent(event: string, data: PipelineEventData): void {
     const { userId, threadId, pipelineId, runId, workflowId } = this.opts;
 
     if (threadId && workflowId) {

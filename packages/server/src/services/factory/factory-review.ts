@@ -46,11 +46,15 @@ import { err, ok, type Result } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
 import type { StartedThread, StartThreadError } from '../runner-thread-launcher.js';
-import type { IssueRunScope } from './factory-action-provider.js';
+import type {
+  FactoryLaunchBody,
+  FactoryThreadMode,
+  IssueRunScope,
+} from './factory-action-provider.js';
 import type { IntegrationScope } from './factory-integrate.js';
 import { issueInputs, issueInstruction, type FactoryIssueText } from './factory-issue-text.js';
 import type { FactoryPullRequestRef } from './factory-pull-requests.js';
-import { readRoleResult } from './factory-role-results.js';
+import { READ_ONLY_SHELL_RULE, readRoleResult } from './factory-role-results.js';
 import { withReviewVerdict, type UpdateRunInput } from './factory-runs.js';
 import { testWeakeningReport, type TestWeakeningFinding } from './factory-test-weakening.js';
 import type { ThreadOutcome, WaitAfter } from './factory-thread-waits.js';
@@ -79,13 +83,13 @@ export const REVIEWER_DISALLOWED_TOOLS: readonly string[] = [
  * needs it, goes as a role input, never in the prompt (`factory-issue-text.ts`).
  */
 export function readOnlyRoleLaunch(input: {
-  scope: { projectId: string; mode: string; issueNumber: number };
+  scope: { projectId: string; mode: FactoryThreadMode; issueNumber: number };
   title: string;
   base: { baseBranch?: string; baseFromRemote?: boolean };
   opts: { provider?: string | null; model?: string | null; effort?: string | null };
   issue: FactoryIssueText | null;
   prompt: string;
-}): Record<string, unknown> {
+}): FactoryLaunchBody {
   return {
     projectId: input.scope.projectId,
     title: input.title.slice(0, 200),
@@ -209,6 +213,7 @@ function reviewPrompt(input: ReviewPromptInput): string {
     '',
     'How to review:',
     ...howToRead(input),
+    `- ${READ_ONLY_SHELL_RULE}`,
     '- Judge whether the change does what the issue asks, in every case the issue names, and whether it is correct: wrong logic, missing cases, races, broken callers, security problems, data loss.',
     '- Check that the regression test would fail without the fix and that no test, check or CI step was removed, skipped or weakened to make the change pass.',
     '- Report only what you verified in the code. Style and naming are at most `low`.',
@@ -350,7 +355,7 @@ export interface FactoryReviewerDeps {
   headSha(): Promise<Result<string, string>>;
   /** What the server found in the head commit, or null when it could not look. */
   classify(): Promise<(ReviewedChange & { sha: string }) | null>;
-  launch(body: Record<string, unknown>): Promise<Result<StartedThread, StartThreadError>>;
+  launch(body: FactoryLaunchBody): Promise<Result<StartedThread, StartThreadError>>;
   /** The newest review thread of this run whose title starts with `titlePrefix`, since `since`. */
   findLaunched(titlePrefix: string, since: string): Promise<string | null>;
   waitThread(threadId: string, signal: AbortSignal, after?: WaitAfter): Promise<ThreadOutcome>;

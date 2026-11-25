@@ -35,6 +35,7 @@ export function startReverseLinkListener(options: {
     ip: ReverseLinkCallerIp,
   ): Response | Promise<Response | undefined> | undefined;
 }): ReverseLinkListener {
+  // SAFETY: options.serve is Bun.serve's own options minus fetch/port/hostname, which this literal supplies.
   const server = Bun.serve<any>({
     ...(options.serve as object),
     hostname: '127.0.0.1',

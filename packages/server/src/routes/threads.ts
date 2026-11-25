@@ -7,6 +7,7 @@
  * Agent operations (create+start, stop, send message) are proxied to the runner.
  */
 
+import type { JsonObject } from '@bufbuild/protobuf';
 import type { CommentAuthor, CommentSource, Thread, ThreadComment } from '@funny/shared';
 import { threadCommentsQuery, threadDeleteQuery } from '@funny/shared/contracts/threads';
 import { THREAD_COMMENT_EVENT, THREAD_COMMENT_DELETED_EVENT } from '@funny/shared/socket-events';
@@ -40,6 +41,7 @@ import {
   withForkInputs,
   threadOwnedBy,
   type CreationIntent,
+  type CreationPayload,
   type ForkVariant,
   type RunnerJson,
 } from '../modules/threads/index.js';
@@ -138,7 +140,7 @@ for (const [method, path] of REMOVED_THREAD_ROUTES) {
 // enrichment done for share grants in routes/thread-shares.ts.
 async function authorsByIds(userIds: string[]): Promise<Map<string, CommentAuthor>> {
   if (userIds.length === 0) return new Map();
-  const rows = await dbAll(
+  const rows = await dbAll<CommentAuthor>(
     db
       .select({
         id: schema.user.id,
@@ -149,7 +151,7 @@ async function authorsByIds(userIds: string[]): Promise<Map<string, CommentAutho
       .from(schema.user)
       .where(inArray(schema.user.id, userIds)),
   );
-  return new Map(rows.map((u: any) => [u.id, u as CommentAuthor]));
+  return new Map(rows.map((u) => [u.id, u] as const));
 }
 
 type CommentRow = typeof schema.threadComments.$inferSelect;
@@ -160,6 +162,8 @@ function toThreadComment(row: CommentRow, authors: Map<string, CommentAuthor>): 
     id: row.id,
     threadId: row.threadId,
     userId: row.userId,
+    // SAFETY: thread_comments.source is written only by insertComment, with 'user' (the
+    // comment route) or 'system' (the runner's comment handler), both CommentSource values.
     source: row.source as CommentSource,
     content: row.content,
     createdAt: row.createdAt,
@@ -253,9 +257,11 @@ threadRoutes.post('/:id/workflow-event', requireThreadOwner, async (c) => {
   if (!body.type.startsWith('workflow:') && !body.type.startsWith('pipeline:')) {
     return c.json({ error: 'type must start with "workflow:" or "pipeline:"' }, 400);
   }
-  const data: Record<string, unknown> =
+  // SAFETY: the request body was parsed as JSON, so `data` is JSON; a
+  // non-null object that is not an array is a JSON object.
+  const data: JsonObject =
     body.data && typeof body.data === 'object' && !Array.isArray(body.data)
-      ? (body.data as Record<string, unknown>)
+      ? (body.data as JsonObject)
       : {};
 
   await threadEventRepo.saveThreadEvent(id, body.type, data);
@@ -304,7 +310,11 @@ async function createdThreadResponse(
       namespace: 'threads',
       threadId: parsed.success ? parsed.data.id : undefined,
     });
-    return c.json(created as Record<string, unknown>, status);
+    // Written as text: the runner's JSON goes back byte for byte, and Hono's
+    // typed `c.json` cannot expand a recursive JSON type.
+    return c.newResponse(JSON.stringify(created), status, {
+      'Content-Type': 'application/json',
+    });
   }
   return c.json(toThread(row) satisfies Thread, status);
 }
@@ -317,18 +327,22 @@ async function createdThreadResponse(
 async function handleCreateThread(c: Context<ServerEnv>, intent: CreationIntent) {
   const parsed = await parseJsonBody(c, threadCreateBodySchema);
   if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
-  if (parsed.value.runtime === 'sandbox') return handleCreateSandboxThread(c, parsed.value);
+  // SAFETY: the request body was parsed as JSON, so every field is JSON.
+  const payload: CreationPayload = parsed.value as JsonObject;
+  if (payload.runtime === 'sandbox') return handleCreateSandboxThread(c, payload);
 
   const createThread = composeCreateThread(c.env);
+  // SAFETY: the org-field casts only hide that they may be null; the actor reaches
+  // runnerActor (runner-adapters.ts), whose `?? null` accepts null and undefined alike.
   const result = await createThread({
     actor: {
       userId: authenticatedUserId(c.get('userId')),
       organizationId: c.get('organizationId') as string | undefined,
-      role: c.get('userRole') as string | undefined,
+      role: c.get('userRole'),
       organizationName: c.get('organizationName') as string | undefined,
     },
     intent,
-    payload: parsed.value,
+    payload,
   });
   if (result.isOk()) return createdThreadResponse(c, result.value.thread, 201);
   return creationFailureResponse(c, intent, result.error);
@@ -351,8 +365,10 @@ function creationFailureResponse(
     case 'no-runner':
       return c.json(runnerResolver.describeResolutionFailure(failure.reason), 502);
     case 'remote-error':
+      // SAFETY: failure.status is the HTTP status the runner answered, relayed as is.
       return c.json({ error: failure.message }, failure.status as any);
     case 'creation-failed': {
+      // SAFETY: only optional `message` / `stack` are read; a non-Error cause logs String(cause).
       const cause = failure.cause as Error;
       log.error('Failed to create thread on runner', {
         namespace: 'threads',
@@ -366,7 +382,7 @@ function creationFailureResponse(
 }
 
 /** `runtime: 'sandbox'`: the server creates the thread and starts it in its own sandbox. */
-async function handleCreateSandboxThread(c: Context<ServerEnv>, payload: Record<string, unknown>) {
+async function handleCreateSandboxThread(c: Context<ServerEnv>, payload: CreationPayload) {
   const userId = c.get('userId');
   const result = await sandboxThreadLauncherFor(c.env ?? {}).create(userId, payload);
   return sandboxLaunchResponse(c, result, 201);
@@ -406,7 +422,7 @@ threadRoutes.all('/:id/scheduler/*', refuseRetiredRoute);
  */
 export async function noteFactoryOwnerFollowUp(c: Context<ServerEnv>, next: Next) {
   await next();
-  const thread = c.get('thread') as { id: string; userId: string; source?: string } | undefined;
+  const thread: ServerEnv['Variables']['thread'] | undefined = c.get('thread');
   if (thread?.source === 'factory' && thread.userId === c.get('userId') && c.res.status < 400) {
     noteOwnerFollowUp(thread.id);
   }
@@ -487,6 +503,7 @@ async function handleForkThread(c: Context<ServerEnv>, variant: ForkVariant) {
     log.error(FORK_FAILURE[variant].log, {
       namespace: 'threads',
       sourceThreadId,
+      // SAFETY: the optional chain reads `message` only; a non-Error cause logs undefined.
       error: (cause as Error)?.message,
     });
     return c.json({ error: FORK_FAILURE[variant].message }, 502);
@@ -502,11 +519,13 @@ async function handleForkThread(c: Context<ServerEnv>, variant: ForkVariant) {
   }
 
   const forkThread = composeForkThread(c.env);
+  // SAFETY: the org-field casts only hide that they may be null; the actor reaches
+  // runnerActor (runner-adapters.ts), whose `?? null` accepts null and undefined alike.
   return withForkInputs(
     {
       userId: authenticatedUserId(c.get('userId')),
       organizationId: c.get('organizationId') as string | undefined,
-      role: c.get('userRole') as string | undefined,
+      role: c.get('userRole'),
       organizationName: c.get('organizationName') as string | undefined,
     },
     { id: authorizedThreadId(source.id), projectId: source.projectId, ownerId: source.userId },
@@ -521,6 +540,7 @@ async function handleForkThread(c: Context<ServerEnv>, variant: ForkVariant) {
         case 'no-runner':
           return c.json(runnerResolver.describeResolutionFailure(failure.reason), 502);
         case 'remote-error':
+          // SAFETY: failure.status is the HTTP status the runner answered, relayed as is.
           return c.json({ error: failure.message }, failure.status as any);
         case 'fork-failed':
           return failed(failure.cause);

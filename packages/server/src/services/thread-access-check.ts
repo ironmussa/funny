@@ -24,24 +24,24 @@ export async function canUserViewThread(threadId: string, userId: string): Promi
 
 /** Whether `userId` is the owner of `threadId` (no share grants count). */
 export async function isThreadOwnedBy(threadId: string, userId: string): Promise<boolean> {
-  const rows = await dbAll(
+  const rows = await dbAll<{ userId: string }>(
     db
       .select({ userId: schema.threads.userId })
       .from(schema.threads)
       .where(eq(schema.threads.id, threadId)),
   );
-  return (rows[0] as { userId: string } | undefined)?.userId === userId;
+  return rows.at(0)?.userId === userId;
 }
 
 /** Display fields for a presence avatar (name/image), or null if unknown. */
 export async function getUserDisplay(
   userId: string,
 ): Promise<{ id: string; name: string; image: string | null } | null> {
-  const rows = await dbAll(
+  const rows = await dbAll<{ id: string; name: string; image: string | null }>(
     db
       .select({ id: schema.user.id, name: schema.user.name, image: schema.user.image })
       .from(schema.user)
       .where(eq(schema.user.id, userId)),
   );
-  return (rows[0] as { id: string; name: string; image: string | null } | undefined) ?? null;
+  return rows.at(0) ?? null;
 }

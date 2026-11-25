@@ -28,7 +28,7 @@ function Frame({ withOther = false }: { withOther?: boolean }) {
     <TooltipProvider>
       <SidebarProvider>
         <div className="bg-sidebar flex h-screen w-[260px] flex-col py-3">
-          <SidebarContent className="px-2 pb-2">
+          <SidebarContent inset="list">
             <SettingsNavFilter
               scope="preferences"
               pages={PAGES}

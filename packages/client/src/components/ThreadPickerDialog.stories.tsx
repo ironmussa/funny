@@ -31,7 +31,7 @@ const MOCK_PROJECTS = [
   }),
 ];
 
-const MOCK_THREADS: Record<string, Thread[]> = {
+const MOCK_THREADS = {
   'proj-1': [
     buildThread({
       projectId: 'proj-1',
@@ -86,7 +86,7 @@ const MOCK_THREADS: Record<string, Thread[]> = {
       archived: false,
     }),
   ],
-};
+} satisfies Record<string, Thread[]>;
 
 /* ------------------------------------------------------------------ */
 /*  Trigger wrapper                                                   */

@@ -83,6 +83,7 @@ export const sqlThreadSandboxStore: ThreadSandboxStore = {
         ? okAsync<TransitionOutcome, string>({ applied: true, state: rule.to })
         : get(threadId).map((row): TransitionOutcome => ({
             applied: false,
+            // SAFETY: thread_sandboxes.state is written only by the store's put ('provisioning') and transition (a machine rule's target).
             current: (row?.state as ThreadSandboxState | undefined) ?? null,
           })),
     );

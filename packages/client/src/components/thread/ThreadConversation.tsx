@@ -50,6 +50,8 @@ interface ThreadConversationProps {
   enablePagination?: boolean;
   /** Notified as the top-most visible message changes (for the timeline). */
   onVisibleMessageChange?: (id: string | null) => void;
+  /** Shown in the bottom dock, right above the follow-up input (the thread recap). */
+  aboveInput?: ReactNode;
   className?: string;
 }
 
@@ -69,6 +71,7 @@ export function ThreadConversation({
   onOpenLightbox,
   enablePagination = false,
   onVisibleMessageChange,
+  aboveInput,
   className,
 }: ThreadConversationProps) {
   const { t } = useTranslation();
@@ -200,35 +203,38 @@ export function ThreadConversation({
         prefersReducedMotion={prefersReducedMotion}
         className="min-h-0 flex-1"
         footer={
-          readOnlyShare ? (
-            <div
-              className="text-muted-foreground border-border border-t px-4 py-3 text-center text-xs"
-              data-testid="thread-readonly-share-notice"
-            >
-              {t(
-                'thread.readOnlyShare',
-                "You're viewing a shared thread — read-only. Only the owner can send messages.",
-              )}{' '}
-              <button
-                type="button"
-                className="text-status-info hover:underline"
-                onClick={() => useUIStore.getState().setCommentsPaneOpen(true)}
-                data-testid="thread-readonly-open-comments"
+          <>
+            {aboveInput}
+            {readOnlyShare ? (
+              <div
+                className="text-muted-foreground border-border border-t px-4 py-3 text-center text-xs"
+                data-testid="thread-readonly-share-notice"
               >
-                {t('thread.readOnlyShareComment', 'Open Comments to leave a note.')}
-              </button>
-            </div>
-          ) : activeThread.waitingReason === 'plan' ? null : (
-            <PromptInput
-              onSubmit={handleSend}
-              onStop={handleStop}
-              loading={sending}
-              running={isRunning && !isExternal}
-              isQueueMode={isQueueMode}
-              setPromptRef={setPromptRef}
-              placeholder={t('thread.nextPrompt')}
-            />
-          )
+                {t(
+                  'thread.readOnlyShare',
+                  "You're viewing a shared thread — read-only. Only the owner can send messages.",
+                )}{' '}
+                <button
+                  type="button"
+                  className="text-status-info hover:underline"
+                  onClick={() => useUIStore.getState().setCommentsPaneOpen(true)}
+                  data-testid="thread-readonly-open-comments"
+                >
+                  {t('thread.readOnlyShareComment', 'Open Comments to leave a note.')}
+                </button>
+              </div>
+            ) : activeThread.waitingReason === 'plan' ? null : (
+              <PromptInput
+                onSubmit={handleSend}
+                onStop={handleStop}
+                loading={sending}
+                running={isRunning && !isExternal}
+                isQueueMode={isQueueMode}
+                setPromptRef={setPromptRef}
+                placeholder={t('thread.nextPrompt')}
+              />
+            )}
+          </>
         }
       />
       {!onOpenLightbox && internalLightbox.lightbox}

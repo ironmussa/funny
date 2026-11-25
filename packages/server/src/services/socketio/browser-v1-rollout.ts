@@ -49,15 +49,18 @@ function browserSessionRepresentation(
     : Representation.LEGACY;
 }
 
+/** The representation each traffic class uses on one connection. */
+interface BrowserV1Assignments {
+  operations: Representation;
+  events: Representation;
+  terminal: Representation;
+  browserSession: Representation;
+}
+
 export class BrowserV1RolloutPolicy {
   constructor(private readonly config: BrowserV1RolloutConfig) {}
 
-  assignments(input: BrowserV1RolloutInput): {
-    operations: Representation;
-    events: Representation;
-    terminal: Representation;
-    browserSession: Representation;
-  } {
+  assignments(input: BrowserV1RolloutInput): BrowserV1Assignments {
     const eligible = this.isEligible(input);
     const capabilities = new Set(input.capabilities);
     const select = (

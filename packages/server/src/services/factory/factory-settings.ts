@@ -2,6 +2,7 @@ import {
   DEFAULT_FACTORY_BATCH,
   DEFAULT_MAX_LOW_RISK_LINES,
   factoryStepOverridesSchema,
+  APPROVAL_ADJUST_LINES_RANGE,
   LOW_RISK_LINES_RANGE,
   MAX_SENSITIVE_PATHS,
   MAX_SIZE_IGNORED_PATHS,
@@ -152,12 +153,14 @@ const configOf = (row: Row): FactoryConfig => ({
   autoMerge: autoMergeOf(row),
   sensitivePaths: sensitivePathsOf(row),
   maxLowRiskLines: maxLowRiskLinesOf(row),
+  approvalAdjustMaxLines: row.approvalAdjustMaxLines ?? 0,
   sizeIgnoredPaths: sizeIgnoredPathsOf(row),
   stageLimits: stageLimitsOf(row),
   stepOverrides: stepOverridesOf(row),
   batch: batchOf(row),
   dependencies: dependenciesOf(row),
   tooBig: tooBigOf(row),
+  holdPathsAwaitingApproval: row.holdPathsAwaitingApproval === 1,
 });
 
 const toView = (row: Row): FactorySettingsView => ({
@@ -202,6 +205,12 @@ const SAVE_RULES: readonly SaveRule[] = [
     lines !== undefined &&
     (!Number.isInteger(lines) || outside(lines, LOW_RISK_LINES_RANGE.min, LOW_RISK_LINES_RANGE.max))
       ? `maxLowRiskLines must be between ${LOW_RISK_LINES_RANGE.min} and ${LOW_RISK_LINES_RANGE.max}`
+      : null,
+  ({ approvalAdjustMaxLines: lines }) =>
+    lines !== undefined &&
+    (!Number.isInteger(lines) ||
+      outside(lines, APPROVAL_ADJUST_LINES_RANGE.min, APPROVAL_ADJUST_LINES_RANGE.max))
+      ? `approvalAdjustMaxLines must be between ${APPROVAL_ADJUST_LINES_RANGE.min} and ${APPROVAL_ADJUST_LINES_RANGE.max}`
       : null,
 ];
 
@@ -256,12 +265,14 @@ const DEFAULTS: FactoryConfig = {
   autoMerge: 'low_risk',
   sensitivePaths: [],
   maxLowRiskLines: DEFAULT_MAX_LOW_RISK_LINES,
+  approvalAdjustMaxLines: 0,
   sizeIgnoredPaths: [],
   stageLimits: {},
   stepOverrides: {},
   batch: DEFAULT_FACTORY_BATCH,
   dependencies: 'wait',
   tooBig: 'ask',
+  holdPathsAwaitingApproval: false,
 };
 
 /** The configured fields a save stores: the ones it carries, else `base`'s. */
@@ -276,12 +287,14 @@ function mergeConfig(input: SaveFactorySettingsInput, base: FactoryConfig): Fact
     autoMerge: pick('autoMerge'),
     sensitivePaths: pick('sensitivePaths'),
     maxLowRiskLines: pick('maxLowRiskLines'),
+    approvalAdjustMaxLines: pick('approvalAdjustMaxLines'),
     sizeIgnoredPaths: pick('sizeIgnoredPaths'),
     stageLimits: pick('stageLimits'),
     stepOverrides: pick('stepOverrides'),
     batch: pick('batch'),
     dependencies: pick('dependencies'),
     tooBig: pick('tooBig'),
+    holdPathsAwaitingApproval: pick('holdPathsAwaitingApproval'),
   };
 }
 
@@ -307,6 +320,7 @@ function buildRow(
     autoMerge: config.autoMerge,
     sensitivePaths: JSON.stringify(config.sensitivePaths),
     maxLowRiskLines: config.maxLowRiskLines,
+    approvalAdjustMaxLines: config.approvalAdjustMaxLines,
     sizeIgnoredPaths: JSON.stringify(config.sizeIgnoredPaths),
     stageLimits: JSON.stringify(config.stageLimits),
     stepOverrides: JSON.stringify(config.stepOverrides),
@@ -314,6 +328,7 @@ function buildRow(
     batchWaitMs: config.batch.waitSeconds * 1000,
     dependencies: config.dependencies,
     tooBig: config.tooBig,
+    holdPathsAwaitingApproval: config.holdPathsAwaitingApproval ? 1 : 0,
     // A save is a new configuration: the watcher re-reports what still blocks it.
     blockedReason: null,
     createdAt: now,
@@ -415,16 +430,20 @@ const COLUMNS_OF: Record<keyof FactoryConfig, readonly (keyof Row)[]> = {
   autoMerge: ['autoMerge'],
   sensitivePaths: ['sensitivePaths'],
   maxLowRiskLines: ['maxLowRiskLines'],
+  approvalAdjustMaxLines: ['approvalAdjustMaxLines'],
   sizeIgnoredPaths: ['sizeIgnoredPaths'],
   stageLimits: ['stageLimits'],
   stepOverrides: ['stepOverrides'],
   batch: ['batchSize', 'batchWaitMs'],
   dependencies: ['dependencies'],
   tooBig: ['tooBig'],
+  holdPathsAwaitingApproval: ['holdPathsAwaitingApproval'],
 };
 
 /** What a save writes over a stored row: the toggle, the bookkeeping and the fields it carries. */
 function changedColumns(row: Row, input: SaveFactorySettingsInput): Partial<Row> {
+  // SAFETY: COLUMNS_OF is typed Record<keyof FactoryConfig, …>, so its own keys are exactly
+  // the FactoryConfig fields; Object.keys only widens them to string.
   const fields = (Object.keys(COLUMNS_OF) as (keyof FactoryConfig)[]).filter(
     (field) => input[field] !== undefined,
   );
@@ -435,6 +454,8 @@ function changedColumns(row: Row, input: SaveFactorySettingsInput): Partial<Row>
     enabled: row.enabled,
     blockedReason: row.blockedReason,
     updatedAt: row.updatedAt,
+    // SAFETY: every entry of `carried` pairs a column (keyof Row) with row[column], the value
+    // the same row holds under that key.
     ...(Object.fromEntries(carried) as Partial<Row>),
   };
 }

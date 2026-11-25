@@ -1,8 +1,8 @@
 /** The slice of a Socket.IO client the connection watcher needs. */
 export interface ConnectionSocket {
   readonly connected: boolean;
-  on(event: 'connect' | 'disconnect', listener: () => void): unknown;
-  off(event: 'connect' | 'disconnect', listener: () => void): unknown;
+  on(event: 'connect' | 'disconnect', listener: () => void): void;
+  off(event: 'connect' | 'disconnect', listener: () => void): void;
 }
 
 /**

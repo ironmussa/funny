@@ -9,6 +9,7 @@
  * before dispatching here — see `handleDataMessageWithAck` in data-handler.ts.
  */
 
+import type { JsonObject } from '@bufbuild/protobuf';
 import type { AgentTemplate } from '@funny/shared';
 import { errorMessage } from '@funny/shared/errors';
 import type { JobPatch, WatcherPatch } from '@funny/shared/repositories';
@@ -35,6 +36,17 @@ import * as projectRepo from './project-repository.js';
 import * as startupCommandsRepo from './startup-commands-repository.js';
 
 /**
+ * @domain subdomain: Team Collaboration
+ * @domain subdomain-type: supporting
+ * @domain type: handler
+ * @domain layer: application
+ *
+ * Per-type executors for runner → server data messages. Callers MUST run the
+ * ownership (`data-ownership.ts`) and project-scope (`data-scope.ts`) guards
+ * before dispatching here — see `handleDataMessageWithAck` in data-handler.ts.
+ */
+
+/**
  * Columns that decide who owns a thread and what it belongs to. The data
  * channel's ownership check runs on the thread as it is, so a runner that could
  * write these would move its own thread to another user or into a project it
@@ -56,7 +68,7 @@ const RUNNER_IMMUTABLE_THREAD_FIELDS = new Set([
  * A runner's `data:update_thread` updates: an object of column changes. Any
  * other value (missing, a primitive, an array) changes nothing.
  */
-const runnerThreadUpdatesSchema = z.record(z.string(), z.unknown()).catch({});
+const runnerThreadUpdatesSchema = z.record(z.string(), z.json()).catch({});
 type RunnerThreadUpdates = z.output<typeof runnerThreadUpdatesSchema>;
 
 /** A string field of a runner's message; any other value reads as absent. */
@@ -66,8 +78,9 @@ function stripRunnerImmutableThreadFields(
   runnerUserId: string | null,
   threadId: string,
   updates: RunnerThreadUpdates,
-): Record<string, unknown> {
-  const allowed: Record<string, unknown> = {};
+): JsonObject {
+  // The updates arrive as the decoded `Struct` of an `UpdateThread` operation.
+  const allowed: JsonObject = {};
   const refused: string[] = [];
   for (const [key, value] of Object.entries(updates)) {
     if (RUNNER_IMMUTABLE_THREAD_FIELDS.has(key)) refused.push(key);
@@ -100,6 +113,11 @@ interface DataMessageContext {
 }
 
 type DataMessageHandler = (ctx: DataMessageContext) => Promise<any>;
+
+/** `data:*` message type → the executor that answers it. */
+interface DataMessageHandlers {
+  readonly [type: string]: DataMessageHandler;
+}
 
 // Statuses that end a run. Only these are re-broadcast from the persistence
 // path: 'waiting' must NOT be, because the client's status handler would apply
@@ -202,20 +220,27 @@ type AgentTemplateRow = typeof schema.agentTemplates.$inferSelect;
 
 // ── Watcher / job patch allow-lists ──────────────────────────────
 
+/** A runner-sent patch's own fields (the decoded `Struct` of a watcher / job update). */
+type PatchFields = ReadonlyMap<string, unknown>;
+
 /** Keep `patch[key]` when it passes `ok`; drop it otherwise. */
-function copyIf<T>(
-  out: Record<string, unknown>,
-  patch: Record<string, unknown>,
-  key: string,
+function copyIf<K extends string, T>(
+  out: Partial<Record<K, T>>,
+  patch: PatchFields,
+  key: K,
   ok: (v: unknown) => v is T,
 ): void {
-  if (Object.hasOwn(patch, key) && ok(patch[key])) out[key] = patch[key];
+  const value = patch.get(key);
+  if (patch.has(key) && ok(value)) out[key] = value;
 }
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const isNumOrNull = (v: unknown): v is number | null => v === null || isNum(v);
 const isStr = (v: unknown): v is string => typeof v === 'string';
 /** A runner's watcher / job patch: an object of fields; any other value patches nothing. */
-const runnerPatchSchema = z.record(z.string(), z.unknown()).catch({});
+const runnerPatchSchema = z
+  .record(z.string(), z.unknown())
+  .catch({})
+  .transform((fields): PatchFields => new Map(Object.entries(fields)));
 type RunnerPatch = z.output<typeof runnerPatchSchema>;
 
 /**
@@ -223,12 +248,14 @@ type RunnerPatch = z.output<typeof runnerPatchSchema>;
  * or caps. Values are type-checked; anything else is dropped.
  */
 function pickWatcherPatch(patch: RunnerPatch): WatcherPatch {
-  const out: Record<string, unknown> = {};
+  const out: Partial<Record<keyof WatcherPatch, string | number>> = {};
   copyIf(out, patch, 'nextWakeAt', isNum);
   copyIf(out, patch, 'lastDelayMs', isNum);
   copyIf(out, patch, 'wakeCount', isNum);
   copyIf(out, patch, 'status', isStr);
   copyIf(out, patch, 'updatedAt', isStr);
+  // SAFETY: the numeric fields passed `isNum`; `status` is any string the
+  // runner sent, stored unchecked as it always was.
   return out as WatcherPatch;
 }
 
@@ -239,11 +266,13 @@ function pickWatcherPatch(patch: RunnerPatch): WatcherPatch {
  * ownership guard already restricts updates to the runner user's own jobs.
  */
 function pickJobPatch(patch: RunnerPatch): JobPatch {
-  const out: Record<string, unknown> = {};
+  const out: Partial<Record<keyof JobPatch, string | number | null>> = {};
   copyIf(out, patch, 'pid', isNumOrNull);
   copyIf(out, patch, 'status', isStr);
   copyIf(out, patch, 'exitCode', isNumOrNull);
   copyIf(out, patch, 'updatedAt', isStr);
+  // SAFETY: `pid` / `exitCode` passed `isNumOrNull`; `status` is any string the
+  // runner sent, stored unchecked as it always was.
   return out as JobPatch;
 }
 
@@ -255,7 +284,7 @@ function pickJobPatch(patch: RunnerPatch): JobPatch {
 const OWNER_SCOPED_LIST_FALLBACK = [] as const;
 
 /** Dispatch table: one executor per `data:*` message type. */
-const DATA_MESSAGE_HANDLERS: Readonly<Record<string, DataMessageHandler>> = {
+const DATA_MESSAGE_HANDLERS: DataMessageHandlers = {
   'data:insert_message': async ({ data }) => {
     const messageRepo = repos.messages();
     const messageId = await messageRepo.insertMessage(data.payload);
@@ -591,12 +620,12 @@ const DATA_MESSAGE_HANDLERS: Readonly<Record<string, DataMessageHandler>> = {
   'data:cancel_queued_message': async ({ data }) => {
     // The ownership guard already verified message → thread → runnerUserId.
     // Resolve threadId here so cancel can scope by (messageId, threadId).
-    const q = (await dbGet(
+    const q = await dbGet<{ threadId: string }>(
       db
         .select({ threadId: schema.messageQueue.threadId })
         .from(schema.messageQueue)
         .where(eq(schema.messageQueue.id, data.messageId)),
-    )) as { threadId: string } | undefined;
+    );
     if (!q)
       return {
         type: 'data:cancel_queued_message_response',
@@ -606,12 +635,12 @@ const DATA_MESSAGE_HANDLERS: Readonly<Record<string, DataMessageHandler>> = {
     return { type: 'data:cancel_queued_message_response', success };
   },
   'data:update_queued_message': async ({ data }) => {
-    const q = (await dbGet(
+    const q = await dbGet<{ threadId: string }>(
       db
         .select({ threadId: schema.messageQueue.threadId })
         .from(schema.messageQueue)
         .where(eq(schema.messageQueue.id, data.messageId)),
-    )) as { threadId: string } | undefined;
+    );
     if (!q) return { type: 'data:update_queued_message_response', updated: null };
     const updated = await messageQueueRepo.update(data.messageId, q.threadId, data.content);
     return { type: 'data:update_queued_message_response', updated };
@@ -688,6 +717,51 @@ const DATA_MESSAGE_HANDLERS: Readonly<Record<string, DataMessageHandler>> = {
             secretName: resolved.error.secretName,
           }),
         };
+  },
+  // The issue factory from a thread's agent (factory-agent-tools). The service
+  // takes the actor and the project from the thread's row and decides every
+  // refusal; a refusal is an answer the agent reads, not a transport error.
+  'data:factory_list_runs': async ({ runnerId, ownerId, data }) => {
+    const { factoryAgentTools } = await import('../trpc/ports/factory.js');
+    const listed = await factoryAgentTools.listRuns({
+      threadId: String(data.threadId),
+      runnerId,
+      runnerOwnerId: ownerId,
+    });
+    return listed.isOk()
+      ? { type: 'data:factory_list_runs_response', ...listed.value }
+      : {
+          type: 'data:factory_list_runs_response',
+          error: listed.error.kind,
+          message: listed.error.message,
+        };
+  },
+  'data:factory_control_run': async ({ runnerId, ownerId, data }) => {
+    const type = 'data:factory_control_run_response';
+    const action = data.action === 'retry' || data.action === 'stop' ? data.action : null;
+    if (!action) {
+      return { type, error: 'refused', message: 'The action must be retry or stop.' };
+    }
+    const { factoryAgentTools } = await import('../trpc/ports/factory.js');
+    const controlled = await factoryAgentTools.controlRun(
+      { threadId: String(data.threadId), runnerId, runnerOwnerId: ownerId },
+      action,
+      String(data.runId),
+    );
+    return controlled.isOk()
+      ? { type, run: controlled.value }
+      : { type, error: controlled.error.kind, message: controlled.error.message };
+  },
+  'data:factory_request_approval': async ({ runnerId, ownerId, data }) => {
+    const type = 'data:factory_request_approval_response';
+    const { factoryAgentTools } = await import('../trpc/ports/factory.js');
+    const asked = await factoryAgentTools.requestApproval(
+      { threadId: String(data.threadId), runnerId, runnerOwnerId: ownerId },
+      String(data.runId),
+    );
+    return asked.isOk()
+      ? { type, ...asked.value }
+      : { type, error: asked.error.kind, message: asked.error.message };
   },
   'data:get_minimax_api_key': async ({ ownerId }) => {
     const { getProviderKey } = await import('./profile-service.js');

@@ -1,4 +1,4 @@
-import type { WSTestActionData } from '@funny/shared';
+import type { TestActionCategory, WSTestActionData } from '@funny/shared';
 import { useMemo } from 'react';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -12,7 +12,7 @@ interface ActionTimelineProps {
   onSelect: (index: number) => void;
 }
 
-const CATEGORY_COLORS: Record<string, string> = {
+const CATEGORY_COLORS: Record<TestActionCategory, string> = {
   'pw:api': 'bg-blue-400',
   expect: 'bg-status-success',
   'test.step': 'bg-purple-400',

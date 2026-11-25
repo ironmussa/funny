@@ -14,141 +14,31 @@
 import type { FailingCheck, IntegrationProvider } from '@funny/core/github-app';
 
 import { log } from '../../lib/logger.js';
-import type { FactoryBatch, FactoryBatchResult } from './factory-batches.js';
+import {
+  checksFeedbackOf,
+  conflictFeedback,
+  decide,
+  eligible,
+  endUnknown,
+  endWith,
+  landAll,
+  resultOf,
+  retest,
+  startRow,
+  type BatchLeaderContext,
+  type Progress,
+} from './factory-batch-leader-steps.js';
+import type { FactoryBatch } from './factory-batches.js';
 import {
   MAX_REBUILDS,
   type BatchOutcome,
-  type MemberVerdict,
   type MergeQueue,
   type MergeQueueDeps,
   type QueueMember,
 } from './factory-merge-queue.js';
 
-/** The verdicts so far, and the members still in the batch. */
-interface Progress {
-  verdicts: Map<string, MemberVerdict>;
-  flake: boolean;
-  partialLanding: boolean;
-}
-
-const conflictFeedback = (member: QueueMember, others: QueueMember[]) =>
-  [
-    `Your pull request #${member.prNumber} does not merge onto the base together with the pull requests ahead of it in the queue (${others.map((m) => `#${m.prNumber}`).join(', ') || 'none'}).`,
-    'Merge the base branch into your branch, keep both changes, run the tests, commit and push.',
-  ].join('\n');
-
-function resultOf(progress: Progress, summary: string): FactoryBatchResult {
-  const by = (kind: MemberVerdict['kind']) =>
-    [...progress.verdicts].flatMap(([runId, v]) => (v.kind === kind ? [runId] : []));
-  return {
-    summary,
-    landed: [...progress.verdicts].flatMap(([runId, v]) =>
-      v.kind === 'merged' ? [{ runId, sha: v.sha }] : [],
-    ),
-    culprits: [...progress.verdicts].flatMap(([runId, v]) =>
-      v.kind === 'sent_back' && v.why === 'checks' ? [runId] : [],
-    ),
-    requeued: by('requeued'),
-    flake: progress.flake,
-    partialLanding: progress.partialLanding,
-  };
-}
-
 export function createBatchLeader(queue: MergeQueue, deps: MergeQueueDeps) {
-  const decide = (progress: Progress, member: QueueMember, verdict: MemberVerdict) => {
-    if (!progress.verdicts.has(member.runId)) progress.verdicts.set(member.runId, verdict);
-  };
-
-  /** Members that may not merge their recorded head are held; the rest go on. */
-  async function eligible(members: QueueMember[], progress: Progress): Promise<QueueMember[]> {
-    const kept: QueueMember[] = [];
-    for (const member of members) {
-      const reason = await deps.hold(member);
-      if (reason) decide(progress, member, { kind: 'held', reason });
-      else kept.push(member);
-    }
-    return kept;
-  }
-
-  /** A batch row for the members; a stale one left by a stopped server is ended first. */
-  async function startRow(members: QueueMember[]): Promise<FactoryBatch | null> {
-    const leader = members[0]!;
-    const stale = await deps.batches.active(leader.repo, leader.baseBranch);
-    if (stale.isOk() && stale.value) {
-      // Left by a leader whose server stopped: end it, and remove its branches.
-      await deps.batches.move(stale.value.id, 'abandon');
-      const host = deps.providerFor(leader);
-      await host.deleteBranch(leader.repo, stale.value.stagingBranch);
-      await host.deleteBranch(leader.repo, stale.value.queueBranch);
-    }
-    const started = await deps.batches.start({
-      repo: leader.repo,
-      baseBranch: leader.baseBranch,
-      leaderRunId: leader.runId,
-      members,
-    });
-    return started.isOk() ? started.value : null;
-  }
-
-  /** Land the tested members in order; a refusal after a landing is a partial landing. */
-  async function landAll(
-    host: IntegrationProvider,
-    batch: FactoryBatch,
-    members: QueueMember[],
-    testedSha: string,
-    progress: Progress,
-  ): Promise<void> {
-    await deps.batches.move(batch.id, 'merge');
-    const { landed, refused } = await queue.land(members);
-    for (const { member, sha } of landed) decide(progress, member, { kind: 'merged', sha });
-    if (!refused) {
-      await queue.checkTree(
-        host,
-        batch,
-        testedSha,
-        landed.map((l) => l.member.runId),
-      );
-      await deps.batches.move(batch.id, 'merged', {
-        result: resultOf(progress, `Merged ${members.length} pull requests tested together.`),
-      });
-      return;
-    }
-    progress.partialLanding = landed.length > 0;
-    if (landed.length === 0) {
-      decide(progress, refused.member, {
-        kind: 'held',
-        reason: `The merge was refused: ${refused.reason}`,
-      });
-    }
-    for (const member of members) {
-      decide(progress, member, {
-        kind: 'requeued',
-        why: `the merge of #${refused.member.prNumber} was refused`,
-      });
-    }
-    await deps.batches.move(batch.id, landed.length > 0 ? 'partial' : 'fail', {
-      result: resultOf(
-        progress,
-        `Merging #${refused.member.prNumber} was refused: ${refused.reason}`,
-      ),
-    });
-  }
-
-  /** A red batch: once more on the same tree; then bisect. Whether it turned green (a flake). */
-  async function retest(
-    host: IntegrationProvider,
-    batch: FactoryBatch,
-    testedSha: string,
-    expected: string[],
-  ): Promise<{ green: true; sha: string } | { green: false; checks: FailingCheck[] }> {
-    await deps.batches.move(batch.id, 'retest');
-    const again = await host.sameTreeCommit(batch.repo, testedSha, `Batch ${batch.id}: test again`);
-    if (again.isErr()) return { green: false, checks: [] };
-    await host.setBranch(batch.repo, batch.queueBranch, again.value);
-    const verdict = await queue.waitVerdict(host, batch.repo, again.value, expected);
-    if (verdict.kind === 'green') return { green: true, sha: again.value };
-    return { green: false, checks: verdict.kind === 'red' ? verdict.checks : [] };
-  }
+  const ctx: BatchLeaderContext = { queue, deps };
 
   /** Batches of one, in order: each tested on the base as it is, landed when green. */
   async function oneByOne(
@@ -239,14 +129,14 @@ export function createBatchLeader(queue: MergeQueue, deps: MergeQueueDeps) {
     progress: Progress,
   ): Promise<{ done: true } | { done: false; members: QueueMember[] }> {
     const base = await host.branchHead(batch.repo, batch.baseBranch);
-    if (base.isErr()) return endUnknown(batch, members, progress, base.error.message);
+    if (base.isErr()) return endUnknown(ctx, batch, members, progress, base.error.message);
     const built = await queue.build(
       host,
       members,
       { staging: batch.stagingBranch, queue: batch.queueBranch, label: `Batch ${batch.id}` },
       base.value,
     );
-    if ('error' in built) return endUnknown(batch, members, progress, built.error);
+    if ('error' in built) return endUnknown(ctx, batch, members, progress, built.error);
     for (const member of built.conflicted) {
       decide(progress, member, {
         kind: 'sent_back',
@@ -255,7 +145,7 @@ export function createBatchLeader(queue: MergeQueue, deps: MergeQueueDeps) {
       });
     }
     if (built.merged.length === 0)
-      return endWith(batch, progress, 'abandon', 'No member merged onto the base.');
+      return endWith(ctx, batch, progress, 'abandon', 'No member merged onto the base.');
     await deps.batches.move(batch.id, 'test', { baseSha: base.value, queueSha: built.sha });
     const tested = await testBatch(
       host,
@@ -273,7 +163,7 @@ export function createBatchLeader(queue: MergeQueue, deps: MergeQueueDeps) {
         decide(progress, member, { kind: 'requeued', why: 'its head moved' });
       return { done: false, members: built.merged.filter((m) => !now.moved.includes(m)) };
     }
-    await landAll(host, batch, built.merged, tested, progress);
+    await landAll(ctx, host, batch, built.merged, tested, progress);
     return { done: true };
   }
 
@@ -298,15 +188,15 @@ export function createBatchLeader(queue: MergeQueue, deps: MergeQueueDeps) {
       deps.onNoQueueCi?.(batch.repo);
       for (const member of members)
         decide(progress, member, { kind: 'requeued', why: verdict.why });
-      await endWith(batch, progress, 'abandon', verdict.why);
+      await endWith(ctx, batch, progress, 'abandon', verdict.why);
       return null;
     }
     if (verdict.kind === 'unknown') {
-      await endUnknown(batch, members, progress, verdict.why);
+      await endUnknown(ctx, batch, members, progress, verdict.why);
       return null;
     }
     if (verdict.kind === 'green') return sha;
-    const again = await retest(host, batch, sha, expected);
+    const again = await retest(ctx, host, batch, sha, expected);
     if (again.green) {
       progress.flake = true;
       return again.sha;
@@ -347,35 +237,6 @@ export function createBatchLeader(queue: MergeQueue, deps: MergeQueueDeps) {
     }
   }
 
-  /** CI could not say (it did not run, a check could not run, the host failed): nobody is blamed. */
-  async function endUnknown(
-    batch: FactoryBatch,
-    members: QueueMember[],
-    progress: Progress,
-    why: string,
-  ): Promise<{ done: true }> {
-    for (const member of members) {
-      decide(
-        progress,
-        member,
-        deps.signal.aborted
-          ? { kind: 'requeued', why }
-          : { kind: 'held', reason: `The merge queue could not test the batch: ${why}.` },
-      );
-    }
-    return endWith(batch, progress, deps.signal.aborted ? 'abandon' : 'fail', why);
-  }
-
-  async function endWith(
-    batch: FactoryBatch,
-    progress: Progress,
-    transition: 'abandon' | 'fail',
-    summary: string,
-  ): Promise<{ done: true }> {
-    await deps.batches.move(batch.id, transition, { result: resultOf(progress, summary) });
-    return { done: true };
-  }
-
   return {
     /** Lead the batch of `members` (the leader first, then the queue order). */
     async lead(members: QueueMember[]): Promise<BatchOutcome> {
@@ -388,7 +249,7 @@ export function createBatchLeader(queue: MergeQueue, deps: MergeQueueDeps) {
         durationMs: Date.now() - started,
       });
       const progress: Progress = { verdicts: new Map(), flake: false, partialLanding: false };
-      const remaining = await eligible(members, progress);
+      const remaining = await eligible(ctx, members, progress);
       if (remaining.length === 0) {
         return {
           verdicts: progress.verdicts,
@@ -396,7 +257,7 @@ export function createBatchLeader(queue: MergeQueue, deps: MergeQueueDeps) {
           stats: await statsOf(null),
         };
       }
-      const batch = await startRow(remaining);
+      const batch = await startRow(ctx, remaining);
       if (!batch) {
         for (const member of remaining)
           decide(progress, member, { kind: 'requeued', why: 'another batch is active' });
@@ -415,6 +276,7 @@ export function createBatchLeader(queue: MergeQueue, deps: MergeQueueDeps) {
       );
       if (expected.length === 0) {
         await endUnknown(
+          ctx,
           batch,
           remaining,
           progress,
@@ -441,22 +303,4 @@ export function createBatchLeader(queue: MergeQueue, deps: MergeQueueDeps) {
       };
     },
   };
-}
-
-/** The failing checks as the culprit's feedback. */
-function checksFeedbackOf(checks: FailingCheck[], members: QueueMember[]): string {
-  const lines = checks.map((check) =>
-    [
-      `- ${check.name} (${check.conclusion})`,
-      check.excerpt ? `  ${check.excerpt.slice(-2000)}` : '',
-    ]
-      .filter(Boolean)
-      .join('\n'),
-  );
-  return [
-    `Tested with the other pull requests waiting to merge (${members.map((m) => `#${m.prNumber}`).join(', ')}), on the base as it is now, your change makes these checks fail:`,
-    ...lines,
-    '',
-    'Fix it on the branch so your change and the base both pass. Do not disable, skip or weaken tests or checks.',
-  ].join('\n');
 }

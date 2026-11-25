@@ -240,6 +240,7 @@ describe('classifyRisk', () => {
       riskHints?: string[];
       maxLowRiskLines?: number;
       sizeIgnoredPaths?: string[];
+      lintCleanup?: boolean;
     } = {},
   ) => {
     const change = { files, truncated: false };
@@ -248,7 +249,12 @@ describe('classifyRisk', () => {
 
   test('a small change in ordinary code is low risk', () => {
     const sixty = Array.from({ length: 60 }, (_, index) => `+const v${index} = ${index};`);
-    expect(risk([file('src/sum.ts', sixty)])).toEqual({ headSha: SHA, level: 'low', reasons: [] });
+    expect(risk([file('src/sum.ts', sixty)])).toEqual({
+      headSha: SHA,
+      level: 'low',
+      reasons: [],
+      keys: [],
+    });
   });
 
   test('a weakened test makes it high', () => {
@@ -286,7 +292,7 @@ describe('classifyRisk', () => {
       file('src/__snapshots__/a.snap', [], big),
       file('src/a.ts', [], { additions: MAX_LOW_RISK_LINES, deletions: 0 }),
     ]);
-    expect(result).toEqual({ headSha: SHA, level: 'low', reasons: [] });
+    expect(result).toEqual({ headSha: SHA, level: 'low', reasons: [], keys: [] });
   });
 
   test('only the counted files add up to the size', () => {
@@ -368,6 +374,113 @@ describe('classifyRisk', () => {
     });
   });
 
+  // A member marked the run as a lint cleanup: large changes that only clear
+  // warnings pass, as long as the diff shows the warnings were not hidden.
+  describe('a run a member marked as a lint cleanup', () => {
+    const big = Array.from({ length: 900 }, (_, index) => `+const v${index} = ${index};`);
+    const hints = { riskHints: ['Large mechanical change: expect conflicts'] };
+    // Built in two parts: this file's own audit reads a literal skip as a weakened test.
+    const SKIPPED_TEST = ['+test', ".skip('adds', () => {"].join('');
+
+    test('its size and the contract hints do not make it high risk, and are kept as waived', () => {
+      const marked = risk([file('src/long.ts', big)], { ...hints, lintCleanup: true });
+      expect(marked).toMatchObject({ level: 'low', reasons: [], keys: [] });
+      expect(marked.waived).toEqual([
+        '900 changed lines outside tests and docs (more than 400)',
+        'the contract names a risk: Large mechanical change: expect conflicts',
+      ]);
+      // Unmarked, the same change waits for a person.
+      expect(risk([file('src/long.ts', big)], hints).level).toBe('high');
+    });
+
+    test('a sensitive path and a weakened test still make it high risk', () => {
+      const sensitive = risk([file('src/long.ts', big), file('src/db/migrate.ts', ['+x'])], {
+        lintCleanup: true,
+      });
+      expect(sensitive.level).toBe('high');
+      expect(sensitive.reasons).toEqual([
+        'touches a sensitive path: src/db/migrate.ts (**/migrate.ts)',
+      ]);
+      const skipped = risk([file('src/long.ts', big), file('src/sum.test.ts', [SKIPPED_TEST])], {
+        lintCleanup: true,
+      });
+      expect(skipped.level).toBe('high');
+      expect(skipped.keys?.some((key) => key.startsWith('finding:'))).toBe(true);
+    });
+
+    test('a suppression added to clear a warning is not a cleanup: the size counts again', () => {
+      const silenced = risk(
+        [file('src/long.ts', [...big, '+// eslint-disable-next-line max-lines'])],
+        { lintCleanup: true },
+      );
+      expect(silenced.level).toBe('high');
+      expect(silenced.waived).toBeUndefined();
+      expect(silenced.reasons).toEqual([
+        '901 changed lines outside tests and docs (more than 400)',
+        'marked as a lint cleanup, but it adds a lint or type-check suppression (src/long.ts)',
+      ]);
+      expect(silenced.keys).toContain('lint-cleanup:suppression');
+    });
+
+    // #489: splitting a long file moves its suppressions to the new files.
+    test('a suppression moved from one file to another is not an added one', () => {
+      const disable = '// oxlint-disable-next-line anti-slop/no-chained-type-assertions -- why';
+      const moved = risk(
+        [
+          file('src/long.ts', [...big, `-    ${disable}`, `-  ${disable}`]),
+          file('src/part-a.ts', [`+      ${disable}`]),
+          file('src/part-b.ts', [`+${disable}`]),
+        ],
+        { lintCleanup: true },
+      );
+      expect(moved.level).toBe('low');
+      expect(moved.keys).not.toContain('lint-cleanup:suppression');
+
+      // One more than was removed, or a different rule, is still added.
+      const extra = risk(
+        [
+          file('src/long.ts', [...big, `-${disable}`]),
+          file('src/part-a.ts', [`+${disable}`, `+${disable}`]),
+          file('src/part-b.ts', ['+// eslint-disable-next-line max-lines']),
+        ],
+        { lintCleanup: true },
+      );
+      expect(extra.level).toBe('high');
+      expect(extra.reasons.at(-1)).toBe(
+        'marked as a lint cleanup, but it adds a lint or type-check suppression (src/part-a.ts, src/part-b.ts)',
+      );
+    });
+
+    test('a change to the lint configuration is not a cleanup', () => {
+      const loosened = risk([file('src/long.ts', big), file('oxlint.config.ts', ['+x'])], {
+        lintCleanup: true,
+      });
+      expect(loosened.level).toBe('high');
+      expect(loosened.reasons.at(-1)).toBe(
+        'marked as a lint cleanup, but it changes the lint or type-check configuration (oxlint.config.ts)',
+      );
+    });
+
+    test('a file GitHub gave no diff for cannot be checked, so nothing is waived', () => {
+      const unread = classifyRisk({
+        headSha: SHA,
+        change: {
+          files: [{ path: 'src/huge.ts', status: 'modified', additions: 900, deletions: 0 }],
+          truncated: false,
+        },
+        findings: [],
+        lintCleanup: true,
+      });
+      expect(unread.level).toBe('high');
+      expect(unread.keys).toEqual(['size', 'lint-cleanup:unread']);
+    });
+
+    test('a small marked change with nothing to waive reads as any low-risk change', () => {
+      const small = risk([file('src/a.ts', ['+const a = 1;'])], { lintCleanup: true });
+      expect(small).toEqual({ headSha: SHA, level: 'low', reasons: [], keys: [] });
+    });
+  });
+
   test('a review result is not an input: a passing review cannot lower the class', () => {
     // The classifier takes the diff, the findings, the settings and the contract's hints only.
     const input = {
@@ -377,6 +490,48 @@ describe('classifyRisk', () => {
       review: { verdict: 'pass', risk: 'low' },
     };
     expect(classifyRisk(input).level).toBe('high');
+  });
+
+  // openspec factory-approval-survives-integration, D4: a merge approval
+  // follows a small adjustment only to a commit with no risk key the approved
+  // one lacked, so a key says what a reason is about and leaves its numbers out.
+  describe('the stable keys of the reasons', () => {
+    const lines = (count: number) =>
+      Array.from({ length: count }, (_, i) => `+const v${i} = ${i};`);
+
+    test('a change over the size limit that grows keeps the key `size`', () => {
+      const before = risk([file('src/sum.ts', lines(500))]);
+      const after = risk([file('src/sum.ts', lines(520))]);
+      expect(before.reasons).not.toEqual(after.reasons);
+      expect(before.keys).toEqual(['size']);
+      expect(after.keys).toEqual(['size']);
+    });
+
+    test('a sensitive path, a finding and a contract hint each add a key', () => {
+      const result = risk(
+        [
+          file('src/sum.ts', ['+x']),
+          file('packages/server/src/db/migrate.ts', ['+x']),
+          file('src/a.test.ts', ["+test.skip('adds', () => {});"]),
+        ],
+        { riskHints: ['touches billing'] },
+      );
+      expect(result.keys).toContain('sensitive:packages/server/src/db/migrate.ts');
+      expect(
+        result.keys?.some((key) => key.startsWith('finding:') && key.endsWith('src/a.test.ts')),
+      ).toBe(true);
+      expect(result.keys?.filter((key) => key.startsWith('contract:'))).toHaveLength(1);
+      // The same hint is the same key; another hint is another.
+      const same = risk([file('src/sum.ts', ['+x'])], { riskHints: ['touches billing'] });
+      const other = risk([file('src/sum.ts', ['+x'])], { riskHints: ['touches auth'] });
+      expect(result.keys).toContain(same.keys![0]!);
+      expect(other.keys).not.toEqual(same.keys);
+    });
+
+    test('every reason has its key, also the ones the capped list does not show', () => {
+      const many = Array.from({ length: 30 }, (_, index) => file(`src/auth/f${index}.ts`, ['+x']));
+      expect(risk(many).keys).toHaveLength(30);
+    });
   });
 
   test('many reasons are capped with a count', () => {

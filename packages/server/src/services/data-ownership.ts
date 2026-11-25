@@ -93,12 +93,12 @@ async function findThread(threadId: string): Promise<UserRow | undefined> {
   return threadOwners.get(
     threadId,
     async () =>
-      (await dbGet(
+      await dbGet<UserRow>(
         db
           .select({ userId: schema.threads.userId })
           .from(schema.threads)
           .where(eq(schema.threads.id, threadId)),
-      )) as UserRow | undefined,
+      ),
   );
 }
 
@@ -106,12 +106,12 @@ async function findMessage(messageId: string): Promise<ThreadRefRow | undefined>
   return messageThreads.get(
     messageId,
     async () =>
-      (await dbGet(
+      await dbGet<ThreadRefRow>(
         db
           .select({ threadId: schema.messages.threadId })
           .from(schema.messages)
           .where(eq(schema.messages.id, messageId)),
-      )) as ThreadRefRow | undefined,
+      ),
   );
 }
 
@@ -119,12 +119,12 @@ async function findToolCallMessage(toolCallId: string): Promise<{ messageId: str
   return toolCallMessages.get(
     toolCallId,
     async () =>
-      (await dbGet(
+      await dbGet<{ messageId: string }>(
         db
           .select({ messageId: schema.toolCalls.messageId })
           .from(schema.toolCalls)
           .where(eq(schema.toolCalls.id, toolCallId)),
-      )) as { messageId: string } | undefined,
+      ),
   );
 }
 
@@ -230,12 +230,12 @@ async function checkThreadByExternalRequestId({
   data,
 }: OwnershipContext): Promise<Denial | null> {
   if (typeof data?.externalRequestId !== 'string') return null;
-  const row = (await dbGet(
+  const row = await dbGet<UserRow>(
     db
       .select({ userId: schema.threads.userId })
       .from(schema.threads)
       .where(eq(schema.threads.externalRequestId, data.externalRequestId)),
-  )) as UserRow | undefined;
+  );
   return row && row.userId !== userId
     ? deny(`external request ${data.externalRequestId} owned by ${row.userId}`)
     : null;
@@ -243,12 +243,12 @@ async function checkThreadByExternalRequestId({
 
 async function checkThreadBySessionId({ userId, data }: OwnershipContext): Promise<Denial | null> {
   if (typeof data?.sessionId !== 'string') return null;
-  const row = (await dbGet(
+  const row = await dbGet<UserRow>(
     db
       .select({ userId: schema.threads.userId })
       .from(schema.threads)
       .where(eq(schema.threads.sessionId, data.sessionId)),
-  )) as UserRow | undefined;
+  );
   return row && row.userId !== userId
     ? deny(`session ${data.sessionId} owned by ${row.userId}`)
     : null;
@@ -301,12 +301,12 @@ const stringOrUndefined = z.string().optional().catch(undefined);
 async function checkQueuedMessage({ userId, data }: OwnershipContext): Promise<Denial | null> {
   if (typeof data?.messageId !== 'string') return null;
   const messageId: string = data.messageId;
-  const q = (await dbGet(
+  const q = await dbGet<ThreadRefRow>(
     db
       .select({ threadId: schema.messageQueue.threadId })
       .from(schema.messageQueue)
       .where(eq(schema.messageQueue.id, messageId)),
-  )) as ThreadRefRow | undefined;
+  );
   if (!q) return deny(`queued message ${messageId} not found`);
   return isOwnedBy(await findThread(q.threadId), userId)
     ? null
@@ -328,9 +328,9 @@ function checkUserOwnedRow(
     // By-id ops MUST name the row they act on.
     if (typeof payload?.id !== 'string' || !payload.id) return deny(`${kind} id required`);
     const id: string = payload.id;
-    const row = (await dbGet(
+    const row = await dbGet<UserRow>(
       db.select({ userId: table.userId }).from(table).where(eq(table.id, id)),
-    )) as UserRow | undefined;
+    );
     if (!row) return deny(`${kind} ${id} not found`);
     return row.userId !== userId ? deny(`${kind} ${id} cross-tenant`) : null;
   };
@@ -340,12 +340,12 @@ async function assertPendingPermissionOwnership(
   runnerUserId: string,
   requestId: string,
 ): Promise<OwnershipResult> {
-  const permission = (await dbGet(
+  const permission = await dbGet<ThreadRefRow>(
     db
       .select({ threadId: schema.pendingPermissionRequests.threadId })
       .from(schema.pendingPermissionRequests)
       .where(eq(schema.pendingPermissionRequests.requestId, requestId)),
-  )) as ThreadRefRow | undefined;
+  );
   if (!permission) return deny('permission request not found');
   const thread = await findThread(permission.threadId);
   return thread?.userId === runnerUserId ? OK : deny('permission request cross-tenant');

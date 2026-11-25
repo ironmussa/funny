@@ -42,6 +42,11 @@ export function validatePasswordStrength(password: string | undefined): Password
   return { ok: true };
 }
 
+/** Auth path → the body field carrying its password. */
+interface PasswordFieldByAuthPath {
+  [path: string]: keyof AuthRequestPasswords;
+}
+
 /**
  * Better Auth endpoints that set a password, and the body field carrying it.
  * Better Auth itself checks only its own minimum length on some of these, and
@@ -49,7 +54,7 @@ export function validatePasswordStrength(password: string | undefined): Password
  * above on every one of them in a `before` hook. Add an endpoint here when a
  * new plugin or route can set a password.
  */
-const PASSWORD_FIELD_BY_AUTH_PATH: Record<string, keyof AuthRequestPasswords> = {
+const PASSWORD_FIELD_BY_AUTH_PATH: PasswordFieldByAuthPath = {
   '/sign-up/email': 'password',
   '/change-password': 'newPassword',
   '/reset-password': 'newPassword',

@@ -1,4 +1,4 @@
-import { ArrowLeft, Folder } from 'lucide-react';
+import { ArrowLeft, FolderIcon } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -245,7 +245,7 @@ function ThreadProjectBreadcrumb() {
       {activeThreadId && projectName && (
         <>
           <BreadcrumbItem className="max-w-[120px] sm:max-w-[180px]">
-            <Folder aria-hidden="true" className="icon-sm text-muted-foreground shrink-0" />
+            <FolderIcon aria-hidden="true" className="icon-sm text-muted-foreground shrink-0" />
             <span className="truncate" title={projectName}>
               {projectName}
             </span>

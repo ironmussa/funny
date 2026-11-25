@@ -53,6 +53,17 @@ function useSidebar() {
   return context;
 }
 
+function isOpenUpdater(
+  value: boolean | ((value: boolean) => boolean),
+): value is (value: boolean) => boolean {
+  return typeof value === 'function';
+}
+
+/** True for a string value. */
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 function SidebarProvider({
   defaultOpen = true,
   open: openProp,
@@ -97,7 +108,7 @@ function SidebarProvider({
   const open = openProp ?? _open;
   const setOpen = React.useCallback(
     (value: boolean | ((value: boolean) => boolean)) => {
-      const openState = typeof value === 'function' ? value(open) : value;
+      const openState = isOpenUpdater(value) ? value(open) : value;
       if (setOpenProp) {
         setOpenProp(openState);
       } else {
@@ -482,17 +493,29 @@ function SidebarSeparator({
     />
   );
 }
+/** Padding of the scrolling content: none, the sidebar's 8px gutters, or gutters plus room below a nav list. */
+const SIDEBAR_CONTENT_INSET = {
+  none: '',
+  x: 'px-2',
+  list: 'px-2 pb-2',
+} as const;
+
 function SidebarContent({
   className,
+  inset = 'none',
   ref,
   ...props
-}: React.ComponentProps<'div'> & { ref?: React.Ref<HTMLDivElement> }) {
+}: React.ComponentProps<'div'> & {
+  ref?: React.Ref<HTMLDivElement>;
+  inset?: keyof typeof SIDEBAR_CONTENT_INSET;
+}) {
   return (
     <div
       ref={ref}
       data-sidebar="content"
       className={cn(
         'flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto group-data-[collapsible=icon]:overflow-hidden',
+        SIDEBAR_CONTENT_INSET[inset],
         className,
       )}
       {...props}
@@ -655,7 +678,7 @@ function SidebarMenuButton({
     return button;
   }
 
-  if (typeof tooltip === 'string') {
+  if (isString(tooltip)) {
     tooltip = {
       children: tooltip,
     };

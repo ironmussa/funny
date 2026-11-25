@@ -21,24 +21,11 @@ import {
   type UnsignedRunnerRequest,
 } from '../runner-access/index.js';
 import type { RunnerPresencePort, RunnerRequestPort, RunnerResponse } from '../runner-ports.js';
-import type { SandboxThreadDeps } from './sandbox-thread.js';
+import type { SandboxMessageBody } from './sandbox-thread.js';
 
 const remoteUrlSchema = z.object({ remoteUrl: z.string().nullable() });
 
 const CHECKOUT_TIMEOUT_MS = 10 * 60_000;
-
-/** The body of a message sent to the sandbox runner, passed through as the launcher built it. */
-type SandboxMessageBody = Parameters<SandboxThreadDeps['sendMessage']>[0]['body'];
-
-/** The checkout request: clone `repoUrl` at `path`, on `branch` when given. */
-interface SandboxCheckoutBody {
-  path: string;
-  repoUrl: string;
-  branch: string | undefined;
-}
-
-/** A JSON body POSTed to the thread's sandbox runner. */
-type SandboxRunnerPostBody = SandboxCheckoutBody | SandboxMessageBody;
 
 export function createSandboxRunnerCalls(ports: {
   requests?: RunnerRequestPort;
@@ -66,7 +53,7 @@ export function createSandboxRunnerCalls(ports: {
   const postToThreadRunner = (
     userId: string,
     path: string,
-    payload: SandboxRunnerPostBody,
+    payload: unknown,
     label: string,
     deadlineAt?: number,
   ): ResultAsync<void, string> =>

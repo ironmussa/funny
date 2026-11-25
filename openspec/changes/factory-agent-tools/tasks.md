@@ -9,10 +9,10 @@
 
 ## 2. The request record
 
-- [ ] 2.1 Add `factory_approval_requests` to `schema.sqlite.ts`, `schema.pg.ts` and a new migration in `db/migrate.ts`, with the unique partial index on pending per run; verify the migration tests pass on both adapters
-- [ ] 2.2 Add the transition table and the pure `nextRequestState(request, run)`; verify with unit tests covering every row of the table in design D3 and the "approved from the board" case
-- [ ] 2.3 Add the repository (`create-or-get`, `resolve` by compare-and-set, `listForFactory`, `pendingForRun`); verify with tests for asking twice (one row), a pending row for an older commit (expired, new row), and a lost compare-and-set (no change)
-- [ ] 2.4 Add the machine to the inventory in `docs/architecture/state-machines.md`; verify the document lists its states, transitions and writer
+- [x] 2.1 Add `factory_approval_requests` to `schema.sqlite.ts`, `schema.pg.ts` and a new migration in `db/migrate.ts`, with the unique partial index on pending per run; verify the migration tests pass on both adapters
+- [x] 2.2 Add the transition table and the pure `nextRequestState(request, run)`; verify with unit tests covering every row of the table in design D3 and the "approved from the board" case
+- [x] 2.3 Add the repository (`create-or-get`, `resolve` by compare-and-set, `listForFactory`, `pendingForRun`); verify with tests for asking twice (one row), a pending row for an older commit (expired, new row), and a lost compare-and-set (no change)
+- [x] 2.4 Add the machine to the inventory in `docs/architecture/state-machines.md`; verify the document lists its states, transitions and writer
 
 ## 3. Server: guard, handlers, expiry
 

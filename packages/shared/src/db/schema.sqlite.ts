@@ -442,6 +442,32 @@ export const factoryIncidents = sqliteTable('factory_incidents', {
 });
 
 /**
+ * An agent's request that the member approve merging a held high-risk change
+ * (openspec factory-agent-tools). Bound to one run and one commit; at most one
+ * `pending` request per run (the partial unique index
+ * `factory_approval_requests_one_pending`, migration 127). The request is never
+ * what is approved: the member approves the run's commit, and that closes it.
+ */
+// Dialect mirror: schema.pg.ts and schema.sqlite.ts must declare the same columns.
+// fallow-ignore-next-line code-duplication
+export const factoryApprovalRequests = sqliteTable('factory_approval_requests', {
+  id: text('id').primaryKey(),
+  runId: text('run_id').notNull(),
+  factoryId: text('factory_id').notNull(),
+  projectId: text('project_id').notNull(),
+  /** The thread whose agent asked. */
+  threadId: text('thread_id').notNull(),
+  /** The commit the run was held on when the agent asked. */
+  sha: text('sha').notNull(),
+  /** `pending` → `approved` | `declined` | `expired` (`factory-approval-requests.ts`). */
+  state: text('state').notNull().default('pending'),
+  createdAt: text('created_at').notNull(),
+  resolvedAt: text('resolved_at'),
+  /** Who declined or approved it; null when it expired. */
+  resolvedBy: text('resolved_by'),
+});
+
+/**
  * A batch of the issue factory's merge queue (change factory-integration, D2):
  * the members one leader tests together on base commit `base_sha`. At most one
  * batch that has not ended per repository and base branch (the partial unique

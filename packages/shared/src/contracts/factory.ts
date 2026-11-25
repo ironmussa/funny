@@ -959,6 +959,31 @@ export const factorySentinelResultSchema = z.discriminatedUnion('decision', [
 export type FactorySentinelResult = z.infer<typeof factorySentinelResultSchema>;
 
 /** A factory merge the sentinel may name. */
+export type FactoryApprovalRequestState = 'pending' | 'approved' | 'declined' | 'expired';
+
+/**
+ * An agent's request that the member approve merging a held high-risk change
+ * (openspec factory-agent-tools). It carries no text: what the member is shown
+ * comes from the run. `sha` is the commit the run was held on when the agent
+ * asked; the request expires when the run is held on another one.
+ */
+export interface FactoryApprovalRequest {
+  id: string;
+  runId: string;
+  projectId: string;
+  /** The thread whose agent asked. */
+  threadId: string;
+  sha: string;
+  state: FactoryApprovalRequestState;
+  createdAt: string;
+  resolvedAt: string | null;
+}
+
+/** Declining one request of the caller's factory. */
+export const factoryApprovalRequestInput = z
+  .object({ projectId, requestId: z.string().min(1) })
+  .strict();
+
 export const factoryIncidentCandidateSchema = z.object({
   issueNumber: z.number().int(),
   prUrl: z.string(),

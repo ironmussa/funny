@@ -473,6 +473,25 @@ export function createTestDb() {
     WHERE state <> 'closed'
   `);
   testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS factory_approval_requests (
+      id TEXT PRIMARY KEY,
+      run_id TEXT NOT NULL,
+      factory_id TEXT NOT NULL,
+      project_id TEXT NOT NULL,
+      thread_id TEXT NOT NULL,
+      sha TEXT NOT NULL,
+      state TEXT NOT NULL DEFAULT 'pending',
+      created_at TEXT NOT NULL,
+      resolved_at TEXT,
+      resolved_by TEXT
+    )
+  `);
+  testDb.run(sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS factory_approval_requests_one_pending
+    ON factory_approval_requests (run_id)
+    WHERE state = 'pending'
+  `);
+  testDb.run(sql`
     CREATE TABLE IF NOT EXISTS factory_batches (
       id TEXT PRIMARY KEY,
       repo TEXT NOT NULL,

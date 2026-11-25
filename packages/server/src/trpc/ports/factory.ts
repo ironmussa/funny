@@ -172,6 +172,12 @@ interface RunControlOptions {
   askedByThread?: string;
 }
 
+/** The factory port, and the run controls an agent may use. */
+interface FactoryParts {
+  port: FactoryPort;
+  controlled: ControlRun;
+}
+
 function createFactoryParts(
   settings = createFactorySettingsService(),
   runs = createFactoryRunsRepository(),
@@ -179,7 +185,7 @@ function createFactoryParts(
   queue = createFactoryQueue({ runs, control }),
   incidents = createFactoryIncidentsRepository(),
   requests = createFactoryApprovalRequestsRepository(),
-): { port: FactoryPort; controlled: ControlRun } {
+): FactoryParts {
   /** The caller's factory for the project; 404 with `missing` when they have none. */
   const factoryOf = (userId: string, projectId: string, missing: string) =>
     settings

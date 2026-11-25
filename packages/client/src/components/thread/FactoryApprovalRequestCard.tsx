@@ -149,6 +149,11 @@ function CardFrame({
 }
 
 /** One muted line: the pull request, the commit asked about, and the size of the change. */
+/** The risk's changed-line count, when the server computed one. */
+function isLineCount(value: number | undefined): value is number {
+  return typeof value === 'number';
+}
+
 function RunFacts({ request, run }: { request: FactoryApprovalRequest; run: FactoryRun }) {
   const { t } = useTranslation();
   const prNumber = run.prUrl ? pullRequestNumber(run.prUrl) : null;
@@ -172,7 +177,7 @@ function RunFacts({ request, run }: { request: FactoryApprovalRequest; run: Fact
           {request.sha.slice(0, 7)}
         </code>
       </span>
-      {typeof run.risk?.changedLines === 'number' && run.risk.headSha === request.sha && (
+      {isLineCount(run.risk?.changedLines) && run.risk.headSha === request.sha && (
         <span>
           {t('factory.approvalRequest.size', '{{count}} changed lines', {
             count: run.risk.changedLines,

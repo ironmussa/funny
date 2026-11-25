@@ -1995,6 +1995,7 @@
       "sandbox-stopped": "Sandbox parado",
       "sandbox-destroyed": "Sandbox destruído",
       "pr-merged": "Pull request mesclado",
+      "pr-closed": "Pull request fechado",
       "remote-branch-deleted": "Branch remoto excluído",
       "agent-stopped": "Agente interrompido",
       "factory-disabled": "Factory desativada",

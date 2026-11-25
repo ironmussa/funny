@@ -45,6 +45,7 @@ export function settingsFailure(error: FactorySettingsError): ApiFailure {
 
 export function controlFailure(error: FactoryRunControlError): ApiFailure {
   if (error.kind === 'storage') return storageFailure(error);
+  if (error.kind === 'github') return failure(502, error.message);
   return failure(error.kind === 'not-found' ? 404 : 409, error.message);
 }
 

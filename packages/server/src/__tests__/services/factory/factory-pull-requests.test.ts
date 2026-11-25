@@ -179,6 +179,92 @@ describe('factory pull requests', () => {
   });
 });
 
+describe("factory pull requests: closing a replaced run's pull request", () => {
+  const by = { issueNumber: 489, prNumber: 511 };
+  const stacked = 'GET /repos/o/r/pulls?base=factory%2F7&state=open&per_page=100';
+  const open = {
+    'GET /repos/o/r/pulls/7': { ...pull, state: 'open', merged: false, base: { ref: 'master' } },
+    'POST /repos/o/r/issues/7/comments': {},
+    'PATCH /repos/o/r/pulls/7': {},
+    [stacked]: [],
+    'DELETE /repos/o/r/git/refs/heads/factory/7': {},
+  };
+
+  test('an open one is commented, closed and its branch deleted, as an activity of the enabler', async () => {
+    const { prs, calls, recorded } = portFor(open);
+    const outcome = (await prs.closeReplaced!(pr, by))._unsafeUnwrap();
+    expect(outcome).toEqual({ kind: 'closed', branchDeleted: true });
+    // The comment says why before the close; the branch goes last.
+    expect(calls.filter((call) => !call.startsWith('GET'))).toEqual([
+      'POST /repos/o/r/issues/7/comments',
+      'PATCH /repos/o/r/pulls/7',
+      'DELETE /repos/o/r/git/refs/heads/factory/7',
+    ]);
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]!.spec).toMatchObject({
+      kind: 'factory.close-pr',
+      userId: 'alice',
+      input: { prNumber: 7, issueNumber: 489, replacedBy: 511 },
+    });
+    expect(recorded[0]!.outcome).toEqual({
+      ok: true,
+      effects: [
+        { effect: 'pr-closed', target: 'o/r#7' },
+        { effect: 'remote-branch-deleted', target: 'factory/7' },
+      ],
+    });
+  });
+
+  test('a merged one is left as it is: no comment, no close, its branch stays', async () => {
+    const { prs, calls, recorded } = portFor({
+      ...open,
+      'GET /repos/o/r/pulls/7': { ...pull, state: 'closed', merged: true, base: { ref: 'master' } },
+    });
+    expect((await prs.closeReplaced!(pr, by))._unsafeUnwrap()).toEqual({ kind: 'merged' });
+    expect(calls).toEqual(['GET /repos/o/r/pulls/7']);
+    expect(recorded).toHaveLength(0);
+  });
+
+  test('one already closed only loses its branch', async () => {
+    const { prs, calls } = portFor({
+      ...open,
+      'GET /repos/o/r/pulls/7': {
+        ...pull,
+        state: 'closed',
+        merged: false,
+        base: { ref: 'master' },
+      },
+    });
+    expect((await prs.closeReplaced!(pr, by))._unsafeUnwrap()).toEqual({
+      kind: 'already-closed',
+      branchDeleted: true,
+    });
+    expect(calls).not.toContain('PATCH /repos/o/r/pulls/7');
+    expect(calls).not.toContain('POST /repos/o/r/issues/7/comments');
+  });
+
+  test('a branch that cannot be deleted fails the activity, not the close', async () => {
+    const { prs, recorded } = portFor({
+      ...open,
+      'DELETE /repos/o/r/git/refs/heads/factory/7': new Response('nope', { status: 403 }),
+    });
+    expect((await prs.closeReplaced!(pr, by))._unsafeUnwrap()).toEqual({
+      kind: 'closed',
+      branchDeleted: false,
+    });
+    expect(recorded[0]!.outcome).toMatchObject({
+      ok: false,
+      effects: [{ effect: 'pr-closed', target: 'o/r#7' }],
+    });
+  });
+
+  test('an enabler who can only read the repository closes nothing', async () => {
+    const { prs, calls } = portFor(open, { level: 'read' });
+    expect((await prs.closeReplaced!(pr, by))._unsafeUnwrapErr().kind).toBe('no-access');
+    expect(calls).toEqual([]);
+  });
+});
+
 describe('factory pull requests: the proof gate (task 4.4)', () => {
   /** A route answering a status instead of a 200 body. */
   interface StatusRoute {

@@ -47,6 +47,8 @@ import { threads } from '../../db/schema.js';
 import { log } from '../../lib/logger.js';
 import { NO_CHANGE_REASON } from './factory-action-provider.js';
 import { forgetOwnerFollowUp, ownerFollowUpAt } from './factory-follow-ups.js';
+import type { FactoryCloseOutcome, FactoryPullRequestRef } from './factory-pull-requests.js';
+import { replacedPullRequest, type ReplacedPullRequest } from './factory-replaced-pr.js';
 import {
   createFactoryRunsRepository,
   HIGH_RISK_HOLD,
@@ -66,7 +68,8 @@ import {
 } from './factory-watcher.js';
 
 export type FactoryRunControlError = {
-  kind: 'not-found' | 'conflict' | 'storage';
+  /** `github`: GitHub refused or could not be reached; nothing of the run changed. */
+  kind: 'not-found' | 'conflict' | 'storage' | 'github';
   message: string;
 };
 
@@ -115,6 +118,27 @@ export async function releaseStoppedIssue(run: FactoryRunView): Promise<void> {
       error: removed.error.message,
     });
   }
+}
+
+/**
+ * A run's pull request as its factory's enabler reaches it, or null when the
+ * factory, its repository or the GitHub side cannot be resolved now.
+ */
+async function replacedPullRequestRef(
+  run: FactoryRunView,
+  replaced: ReplacedPullRequest,
+): Promise<FactoryPullRequestRef | null> {
+  const factory = await getWatchedFactory(run.factoryId);
+  if (!factory || !factoryGithubPort()) return null;
+  const target = await checkFactoryTarget(factory);
+  if (!target || 'reason' in target) return null;
+  return {
+    repo: target.repo,
+    number: replaced.number,
+    branch: replaced.branch,
+    userId: factory.userId,
+    projectId: factory.projectId,
+  };
 }
 
 /** A reopen the unique index refused: another run of the issue is in flight. */
@@ -272,6 +296,43 @@ export function createFactoryRunControl(runs = createFactoryRunsRepository()) {
                   message: 'Only a run that ended with no change can be marked as done.',
                 }),
           ),
+      );
+    },
+
+    /**
+     * Close the pull request of a run that a newer run of its issue replaced,
+     * and delete its branch, as the factory's enabler. Refused for a run that
+     * was not replaced, has not ended, or has no pull request of its own. The
+     * run itself does not change.
+     */
+    closeReplacedPr(
+      factoryId: string,
+      runId: string,
+    ): ResultAsync<{ run: FactoryRunView; outcome: FactoryCloseOutcome }, FactoryRunControlError> {
+      const refuse = (message: string) =>
+        errAsync<never, FactoryRunControlError>({ kind: 'conflict', message });
+      return runOf(factoryId, runId).andThen((run) =>
+        runs
+          .list(factoryId)
+          .mapErr(storage)
+          .andThen((all) => {
+            const replaced = replacedPullRequest(run, all);
+            if (replaced.isErr()) return refuse(replaced.error);
+            return ResultAsync.fromSafePromise(replacedPullRequestRef(run, replaced.value)).andThen(
+              (ref) => {
+                const close = factoryGithubPort()?.pullRequests.closeReplaced;
+                if (!ref || !close) {
+                  return refuse("The factory cannot reach the run's repository on GitHub now.");
+                }
+                return close(ref, replaced.value.by)
+                  .mapErr((error): FactoryRunControlError => ({
+                    kind: 'github',
+                    message: error.message,
+                  }))
+                  .map((outcome) => ({ run, outcome }));
+              },
+            );
+          }),
       );
     },
 

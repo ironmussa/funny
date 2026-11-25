@@ -39,6 +39,8 @@ export interface AgentToolContext {
   assetsDir?: string;
   /** The adapter supports native background execution and completion delivery. */
   nativeBackgroundJobs?: boolean;
+  /** False for a thread that may not schedule a deferred wake: `funny_watch` is not listed. */
+  scheduledWakes?: boolean;
 }
 
 export interface AgentToolResult {

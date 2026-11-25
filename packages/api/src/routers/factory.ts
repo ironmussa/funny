@@ -83,6 +83,13 @@ export const factoryRouter = router({
     .mutation(async ({ ctx, input }) =>
       unwrap(await ctx.ports.factory.markRunDone(ctx.userId, input.projectId, input.runId)),
     ),
+  // A member closes the pull request a replaced run left open. The server
+  // decides again that the run was replaced; the board only offers it.
+  closeReplacedPr: projectProcedure('steer', CONTROL_FORBIDDEN)
+    .input(factoryRunInput)
+    .mutation(async ({ ctx, input }) =>
+      unwrap(await ctx.ports.factory.closeReplacedPr(ctx.userId, input.projectId, input.runId)),
+    ),
   // A member's statement that a run only clears lint warnings: its size then
   // does not hold it. Like an approval, it comes from a member's session only.
   setLintCleanup: projectProcedure('steer', CONTROL_FORBIDDEN)

@@ -112,6 +112,17 @@ export function isReadOnlyThread(thread: { readOnly?: number | boolean | null })
 }
 
 /**
+ * Returns true for a thread whose agent may schedule a deferred wake
+ * (`funny_watch`). A thread of the issue factory (`threads.source = 'factory'`)
+ * may not: its flow waits for external state with its own steps (`wait_ci`,
+ * `review`), and a step is not over while its thread has a pending watcher, so
+ * a watcher there only holds the run until it expires.
+ */
+export function canScheduleWakes(thread: { source?: string | null } | undefined): boolean {
+  return thread?.source !== 'factory';
+}
+
+/**
  * Returns true for a thread that runs in its own sandbox (thread-sandboxes).
  * Its checkout lives on the sandbox runner, so its git status is never the
  * project checkout's: it gets its own status key, and a project runner's bulk

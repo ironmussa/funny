@@ -83,6 +83,21 @@ describe('funny MCP servers over HTTP', () => {
     }
   });
 
+  test('an issue factory thread is not offered funny_watch', async () => {
+    // A pending watcher keeps a factory step from ending: #490 waited an hour on one.
+    const servers = expectDefined(
+      await withWatchMcpServer('factory-thread', 'u1', undefined, 'claude', { source: 'factory' }),
+    );
+    const tools = await listTools(expectHttpMcpEntry(servers.funny));
+    expect(tools).not.toContain('funny_watch');
+    expect(tools).toContain('funny_run_checks');
+
+    const own = expectDefined(
+      await withWatchMcpServer('own-thread', 'u1', undefined, 'claude', { source: 'web' }),
+    );
+    expect(await listTools(expectHttpMcpEntry(own.funny))).toContain('funny_watch');
+  });
+
   test('the funny server is an always-loaded HTTP entry with its tools', async () => {
     const servers = expectDefined(await withWatchMcpServer('t1', 'u1', undefined));
     // A copy: bun's toMatchObject writes the asymmetric matchers into the object

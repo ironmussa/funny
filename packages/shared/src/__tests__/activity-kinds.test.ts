@@ -104,6 +104,7 @@ describe('parseActivityInput for the new kinds', () => {
     'sandbox.wake': {},
     'sandbox.destroy': { reason: 'thread-deleted' },
     'factory.merge': { issueNumber: 3, prNumber: 9 },
+    'factory.close-pr': { issueNumber: 3, prNumber: 9, replacedBy: 11 },
     'factory.disabled': { reason: 'access-lost' },
     'factory.trigger_skipped': {
       triggerId: 't1',

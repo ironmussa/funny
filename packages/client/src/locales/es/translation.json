@@ -2029,6 +2029,7 @@
       "sandbox-stopped": "Sandbox detenido",
       "sandbox-destroyed": "Sandbox destruido",
       "pr-merged": "Pull request fusionado",
+      "pr-closed": "Pull request cerrado",
       "remote-branch-deleted": "Rama remota borrada",
       "agent-stopped": "Agente detenido",
       "factory-disabled": "Factory desactivada",

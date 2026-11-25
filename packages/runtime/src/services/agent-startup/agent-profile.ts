@@ -50,8 +50,10 @@ export async function withWatchMcpServer(
   userId: string | undefined,
   mcpServers: AgentMcpServers | undefined,
   provider?: AgentProvider,
+  thread?: { source?: string | null },
 ): Promise<AgentMcpServers | undefined> {
   if (!userId) return mcpServers;
+  const { canScheduleWakes } = await import('../thread-context.js');
   const { FUNNY_MCP_SERVER } = await import('../agent-watch-tool.js');
   const { grantAgentMcpHttp } = await import('../agent-mcp-http.js');
   return {
@@ -62,6 +64,7 @@ export async function withWatchMcpServer(
       // Claude tracks native tasks through completion after the main turn.
       // Keep the fallback for adapters without verified lifecycle support.
       nativeBackgroundJobs: provider === 'claude',
+      scheduledWakes: canScheduleWakes(thread),
     }),
   };
 }

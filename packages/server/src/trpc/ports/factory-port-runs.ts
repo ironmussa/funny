@@ -204,6 +204,7 @@ export function runPortMethods(
   | 'retryRun'
   | 'approveMerge'
   | 'markRunDone'
+  | 'closeReplacedPr'
   | 'setLintCleanup'
   | 'approvalRequests'
   | 'declineApprovalRequest'
@@ -304,6 +305,23 @@ export function runPortMethods(
             meta: { projectId, runId, issueNumber: run.issueNumber },
           }),
         );
+    },
+
+    async closeReplacedPr(userId, projectId, runId) {
+      return ownFactory(userId, projectId)
+        .andThen((factoryId) => control.closeReplacedPr(factoryId, runId).mapErr(controlFailure))
+        .map(({ run, outcome }) => {
+          audit({
+            action: 'factory.superseded_pr_closed',
+            actorId: userId,
+            detail: `Pull request of replaced factory run ${factoryRunLabel(run)}: ${outcome.kind}`,
+            meta: { projectId, runId, issueNumber: run.issueNumber, prUrl: run.prUrl },
+          });
+          return {
+            outcome: outcome.kind,
+            branchDeleted: outcome.kind === 'merged' ? false : outcome.branchDeleted,
+          };
+        });
     },
 
     async setLintCleanup(userId, projectId, runId, lintCleanup) {

@@ -13,7 +13,8 @@
  * `funny_watch` is the SOLE creation path for a watcher (a deferred-wake
  * "snooze"). It is injected on every spawn with `alwaysLoad: true`, so the
  * agent can always reach it — the reliability invariant depends on it never
- * being "not configured". The handlers run in the runner with the spawn's
+ * being "not configured". The one thread that does not get it is an issue
+ * factory thread (`canScheduleWakes`, `thread-context.ts`). The handlers run in the runner with the spawn's
  * `threadId`/`userId` from its token grant.
  *
  * Tool name as seen by the model: `mcp__funny__funny_watch`.
@@ -372,7 +373,11 @@ export function watchToolDefinitions(ctx: AgentToolContext): AgentToolDefinition
     // sandbox, read-only, factory threads): the runner's code is not the guard.
     ...factoryToolDefinitions(ctx),
   ];
-  return ctx.nativeBackgroundJobs ? tools.filter((tool) => tool.name !== 'funny_spawn') : tools;
+  const hidden = new Set<string>();
+  if (ctx.nativeBackgroundJobs) hidden.add('funny_spawn');
+  // Not listed rather than refused: the agent plans around the tools it sees.
+  if (ctx.scheduledWakes === false) hidden.add('funny_watch');
+  return tools.filter((tool) => !hidden.has(tool.name));
 }
 
 /**

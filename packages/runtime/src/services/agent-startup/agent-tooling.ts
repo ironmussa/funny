@@ -44,6 +44,7 @@ export async function resolveAgentTooling(input: {
     thread?.userId,
     template.mcpServers,
     provider,
+    thread,
   );
   return {
     ...template,

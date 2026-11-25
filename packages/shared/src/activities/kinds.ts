@@ -161,6 +161,18 @@ export const ACTIVITY_KINDS = {
       prNumber: z.number().int(),
     }),
   },
+  // A member closed the pull request of a run that a newer run of its issue replaced.
+  'factory.close-pr': {
+    scope: 'project',
+    destructive: true,
+    record: 'always',
+    input: z.object({
+      issueNumber: z.number().int().optional(),
+      prNumber: z.number().int(),
+      /** The pull request of the run that replaced it, when it has one. */
+      replacedBy: z.number().int().optional(),
+    }),
+  },
   'factory.disabled': {
     scope: 'project',
     destructive: false,
@@ -346,6 +358,7 @@ export const ACTIVITY_EFFECTS = [
   'sandbox-stopped',
   'sandbox-destroyed',
   'pr-merged',
+  'pr-closed',
   'remote-branch-deleted',
   'agent-stopped',
   'factory-disabled',

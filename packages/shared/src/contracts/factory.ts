@@ -37,6 +37,16 @@ export const factoryProjectInput = z.object({ projectId }).strict();
 export const factoryRunInput = z.object({ projectId, runId: z.string().min(1) }).strict();
 
 /**
+ * What closing a replaced run's pull request did. `merged`: it had been
+ * merged, so nothing was closed and its branch was left alone.
+ */
+export interface FactoryReplacedPrClose {
+  outcome: 'closed' | 'already-closed' | 'merged';
+  /** Whether its branch is gone from GitHub. */
+  branchDeleted: boolean;
+}
+
+/**
  * A member's approval of a held high-risk merge. `expectedSha` is the commit
  * the member was shown: the approval is refused when the run is held on
  * another one (openspec factory-agent-tools).

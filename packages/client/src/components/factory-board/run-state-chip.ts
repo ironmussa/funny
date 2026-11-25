@@ -103,7 +103,7 @@ function stoppedBeforeStartChip(
 
 /**
  * The board card's state chip, or null when the card shows the state without
- * it. A run with no thread has a clock for its icon, so only its column speaks.
+ * it. A run with no thread has its state dot for its icon.
  * What the state means for this run is the chip's tooltip, not a line of text.
  */
 export function factoryBoardStateChip(

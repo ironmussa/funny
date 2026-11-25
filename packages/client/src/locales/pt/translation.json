@@ -1937,7 +1937,11 @@
     "split_one": "Dividir em {{count}} issue",
     "split_other": "Dividir em {{count}} issues",
     "splitTitle": "Dividir a issue #{{issue}}?",
-    "splitBody": "A factory abre uma issue por parte, com a descrição de #{{issue}} como contexto, e as coloca na fila. #{{issue}} recebe a lista e sai da factory. Nenhum agente roda para isso."
+    "splitBody": "A factory abre uma issue por parte, com a descrição de #{{issue}} como contexto, e as coloca na fila. #{{issue}} recebe a lista e sai da factory. Nenhum agente roda para isso.",
+    "closeReplacedPr": "Fechar pull request",
+    "closeReplacedPrTitle": "Fechar o pull request #{{pr}}?",
+    "closeReplacedPrBody": "Uma run mais nova da issue #{{issue}} substituiu esta run com #{{newer}}. A factory comenta em #{{pr}} com um link para #{{newer}}, fecha-o e apaga sua branch.",
+    "closeReplacedPrBodyNoPr": "Uma run mais nova da issue #{{issue}} substituiu esta run. A factory comenta em #{{pr}}, fecha-o e apaga sua branch."
   },
   "projectSecrets": {
     "title": "Segredos",
@@ -2133,7 +2137,21 @@
       "needsPerson": "precisa de uma pessoa",
       "blocks": "Bloqueia",
       "then": "depois"
-    }
+    },
+    "selection": {
+      "select": "Selecionar execução",
+      "count_one": "{{count}} selecionada",
+      "count_other": "{{count}} selecionadas",
+      "retry": "Tentar novamente ({{count}})",
+      "stop": "Parar ({{count}})",
+      "clear": "Limpar seleção",
+      "stopTitle_one": "Parar {{count}} execução?",
+      "stopTitle_other": "Parar {{count}} execuções?",
+      "stopDesc": "Isso para as execuções selecionadas que não terminaram e suas threads de agente."
+    },
+    "replaced": "Substituída",
+    "replacedBy": "Substituída por #{{pr}}",
+    "replacedDetail": "A issue #{{issue}} foi enviada à factory de novo: uma run mais nova trabalha nela."
   },
   "factoryRunDetail": {
     "lintCleanupTriage": "A triagem a classificou como limpeza de lint de regras que não podem mudar o comportamento: o tamanho e os riscos do contrato não a retêm. Você pode indicar que não é.",

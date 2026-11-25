@@ -11,6 +11,7 @@ import i18next from 'i18next';
 import {
   type FactoryBoardColumnId,
   factoryBoardColumn,
+  factoryRunReplacements,
   layoutFactoryBoard,
 } from '@/components/factory-board/board-columns';
 import { factoryRunGateChips, isFactoryRunHeldForRisk } from '@/components/factory-board/run-gates';
@@ -20,6 +21,7 @@ import {
   factoryRunStateChip,
 } from '@/components/factory-board/run-state-chip';
 import { factoryRunWaitingText } from '@/components/factory-board/run-waiting';
+import { canCloseReplacedPr } from '@/components/thread/FactoryRunControls';
 import { buildFactoryRun } from '@/data/factory/testing';
 import {
   factoryRunFallbackTitle,
@@ -138,6 +140,51 @@ describe('layoutFactoryBoard', () => {
     expect(columns.needs_person).toEqual([]);
     expect(columns.done.map((run) => run.id)).toEqual(['first', 'earlier-failure']);
     expect(columns.implementing.map((run) => run.id)).toEqual(['resent']);
+  });
+});
+
+describe('factoryRunReplacements', () => {
+  const pr = (n: number) => `https://github.com/o/r/pull/${n}`;
+  const old = buildFactoryRun({
+    id: 'old',
+    issueNumber: 463,
+    state: 'failed',
+    prUrl: pr(513),
+    startedAt: hoursAgo(3),
+  });
+  const resent = buildFactoryRun({
+    id: 'resent',
+    issueNumber: 463,
+    state: 'waiting_human',
+    prUrl: pr(514),
+    startedAt: hoursAgo(2),
+  });
+
+  test('maps each replaced run to the newest run of its issue', () => {
+    const middle = buildFactoryRun({ id: 'middle', issueNumber: 463, startedAt: hoursAgo(2.5) });
+    const other = buildFactoryRun({ id: 'other', issueNumber: 7, startedAt: hoursAgo(5) });
+    const replaced = factoryRunReplacements([old, middle, resent, other]);
+    expect(replaced.get('old')?.id).toBe('resent');
+    expect(replaced.get('middle')?.id).toBe('resent');
+    expect(replaced.has('resent')).toBe(false);
+    expect(replaced.has('other')).toBe(false);
+  });
+
+  test('a run of the same issue in another factory replaces nothing', () => {
+    const elsewhere = { ...resent, factoryId: 'another-factory' };
+    expect(factoryRunReplacements([old, elsewhere]).size).toBe(0);
+  });
+
+  // A failed run a re-send replaced sits in Done with its PR still open: the
+  // card offers to close it (the PR #513 left open by run 98a4408a).
+  test('the replaced run offers to close its own open PR', () => {
+    const by = factoryRunReplacements([old, resent]).get('old');
+    expect(canCloseReplacedPr(old, by, 'OPEN')).toBe(true);
+    expect(canCloseReplacedPr(old, by, 'CLOSED')).toBe(false);
+    expect(canCloseReplacedPr(old, undefined, 'OPEN')).toBe(false);
+    expect(canCloseReplacedPr({ ...old, state: 'working' }, by, 'OPEN')).toBe(false);
+    expect(canCloseReplacedPr(old, { ...resent, prUrl: pr(513) }, 'OPEN')).toBe(false);
+    expect(canCloseReplacedPr({ ...old, prUrl: null }, by, 'OPEN')).toBe(false);
   });
 });
 
@@ -309,9 +356,14 @@ describe('factoryRunGateChips', () => {
     });
     expect(factoryRunGateChips(t, failed)[0]).toMatchObject({
       id: 'problem',
-      label: 'implement failed',
+      label: 'Implement failed',
       detail: 'tests timed out',
     });
+    const proof = buildFactoryRun({
+      state: 'waiting_human',
+      failureReason: 'regression-proof[regression_proof] failed: no test',
+    });
+    expect(factoryRunGateChips(t, proof)[0]).toMatchObject({ label: 'Regression proof failed' });
     const noReview = buildFactoryRun({ state: 'waiting_human', failureReason: 'no review' });
     expect(factoryRunGateChips(t, noReview)[0]).toMatchObject({ label: 'No review' });
   });

@@ -9,12 +9,14 @@ import { useTranslation } from 'react-i18next';
 
 import { BoardColumn } from '@/components/board/BoardColumn';
 import { LoadMoreSentinel } from '@/components/LoadMoreSentinel';
+import type { FactoryRunReplacement } from '@/components/thread/FactoryRunControls';
 import { useFactorySettings } from '@/data/factory/hooks';
 import type { FactoryQueueRun } from '@/lib/api/factory';
 
 import {
   FACTORY_BOARD_COLUMNS,
   type FactoryBoardColumnId,
+  factoryRunReplacements,
   layoutFactoryBoard,
 } from './board-columns';
 import { FactoryRunCard } from './FactoryRunCard';
@@ -106,6 +108,12 @@ interface ColumnProps {
   /** Opens the run's detail panel. */
   onSelect: (run: FactoryQueueRun) => void;
   dependencies?: FactoryRunDependencyLookup;
+  /** The newer run of the same issue that replaced each replaced run. */
+  replacements: ReadonlyMap<string, FactoryRunReplacement>;
+  /** The runs picked for a bulk action. */
+  selectedIds?: ReadonlySet<string>;
+  /** Picks or unpicks a run; absent, the cards have no checkbox. */
+  onToggleSelected?: (runId: string) => void;
 }
 
 /** What a column header shows after its count: the stage's median and its limit. */
@@ -137,6 +145,9 @@ function FactoryBoardStage({
   medianMs,
   onSelect,
   dependencies,
+  replacements,
+  selectedIds,
+  onToggleSelected,
 }: ColumnProps) {
   const { t } = useTranslation();
   const [limit, setLimit] = useState(PAGE);
@@ -176,6 +187,10 @@ function FactoryBoardStage({
           now={now}
           onSelect={onSelect}
           dependencies={dependencies}
+          replacedBy={replacements.get(run.id)}
+          selected={selectedIds?.has(run.id) ?? false}
+          selecting={(selectedIds?.size ?? 0) > 0}
+          onToggleSelected={onToggleSelected}
         />
       ))}
       <LoadMoreSentinel
@@ -199,12 +214,15 @@ interface Props {
   onSelect: (run: FactoryQueueRun) => void;
   /** How every listed run (not only the shown ones) holds the others back. */
   dependencies?: FactoryRunDependencyLookup;
+  selectedIds?: ReadonlySet<string>;
+  onToggleSelected?: (runId: string) => void;
 }
 
 export function FactoryBoard({ runs, now, ...rest }: Props) {
   const { t } = useTranslation();
   const columns = layoutFactoryBoard(runs);
   const medians = stageMedians(runs, now);
+  const replacements = factoryRunReplacements(runs);
   const titles: Record<FactoryBoardColumnId, string> = {
     queue: t('factoryBoard.column.queue', 'Queue'),
     triage: t('factoryBoard.column.triage', 'Triage'),
@@ -225,6 +243,7 @@ export function FactoryBoard({ runs, now, ...rest }: Props) {
           cards={columns[id]}
           now={now}
           medianMs={medians[id]}
+          replacements={replacements}
           {...rest}
         />
       ))}

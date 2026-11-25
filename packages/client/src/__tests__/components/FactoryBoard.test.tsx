@@ -189,7 +189,7 @@ describe('FactoryBoard', () => {
     // The parked blocker's reason is its red problem chip, not a line of its own.
     expect(screen.queryByTestId('factory-board-waiting-r434')).toBeNull();
     const problem = screen.getByTestId('factory-board-gate-r434-problem');
-    expect(problem.textContent).toBe('integrate failed');
+    expect(problem.textContent).toBe('Integrate failed');
     expect(problem.dataset.tone).toBe('fail');
     // #436 waits on #435, which is only queued: no "stuck" line for it.
     expect(screen.queryByTestId('factory-board-deps-r436-stuck-behind')).toBeNull();
@@ -423,6 +423,56 @@ describe('FactoryBoard', () => {
       }
     });
   }
+});
+
+describe('state dot and selection', () => {
+  test('a stopped run and a run waiting on a person show a state dot, not a clock or the thread pin', () => {
+    mocks.threads = { t1: buildThread({ id: 't1', projectId: 'p1', status: 'completed' }) };
+    renderBoard([
+      queueRun('stopped', 'stopped', { threadIds: [] }),
+      queueRun('waiting', 'waiting_human', { threadIds: ['t1'] }),
+    ]);
+    expect(screen.getByTestId('factory-board-dot-stopped').getAttribute('data-state')).toBe(
+      'stopped',
+    );
+    expect(screen.getByTestId('factory-board-dot-waiting').getAttribute('data-state')).toBe(
+      'waiting_human',
+    );
+  });
+
+  test('picking runs offers retry to the retryable ones and stop to the unfinished ones', () => {
+    mocks.queue = [
+      queueRun('broken', 'failed'),
+      queueRun('busy', 'working'),
+      queueRun('merged', 'merged', { completedAt: recent() }),
+    ];
+    render(
+      <MemoryRouter initialEntries={['/factory?view=board']}>
+        <TooltipProvider>
+          <FactoryQueueView />
+        </TooltipProvider>
+      </MemoryRouter>,
+    );
+    expect(screen.queryByTestId('factory-bulk-actions')).toBeNull();
+    for (const id of ['broken', 'busy', 'merged']) {
+      fireEvent.click(screen.getByTestId(`factory-board-select-${id}`));
+    }
+    // Picking a run does not open it.
+    expect(mocks.navigate).not.toHaveBeenCalled();
+    expect(screen.getByTestId('factory-bulk-count')).toHaveTextContent('3 selected');
+    expect(screen.getByTestId('factory-bulk-retry')).toHaveTextContent('Retry (1)');
+    expect(screen.getByTestId('factory-bulk-stop')).toHaveTextContent('Stop (1)');
+
+    fireEvent.click(screen.getByTestId('factory-bulk-retry'));
+    expect(mocks.control.mock.calls).toEqual([['retry', 'p1', 'broken']]);
+    // The selection clears once the action is sent.
+    expect(screen.queryByTestId('factory-bulk-actions')).toBeNull();
+
+    fireEvent.click(screen.getByTestId('factory-board-select-busy'));
+    fireEvent.click(screen.getByTestId('factory-bulk-stop'));
+    fireEvent.click(screen.getByTestId('confirm-dialog-confirm'));
+    expect(mocks.control.mock.calls.at(-1)).toEqual(['stop', 'p1', 'busy']);
+  });
 });
 
 describe('time on the board', () => {

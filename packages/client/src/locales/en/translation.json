@@ -1978,7 +1978,11 @@
     "split_one": "Split into {{count}} issue",
     "split_other": "Split into {{count}} issues",
     "splitTitle": "Split issue #{{issue}}?",
-    "splitBody": "The factory opens one issue per part, with the description of #{{issue}} for context, and queues them. #{{issue}} gets the list and leaves the factory. No agent runs for this."
+    "splitBody": "The factory opens one issue per part, with the description of #{{issue}} for context, and queues them. #{{issue}} gets the list and leaves the factory. No agent runs for this.",
+    "closeReplacedPr": "Close pull request",
+    "closeReplacedPrTitle": "Close pull request #{{pr}}?",
+    "closeReplacedPrBody": "A newer run of issue #{{issue}} replaced this run with #{{newer}}. The factory comments on #{{pr}} with a link to #{{newer}}, closes it and deletes its branch.",
+    "closeReplacedPrBodyNoPr": "A newer run of issue #{{issue}} replaced this run. The factory comments on #{{pr}}, closes it and deletes its branch."
   },
   "projectSecrets": {
     "title": "Secrets",
@@ -2174,7 +2178,21 @@
       "needsPerson": "it needs a person",
       "blocks": "Blocks",
       "then": "then"
-    }
+    },
+    "selection": {
+      "select": "Select run",
+      "count_one": "{{count}} selected",
+      "count_other": "{{count}} selected",
+      "retry": "Retry ({{count}})",
+      "stop": "Stop ({{count}})",
+      "clear": "Clear selection",
+      "stopTitle_one": "Stop {{count}} run?",
+      "stopTitle_other": "Stop {{count}} runs?",
+      "stopDesc": "This stops the selected runs that have not ended and their agent threads."
+    },
+    "replaced": "Replaced",
+    "replacedBy": "Replaced by #{{pr}}",
+    "replacedDetail": "Issue #{{issue}} was sent to the factory again: a newer run works on it."
   },
   "factoryRunDetail": {
     "lintCleanupTriage": "Triage classed it as a lint cleanup of rules that cannot change behavior: its size and its contract risks do not hold it. You can say it is not one.",

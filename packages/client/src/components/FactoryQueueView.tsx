@@ -19,6 +19,10 @@ import { FilterDropdown } from '@/components/all-threads/FilterDropdown';
 import { useFactoryViewParams } from '@/components/factory-board/factory-view-params';
 import { FactoryAnalytics } from '@/components/factory-board/FactoryAnalytics';
 import { FactoryBoard } from '@/components/factory-board/FactoryBoard';
+import {
+  FactoryBulkActions,
+  useFactoryRunSelection,
+} from '@/components/factory-board/FactoryBulkActions';
 import { FactoryIncidentBanners } from '@/components/factory-board/FactoryHealthHeader';
 import { FactoryQueueActions } from '@/components/factory-board/FactoryQueueActions';
 import {
@@ -478,19 +482,25 @@ function FactoryQueueContent({
   const dependencies = useMemo(() => factoryRunDependencies(runs ?? []), [runs]);
   const boardRuns = layout === 'board' && (runs?.length ?? 0) > 0 ? filtered : undefined;
   const selectedProject = selection.run ? projectNameById.get(selection.run.projectId) : undefined;
+  const picked = useFactoryRunSelection(boardRuns);
   return (
     <>
       {layout === 'analytics' ? (
         <FactoryAnalytics runs={runs} filtered={filtered} now={now} />
       ) : boardRuns ? (
-        <FactoryBoard
-          runs={boardRuns}
-          projectNameById={projectNameById}
-          now={now}
-          singleProjectId={singleProjectId}
-          onSelect={selection.select}
-          dependencies={dependencies}
-        />
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          <FactoryBoard
+            runs={boardRuns}
+            projectNameById={projectNameById}
+            now={now}
+            singleProjectId={singleProjectId}
+            onSelect={selection.select}
+            dependencies={dependencies}
+            selectedIds={picked.selectedIds}
+            onToggleSelected={picked.toggle}
+          />
+          <FactoryBulkActions runs={picked.selectedRuns} onClear={picked.clear} />
+        </div>
       ) : (
         <FactoryQueueBody
           runs={filtered}

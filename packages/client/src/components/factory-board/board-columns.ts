@@ -62,21 +62,32 @@ type PlacedRun = Pick<
   'id' | 'factoryId' | 'issueNumber' | 'state' | 'failureReason' | 'startedAt'
 >;
 
-/** The runs a later-sent run of the same issue, in the same factory, replaced. */
-function supersededRuns(runs: readonly PlacedRun[]): ReadonlySet<string> {
-  const keyOf = (run: PlacedRun) => `${run.factoryId}#${run.issueNumber}`;
-  const latestStart = new Map<string, number>();
+type ReplaceableRun = Pick<FactoryRun, 'id' | 'factoryId' | 'issueNumber' | 'startedAt'>;
+
+/**
+ * Each run a later-sent run of the same issue, in the same factory, replaced,
+ * with the newest run of that issue (the server's `replacementOf` decides the
+ * same from its own rows before it closes the replaced run's pull request).
+ */
+export function factoryRunReplacements<R extends ReplaceableRun>(
+  runs: readonly R[],
+): ReadonlyMap<string, R> {
+  const keyOf = (run: R) => `${run.factoryId}#${run.issueNumber}`;
+  const newest = new Map<string, R>();
   for (const run of runs) {
     if (run.issueNumber === null) continue;
-    const key = keyOf(run);
-    latestStart.set(key, Math.max(latestStart.get(key) ?? -Infinity, Date.parse(run.startedAt)));
+    const current = newest.get(keyOf(run));
+    if (!current || Date.parse(run.startedAt) > Date.parse(current.startedAt)) {
+      newest.set(keyOf(run), run);
+    }
   }
-  const superseded = new Set<string>();
+  const replaced = new Map<string, R>();
   for (const run of runs) {
     if (run.issueNumber === null) continue;
-    if (Date.parse(run.startedAt) < latestStart.get(keyOf(run))!) superseded.add(run.id);
+    const latest = newest.get(keyOf(run))!;
+    if (Date.parse(run.startedAt) < Date.parse(latest.startedAt)) replaced.set(run.id, latest);
   }
-  return superseded;
+  return replaced;
 }
 
 /**
@@ -88,7 +99,7 @@ function supersededRuns(runs: readonly PlacedRun[]): ReadonlySet<string> {
 export function placeFactoryRuns<R extends PlacedRun>(
   runs: readonly R[],
 ): Map<string, FactoryBoardColumnId> {
-  const superseded = supersededRuns(runs);
+  const superseded = factoryRunReplacements(runs);
   const placed = new Map<string, FactoryBoardColumnId>();
   for (const run of runs) {
     const column = isFactoryRunStoppedAfterFailure(run)

@@ -23,11 +23,105 @@ function useSuggestionStateRefs(
 }
 
 /**
- * The single, shared suggestion menu used by every trigger (@, /, #, >>):
- * its state, the refs TipTap's suggestion callbacks read, and the helpers
- * the per-trigger configs share.
+ * Read the full text after a trigger character (@, /, #, or >) up to the next
+ * whitespace or end of the text node, regardless of caret position.
+ * Falls back to TipTap's query if the editor isn't available.
  */
-export function useSuggestionMenu() {
+function readFullQuery(
+  ed: PromptTiptapEditor | null,
+  triggerFrom: number | null,
+  tiptapQuery: string,
+): string {
+  if (!ed || triggerFrom == null) return tiptapQuery;
+
+  try {
+    const doc = ed.state.doc;
+    // triggerFrom is the position of the trigger char (@ or /), text starts after it
+    const textStart = triggerFrom + 1;
+    const docSize = doc.content.size;
+    if (textStart >= docSize) return tiptapQuery;
+
+    // Read text from after the trigger to end of document
+    const textAfterTrigger = doc.textBetween(textStart, docSize, '\n');
+    // Take everything up to the first whitespace
+    const match = textAfterTrigger.match(/^(\S*)/);
+    return match ? match[1] : tiptapQuery;
+  } catch {
+    return tiptapQuery;
+  }
+}
+
+interface SuggestionKeyContext {
+  items: SuggestionItem[];
+  index: number;
+  setSuggestionIndex: React.Dispatch<React.SetStateAction<number>>;
+  setSuggestionType: React.Dispatch<React.SetStateAction<SuggestionMenuType | null>>;
+  runCommand: (item: SuggestionItem) => void;
+}
+
+/** Arrow keys move the selection, Enter/Tab pick the item, Escape closes. */
+function handleSuggestionMenuKey(event: KeyboardEvent, ctx: SuggestionKeyContext): boolean {
+  const len = Math.max(1, ctx.items.length);
+  if (event.key === 'ArrowDown') {
+    ctx.setSuggestionIndex((i) => (i + 1) % len);
+    return true;
+  }
+  if (event.key === 'ArrowUp') {
+    ctx.setSuggestionIndex((i) => (i - 1 + len) % len);
+    return true;
+  }
+  if (event.key === 'Enter' || event.key === 'Tab') {
+    // Run the command here, never inside a state updater: React may call
+    // an updater twice (StrictMode, replayed renders), and a second run
+    // re-applies the stale range and deletes the text after the chip.
+    const item = ctx.items[ctx.index];
+    if (item) ctx.runCommand(item);
+    return true;
+  }
+  if (event.key === 'Escape') {
+    ctx.setSuggestionType(null);
+    return true;
+  }
+  return false;
+}
+
+function itemsChanged(previousItems: SuggestionItem[], items: SuggestionItem[]): boolean {
+  return (
+    previousItems.length !== items.length ||
+    previousItems.some((item, index) => item.id !== items[index]?.id)
+  );
+}
+
+interface SuggestionKeyDownDeps {
+  suggestionTypeRef: React.RefObject<SuggestionMenuType | null>;
+  suggestionItemsRef: React.RefObject<SuggestionItem[]>;
+  suggestionIndexRef: React.RefObject<number>;
+  suggestionCommandRef: React.RefObject<((props: Record<string, unknown>) => void) | null>;
+  setSuggestionIndex: React.Dispatch<React.SetStateAction<number>>;
+  setSuggestionType: React.Dispatch<React.SetStateAction<SuggestionMenuType | null>>;
+}
+
+/**
+ * The key handler of one trigger's suggestion plugin. Every trigger renders
+ * the same popup, so a plugin claims keys only while its own menu is open.
+ */
+function createSuggestionKeyDown(menuType: SuggestionMenuType, deps: SuggestionKeyDownDeps) {
+  return ({ event }: { event: KeyboardEvent }) => {
+    if (deps.suggestionTypeRef.current !== menuType) return false;
+    return handleSuggestionMenuKey(event, {
+      items: deps.suggestionItemsRef.current,
+      index: deps.suggestionIndexRef.current,
+      setSuggestionIndex: deps.setSuggestionIndex,
+      setSuggestionType: deps.setSuggestionType,
+      runCommand: (item) =>
+        // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
+        deps.suggestionCommandRef.current?.(item as unknown as Record<string, unknown>),
+    });
+  };
+}
+
+/** The menu's state (shared by every trigger) and the selected item's command. */
+function useSuggestionMenuState() {
   // ── Suggestion state (shared for both @ and /) ──
   const [suggestionType, setSuggestionType] = useState<SuggestionMenuType | null>(null);
   const [suggestionItems, setSuggestionItems] = useState<SuggestionItem[]>([]);
@@ -37,6 +131,48 @@ export function useSuggestionMenu() {
   const [suggestionQuery, setSuggestionQuery] = useState('');
   const [suggestionRect, setSuggestionRect] = useState<(() => DOMRect | null) | null>(null);
   const suggestionCommandRef = useRef<((props: Record<string, unknown>) => void) | null>(null);
+  return {
+    suggestionType,
+    setSuggestionType,
+    suggestionItems,
+    setSuggestionItems,
+    suggestionIndex,
+    setSuggestionIndex,
+    suggestionLoading,
+    setSuggestionLoading,
+    suggestionTruncated,
+    setSuggestionTruncated,
+    suggestionQuery,
+    setSuggestionQuery,
+    suggestionRect,
+    setSuggestionRect,
+    suggestionCommandRef,
+  };
+}
+
+/**
+ * The single, shared suggestion menu used by every trigger (@, /, #, >>):
+ * its state, the refs TipTap's suggestion callbacks read, and the helpers
+ * the per-trigger configs share.
+ */
+export function useSuggestionMenu() {
+  const {
+    suggestionType,
+    setSuggestionType,
+    suggestionItems,
+    setSuggestionItems,
+    suggestionIndex,
+    setSuggestionIndex,
+    suggestionLoading,
+    setSuggestionLoading,
+    suggestionTruncated,
+    setSuggestionTruncated,
+    suggestionQuery,
+    setSuggestionQuery,
+    suggestionRect,
+    setSuggestionRect,
+    suggestionCommandRef,
+  } = useSuggestionMenuState();
 
   const { suggestionItemsRef, suggestionTypeRef, suggestionQueryRef, suggestionIndexRef } =
     useSuggestionStateRefs(suggestionItems, suggestionType, suggestionQuery, suggestionIndex);
@@ -67,40 +203,21 @@ export function useSuggestionMenu() {
    * whitespace or end of the text node, regardless of caret position.
    * Falls back to TipTap's query if the editor isn't available.
    */
-  const getFullQuery = useCallback((tiptapQuery: string): string => {
-    const ed = editorRef.current;
-    const triggerFrom = triggerPosRef.current;
-    if (!ed || triggerFrom == null) return tiptapQuery;
-
-    try {
-      const doc = ed.state.doc;
-      // triggerFrom is the position of the trigger char (@ or /), text starts after it
-      const textStart = triggerFrom + 1;
-      const docSize = doc.content.size;
-      if (textStart >= docSize) return tiptapQuery;
-
-      // Read text from after the trigger to end of document
-      const textAfterTrigger = doc.textBetween(textStart, docSize, '\n');
-      // Take everything up to the first whitespace
-      const match = textAfterTrigger.match(/^(\S*)/);
-      return match ? match[1] : tiptapQuery;
-    } catch {
-      return tiptapQuery;
-    }
-  }, []);
+  const getFullQuery = useCallback(
+    (tiptapQuery: string): string =>
+      readFullQuery(editorRef.current, triggerPosRef.current, tiptapQuery),
+    [],
+  );
 
   const applySuggestionItems = useCallback(
     (items: SuggestionItem[]) => {
-      const previousItems = suggestionItemsRef.current;
-      const changed =
-        previousItems.length !== items.length ||
-        previousItems.some((item, index) => item.id !== items[index]?.id);
+      const changed = itemsChanged(suggestionItemsRef.current, items);
 
       suggestionItemsRef.current = items;
       setSuggestionItems(items);
       if (changed) setSuggestionIndex(0);
     },
-    [suggestionItemsRef],
+    [suggestionItemsRef, setSuggestionItems, setSuggestionIndex],
   );
 
   // Every trigger (@, /, #, >>) renders the same popup off one shared
@@ -116,46 +233,42 @@ export function useSuggestionMenu() {
     setSuggestionQuery('');
     setSuggestionLoading(false);
     setSuggestionTruncated(false);
-  }, []);
+  }, [
+    setSuggestionType,
+    setSuggestionItems,
+    setSuggestionQuery,
+    setSuggestionLoading,
+    setSuggestionTruncated,
+  ]);
 
   const makeSuggestionKeyDown = useCallback(
     (menuType: SuggestionMenuType) =>
-      ({ event }: { event: KeyboardEvent }) => {
-        if (suggestionTypeRef.current !== menuType) return false;
-        const len = suggestionItemsRef.current.length;
-        if (event.key === 'ArrowDown') {
-          setSuggestionIndex((i) => (i + 1) % Math.max(1, len));
-          return true;
-        }
-        if (event.key === 'ArrowUp') {
-          setSuggestionIndex((i) => (i - 1 + Math.max(1, len)) % Math.max(1, len));
-          return true;
-        }
-        if (event.key === 'Enter' || event.key === 'Tab') {
-          // Run the command here, never inside a state updater: React may call
-          // an updater twice (StrictMode, replayed renders), and a second run
-          // re-applies the stale range and deletes the text after the chip.
-          const item = suggestionItemsRef.current[suggestionIndexRef.current];
-          if (item) {
-            // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
-            suggestionCommandRef.current?.(item as unknown as Record<string, unknown>);
-          }
-          return true;
-        }
-        if (event.key === 'Escape') {
-          setSuggestionType(null);
-          return true;
-        }
-        return false;
-      },
-    [suggestionItemsRef, suggestionTypeRef, suggestionIndexRef],
+      createSuggestionKeyDown(menuType, {
+        suggestionTypeRef,
+        suggestionItemsRef,
+        suggestionIndexRef,
+        suggestionCommandRef,
+        setSuggestionIndex,
+        setSuggestionType,
+      }),
+    [
+      suggestionItemsRef,
+      suggestionTypeRef,
+      suggestionIndexRef,
+      suggestionCommandRef,
+      setSuggestionIndex,
+      setSuggestionType,
+    ],
   );
 
   // ── Handle suggestion item selection from the popup ──
-  const handleSuggestionSelect = useCallback((item: SuggestionItem) => {
-    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
-    suggestionCommandRef.current?.(item as unknown as Record<string, unknown>);
-  }, []);
+  const handleSuggestionSelect = useCallback(
+    (item: SuggestionItem) => {
+      // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
+      suggestionCommandRef.current?.(item as unknown as Record<string, unknown>);
+    },
+    [suggestionCommandRef],
+  );
 
   // Every member is stable (state setters, refs and memoized callbacks), so
   // the per-trigger configs can depend on this one object.
@@ -180,6 +293,14 @@ export function useSuggestionMenu() {
       handleSuggestionSelect,
     }),
     [
+      setSuggestionType,
+      setSuggestionItems,
+      setSuggestionIndex,
+      setSuggestionLoading,
+      setSuggestionTruncated,
+      setSuggestionQuery,
+      setSuggestionRect,
+      suggestionCommandRef,
       suggestionTypeRef,
       suggestionQueryRef,
       getFullQuery,

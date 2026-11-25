@@ -15,6 +15,24 @@ interface KeyDownRefs {
   onSubmitRef: RefOf<(() => void) | undefined>;
 }
 
+/**
+ * Preserve normal multiline cursor movement. History navigation is
+ * only active when the caret is at the start/end of the document.
+ */
+function historyDirectionFor(
+  refs: KeyDownRefs,
+  view: EditorView,
+  event: KeyboardEvent,
+): 'previous' | 'next' | null {
+  if (refs.suggestionTypeRef.current || !view.state.selection.empty) return null;
+  const { from } = view.state.selection;
+  if (event.key === 'ArrowUp' && from <= 1) return 'previous';
+  // A text selection at the end of a paragraph is one position before
+  // the document content boundary (the paragraph's closing token).
+  if (event.key === 'ArrowDown' && from >= view.state.doc.content.size - 1) return 'next';
+  return null;
+}
+
 /** Editor-level keys: Shift+Tab cycles the mode, history at the edges, Enter submits. */
 export function handlePromptKeyDown(refs: KeyDownRefs, _view: EditorView, event: KeyboardEvent) {
   // Shift+Tab: cycle permission mode
@@ -23,18 +41,9 @@ export function handlePromptKeyDown(refs: KeyDownRefs, _view: EditorView, event:
     refs.onCycleModeRef.current?.();
     return true;
   }
-  // Preserve normal multiline cursor movement. History navigation is
-  // only active when the caret is at the start/end of the document.
-  if (!refs.suggestionTypeRef.current && _view.state.selection.empty) {
-    const { from } = _view.state.selection;
-    if (event.key === 'ArrowUp' && from <= 1) {
-      return refs.onHistoryNavigateRef.current?.('previous') ?? false;
-    }
-    // A text selection at the end of a paragraph is one position before
-    // the document content boundary (the paragraph's closing token).
-    if (event.key === 'ArrowDown' && from >= _view.state.doc.content.size - 1) {
-      return refs.onHistoryNavigateRef.current?.('next') ?? false;
-    }
+  const historyDirection = historyDirectionFor(refs, _view, event);
+  if (historyDirection) {
+    return refs.onHistoryNavigateRef.current?.(historyDirection) ?? false;
   }
   // Enter without shift → submit
   if (event.key === 'Enter' && !event.shiftKey) {

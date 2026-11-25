@@ -2,11 +2,8 @@ import { useLayoutEffect, useRef } from 'react';
 
 import type { PromptEditorProps, PromptSlashResource, PromptWorkflowResource } from './types';
 
-/**
- * Mirrors the props that TipTap's callbacks (captured at editor creation
- * time) read into refs, kept current in a layout effect.
- */
-export function usePromptEditorRefs({
+/** The suggestion sources (skills, commands, workflows, cwd) mirrored into refs. */
+function useSuggestionSourceRefs({
   cwd,
   slashSkills,
   slashSkillsLoading,
@@ -15,11 +12,6 @@ export function usePromptEditorRefs({
   workflows,
   workflowsLoading,
   commandProvider,
-  onSubmit,
-  onCycleMode,
-  onHistoryNavigate,
-  onChange,
-  onFileMentionDrop,
 }: PromptEditorProps) {
   // Slash skills come from the owner (single source of truth) — mirror them
   // into refs for synchronous reads inside the TipTap suggestion callbacks.
@@ -53,7 +45,26 @@ export function usePromptEditorRefs({
     workflowsLoading,
   ]);
 
-  // ── TipTap editor callbacks ──
+  return {
+    slashSkillsRef,
+    slashSkillsLoadingRef,
+    onSlashOpenRef,
+    cwdRef,
+    sdkSlashCommandsRef,
+    workflowsRef,
+    workflowsLoadingRef,
+    commandProviderRef,
+  };
+}
+
+/** The TipTap editor callbacks mirrored into refs. */
+function useEditorCallbackRefs({
+  onSubmit,
+  onCycleMode,
+  onHistoryNavigate,
+  onChange,
+  onFileMentionDrop,
+}: PromptEditorProps) {
   const onSubmitRef = useRef(onSubmit);
   const onCycleModeRef = useRef(onCycleMode);
   const onHistoryNavigateRef = useRef(onHistoryNavigate);
@@ -69,20 +80,20 @@ export function usePromptEditorRefs({
   }, [onChange, onCycleMode, onFileMentionDrop, onHistoryNavigate, onSubmit]);
 
   return {
-    slashSkillsRef,
-    slashSkillsLoadingRef,
-    onSlashOpenRef,
-    cwdRef,
-    sdkSlashCommandsRef,
-    workflowsRef,
-    workflowsLoadingRef,
-    commandProviderRef,
     onSubmitRef,
     onCycleModeRef,
     onHistoryNavigateRef,
     onChangeRef,
     onFileMentionDropRef,
   };
+}
+
+/**
+ * Mirrors the props that TipTap's callbacks (captured at editor creation
+ * time) read into refs, kept current in a layout effect.
+ */
+export function usePromptEditorRefs(props: PromptEditorProps) {
+  return { ...useSuggestionSourceRefs(props), ...useEditorCallbackRefs(props) };
 }
 
 export type PromptEditorRefs = ReturnType<typeof usePromptEditorRefs>;

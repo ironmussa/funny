@@ -132,9 +132,9 @@ export class RunnerEnrollmentClient {
 
   private async centralFetch(
     path: string,
-    options: Omit<RequestInit, 'headers'> & { headers?: Record<string, string> } = {},
+    options: Omit<RequestInit, 'headers'> & { headers?: RequestHeaders } = {},
   ): Promise<Response> {
-    const headers: Record<string, string> = {
+    const headers: RequestHeaders = {
       'Content-Type': 'application/json',
       ...options.headers,
     };

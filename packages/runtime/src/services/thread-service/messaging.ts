@@ -62,8 +62,8 @@ import {
   formatShellEscapeOutput,
 } from './shell-escape.js';
 
-function toThreadServiceError(err: unknown): ThreadServiceError {
-  return err instanceof ThreadServiceError ? err : new ThreadServiceError(String(err), 500);
+function toThreadServiceError(cause: unknown): ThreadServiceError {
+  return cause instanceof ThreadServiceError ? cause : new ThreadServiceError(String(cause), 500);
 }
 
 /**
@@ -360,7 +360,7 @@ async function findComposerResource(
 }
 
 /** True when the caller supplied a value that differs from the stored one. */
-function isChanged(next: string | undefined, current: unknown): boolean {
+function isChanged(next: string | undefined, current: string | null | undefined): boolean {
   return !!(next && next !== current);
 }
 
@@ -459,8 +459,11 @@ async function startIdleThreadIfNeeded(
   return { params: { ...params, images: draftImages }, hasDraft };
 }
 
-function parseDraftImages(raw: unknown): ImageAttachment[] | undefined {
-  if (Array.isArray(raw)) return raw as ImageAttachment[];
+/** A draft message's images: already decoded, or the stored JSON text. */
+type StoredDraftImages = ImageAttachment[] | string | null | undefined;
+
+function parseDraftImages(raw: StoredDraftImages): ImageAttachment[] | undefined {
+  if (Array.isArray(raw)) return raw;
   if (typeof raw !== 'string' || !raw) return undefined;
   const parsed = parseStoredJson(z.array(imageAttachmentSchema), raw, 'draft message images');
   return parsed.ok ? (parsed.value as ImageAttachment[]) : undefined;
@@ -568,7 +571,7 @@ function logQueuedToAvoidInterrupt(params: SendMessageParams, followUpMode: stri
   });
 }
 
-function jsonOrUndefined(value: unknown): string | undefined {
+function jsonOrUndefined<T extends object>(value: T | undefined): string | undefined {
   return value ? JSON.stringify(value) : undefined;
 }
 

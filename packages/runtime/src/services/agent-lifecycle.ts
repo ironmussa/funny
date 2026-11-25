@@ -862,8 +862,8 @@ export class AgentLifecycleManager {
   }
 }
 
-function errorMessage(error: unknown, fallback: string): string {
-  if (error instanceof Error && error.message) return error.message;
-  if (typeof error === 'string' && error) return error;
+function errorMessage(cause: unknown, fallback: string): string {
+  if (cause instanceof Error && cause.message) return cause.message;
+  if (typeof cause === 'string' && cause) return cause;
   return fallback;
 }

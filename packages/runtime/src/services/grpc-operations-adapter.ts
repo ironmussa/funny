@@ -1,4 +1,5 @@
 import { waitFor } from '@funny/shared/async';
+import { type JsonValue } from '@funny/shared/json-validation';
 import { FailureCode } from '@funny/shared/runner-v2/common';
 import { nanoid } from 'nanoid';
 
@@ -84,11 +85,17 @@ export const RUNNER_OPERATION_EVENT_TYPES = [
 
 export type RunnerOperationEventType = (typeof RUNNER_OPERATION_EVENT_TYPES)[number];
 
+/** What a runner operation resolves with: the JSON form of the server's answer. */
+export type RunnerOperationOutcome = JsonValue;
+
+/** An operation's payload: the mapped request, or a replayed outbox payload. */
+type RunnerOperationValue = Record<string, any> | JsonValue;
+
 type PendingOperation = {
   eventType: RunnerOperationEventType;
   kind: string;
   value: Record<string, any>;
-  resolve(value: unknown): void;
+  resolve(value: RunnerOperationOutcome): void;
   reject(error: Error): void;
   timer: ReturnType<typeof setTimeout>;
   idempotencyKey?: string;
@@ -381,7 +388,10 @@ export function mapRunnerOperation(
   return { kind, value: toValue(input, input.payload ?? input) };
 }
 
-export function mapRunnerOperationOutcome(kind: string, success: Record<string, any>): unknown {
+export function mapRunnerOperationOutcome(
+  kind: string,
+  success: Record<string, any>,
+): RunnerOperationOutcome {
   if (success.operationResponse !== undefined) return success.operationResponse;
   if (success.threadMessages)
     return { type: 'data:get_thread_messages_response', ...success.threadMessages };
@@ -396,7 +406,7 @@ export function mapRunnerOperationOutcome(kind: string, success: Record<string, 
   return { success: true };
 }
 
-function missingOperationResult(kind: string): unknown | undefined {
+function missingOperationResult(kind: string): RunnerOperationOutcome | undefined {
   if (
     kind === 'getThread' ||
     kind === 'getThreadByExternalRequestId' ||
@@ -549,7 +559,12 @@ export class GrpcOperationsAdapter {
     this.outbox.close();
   }
 
-  private send(correlationId: string, kind: string, value: unknown, idempotencyKey?: string): void {
+  private send(
+    correlationId: string,
+    kind: string,
+    value: RunnerOperationValue,
+    idempotencyKey?: string,
+  ): void {
     const sent = this.sender.send('operations', {
       metadata: {
         correlationId,

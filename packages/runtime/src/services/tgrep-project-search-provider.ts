@@ -187,9 +187,9 @@ class TgrepProjectSearchProvider implements ProjectSearchProvider {
         }
         this.scanFailed = false;
       })
-      .catch((error: unknown) => {
+      .catch((cause: unknown) => {
         this.scanFailed = true;
-        throw error;
+        throw cause;
       })
       .finally(() => {
         this.fileRefresh = undefined;

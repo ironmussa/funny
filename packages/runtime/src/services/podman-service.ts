@@ -17,7 +17,18 @@ import { ResultAsync, errAsync } from 'neverthrow';
 import { log } from '../lib/logger.js';
 import { safeFetchUserUrl } from '../lib/ssrf-guard.js';
 
-async function launcherPost(url: string, body: unknown): Promise<Response> {
+/** The launcher's request to start a container. */
+interface LauncherStartRequest {
+  containerName: string;
+  repoMode: 'clone';
+  repoUrl: string;
+  repoRef: string;
+  enableStreaming: boolean;
+  authMode: 'local';
+  gitToken: string | undefined;
+}
+
+async function launcherPost(url: string, body: LauncherStartRequest): Promise<Response> {
   const res = await safeFetchUserUrl(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

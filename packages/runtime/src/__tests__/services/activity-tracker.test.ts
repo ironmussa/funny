@@ -2,11 +2,16 @@ import { describe, expect, test } from 'bun:test';
 
 import { err, ok } from 'neverthrow';
 
-import { createActivityTracker } from '../../services/activity-tracker.js';
+import {
+  createActivityTracker,
+  type ActivityReportAnswer,
+} from '../../services/activity-tracker.js';
 
 type Report = { eventType: string; payload: any };
 
-function setup(respond: (r: Report, n: number) => Promise<unknown> = async () => ({ ok: true })) {
+function setup(
+  respond: (r: Report, n: number) => Promise<ActivityReportAnswer> = async () => ({ ok: true }),
+) {
   const reports: Report[] = [];
   const events: any[] = [];
   let n = 0;
@@ -124,7 +129,7 @@ describe('trackActivity', () => {
   });
 
   test('a refused terminal report is not retried', async () => {
-    const { tracker, reports } = setup(async (r) =>
+    const { tracker, reports } = setup(async (r): Promise<ActivityReportAnswer> =>
       r.eventType === 'data:activity_update' ? { success: false, error: 'Forbidden' } : {},
     );
     await tracker.trackActivity(SPEC, async () => ok(1));

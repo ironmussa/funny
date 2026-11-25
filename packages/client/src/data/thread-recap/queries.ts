@@ -74,5 +74,17 @@ export function threadRecapQuery(
     },
     staleTime: Infinity,
     gcTime: Infinity,
+    // A failed recap is not asked again for the same newest message: reopening
+    // the thread would otherwise run another generation for every open.
+    retryOnMount: false,
   };
+}
+
+/**
+ * Whether a query is a recap's. A recap covers the activity up to its newest
+ * message, so missed realtime events cannot make it out of date, and a resync
+ * must neither mark it stale nor refetch it (that would generate it again).
+ */
+export function isThreadRecapQueryKey(queryKey: readonly unknown[]): boolean {
+  return queryKey[0] === 'thread-recap' || queryKey[0] === recapUnavailableQuery.queryKey[0];
 }

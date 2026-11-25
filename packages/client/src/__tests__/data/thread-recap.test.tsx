@@ -19,6 +19,7 @@ mock.module('@/lib/api/profile', () => ({
 }));
 
 import { writeProfile } from '@/data/profile/queries';
+import { resyncDataLayer } from '@/data/resync';
 import { useThreadRecap, type RecapOpen } from '@/data/thread-recap/hooks';
 
 import { installTestDataLayer, resetTestDataLayer } from '../helpers/data-layer-harness';
@@ -181,5 +182,39 @@ describe('useThreadRecap', () => {
     await waitFor(() => expect(generate).toHaveBeenCalledTimes(1));
     await new Promise((r) => setTimeout(r, 10));
     expect(result.current).toEqual({ state: 'hidden' });
+  });
+
+  test('reopening after a failed recap does not generate it again', async () => {
+    seedProfile();
+    generate.mockReturnValue(errAsync({ type: 'INTERNAL', message: 'timeout' }));
+    const first = renderHook(() => useThreadRecap(thread, 'user-1', opened(), notDismissed));
+    await waitFor(() => expect(generate).toHaveBeenCalledTimes(1));
+    await new Promise((r) => setTimeout(r, 10));
+    first.unmount();
+
+    // Reopened with no new activity: the same (thread, newest message) failed already.
+    const second = renderHook(() =>
+      useThreadRecap(thread, 'user-1', opened({ openedAt: NOW + 60_000 }), notDismissed),
+    );
+    await new Promise((r) => setTimeout(r, 20));
+    expect(second.result.current).toEqual({ state: 'hidden' });
+    expect(generate).toHaveBeenCalledTimes(1);
+  });
+
+  test('a realtime resync does not regenerate a recap', async () => {
+    seedProfile();
+    generate.mockReturnValue(okAsync({ recap: 'Did things.', newestMessageId: 'm9' }));
+    const first = renderHook(() => useThreadRecap(thread, 'user-1', opened(), notDismissed));
+    await waitFor(() => expect(first.result.current.state).toBe('ready'));
+
+    // Reconnect while the card is shown, then reopen the thread later.
+    await resyncDataLayer();
+    first.unmount();
+    const second = renderHook(() =>
+      useThreadRecap(thread, 'user-1', opened({ openedAt: NOW + 60_000 }), notDismissed),
+    );
+    await new Promise((r) => setTimeout(r, 20));
+    expect(second.result.current).toEqual({ state: 'ready', key: 't1:m9', recap: 'Did things.' });
+    expect(generate).toHaveBeenCalledTimes(1);
   });
 });

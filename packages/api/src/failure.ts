@@ -38,7 +38,12 @@ export function failureFromDomainError(error: DomainError): ApiFailure {
   return failure(DOMAIN_STATUS[error.type], error.message, error.friendlyMessage);
 }
 
-const CODE_BY_STATUS: Record<number, TRPC_ERROR_CODE_KEY> = {
+/** HTTP status → the tRPC error code it is sent as. */
+interface TrpcCodesByStatus {
+  readonly [status: number]: TRPC_ERROR_CODE_KEY;
+}
+
+const CODE_BY_STATUS: TrpcCodesByStatus = {
   400: 'BAD_REQUEST',
   401: 'UNAUTHORIZED',
   402: 'PAYMENT_REQUIRED',

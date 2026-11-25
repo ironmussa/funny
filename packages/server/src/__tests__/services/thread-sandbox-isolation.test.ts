@@ -270,6 +270,17 @@ describe('runner → server data channel', () => {
     expect(await ask('r-box', 't-other')).toBe(false);
   });
 
+  test('the factory tools are refused to a sandbox runner, even for its own thread', async () => {
+    for (const type of [
+      'data:factory_list_runs',
+      'data:factory_control_run',
+      'data:factory_request_approval',
+    ]) {
+      const decision = await assertRunnerDataScope('r-box', { type, threadId: 't-box' });
+      expect({ type, ok: decision.ok }).toEqual({ type, ok: false });
+    }
+  });
+
   test('projectless work and thread creation are refused', async () => {
     expect((await assertRunnerDataScope('r-box', { type: 'data:create_project' })).ok).toBe(false);
     const create = await assertRunnerDataScope('r-box', {

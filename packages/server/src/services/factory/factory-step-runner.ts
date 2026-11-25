@@ -14,7 +14,7 @@
  */
 
 import { sleep as interruptibleSleep } from '@funny/shared/async';
-import type { Result } from 'neverthrow';
+import { err, ok, type Result } from 'neverthrow';
 import { z } from 'zod';
 
 import { RUNNER_UNAVAILABLE_PREFIX } from './factory-runner-jobs.js';
@@ -58,10 +58,30 @@ const integrateResultSchema = z.object({
   message: z.string(),
 });
 
-const stepResultSchema = z.discriminatedUnion('kind', [commandResultSchema, integrateResultSchema]);
+const changeDeltaResultSchema = z.object({
+  kind: z.literal('change-delta'),
+  outcome: z.enum(['compared', 'failed']),
+  ancestor: z.boolean(),
+  lines: z.number().int().min(0),
+  files: z.array(z.object({ path: z.string(), lines: z.number().int().min(0) })),
+  filesTruncated: z.boolean(),
+  outsideFrom: z.array(z.string()),
+  message: z.string(),
+});
+
+const stepResultSchema = z.discriminatedUnion('kind', [
+  commandResultSchema,
+  integrateResultSchema,
+  changeDeltaResultSchema,
+]);
 
 export type IntegrateStepResult = z.infer<typeof integrateResultSchema>;
 export type FactoryStepResult = z.infer<typeof stepResultSchema>;
+/** How a pull request's change differs at two commits (runtime `factory-change-delta.ts`). */
+export type ChangeDelta = Omit<
+  z.infer<typeof changeDeltaResultSchema>,
+  'kind' | 'outcome' | 'message'
+>;
 
 export type StepRun =
   | { kind: 'done'; result: FactoryStepResult }
@@ -125,4 +145,32 @@ export async function runStepOnRunner(
     kind: 'unavailable',
     why: signal.aborted ? 'the run was stopped.' : 'timed out waiting for the step.',
   };
+}
+
+const CHANGE_DELTA_TIMEOUT_MS = 2 * 60_000;
+
+/**
+ * Ask the runner of `threadId` how the pull request's change differs at `from`
+ * and at `to` (openspec factory-approval-survives-integration, D2). Resolves
+ * with why it is not available when the runner cannot answer: it is offline,
+ * it does not know the step, it lost it, or the commits are not in its
+ * checkout. The caller then treats the change as different.
+ */
+export async function changeDeltaOnRunner(
+  steps: FactoryStepDeps,
+  threadId: string,
+  commits: { from: string; to: string; baseBranch: string; branch: string },
+  signal: AbortSignal,
+): Promise<Result<ChangeDelta, string>> {
+  const run = await runStepOnRunner(
+    steps,
+    threadId,
+    { kind: 'change-delta', ...commits, timeoutMs: CHANGE_DELTA_TIMEOUT_MS },
+    signal,
+  );
+  if (run.kind === 'unavailable') return err(run.why);
+  if (run.result.kind !== 'change-delta') return err('the runner answered another step.');
+  if (run.result.outcome !== 'compared') return err(run.result.message);
+  const { ancestor, lines, files, filesTruncated, outsideFrom } = run.result;
+  return ok({ ancestor, lines, files, filesTruncated, outsideFrom });
 }

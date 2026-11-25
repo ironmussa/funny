@@ -28,9 +28,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { LabelBadge } from '@/components/ui/label-badge';
+import { usePendingApprovalRequestOfRun } from '@/data/factory/hooks';
 import { useGitStatusForThread } from '@/data/git-status/hooks';
 import type { FactoryQueueRun } from '@/lib/api/factory';
-import { factoryRunFallbackTitle } from '@/lib/factory-run-labels';
+import {
+  factoryRunFallbackTitle,
+  isFactoryRunAwaitingMergeApproval,
+} from '@/lib/factory-run-labels';
 import { useThreadById } from '@/lib/thread-selectors';
 import { timeAgo } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
@@ -97,6 +101,22 @@ function withRunPullRequest(
   };
 }
 
+/**
+ * Says that an agent asked the member to approve this held run (openspec
+ * factory-agent-tools). Only a run waiting for an approval reads the requests.
+ */
+function AgentAskedMarker({ run }: { run: FactoryQueueRun }) {
+  const { t } = useTranslation();
+  const held = isFactoryRunAwaitingMergeApproval(run);
+  const request = usePendingApprovalRequestOfRun(run.projectId, run.id, held);
+  if (!held || !request || request.sha !== run.risk?.headSha) return null;
+  return (
+    <LabelBadge tone="warning" data-testid={`factory-board-agent-asked-${run.id}`}>
+      {t('factory.approvalRequest.boardMarker', 'An agent asked for your approval')}
+    </LabelBadge>
+  );
+}
+
 /** What the factory adds under a card's title: gate chips, why it waits, what it blocks. */
 function FactoryRunCardBody({
   run,
@@ -123,6 +143,7 @@ function FactoryRunCardBody({
           {state.label}
         </LabelBadge>
         <FactoryRunGateChips run={run} />
+        <AgentAskedMarker run={run} />
       </div>
       {waiting && (
         <p

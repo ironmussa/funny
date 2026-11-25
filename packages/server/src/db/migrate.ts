@@ -2465,6 +2465,46 @@ const migrations: Migration[] = [
       await ctx().addColumn('factory_settings', 'too_big', 'TEXT');
     },
   },
+  {
+    // The largest adjustment a merge approval follows to a new commit, in
+    // lines (openspec factory-approval-survives-integration); null: 0, only
+    // the same change.
+    name: '126_factory_settings_approval_adjust',
+    async up() {
+      await ctx().addColumn('factory_settings', 'approval_adjust_max_lines', 'INTEGER');
+    },
+  },
+  {
+    // An agent's request that the member approve merging a held high-risk
+    // change (openspec factory-agent-tools). One pending request per run: the
+    // partial unique index is what makes asking twice return the same request.
+    name: '127_factory_approval_requests',
+    async up() {
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS factory_approval_requests (
+          id TEXT PRIMARY KEY,
+          run_id TEXT NOT NULL,
+          factory_id TEXT NOT NULL,
+          project_id TEXT NOT NULL,
+          thread_id TEXT NOT NULL,
+          sha TEXT NOT NULL,
+          state TEXT NOT NULL DEFAULT 'pending',
+          created_at TEXT NOT NULL,
+          resolved_at TEXT,
+          resolved_by TEXT
+        )
+      `);
+      await ctx().exec(sql`
+        CREATE UNIQUE INDEX IF NOT EXISTS factory_approval_requests_one_pending
+        ON factory_approval_requests (run_id)
+        WHERE state = 'pending'
+      `);
+      await ctx().exec(sql`
+        CREATE INDEX IF NOT EXISTS factory_approval_requests_factory
+        ON factory_approval_requests (factory_id, created_at)
+      `);
+    },
+  },
 ];
 
 /**

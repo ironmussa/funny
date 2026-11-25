@@ -15,8 +15,13 @@ const EVFLOW_METHODS = [
   'slice',
 ] as const;
 
+/** Builder method name → the element kind it declares. */
+export interface MethodKinds {
+  readonly [method: string]: string;
+}
+
 /** Map method names to element kinds */
-export const METHOD_TO_KIND: Record<string, string> = {
+export const METHOD_TO_KIND: MethodKinds = {
   command: 'command',
   event: 'event',
   readModel: 'readModel',

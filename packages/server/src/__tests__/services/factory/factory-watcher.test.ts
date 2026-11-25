@@ -2452,7 +2452,23 @@ describe('factory operator controls', () => {
       },
     });
 
-    const approved = await createFactoryRunControl().approveMerge('alice', factoryId, run.id);
+    // Naming another commit than the held one approves nothing.
+    const stale = await createFactoryRunControl().approveMerge(
+      'alice',
+      factoryId,
+      run.id,
+      'd'.repeat(12),
+    );
+    expect(stale.isErr() && stale.error.kind).toBe('conflict');
+    const untouched = (await createFactoryRunsRepository().get(run.id))._unsafeUnwrap();
+    expect(untouched).toMatchObject({ state: 'waiting_human', mergeApproval: null });
+
+    const approved = await createFactoryRunControl().approveMerge(
+      'alice',
+      factoryId,
+      run.id,
+      'c2b585c51b2e',
+    );
 
     const { run: after, sha } = approved._unsafeUnwrap();
     expect(sha).toBe('c2b585c51b2e');
@@ -2479,11 +2495,51 @@ describe('factory operator controls', () => {
       (await runs.carryMergeApproval(run.id, 'm'.repeat(40), 'n'.repeat(40)))._unsafeUnwrap(),
     ).toBe(true);
     const after = (await runs.get(run.id))._unsafeUnwrap();
-    expect(after?.mergeApproval).toEqual({
+    expect(after?.mergeApproval).toMatchObject({
       sha: 'n'.repeat(40),
       userId: 'alice',
       at: 'now',
       carriedFrom: 'a'.repeat(40),
+      // Each move is kept, so a person can read what merged on a moved approval.
+      moves: [
+        { to: 'm'.repeat(40), kind: 'same', lines: 0, files: [] },
+        { to: 'n'.repeat(40), kind: 'same', lines: 0, files: [] },
+      ],
+    });
+  });
+
+  // openspec factory-approval-survives-integration, D5.
+  test('a move for an adjustment records its size and files, and a newer approval is not overwritten', async () => {
+    const factoryId = await enableFactory();
+    const run = await seedRun(factoryId, 'waiting_human', []);
+    const runs = createFactoryRunsRepository();
+    await runs.update(run.id, { failureReason: 'high risk' });
+    await runs.approveMerge(run.id, { sha: 'a'.repeat(40), userId: 'alice', at: 'now' });
+    const files = Array.from({ length: 30 }, (_, i) => `src/f${i}.ts`);
+
+    expect(
+      (
+        await runs.carryMergeApproval(run.id, 'a'.repeat(40), 'b'.repeat(40), {
+          kind: 'adjustment',
+          lines: 7,
+          files,
+        })
+      )._unsafeUnwrap(),
+    ).toBe(true);
+    const moved = (await runs.get(run.id))._unsafeUnwrap()?.mergeApproval;
+    expect(moved).toMatchObject({ sha: 'b'.repeat(40), carriedFrom: 'a'.repeat(40) });
+    expect(moved?.moves).toMatchObject([{ to: 'b'.repeat(40), kind: 'adjustment', lines: 7 }]);
+    expect(moved?.moves?.[0]?.files).toHaveLength(20);
+
+    // The member approves another commit; a move still asked from `b` changes nothing.
+    await runs.approveMerge(run.id, { sha: 'c'.repeat(40), userId: 'alice', at: 'later' });
+    expect(
+      (await runs.carryMergeApproval(run.id, 'b'.repeat(40), 'd'.repeat(40)))._unsafeUnwrap(),
+    ).toBe(false);
+    expect((await runs.get(run.id))._unsafeUnwrap()?.mergeApproval).toEqual({
+      sha: 'c'.repeat(40),
+      userId: 'alice',
+      at: 'later',
     });
   });
 
@@ -2502,7 +2558,7 @@ describe('factory operator controls', () => {
     const control = createFactoryRunControl();
 
     for (const run of [failed, parked]) {
-      const approved = await control.approveMerge('alice', factoryId, run.id);
+      const approved = await control.approveMerge('alice', factoryId, run.id, 'a'.repeat(12));
       expect(approved.isErr() && approved.error.kind).toBe('conflict');
     }
     const rows = (await createFactoryRunsRepository().list(factoryId))._unsafeUnwrap();

@@ -9,7 +9,7 @@ import { subscribeGitHistoryChanged } from '@/lib/git-history-invalidation';
 import { metric } from '@/lib/telemetry';
 import { historyRefreshMachine } from '@/machines/history-refresh-machine';
 
-interface GitHistoryAutoRefreshOptions {
+interface GitHistoryAutoRefreshOptions<Loaded> {
   effectiveThreadId: string | undefined;
   projectModeId: string | null;
   /** Identity of the loaded history; a change means the caller reloads it itself. */
@@ -20,11 +20,11 @@ interface GitHistoryAutoRefreshOptions {
   /** A history load is already in flight. */
   busy: boolean;
   /** Reload the first page of history (called with no arguments). */
-  refresh: () => Promise<unknown>;
+  refresh: () => Promise<Loaded>;
 }
 
 /** Bind the machine's reload to the caller's loader, timing each auto-refresh. */
-function withRefreshLoader(refresh: () => Promise<unknown>) {
+function withRefreshLoader<Loaded>(refresh: () => Promise<Loaded>) {
   return historyRefreshMachine.provide({
     actors: {
       refreshHistory: fromPromise(async () => {
@@ -51,7 +51,7 @@ function withRefreshLoader(refresh: () => Promise<unknown>) {
  * push or pull). Going through the machine instead of reloading directly lets
  * it merge with the reload the resulting status change triggers on its own.
  */
-export function useGitHistoryAutoRefresh({
+export function useGitHistoryAutoRefresh<Loaded>({
   effectiveThreadId,
   projectModeId,
   contextKey: rawContextKey,
@@ -59,7 +59,7 @@ export function useGitHistoryAutoRefresh({
   enabled,
   busy,
   refresh,
-}: GitHistoryAutoRefreshOptions): () => void {
+}: GitHistoryAutoRefreshOptions<Loaded>): () => void {
   const contextKey = rawContextKey ?? '';
   const visible = !!rawVisible && enabled;
   const threadStatus = useGitStatusForThread(effectiveThreadId);

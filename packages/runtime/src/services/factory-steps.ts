@@ -17,6 +17,11 @@ import { execute, factoryGitConfigEnv, gitNetwork, gitRead, gitWrite } from '@fu
 
 import { log } from '../lib/logger.js';
 import { factoryGitDir } from './agent-startup/factory-git.js';
+import {
+  changeDelta,
+  type ChangeDeltaRequest,
+  type ChangeDeltaResult,
+} from './factory-change-delta.js';
 
 const ns = 'factory-steps';
 
@@ -51,7 +56,8 @@ export type FactoryStepRequest =
       /** Fast checks run after a merge, before it is pushed. */
       checks: string[];
       timeoutMs: number;
-    };
+    }
+  | ChangeDeltaRequest;
 
 export interface CommandResult {
   kind: 'command';
@@ -88,7 +94,7 @@ export interface IntegrateResult {
   message: string;
 }
 
-export type FactoryStepResult = CommandResult | IntegrateResult;
+export type FactoryStepResult = CommandResult | IntegrateResult | ChangeDeltaResult;
 
 export interface FactoryStepJob {
   id: string;
@@ -431,10 +437,36 @@ async function runStep(
 ): Promise<FactoryStepResult> {
   const gitEnv = await factoryGitConfigEnv(factoryGitDir()).unwrapOr({ env: {}, weave: false });
   if (request.kind === 'command') return runCommandStep(cwd, request, signal, gitEnv.env);
+  if (request.kind === 'change-delta') return changeDeltaStep(cwd, request, signal, gitEnv.env);
   return integrateStep(cwd, request, signal, gitEnv);
 }
 
+const NO_DELTA = {
+  ancestor: false,
+  lines: 0,
+  files: [],
+  filesTruncated: false,
+  outsideFrom: [],
+} satisfies Partial<ChangeDeltaResult>;
+
+/** `change-delta`: how the pull request's change differs at two commits; reads only. */
+async function changeDeltaStep(
+  cwd: string,
+  request: ChangeDeltaRequest,
+  signal: AbortSignal,
+  env: Record<string, string>,
+): Promise<ChangeDeltaResult> {
+  const delta = await changeDelta(cwd, request, signal, env);
+  if (delta.isErr()) {
+    return { kind: 'change-delta', outcome: 'failed', ...NO_DELTA, message: delta.error };
+  }
+  return { kind: 'change-delta', outcome: 'compared', ...delta.value, message: '' };
+}
+
 function failedResult(request: FactoryStepRequest, message: string): FactoryStepResult {
+  if (request.kind === 'change-delta') {
+    return { kind: 'change-delta', outcome: 'failed', ...NO_DELTA, message };
+  }
   if (request.kind === 'command') {
     return {
       kind: 'command',

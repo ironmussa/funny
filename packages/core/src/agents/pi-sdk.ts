@@ -5,7 +5,7 @@ import { isAbsolute, join, resolve } from 'path';
 import { parseStoredJson } from '@funny/shared/json-validation';
 import { z } from 'zod';
 
-import { toACPImageBlocks } from './acp-image.js';
+import { toACPImageBlocks, type ACPImageBlock, type ImageAttachments } from './acp-image.js';
 import { BaseAgentProcess } from './base-process.js';
 import { connectMcpTools, type McpToolBridge } from './mcp-tool-bridge.js';
 import { createPiSessionManager } from './pi-sdk-session.js';
@@ -76,6 +76,24 @@ const PI_EXTENSION_PACKAGE_SCHEMA = z
 type PiSdk = typeof import('@earendil-works/pi-coding-agent');
 type AgentSession = Awaited<ReturnType<PiSdk['createAgentSession']>>['session'];
 type ModelRuntime = Awaited<ReturnType<PiSdk['ModelRuntime']['create']>>;
+type PiSessionEvent = import('@earendil-works/pi-coding-agent').AgentSessionEvent;
+type PiAssistantMessageEvent = Extract<
+  PiSessionEvent,
+  { type: 'message_update' }
+>['assistantMessageEvent'];
+/** A pi tool call's arguments: the model's JSON object, or the bare string some tools send. */
+type PiToolArgs = Readonly<Record<string, unknown>> | string;
+/** A pi tool result as `tool_execution_end` reports it: usually `{ content: blocks }`, or text. */
+type PiToolResult = { readonly content?: unknown } | string | null | undefined;
+/** One block of a pi tool result's `content`; only text and image blocks are read. */
+interface PiResultBlock {
+  readonly type?: unknown;
+  readonly text?: unknown;
+}
+/** A pi message as `turn_end` / `agent_end` carry it; only its `usage` block is read. */
+interface PiMessageWithUsage {
+  readonly usage?: unknown;
+}
 
 export class PiSDKProcess extends BaseAgentProcess {
   private session: AgentSession | null = null;
@@ -198,7 +216,7 @@ export class PiSDKProcess extends BaseAgentProcess {
     }
   }
 
-  private handleSessionEvent(event: unknown): void {
+  private handleSessionEvent(event: PiSessionEvent): void {
     if (!isObject(event)) return;
     const e = event as Record<string, any>;
     switch (e.type) {
@@ -240,7 +258,7 @@ export class PiSDKProcess extends BaseAgentProcess {
     }
   }
 
-  private handleMessageUpdate(event: unknown): void {
+  private handleMessageUpdate(event: PiAssistantMessageEvent | undefined): void {
     if (!isObject(event)) return;
     const e = event as Record<string, any>;
     if (e.type === 'text_delta' && isNonEmptyString(e.delta)) {
@@ -265,7 +283,11 @@ export class PiSDKProcess extends BaseAgentProcess {
     }
   }
 
-  private emitToolUse(toolCallId: unknown, toolName: unknown, input: unknown): void {
+  private emitToolUse(
+    toolCallId: string | undefined,
+    toolName: string | undefined,
+    input: PiToolArgs | null | undefined,
+  ): void {
     const id = isNonEmptyString(toolCallId) ? toolCallId : randomUUID();
     if (this.seenToolCalls.has(id)) return;
     const normalized = normalizePiToolCall(toolName, input);
@@ -288,9 +310,9 @@ export class PiSDKProcess extends BaseAgentProcess {
   }
 
   private emitToolResult(
-    toolCallId: unknown,
-    toolName: unknown,
-    result: unknown,
+    toolCallId: string | undefined,
+    toolName: string | undefined,
+    result: PiToolResult,
     isError: boolean,
   ): void {
     const id = isNonEmptyString(toolCallId) ? toolCallId : randomUUID();
@@ -340,14 +362,14 @@ export class PiSDKProcess extends BaseAgentProcess {
     this.seenToolCalls.clear();
   }
 
-  private captureMessagesUsage(messages: unknown): void {
+  private captureMessagesUsage(messages: readonly PiMessageWithUsage[] | undefined): void {
     if (!Array.isArray(messages)) return;
     for (const msg of messages) this.captureUsage(msg);
   }
 
-  private captureUsage(message: unknown): void {
+  private captureUsage(message: PiMessageWithUsage | null | undefined): void {
     if (!isObject(message)) return;
-    const usage = (message as Record<string, any>).usage;
+    const usage = message.usage;
     if (!isPiUsage(usage)) return;
     const input = Number(usage.input ?? 0);
     const output = Number(usage.output ?? 0);
@@ -374,7 +396,10 @@ function normalizePiToolNames(names: string[]): string[] {
   return [...normalized];
 }
 
-function normalizePiToolCall(toolName: unknown, input: unknown): { name: string; input: unknown } {
+function normalizePiToolCall(
+  toolName: string | undefined,
+  input: PiToolArgs | null | undefined,
+): { name: string; input: PiToolArgs } {
   const name = normalizePiToolName(toolName);
   switch (name) {
     case 'Bash':
@@ -390,16 +415,16 @@ function normalizePiToolCall(toolName: unknown, input: unknown): { name: string;
   }
 }
 
-function isString(value: unknown): value is string {
+function isString<T>(value: T): value is T & string {
   return typeof value === 'string';
 }
 
-function isNonEmptyString(value: unknown): value is string {
+function isNonEmptyString<T>(value: T): value is T & string {
   return typeof value === 'string' && value.length > 0;
 }
 
 /** Any non-null object (arrays included). */
-function isObject(value: unknown): value is object {
+function isObject<T>(value: T): value is T & object {
   return typeof value === 'object' && value !== null;
 }
 
@@ -414,7 +439,7 @@ function isPiUsage(value: unknown): value is {
   return typeof value === 'object' && value !== null;
 }
 
-function normalizePiToolName(toolName: unknown): string {
+function normalizePiToolName(toolName: string | undefined): string {
   if (!isNonEmptyString(toolName)) return 'Tool';
   switch (toolName) {
     case 'bash':
@@ -442,7 +467,7 @@ function normalizePiToolName(toolName: unknown): string {
   }
 }
 
-function normalizeCommandInput(input: unknown): unknown {
+function normalizeCommandInput(input: PiToolArgs | null | undefined): PiToolArgs {
   if (isString(input)) return { command: input };
   const record = cloneRecord(input);
   if (!record) return input ?? {};
@@ -454,7 +479,7 @@ function normalizeCommandInput(input: unknown): unknown {
   return record;
 }
 
-function normalizeFileInput(input: unknown): unknown {
+function normalizeFileInput(input: PiToolArgs | null | undefined): PiToolArgs {
   if (isString(input)) return { file_path: input };
   const record = cloneRecord(input);
   if (!record) return input ?? {};
@@ -464,7 +489,7 @@ function normalizeFileInput(input: unknown): unknown {
   return record;
 }
 
-function normalizeSearchInput(input: unknown): unknown {
+function normalizeSearchInput(input: PiToolArgs | null | undefined): PiToolArgs {
   const record = cloneRecord(input);
   if (!record) return input ?? {};
 
@@ -473,7 +498,7 @@ function normalizeSearchInput(input: unknown): unknown {
   return record;
 }
 
-function cloneRecord(input: unknown): Record<string, unknown> | null {
+function cloneRecord(input: PiToolArgs | null | undefined): Record<string, unknown> | null {
   if (!isObject(input) || Array.isArray(input)) return null;
   return { ...(input as Record<string, unknown>) };
 }
@@ -651,8 +676,12 @@ export function piToolsFromMcp(bridge: McpToolBridge) {
     label: tool.name,
     description: tool.description,
     parameters: tool.inputSchema as any,
-    execute: async (_toolCallId: string, params: unknown, signal: AbortSignal | undefined) => {
-      const result = await tool.call((params ?? {}) as Record<string, unknown>, signal);
+    execute: async (
+      _toolCallId: string,
+      params: Record<string, unknown> | undefined,
+      signal: AbortSignal | undefined,
+    ) => {
+      const result = await tool.call(params ?? {}, signal);
       if (result.isError) throw new Error(result.text || 'tool failed');
       return { content: [{ type: 'text' as const, text: result.text }], details: undefined };
     },
@@ -742,7 +771,7 @@ function safeStat(path: string) {
   }
 }
 
-function readJson(path: string): unknown {
+function readJson(path: string): z.infer<typeof PI_EXTENSION_PACKAGE_SCHEMA> | null {
   try {
     const parsed = parseStoredJson(PI_EXTENSION_PACKAGE_SCHEMA, readFileSync(path, 'utf8'), path);
     return parsed.ok ? parsed.value : null;
@@ -784,18 +813,18 @@ function formatModel(model: any, fallback?: string): string {
   return fallback ?? 'default';
 }
 
-function toPiImages(images: unknown): any[] {
+function toPiImages(images: ImageAttachments): ACPImageBlock[] {
   return toACPImageBlocks(images);
 }
 
-function stringifyToolResult(result: unknown): string {
+function stringifyToolResult(result: PiToolResult): string {
   if (result == null) return '';
   if (isString(result)) return result;
   if (!isObject(result)) return String(result);
   const content = (result as Record<string, any>).content;
   if (Array.isArray(content)) {
     const text = content
-      .map((block) => {
+      .map((block: PiResultBlock | string | null | undefined) => {
         if (isString(block)) return block;
         if (block?.type === 'text' && isString(block.text)) return block.text;
         if (block?.type === 'image') return '[image]';
@@ -812,7 +841,7 @@ function stringifyToolResult(result: unknown): string {
   }
 }
 
-function formatToolResultContent(result: unknown, isError: boolean): string {
+function formatToolResultContent(result: PiToolResult, isError: boolean): string {
   const content = stringifyToolResult(result);
   return isError && content ? `Error: ${content}` : content;
 }

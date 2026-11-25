@@ -22,6 +22,7 @@ import { buildChildEnv } from '@funny/shared/lib/child-env';
 import {
   Codex,
   type Input,
+  type McpToolCallItem,
   type ModelReasoningEffort,
   type Thread,
   type ThreadEvent,
@@ -36,7 +37,13 @@ import { BaseAgentProcess, type ResultSubtype } from './base-process.js';
 import { CodexAppServer, codexReviewTarget } from './codex-app-server.js';
 import { codexMcpSettings } from './codex-mcp.js';
 import { codexReadOnlyOverrides } from './read-only.js';
-import type { ClaudeProcessOptions, CLIMessage } from './types.js';
+import type { CLIAssistantMessage, ClaudeProcessOptions, CLIMessage } from './types.js';
+
+/** The `tool_use` half of a tool pair, as the CLI protocol carries it: `input` is forwarded as-is. */
+type CodexToolUse = Pick<
+  Extract<CLIAssistantMessage['message']['content'][number], { type: 'tool_use' }>,
+  'name' | 'input'
+>;
 
 const dlog = createDebugLogger('codex-sdk');
 const execFileAsync = promisify(execFile);
@@ -277,15 +284,14 @@ export class CodexSDKProcess extends BaseAgentProcess {
         const pages: unknown[] = [];
         let cursor: string | undefined;
         do {
-          const page = z
-            .object({ nextCursor: z.string().nullish() })
-            .passthrough()
-            .parse(
-              await server.request(methods[name], {
-                cwds: ['skills', 'plugins'].includes(name) ? [this.options.cwd] : undefined,
-                cursor: cursor ?? undefined,
-              }),
-            );
+          const page = await server.request(
+            methods[name],
+            {
+              cwds: ['skills', 'plugins'].includes(name) ? [this.options.cwd] : undefined,
+              cursor: cursor ?? undefined,
+            },
+            z.object({ nextCursor: z.string().nullish() }).passthrough(),
+          );
           pages.push(page);
           cursor = page.nextCursor ?? undefined;
         } while (cursor);
@@ -298,8 +304,9 @@ export class CodexSDKProcess extends BaseAgentProcess {
         sandbox.sandboxMode === 'workspace-write'
           ? await resolveCodexSandboxWritableDirectories(this.options.cwd)
           : [];
-      const resumed = z.object({ thread: z.object({ id: z.string() }) }).parse(
-        await server.request(this.activeSessionId ? 'thread/resume' : 'thread/start', {
+      const resumed = await server.request(
+        this.activeSessionId ? 'thread/resume' : 'thread/start',
+        {
           threadId: this.activeSessionId ?? undefined,
           cwd: this.options.cwd,
           model: this.options.model,
@@ -317,7 +324,8 @@ export class CodexSDKProcess extends BaseAgentProcess {
                   }
                 : undefined,
           },
-        }),
+        },
+        z.object({ thread: z.object({ id: z.string() }) }),
       );
       this.activeSessionId = resumed.thread.id;
       this.emitInitOnce(resumed.thread.id);
@@ -439,14 +447,13 @@ export class CodexSDKProcess extends BaseAgentProcess {
 
       case 'reasoning':
         if (!completed) return null;
-        this.emitToolPair('Think', { content: item.text }, item.text, item.id);
+        this.emitToolPair({ name: 'Think', input: { content: item.text } }, item.text, item.id);
         return null;
 
       case 'command_execution':
         if (!completed) return null;
         this.emitToolPair(
-          'Bash',
-          { command: item.command },
+          { name: 'Bash', input: { command: item.command } },
           item.aggregated_output || `Command ${item.status}`,
           item.id,
           item.status === 'failed',
@@ -459,8 +466,7 @@ export class CodexSDKProcess extends BaseAgentProcess {
         // later Git requests can be empty after another edit or a commit, which
         // otherwise leaves this historical Edit card with no content.
         this.emitToolPair(
-          'Edit',
-          { changes: await this.captureFileChangeDiffs(item.changes) },
+          { name: 'Edit', input: { changes: await this.captureFileChangeDiffs(item.changes) } },
           item.status,
           item.id,
           item.status === 'failed',
@@ -470,8 +476,7 @@ export class CodexSDKProcess extends BaseAgentProcess {
       case 'mcp_tool_call':
         if (!completed) return null;
         this.emitToolPair(
-          `mcp__${item.server}__${item.tool}`,
-          item.arguments,
+          { name: `mcp__${item.server}__${item.tool}`, input: item.arguments },
           stringifyToolOutput(item.result ?? item.error ?? item.status),
           item.id,
           item.status === 'failed',
@@ -480,7 +485,7 @@ export class CodexSDKProcess extends BaseAgentProcess {
 
       case 'web_search':
         if (!completed) return null;
-        this.emitToolPair('WebSearch', { query: item.query }, item.query, item.id);
+        this.emitToolPair({ name: 'WebSearch', input: { query: item.query } }, item.query, item.id);
         return null;
 
       case 'todo_list':
@@ -492,7 +497,11 @@ export class CodexSDKProcess extends BaseAgentProcess {
           content: todo.text,
           status: todo.completed ? 'completed' : 'pending',
         }));
-        this.emitToolPair('TodoWrite', { todos }, stringifyToolOutput(todos), item.id);
+        this.emitToolPair(
+          { name: 'TodoWrite', input: { todos } },
+          stringifyToolOutput(todos),
+          item.id,
+        );
         return null;
 
       case 'error':
@@ -604,8 +613,7 @@ export class CodexSDKProcess extends BaseAgentProcess {
   }
 
   private emitToolPair(
-    name: string,
-    input: unknown,
+    { name, input }: CodexToolUse,
     output: string,
     itemId?: string,
     isError = false,
@@ -899,7 +907,14 @@ function extensionForMime(mime: string): string {
   return '.png';
 }
 
-function stringifyToolOutput(value: unknown): string {
+/** What a tool pair's output is printed from: an MCP call's result or error, a status, or the todos. */
+type CodexToolOutput =
+  | NonNullable<McpToolCallItem['result']>
+  | NonNullable<McpToolCallItem['error']>
+  | string
+  | ReadonlyArray<{ content: string; status: string }>;
+
+function stringifyToolOutput(value: CodexToolOutput): string {
   if (isString(value)) return value;
   try {
     return JSON.stringify(value, null, 2);

@@ -14,6 +14,11 @@ import {
   recordServerActivity,
   type ServerActivityOutcome,
 } from '../../services/activities/server-activities.js';
+import { factoryAgentToolsWith } from '../../services/factory/factory-agent-tools.js';
+import {
+  createFactoryApprovalRequestsRepository,
+  publicApprovalRequest,
+} from '../../services/factory/factory-approval-requests.js';
 import { BUILT_IN_FACTORY_FLOWS } from '../../services/factory/factory-flow.js';
 import {
   createFactoryIncidentsRepository,
@@ -141,6 +146,8 @@ function recordRunControl(
   issueNumber: number | null | undefined,
   sha: string | null,
   outcome: ServerActivityOutcome,
+  /** The thread whose agent asked, when a member did not (factory-agent-tools). */
+  askedByThread?: string,
 ): Promise<void> {
   const { kind, title } = RUN_CONTROL[action];
   return recordServerActivity(
@@ -148,24 +155,34 @@ function recordRunControl(
       kind,
       userId,
       projectId,
-      title: title(issueNumber, sha, outcome.ok),
+      ...(askedByThread && { threadId: askedByThread }),
+      title: `${title(issueNumber, sha, outcome.ok)}${askedByThread ? ' (asked by an agent)' : ''}`,
       input: {
         ...(typeof issueNumber === 'number' && { issueNumber }),
         ...(action === 'approve-merge' && sha && { sha }),
       },
-      origin: 'user',
+      origin: askedByThread ? 'implicit' : 'user',
     },
     outcome,
   );
 }
 
-function createFactoryPort(
+/** What a run control carries besides the run: the approved commit, or the asking thread. */
+interface RunControlOptions {
+  /** The commit the member was shown (`approve-merge` only). */
+  expectedSha?: string;
+  /** The thread whose agent asked for a retry or a stop. */
+  askedByThread?: string;
+}
+
+function createFactoryParts(
   settings = createFactorySettingsService(),
   runs = createFactoryRunsRepository(),
   control = createFactoryRunControl(runs),
   queue = createFactoryQueue({ runs, control }),
   incidents = createFactoryIncidentsRepository(),
-): FactoryPort {
+  requests = createFactoryApprovalRequestsRepository(),
+): { port: FactoryPort; controlled: ControlRun } {
   /** The caller's factory for the project; 404 with `missing` when they have none. */
   const factoryOf = (userId: string, projectId: string, missing: string) =>
     settings
@@ -176,6 +193,7 @@ function createFactoryPort(
       );
   const ownFactory = (userId: string, projectId: string) =>
     factoryOf(userId, projectId, 'Run not found');
+  const ownFactoryOr = factoryOf;
   const configured = (userId: string, projectId: string) =>
     factoryOf(userId, projectId, 'Set up the issue factory first.');
 
@@ -227,13 +245,14 @@ function createFactoryPort(
     userId: string,
     projectId: string,
     runId: string,
+    { expectedSha = '', askedByThread }: RunControlOptions = {},
   ): ResultAsync<FactoryRunView, ApiFailure> =>
     ownFactory(userId, projectId)
       .andThen((factoryId) => {
         const run = {
           stop: () => control.stop(userId, factoryId, runId).map(withoutSha),
           retry: () => control.retry(factoryId, runId).map(withoutSha),
-          'approve-merge': () => control.approveMerge(userId, factoryId, runId),
+          'approve-merge': () => control.approveMerge(userId, factoryId, runId, expectedSha),
         }[action];
         return run().mapErr(controlFailure);
       })
@@ -242,22 +261,53 @@ function createFactoryPort(
           action: RUN_CONTROL[action].audit,
           actorId: userId,
           detail: RUN_CONTROL[action].auditDetail(factoryRunLabel(run), sha),
-          meta: { projectId, runId, issueNumber: run.issueNumber, ...(sha && { sha }) },
+          meta: {
+            projectId,
+            runId,
+            issueNumber: run.issueNumber,
+            ...(sha && { sha }),
+            ...(askedByThread && { askedByThread }),
+          },
         });
-        void recordRunControl(action, userId, projectId, run.issueNumber, sha, { ok: true });
+        void recordRunControl(
+          action,
+          userId,
+          projectId,
+          run.issueNumber,
+          sha,
+          { ok: true },
+          askedByThread,
+        );
+        // An approval closes the run's pending request; a stop expires it.
+        void requests
+          .sync(run.id, run, action === 'approve-merge' ? userId : null)
+          .mapErr((error) =>
+            log.warn('Could not close a factory approval request', {
+              namespace: 'factory',
+              runId: run.id,
+              error: error.message,
+            }),
+          );
       })
       .orTee((error) => {
         // The run's issue, when the run can still be read, names the failed action.
-        void runs.get(runId).map((run) =>
-          recordRunControl(action, userId, projectId, run?.issueNumber, null, {
-            ok: false,
-            error: error.message,
-          }),
-        );
+        void runs
+          .get(runId)
+          .map((run) =>
+            recordRunControl(
+              action,
+              userId,
+              projectId,
+              run?.issueNumber,
+              null,
+              { ok: false, error: error.message },
+              askedByThread,
+            ),
+          );
       })
       .map(({ run }) => run);
 
-  return {
+  const port: FactoryPort = {
     async settings(userId, projectId) {
       return settingsWithIncident(userId, projectId);
     },
@@ -335,8 +385,68 @@ function createFactoryPort(
       return controlled('retry', userId, projectId, runId);
     },
 
-    async approveMerge(userId, projectId, runId) {
-      return controlled('approve-merge', userId, projectId, runId);
+    async approveMerge(userId, projectId, runId, expectedSha) {
+      return controlled('approve-merge', userId, projectId, runId, { expectedSha });
+    },
+
+    async approvalRequests(userId, projectId) {
+      const factoryId = await settings.factoryId(userId, projectId).mapErr(settingsFailure);
+      if (factoryId.isErr()) return errAsync(factoryId.error);
+      if (!factoryId.value) return okAsync([]);
+      const id = factoryId.value;
+      return requests
+        .listForFactory(id)
+        .mapErr(storageFailure)
+        .andThen((listed) =>
+          // A pending request is brought in line with its run before it is shown.
+          ResultAsync.combine(
+            listed
+              .filter((request) => request.state === 'pending')
+              .map((request) =>
+                runs
+                  .get(request.runId)
+                  .mapErr(storageFailure)
+                  .andThen((run) => requests.sync(request.runId, run).mapErr(storageFailure)),
+              ),
+          ).andThen((changed) =>
+            changed.some(Boolean)
+              ? requests.listForFactory(id).mapErr(storageFailure)
+              : okAsync(listed),
+          ),
+        )
+        .map((listed) => listed.map(publicApprovalRequest));
+    },
+
+    async declineApprovalRequest(userId, projectId, requestId) {
+      return ownFactoryOr(userId, projectId, 'Request not found').andThen((factoryId) =>
+        requests
+          .get(requestId)
+          .mapErr(storageFailure)
+          .andThen((request) =>
+            request && request.factoryId === factoryId
+              ? okAsync(request)
+              : errAsync<never, ApiFailure>(failure(404, 'Request not found')),
+          )
+          .andThen((request) =>
+            requests
+              .resolve(request.id, 'declined', userId)
+              .mapErr(storageFailure)
+              .andThen((moved) => {
+                if (!moved) {
+                  return errAsync<never, ApiFailure>(
+                    failure(409, 'This request is no longer pending.'),
+                  );
+                }
+                audit({
+                  action: 'factory.approval_declined',
+                  actorId: userId,
+                  detail: `Declined an agent's request to approve merging the factory run ${request.runId}`,
+                  meta: { projectId, runId: request.runId, requestId, sha: request.sha },
+                });
+                return okAsync(publicApprovalRequest({ ...request, state: 'declined' }));
+              }),
+          ),
+      );
     },
 
     async submitIssues(userId, projectId, input) {
@@ -539,6 +649,26 @@ function createFactoryPort(
         );
     },
   };
+
+  return {
+    port,
+    // The two controls an agent has. The action type leaves `approve-merge` out.
+    controlled: (action, userId, projectId, runId, askedByThread) =>
+      controlled(action, userId, projectId, runId, { askedByThread }),
+  };
 }
 
-export const factoryPort = createFactoryPort();
+type ControlRun = (
+  action: 'retry' | 'stop',
+  userId: string,
+  projectId: string,
+  runId: string,
+  askedByThread: string,
+) => ResultAsync<FactoryRunView, ApiFailure>;
+
+const parts = createFactoryParts();
+
+export const factoryPort = parts.port;
+
+/** The factory tools of the `funny` MCP server, behind the runner's data channel. */
+export const factoryAgentTools = factoryAgentToolsWith(parts.controlled);

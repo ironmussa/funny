@@ -8,7 +8,9 @@ import { CommandOutput } from './CommandOutput';
 import { unwrapShellCommand } from './format-utils';
 import { ToolContentArea } from './MobileContentPreview';
 
-function commandToText(command: unknown): string | null {
+/** The call's `command` as text: a string unwrapped from its shell, anything else as JSON. */
+function commandToText(parsed: { command?: unknown }): string | null {
+  const command = parsed.command;
   if (typeof command === 'string') return unwrapShellCommand(command);
   if (command == null) return null;
   if (typeof command === 'number' || typeof command === 'boolean' || typeof command === 'bigint') {
@@ -37,7 +39,7 @@ export function BashCard({
 }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(author === 'shell');
-  const command = useMemo(() => commandToText(parsed.command), [parsed.command]);
+  const command = useMemo(() => commandToText(parsed), [parsed]);
 
   return (
     <div

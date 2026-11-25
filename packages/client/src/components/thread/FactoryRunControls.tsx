@@ -55,15 +55,24 @@ export interface FactoryRunAction {
   run: () => void;
 }
 
+/** One action a run offers, if any, and the confirmation dialog it opens. */
+interface OfferedAction {
+  action: FactoryRunAction | null;
+  dialog: ReactNode;
+}
+
+/** The actions a run offers, and the confirmation dialogs they open. */
+interface FactoryRunActions {
+  actions: FactoryRunAction[];
+  dialog: ReactNode;
+}
+
 /**
  * The member's veto of triage's lint-cleanup class: "Not a lint cleanup" on a
  * run triage classed as one, and, behind a confirmation, taking that back.
  * A member never classes a run as one: that comes from triage.
  */
-function useLintCleanupAction(
-  projectId: string,
-  run: FactoryRun,
-): { action: FactoryRunAction | null; dialog: ReactNode } {
+function useLintCleanupAction(projectId: string, run: FactoryRun): OfferedAction {
   const { t } = useTranslation();
   const [confirmingLint, setConfirmingLint] = useState(false);
   const markLintCleanup = (on: boolean) =>
@@ -130,10 +139,7 @@ function useMarkDoneAction(projectId: string, run: FactoryRun): FactoryRunAction
  * The member's approval of a high-risk change the factory holds, behind a
  * confirmation that names the commit and why it is held.
  */
-function useApproveMergeAction(
-  projectId: string,
-  run: FactoryRun,
-): { action: FactoryRunAction | null; dialog: ReactNode } {
+function useApproveMergeAction(projectId: string, run: FactoryRun): OfferedAction {
   const { t } = useTranslation();
   const [confirmingMerge, setConfirmingMerge] = useState(false);
   // The commit the dialog names is the one approved: the server refuses another.
@@ -189,10 +195,7 @@ function useApproveMergeAction(
  * confirmation dialogs they open. The dialogs are returned apart so a menu can
  * close without taking them along: render them outside the menu.
  */
-export function useFactoryRunActions(
-  projectId: string,
-  run: FactoryRun,
-): { actions: FactoryRunAction[]; dialog: ReactNode } {
+export function useFactoryRunActions(projectId: string, run: FactoryRun): FactoryRunActions {
   const { t } = useTranslation();
   const canSteer = useCanSteerProject(projectId);
   const control = (action: 'retry' | 'stop') =>

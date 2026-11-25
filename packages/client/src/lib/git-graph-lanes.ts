@@ -138,6 +138,12 @@ function routeParent(
   return claimLane(state, lane ?? firstFree(state.lanes), parentHash, color);
 }
 
+/** The lane a commit's node sits in, and its color. */
+interface CommitPlacement {
+  commitLane: number;
+  nodeColor: number;
+}
+
 /**
  * Find a commit's lane (a child already routed to it, else a free one) and its
  * node color, then free every lane that was waiting for it: they converge here.
@@ -146,7 +152,7 @@ function placeCommit(
   state: LaneState,
   hash: string,
   colorKeyOf: GraphLayoutOptions['colorKeyOf'],
-): { commitLane: number; nodeColor: number } {
+): CommitPlacement {
   const childLane = state.lanes.indexOf(hash);
   const commitLane = childLane === -1 ? firstFree(state.lanes) : childLane;
   // A branch tip takes its own color; otherwise it continues its child's rail.

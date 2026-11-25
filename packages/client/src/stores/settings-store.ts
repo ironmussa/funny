@@ -47,7 +47,8 @@ export const ALL_STANDARD_TOOLS = [
   'NotebookEdit',
 ] as const;
 
-export const TOOL_LABELS: Record<string, string> = {
+/** i18n keys of tool labels, keyed by tool name. */
+export const TOOL_LABELS = {
   Read: 'tools.readFile',
   Edit: 'tools.editFile',
   Write: 'tools.writeFile',
@@ -59,7 +60,7 @@ export const TOOL_LABELS: Record<string, string> = {
   Task: 'tools.subagent',
   TodoWrite: 'tools.todos',
   NotebookEdit: 'tools.editNotebook',
-};
+} satisfies Record<(typeof ALL_STANDARD_TOOLS)[number], string>;
 
 const DEFAULT_TOOL_PERMISSIONS: Record<string, ToolPermission> = Object.fromEntries(
   ALL_STANDARD_TOOLS.map((tool) => [tool, 'allow' as ToolPermission]),
@@ -229,11 +230,14 @@ function syncToServer(data: Record<string, any>) {
   );
 }
 
-/** Derive allowedTools and disallowedTools arrays from the permissions record. */
-export function deriveToolLists(permissions: Record<string, ToolPermission>): {
+/** The tools a permissions record allows, and the ones it denies. */
+interface ToolLists {
   allowedTools: string[];
   disallowedTools: string[];
-} {
+}
+
+/** Derive allowedTools and disallowedTools arrays from the permissions record. */
+export function deriveToolLists(permissions: Record<string, ToolPermission>): ToolLists {
   const allowedTools: string[] = [];
   const disallowedTools: string[] = [];
   for (const [tool, perm] of Object.entries(permissions)) {

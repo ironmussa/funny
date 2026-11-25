@@ -20,22 +20,24 @@ export const WORKFLOW_SUGGESTION_MATCH_OPTIONS = {
 // Human-readable blurbs for the built-in SDK slash commands. The SDK reports
 // command names but no descriptions, so we annotate the well-known ones; any
 // other reported command falls back to a generic label.
-const BUILTIN_SLASH_DESCRIPTIONS: Record<string, string> = {
-  compact: 'Summarize the conversation to free up context',
-  clear: 'Clear the conversation history',
-  context: 'Show current context window usage',
-  cost: 'Show token usage and cost for this session',
-  init: 'Generate a CLAUDE.md for this project',
-  review: 'Review a pull request',
-  'security-review': 'Review pending changes for security vulnerabilities',
-  'pr-comments': 'Get comments from a GitHub pull request',
-  'add-dir': 'Add a working directory to the session',
-  'output-style': 'Change the agent output style',
-  agents: 'Manage available subagents',
-  mcp: 'Manage MCP server connections',
-  memory: 'Edit memory files',
-  vim: 'Toggle vim editing mode',
-};
+const BUILTIN_SLASH_DESCRIPTIONS = new Map(
+  Object.entries({
+    compact: 'Summarize the conversation to free up context',
+    clear: 'Clear the conversation history',
+    context: 'Show current context window usage',
+    cost: 'Show token usage and cost for this session',
+    init: 'Generate a CLAUDE.md for this project',
+    review: 'Review a pull request',
+    'security-review': 'Review pending changes for security vulnerabilities',
+    'pr-comments': 'Get comments from a GitHub pull request',
+    'add-dir': 'Add a working directory to the session',
+    'output-style': 'Change the agent output style',
+    agents: 'Manage available subagents',
+    mcp: 'Manage MCP server connections',
+    memory: 'Edit memory files',
+    vim: 'Toggle vim editing mode',
+  }),
+);
 const BUILTIN_SLASH_FALLBACK = 'Built-in command';
 
 interface WorkflowSuggestionOptions {
@@ -104,14 +106,14 @@ export function buildSlashSuggestionItems({
   // report their own /init, /compact, /review; use a neutral label there.
   const isClaude = commandProvider === 'claude';
   const builtinDesc = (name: string): string | undefined =>
-    isClaude ? BUILTIN_SLASH_DESCRIPTIONS[name] : undefined;
+    isClaude ? BUILTIN_SLASH_DESCRIPTIONS.get(name) : undefined;
 
   if (commandProvider === 'codex') {
     for (const [name, description] of Object.entries(CODEX_COMMANDS))
       add(name, description, 'slash');
   }
   if (isClaude) {
-    for (const [name, description] of Object.entries(BUILTIN_SLASH_DESCRIPTIONS)) {
+    for (const [name, description] of BUILTIN_SLASH_DESCRIPTIONS) {
       if (sdkCommandNames.has(name) || skillByName.has(name)) add(name, description, 'slash');
     }
   }

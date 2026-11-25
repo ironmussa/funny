@@ -248,9 +248,8 @@ function HideTerminalPanelButton() {
   );
 }
 
-/** Hook that derives all the props DockviewLayout needs to render the bottom
- *  group as a set of native dockview tabs (one per terminal). */
-export function useTerminalDockview(): {
+/** The terminal tabs and actions the dockview's bottom pane shows. */
+interface TerminalDockviewBottomPane {
   bottomTabs: BottomTabSpec[];
   activeBottomTab: string | undefined;
   onActiveBottomTabChange: (id: string) => void;
@@ -260,7 +259,11 @@ export function useTerminalDockview(): {
   bottomPrefixActions: React.ReactNode;
   bottomLeftActions: React.ReactNode;
   bottomRightActions: React.ReactNode;
-} {
+}
+
+/** Hook that derives all the props DockviewLayout needs to render the bottom
+ *  group as a set of native dockview tabs (one per terminal). */
+export function useTerminalDockview(): TerminalDockviewBottomPane {
   const { scopeId: selectedProjectId } = useTerminalScope();
   const tabs = useTerminalStore((s) => s.tabs);
   const activeTabId = useTerminalStore((s) => s.activeTabId);

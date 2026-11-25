@@ -34,8 +34,14 @@ import type { CompactionEvent } from '@/stores/thread-store';
 
 import type { FontConfig } from './MemoizedMessageList.measurement';
 
+/** What `useListFontConfig` returns. */
+interface ListFontConfig {
+  fontSize: FontSize;
+  fontConfig: FontConfig;
+}
+
 /** The user's font size and the fonts a message list measures text with. */
-export function useListFontConfig(): { fontSize: FontSize; fontConfig: FontConfig } {
+export function useListFontConfig(): ListFontConfig {
   const fontSize = useSettingsStore((s) => s.fontSize);
   const fontConfig = useMemo<FontConfig>(
     () => ({

@@ -1,4 +1,4 @@
-function isString(value: unknown): value is string {
+function isString(value: string | Record<string, unknown>): value is string {
   return typeof value === 'string';
 }
 

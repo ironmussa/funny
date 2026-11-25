@@ -23,7 +23,7 @@ import {
   type WSBrowserSessionDialogData,
 } from '@funny/shared';
 import type { AnnotationDomInfo } from '@funny/shared/dom/extract';
-import { create } from 'zustand';
+import { create, type StoreApi } from 'zustand';
 
 import {
   BROWSER_SESSION_VIEWPORT_HEIGHT,
@@ -465,6 +465,388 @@ function errorMessage(cause: unknown): string {
   return cause instanceof Error ? cause.message : String(cause);
 }
 
+type SetPanelState = StoreApi<BrowserPanelState>['setState'];
+type GetPanelState = StoreApi<BrowserPanelState>['getState'];
+
+/** Panel visibility, annotation tools and the persisted width / defaults / history. */
+function panelActions(set: SetPanelState, get: GetPanelState) {
+  return {
+    togglePanel: () => {
+      const opening = !get().open;
+      if (opening) {
+        log.info('panel opened');
+        metric('browser_panel.opened', 1, { type: 'sum' });
+        set({ open: true, openByThread: rememberOpen(get(), true) });
+        // On a thread, show its (agent-shared) session if it already has one.
+        const { panelThreadId, sessionId } = get();
+        if (panelThreadId && !sessionId) void get().attachThreadSession(panelThreadId);
+      } else {
+        get().closePanel();
+      }
+    },
+
+    closePanel: () => {
+      // Closing the panel tears down a panel-owned session (frames keep
+      // streaming otherwise) and detaches from a thread-bound one.
+      void get().closeBrowserSession();
+      set({ ...FRESH, open: false, openByThread: rememberOpen(get(), false) });
+    },
+
+    setUrl: (url) => set({ url }),
+
+    setLoadError: (msg) => set({ loadError: msg }),
+
+    resetAnnotationTools: () => {
+      const state = get();
+      if (state.animationsPaused) state.toggleAnimationsPaused();
+      set({
+        tool: 'browse',
+        inspectActive: false,
+        showTestIds: false,
+      });
+    },
+
+    setTool: (tool) => set({ tool }),
+
+    setDrawColor: (drawColor) => set({ drawColor }),
+
+    addAnnotation: (a) => {
+      const id = newId();
+      log.debug('annotation added', { kind: a.kind, id });
+      metric('browser_panel.annotation_added', 1, {
+        type: 'sum',
+        attributes: { kind: a.kind },
+      });
+      set((state) => ({
+        annotations: [...state.annotations, { ...a, id } as Annotation],
+      }));
+      return id;
+    },
+
+    updateAnnotationNote: (id, note) =>
+      set((state) => ({
+        annotations: state.annotations.map((a) => (a.id === id ? { ...a, note } : a)),
+      })),
+
+    updateAnnotationDom: (id, dom) =>
+      set((state) => ({
+        annotations: state.annotations.map((a) =>
+          a.id === id && a.kind === 'pin' ? { ...a, dom: dom ?? undefined } : a,
+        ),
+      })),
+
+    updateRegionDom: (id, dom) =>
+      set((state) => ({
+        annotations: state.annotations.map((a) =>
+          a.id === id && a.kind === 'region' ? { ...a, dom: dom ?? undefined } : a,
+        ),
+      })),
+
+    removeAnnotation: (id) =>
+      set((state) => ({
+        annotations: state.annotations.filter((a) => a.id !== id),
+      })),
+
+    setDrawCanvasRef: (canvas) => set({ drawCanvasRef: canvas }),
+
+    clearDraw: () => {
+      const canvas = get().drawCanvasRef;
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        ctx?.clearRect(0, 0, canvas.width, canvas.height);
+      }
+      set((state) => ({
+        annotations: state.annotations.filter((a) => a.kind !== 'draw'),
+      }));
+    },
+
+    clearAllAnnotations: () => {
+      const canvas = get().drawCanvasRef;
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        ctx?.clearRect(0, 0, canvas.width, canvas.height);
+      }
+      log.info('clear all annotations');
+      set({ annotations: [] });
+    },
+
+    toggleOverlaysVisibility: () => set((state) => ({ overlaysVisible: !state.overlaysVisible })),
+
+    setBrowserPanelWidth: (w) => {
+      const max =
+        typeof window !== 'undefined' ? Math.floor(window.innerWidth * 0.8) : MIN_WIDTH * 4;
+      const clamped = Math.max(MIN_WIDTH, Math.min(w, max));
+      try {
+        localStorage.setItem(WIDTH_KEY, String(clamped));
+      } catch {
+        /* localStorage unavailable */
+      }
+      set({ browserPanelWidth: clamped });
+    },
+
+    setDefaultModel: (model) => {
+      writeDefaults({ defaultModel: model });
+      set({ defaultModel: model });
+    },
+
+    recordSent: (entry) => {
+      const next = [entry, ...get().sentHistory.filter((e) => e.threadId !== entry.threadId)].slice(
+        0,
+        HISTORY_MAX,
+      );
+      writeHistory(next);
+      set({ sentHistory: next });
+    },
+
+    clearSentHistory: () => {
+      writeHistory([]);
+      set({ sentHistory: [] });
+    },
+  } satisfies Partial<BrowserPanelState>;
+}
+
+/** Opening, closing and attaching the panel's browser session, per thread. */
+function sessionLifecycleActions(set: SetPanelState, get: GetPanelState) {
+  return {
+    openBrowserSession: async (url: string) => {
+      const state = get();
+      // If we already have a session, just navigate it (the runner handles the
+      // open→navigate fall-through too, but going through the dedicated client
+      // method gives us cleaner WS traffic).
+      if (state.sessionId && state.sessionStatus === 'ready') {
+        const { browserSessionClient } = await loadClient();
+        browserSessionClient.navigate(state.sessionId, url);
+        set({ loadedUrl: url, loadError: null });
+        return;
+      }
+
+      // On a thread, the session is the thread's — shared with its agent.
+      const { getUrlThreadId } = await import('@/stores/thread-store');
+      const threadId = state.sessionThreadId ?? getUrlThreadId();
+      const sessionId = state.sessionId ?? newPanelSessionId(threadId);
+
+      set({
+        sessionId,
+        sessionThreadId: threadId,
+        sessionStatus: 'spawning',
+        sessionError: null,
+        loadedUrl: url,
+        loadError: null,
+      });
+
+      metric('browser_panel.url_loaded', 1, {
+        type: 'sum',
+        attributes: { protocol: urlProtocol(url) },
+      });
+
+      try {
+        const { browserSessionClient } = await loadClient();
+        browserSessionClient.open(sessionId, url);
+      } catch (error) {
+        if (get().sessionId !== sessionId) return;
+        get().setSessionStatus('disconnected', errorMessage(error));
+      }
+    },
+
+    closeBrowserSession: async () => {
+      const { sessionId, sessionThreadId } = get();
+      if (!sessionId) return;
+      await releaseSession(sessionId, sessionThreadId ? 'detach' : 'user');
+      set({ ...DETACHED });
+    },
+
+    endBrowserSession: async () => {
+      const { sessionId } = get();
+      if (!sessionId) return;
+      await releaseSession(sessionId, 'user');
+      set({ ...DETACHED, url: '', loadedUrl: null });
+    },
+
+    attachThreadSession: async (threadId) => {
+      const sessionId = threadBrowserSessionId(threadId);
+      // Controller and dialog start from defaults; `ready` restates the real ones.
+      set({
+        sessionId,
+        sessionThreadId: threadId,
+        sessionStatus: 'spawning',
+        sessionError: null,
+        tool: 'browse',
+        inspectActive: false,
+        showTestIds: false,
+        controller: 'agent',
+        dialog: null,
+      });
+      try {
+        const { browserSessionClient } = await loadClient();
+        // Empty URL = attach only: the runner re-sends `ready` or replies `not_found`.
+        browserSessionClient.open(sessionId, '');
+      } catch (error) {
+        if (get().sessionId === sessionId)
+          get().setSessionStatus(
+            'disconnected',
+            error instanceof Error ? error.message : String(error),
+          );
+      }
+    },
+
+    syncActiveThread: (threadId) => {
+      const state = get();
+      if (state.panelThreadId === threadId) {
+        if (threadId && needsSession(state)) void get().attachThreadSession(threadId);
+        return;
+      }
+      // Another thread: let go of this one's session (detach — never close — a
+      // thread-bound one) and restore the new thread's open/closed state.
+      releaseHeldSession(state);
+      const open = state.openByThread[threadKey(threadId)] ?? false;
+      set(panelStateForThread(threadId, open));
+      if (open && threadId) void get().attachThreadSession(threadId);
+    },
+
+    showThreadBrowser: (threadId) => {
+      const state = get();
+      if (state.panelThreadId === threadId) {
+        if (!state.open) get().togglePanel();
+        return;
+      }
+      set({ openByThread: { ...state.openByThread, [threadKey(threadId)]: true } });
+    },
+
+    handleAgentOpened: (sessionId, threadId, activeThreadId) => {
+      if (threadId !== activeThreadId) return;
+      const state = get();
+      if (state.sessionId === sessionId) return;
+      releaseHeldSession(state);
+      log.info('agent opened browser on active thread — attaching', { threadId });
+      set({
+        ...DETACHED,
+        open: true,
+        panelThreadId: threadId,
+        openByThread: { ...state.openByThread, [threadKey(threadId)]: true },
+      });
+      void get().attachThreadSession(threadId);
+    },
+  } satisfies Partial<BrowserPanelState>;
+}
+
+/** Runner session events and the user's controls on a live session. */
+function sessionControlActions(set: SetPanelState, get: GetPanelState) {
+  return {
+    setSessionViewport: (sessionId, width, height) => {
+      if (get().sessionId !== sessionId) return;
+      set({ viewport: { width, height } });
+    },
+
+    handleSessionNotFound: (sessionId) => {
+      if (get().sessionId !== sessionId) return;
+      set({ ...DETACHED });
+    },
+
+    setSessionController: (sessionId, controller) => {
+      if (get().sessionId !== sessionId) return;
+      if (controller !== 'user') get().resetAnnotationTools();
+      set({ controller });
+    },
+
+    setSessionDialog: (sessionId, dialog) => {
+      if (get().sessionId !== sessionId) return;
+      set({ dialog });
+    },
+
+    setSessionAudio: (sessionId, muted) => {
+      if (get().sessionId !== sessionId) return;
+      set({ audioMuted: muted });
+    },
+
+    setAudioMuted: async (muted) => {
+      const { sessionId } = get();
+      if (!sessionId) return;
+      const { browserSessionClient } = await loadClient();
+      browserSessionClient.input(sessionId, { kind: 'audio', muted });
+      metric('browser_panel.audio_toggled', 1, {
+        type: 'sum',
+        attributes: { muted: String(muted) },
+      });
+    },
+
+    resizeViewport: async (width, height) => {
+      const { sessionId } = get();
+      if (!sessionId) return;
+      const { browserSessionClient } = await loadClient();
+      // The runner answers with `browser-session:viewport`, which updates `viewport`.
+      browserSessionClient.input(sessionId, { kind: 'viewport', width, height });
+      metric('browser_panel.viewport_resized', 1, {
+        type: 'sum',
+        attributes: { size: `${width}x${height}` },
+      });
+    },
+
+    setUserControl: async (userControls) => {
+      const { sessionId } = get();
+      if (!sessionId) return;
+      const { browserSessionClient } = await loadClient();
+      if (!userControls) get().resetAnnotationTools();
+      browserSessionClient.input(sessionId, {
+        kind: userControls ? 'takeControl' : 'releaseControl',
+      });
+      metric('browser_panel.control_changed', 1, {
+        type: 'sum',
+        attributes: { controller: userControls ? 'user' : 'agent' },
+      });
+    },
+
+    answerDialog: async (accept, promptText) => {
+      const { sessionId } = get();
+      if (!sessionId) return;
+      const { browserSessionClient } = await loadClient();
+      browserSessionClient.input(sessionId, { kind: 'dialog', accept, promptText });
+      set({ dialog: null });
+    },
+
+    clearBrowserProfile: async () => {
+      const { sessionId } = get();
+      const { browserSessionClient } = await loadClient();
+      browserSessionClient.close(sessionId ?? 'browser-profile', 'clear-profile');
+      if (sessionId) {
+        const { clearLatestFrame } = await loadFrames();
+        clearLatestFrame(sessionId);
+      }
+      metric('browser_panel.profile_cleared', 1, { type: 'sum' });
+      set({ ...DETACHED, url: '', loadedUrl: null });
+    },
+
+    setSessionStatus: (status, error = null) =>
+      set((state) => ({
+        sessionStatus: status,
+        sessionError: error ?? state.sessionError,
+      })),
+
+    toggleShowTestIds: () => set((state) => ({ showTestIds: !state.showTestIds })),
+
+    toggleAnimationsPaused: () => {
+      const next = !get().animationsPaused;
+      set({ animationsPaused: next });
+
+      const { sessionId } = get();
+      if (!sessionId) return;
+      void loadClient().then(({ browserSessionClient }) => {
+        browserSessionClient
+          .execute(
+            sessionId,
+            next
+              ? 'document.getAnimations().forEach(a => a.pause())'
+              : 'document.getAnimations().forEach(a => a.play())',
+          )
+          .catch(() => {});
+      });
+    },
+
+    toggleInspectActive: () => set((state) => ({ inspectActive: !state.inspectActive })),
+
+    reset: () => set({ ...FRESH, open: false, openByThread: {}, panelThreadId: undefined }),
+  } satisfies Partial<BrowserPanelState>;
+}
+
 export const useBrowserPanelStore = create<BrowserPanelState>((set, get) => ({
   ...FRESH,
   openByThread: {},
@@ -473,366 +855,7 @@ export const useBrowserPanelStore = create<BrowserPanelState>((set, get) => ({
   defaultModel: initialDefaults.defaultModel,
   sentHistory: readHistory(),
 
-  togglePanel: () => {
-    const opening = !get().open;
-    if (opening) {
-      log.info('panel opened');
-      metric('browser_panel.opened', 1, { type: 'sum' });
-      set({ open: true, openByThread: rememberOpen(get(), true) });
-      // On a thread, show its (agent-shared) session if it already has one.
-      const { panelThreadId, sessionId } = get();
-      if (panelThreadId && !sessionId) void get().attachThreadSession(panelThreadId);
-    } else {
-      get().closePanel();
-    }
-  },
-
-  closePanel: () => {
-    // Closing the panel tears down a panel-owned session (frames keep
-    // streaming otherwise) and detaches from a thread-bound one.
-    void get().closeBrowserSession();
-    set({ ...FRESH, open: false, openByThread: rememberOpen(get(), false) });
-  },
-
-  setUrl: (url) => set({ url }),
-
-  setLoadError: (msg) => set({ loadError: msg }),
-
-  resetAnnotationTools: () => {
-    const state = get();
-    if (state.animationsPaused) state.toggleAnimationsPaused();
-    set({
-      tool: 'browse',
-      inspectActive: false,
-      showTestIds: false,
-    });
-  },
-
-  setTool: (tool) => set({ tool }),
-
-  setDrawColor: (drawColor) => set({ drawColor }),
-
-  addAnnotation: (a) => {
-    const id = newId();
-    log.debug('annotation added', { kind: a.kind, id });
-    metric('browser_panel.annotation_added', 1, {
-      type: 'sum',
-      attributes: { kind: a.kind },
-    });
-    set((state) => ({
-      annotations: [...state.annotations, { ...a, id } as Annotation],
-    }));
-    return id;
-  },
-
-  updateAnnotationNote: (id, note) =>
-    set((state) => ({
-      annotations: state.annotations.map((a) => (a.id === id ? { ...a, note } : a)),
-    })),
-
-  updateAnnotationDom: (id, dom) =>
-    set((state) => ({
-      annotations: state.annotations.map((a) =>
-        a.id === id && a.kind === 'pin' ? { ...a, dom: dom ?? undefined } : a,
-      ),
-    })),
-
-  updateRegionDom: (id, dom) =>
-    set((state) => ({
-      annotations: state.annotations.map((a) =>
-        a.id === id && a.kind === 'region' ? { ...a, dom: dom ?? undefined } : a,
-      ),
-    })),
-
-  removeAnnotation: (id) =>
-    set((state) => ({
-      annotations: state.annotations.filter((a) => a.id !== id),
-    })),
-
-  setDrawCanvasRef: (canvas) => set({ drawCanvasRef: canvas }),
-
-  clearDraw: () => {
-    const canvas = get().drawCanvasRef;
-    if (canvas) {
-      const ctx = canvas.getContext('2d');
-      ctx?.clearRect(0, 0, canvas.width, canvas.height);
-    }
-    set((state) => ({
-      annotations: state.annotations.filter((a) => a.kind !== 'draw'),
-    }));
-  },
-
-  clearAllAnnotations: () => {
-    const canvas = get().drawCanvasRef;
-    if (canvas) {
-      const ctx = canvas.getContext('2d');
-      ctx?.clearRect(0, 0, canvas.width, canvas.height);
-    }
-    log.info('clear all annotations');
-    set({ annotations: [] });
-  },
-
-  toggleOverlaysVisibility: () => set((state) => ({ overlaysVisible: !state.overlaysVisible })),
-
-  setBrowserPanelWidth: (w) => {
-    const max = typeof window !== 'undefined' ? Math.floor(window.innerWidth * 0.8) : MIN_WIDTH * 4;
-    const clamped = Math.max(MIN_WIDTH, Math.min(w, max));
-    try {
-      localStorage.setItem(WIDTH_KEY, String(clamped));
-    } catch {
-      /* localStorage unavailable */
-    }
-    set({ browserPanelWidth: clamped });
-  },
-
-  setDefaultModel: (model) => {
-    writeDefaults({ defaultModel: model });
-    set({ defaultModel: model });
-  },
-
-  recordSent: (entry) => {
-    const next = [entry, ...get().sentHistory.filter((e) => e.threadId !== entry.threadId)].slice(
-      0,
-      HISTORY_MAX,
-    );
-    writeHistory(next);
-    set({ sentHistory: next });
-  },
-
-  clearSentHistory: () => {
-    writeHistory([]);
-    set({ sentHistory: [] });
-  },
-
-  openBrowserSession: async (url: string) => {
-    const state = get();
-    // If we already have a session, just navigate it (the runner handles the
-    // open→navigate fall-through too, but going through the dedicated client
-    // method gives us cleaner WS traffic).
-    if (state.sessionId && state.sessionStatus === 'ready') {
-      const { browserSessionClient } = await loadClient();
-      browserSessionClient.navigate(state.sessionId, url);
-      set({ loadedUrl: url, loadError: null });
-      return;
-    }
-
-    // On a thread, the session is the thread's — shared with its agent.
-    const { getUrlThreadId } = await import('@/stores/thread-store');
-    const threadId = state.sessionThreadId ?? getUrlThreadId();
-    const sessionId = state.sessionId ?? newPanelSessionId(threadId);
-
-    set({
-      sessionId,
-      sessionThreadId: threadId,
-      sessionStatus: 'spawning',
-      sessionError: null,
-      loadedUrl: url,
-      loadError: null,
-    });
-
-    metric('browser_panel.url_loaded', 1, {
-      type: 'sum',
-      attributes: { protocol: urlProtocol(url) },
-    });
-
-    try {
-      const { browserSessionClient } = await loadClient();
-      browserSessionClient.open(sessionId, url);
-    } catch (error) {
-      if (get().sessionId !== sessionId) return;
-      get().setSessionStatus('disconnected', errorMessage(error));
-    }
-  },
-
-  closeBrowserSession: async () => {
-    const { sessionId, sessionThreadId } = get();
-    if (!sessionId) return;
-    await releaseSession(sessionId, sessionThreadId ? 'detach' : 'user');
-    set({ ...DETACHED });
-  },
-
-  endBrowserSession: async () => {
-    const { sessionId } = get();
-    if (!sessionId) return;
-    await releaseSession(sessionId, 'user');
-    set({ ...DETACHED, url: '', loadedUrl: null });
-  },
-
-  attachThreadSession: async (threadId) => {
-    const sessionId = threadBrowserSessionId(threadId);
-    // Controller and dialog start from defaults; `ready` restates the real ones.
-    set({
-      sessionId,
-      sessionThreadId: threadId,
-      sessionStatus: 'spawning',
-      sessionError: null,
-      tool: 'browse',
-      inspectActive: false,
-      showTestIds: false,
-      controller: 'agent',
-      dialog: null,
-    });
-    try {
-      const { browserSessionClient } = await loadClient();
-      // Empty URL = attach only: the runner re-sends `ready` or replies `not_found`.
-      browserSessionClient.open(sessionId, '');
-    } catch (error) {
-      if (get().sessionId === sessionId)
-        get().setSessionStatus(
-          'disconnected',
-          error instanceof Error ? error.message : String(error),
-        );
-    }
-  },
-
-  syncActiveThread: (threadId) => {
-    const state = get();
-    if (state.panelThreadId === threadId) {
-      if (threadId && needsSession(state)) void get().attachThreadSession(threadId);
-      return;
-    }
-    // Another thread: let go of this one's session (detach — never close — a
-    // thread-bound one) and restore the new thread's open/closed state.
-    releaseHeldSession(state);
-    const open = state.openByThread[threadKey(threadId)] ?? false;
-    set(panelStateForThread(threadId, open));
-    if (open && threadId) void get().attachThreadSession(threadId);
-  },
-
-  showThreadBrowser: (threadId) => {
-    const state = get();
-    if (state.panelThreadId === threadId) {
-      if (!state.open) get().togglePanel();
-      return;
-    }
-    set({ openByThread: { ...state.openByThread, [threadKey(threadId)]: true } });
-  },
-
-  handleAgentOpened: (sessionId, threadId, activeThreadId) => {
-    if (threadId !== activeThreadId) return;
-    const state = get();
-    if (state.sessionId === sessionId) return;
-    releaseHeldSession(state);
-    log.info('agent opened browser on active thread — attaching', { threadId });
-    set({
-      ...DETACHED,
-      open: true,
-      panelThreadId: threadId,
-      openByThread: { ...state.openByThread, [threadKey(threadId)]: true },
-    });
-    void get().attachThreadSession(threadId);
-  },
-
-  setSessionViewport: (sessionId, width, height) => {
-    if (get().sessionId !== sessionId) return;
-    set({ viewport: { width, height } });
-  },
-
-  handleSessionNotFound: (sessionId) => {
-    if (get().sessionId !== sessionId) return;
-    set({ ...DETACHED });
-  },
-
-  setSessionController: (sessionId, controller) => {
-    if (get().sessionId !== sessionId) return;
-    if (controller !== 'user') get().resetAnnotationTools();
-    set({ controller });
-  },
-
-  setSessionDialog: (sessionId, dialog) => {
-    if (get().sessionId !== sessionId) return;
-    set({ dialog });
-  },
-
-  setSessionAudio: (sessionId, muted) => {
-    if (get().sessionId !== sessionId) return;
-    set({ audioMuted: muted });
-  },
-
-  setAudioMuted: async (muted) => {
-    const { sessionId } = get();
-    if (!sessionId) return;
-    const { browserSessionClient } = await loadClient();
-    browserSessionClient.input(sessionId, { kind: 'audio', muted });
-    metric('browser_panel.audio_toggled', 1, {
-      type: 'sum',
-      attributes: { muted: String(muted) },
-    });
-  },
-
-  resizeViewport: async (width, height) => {
-    const { sessionId } = get();
-    if (!sessionId) return;
-    const { browserSessionClient } = await loadClient();
-    // The runner answers with `browser-session:viewport`, which updates `viewport`.
-    browserSessionClient.input(sessionId, { kind: 'viewport', width, height });
-    metric('browser_panel.viewport_resized', 1, {
-      type: 'sum',
-      attributes: { size: `${width}x${height}` },
-    });
-  },
-
-  setUserControl: async (userControls) => {
-    const { sessionId } = get();
-    if (!sessionId) return;
-    const { browserSessionClient } = await loadClient();
-    if (!userControls) get().resetAnnotationTools();
-    browserSessionClient.input(sessionId, {
-      kind: userControls ? 'takeControl' : 'releaseControl',
-    });
-    metric('browser_panel.control_changed', 1, {
-      type: 'sum',
-      attributes: { controller: userControls ? 'user' : 'agent' },
-    });
-  },
-
-  answerDialog: async (accept, promptText) => {
-    const { sessionId } = get();
-    if (!sessionId) return;
-    const { browserSessionClient } = await loadClient();
-    browserSessionClient.input(sessionId, { kind: 'dialog', accept, promptText });
-    set({ dialog: null });
-  },
-
-  clearBrowserProfile: async () => {
-    const { sessionId } = get();
-    const { browserSessionClient } = await loadClient();
-    browserSessionClient.close(sessionId ?? 'browser-profile', 'clear-profile');
-    if (sessionId) {
-      const { clearLatestFrame } = await loadFrames();
-      clearLatestFrame(sessionId);
-    }
-    metric('browser_panel.profile_cleared', 1, { type: 'sum' });
-    set({ ...DETACHED, url: '', loadedUrl: null });
-  },
-
-  setSessionStatus: (status, error = null) =>
-    set((state) => ({
-      sessionStatus: status,
-      sessionError: error ?? state.sessionError,
-    })),
-
-  toggleShowTestIds: () => set((state) => ({ showTestIds: !state.showTestIds })),
-
-  toggleAnimationsPaused: () => {
-    const next = !get().animationsPaused;
-    set({ animationsPaused: next });
-
-    const { sessionId } = get();
-    if (!sessionId) return;
-    void loadClient().then(({ browserSessionClient }) => {
-      browserSessionClient
-        .execute(
-          sessionId,
-          next
-            ? 'document.getAnimations().forEach(a => a.pause())'
-            : 'document.getAnimations().forEach(a => a.play())',
-        )
-        .catch(() => {});
-    });
-  },
-
-  toggleInspectActive: () => set((state) => ({ inspectActive: !state.inspectActive })),
-
-  reset: () => set({ ...FRESH, open: false, openByThread: {}, panelThreadId: undefined }),
+  ...panelActions(set, get),
+  ...sessionLifecycleActions(set, get),
+  ...sessionControlActions(set, get),
 }));

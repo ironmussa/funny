@@ -73,18 +73,18 @@ function splitDiffByFile(rawDiff: string): Map<string, string> {
   return result;
 }
 
-/**
- * Normalize a path entry and detect whether it's a submodule / nested git repo.
- * `git ls-files --others --exclude-standard` returns nested repos with a trailing `/`,
- * and `git diff` reports gitlink entries (mode 160000) without content. In both cases
- * the entry represents a whole repo — detect by probing `<cwd>/<path>/.git`.
- */
 /** A diff entry's path, and whether it is a whole nested repository. */
 interface ClassifiedPath {
   path: string;
   isSubmodule: boolean;
 }
 
+/**
+ * Normalize a path entry and detect whether it's a submodule / nested git repo.
+ * `git ls-files --others --exclude-standard` returns nested repos with a trailing `/`,
+ * and `git diff` reports gitlink entries (mode 160000) without content. In both cases
+ * the entry represents a whole repo — detect by probing `<cwd>/<path>/.git`.
+ */
 function classifyPath(cwd: string, rawPath: string): ClassifiedPath {
   const path = rawPath.endsWith('/') ? rawPath.slice(0, -1) : rawPath;
   // `.git` can be a dir (standalone clone) or a file (submodule gitlink pointer).

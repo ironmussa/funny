@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { VirtualDiff } from '@/components/VirtualDiff';
+import { cn } from '@/lib/utils';
 import type { Editor } from '@/stores/settings-store';
 
 import { MobileContentPreview } from './MobileContentPreview';
@@ -106,8 +107,13 @@ export function EditFileInlineDiff({
     <MobileContentPreview onExpand={onExpand} label={t('tools.viewFullDiff')}>
       <div
         ref={slotRef}
-        className="border-border/40 max-h-[50vh] overflow-hidden border-t"
-        style={{ height: slotHeight }}
+        className={cn(
+          'border-border/40 max-h-[50vh] overflow-hidden border-t',
+          slotHeight !== undefined && 'h-[var(--edit-file-diff-slot-height)]',
+        )}
+        style={{
+          '--edit-file-diff-slot-height': slotHeight === undefined ? undefined : `${slotHeight}px`,
+        }}
       >
         {diffMounted ? (
           <VirtualDiff

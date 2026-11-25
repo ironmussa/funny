@@ -1,4 +1,4 @@
-import { beforeEach, describe, test, expect, vi, mock } from 'bun:test';
+import { beforeEach, describe, test, expect, vi, mock, setDefaultTimeout } from 'bun:test';
 
 import { act, fireEvent, render, waitFor } from '@testing-library/react';
 import { createRef, useMemo, useRef, type RefObject } from 'react';
@@ -9,6 +9,10 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 
 import { buildRect, expectInstance } from '../helpers/builders-components';
 import { mockT } from '../helpers/mock-i18n';
+
+// The proof and pre-push run these files together under `bun test --parallel`; on a
+// loaded machine a first render (cold module load) ran well past the 5 s default.
+setDefaultTimeout(60_000);
 
 mock.module('react-i18next', () => ({
   Trans: ({ i18nKey }: { i18nKey: string }) => mockT(i18nKey),
@@ -575,8 +579,10 @@ describe('MemoizedMessageList virtualization', () => {
     expect(viewport.querySelectorAll('[data-testid="user-message-u0"]')).toHaveLength(1);
     expect(viewport.querySelector('[data-item-key="u0"]')).toBeNull();
     expect(
-      viewport.querySelector<HTMLElement>('[data-virtual-row-key="a1"]')?.style.transform,
-    ).not.toBe('translateY(0px)');
+      viewport
+        .querySelector<HTMLElement>('[data-virtual-row-key="a1"]')
+        ?.style.getPropertyValue('--message-row-offset'),
+    ).not.toBe('0px');
   });
 
   test.each([1, 2])(
@@ -602,7 +608,10 @@ describe('MemoizedMessageList virtualization', () => {
       await waitFor(() => expect(getByTestId('sticky-section-card').dataset.docked).toBe('true'));
       const firstRow = getByTestId('viewport').querySelector<HTMLElement>('[data-virtual-row-key]');
       expect(firstRow).toBeTruthy();
-      const offset = Number(firstRow!.style.transform.match(/translateY\(([-\d.]+)px\)/)?.[1]);
+      expect(firstRow).toHaveClass('[transform:translateY(var(--message-row-offset))]');
+      const offset = Number(
+        firstRow!.style.getPropertyValue('--message-row-offset').match(/^([-\d.]+)px$/)?.[1],
+      );
       expect(offset).toBeGreaterThan(0);
     },
   );
@@ -947,7 +956,9 @@ describe('MemoizedMessageList virtualization', () => {
       });
     });
 
-    await waitFor(() => expect(virtualContainer.style.height).toBe('300px'));
+    await waitFor(() =>
+      expect(virtualContainer.style.getPropertyValue('--message-list-height')).toBe('300px'),
+    );
   });
 
   test('caps list height at the measured bottom of the final row', async () => {
@@ -979,7 +990,9 @@ describe('MemoizedMessageList virtualization', () => {
       });
     });
 
-    await waitFor(() => expect(virtualContainer.style.height).toBe('160px'));
+    await waitFor(() =>
+      expect(virtualContainer.style.getPropertyValue('--message-list-height')).toBe('160px'),
+    );
   });
 
   test('uses a conservative initial estimate for collapsed user message cards', async () => {

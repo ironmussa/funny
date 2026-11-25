@@ -339,8 +339,8 @@ const DesktopTemplateSelect = memo(function DesktopTemplateSelect({
       <span className="flex items-center gap-1.5">
         {tpl.color && (
           <span
-            className="inline-block size-2 shrink-0 rounded-full"
-            style={{ backgroundColor: tpl.color }}
+            className="inline-block size-2 shrink-0 rounded-full bg-[color:var(--agent-template-color)]"
+            style={{ '--agent-template-color': tpl.color }}
           />
         )}
         <span className="truncate">{tpl.name}</span>

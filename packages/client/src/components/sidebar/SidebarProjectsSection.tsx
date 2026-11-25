@@ -135,8 +135,8 @@ export function SidebarProjectsSection({
                   <Skeleton corners="square" className="size-3.5" />
                   <Skeleton corners="square" className="size-3.5" />
                   <Skeleton
-                    className="h-3 flex-1"
-                    style={{ maxWidth: `${60 + ((i * 37) % 35)}%` }}
+                    className="h-3 max-w-[var(--sidebar-project-skeleton-max-width)] flex-1"
+                    style={{ '--sidebar-project-skeleton-max-width': `${60 + ((i * 37) % 35)}%` }}
                   />
                 </div>
               ))}

@@ -25,6 +25,8 @@ import {
   type Question,
 } from './utils';
 
+import { cn } from '@/lib/utils';
+
 const cardLog = createClientLogger('AskUserQuestion');
 
 // Special index to represent "Other" option
@@ -408,12 +410,13 @@ export const AskQuestionCard = memo(function AskQuestionCard({
 
                 {/* Options — use min-height from the tallest question to prevent layout shift (only when interactive) */}
                 <div
-                  className="space-y-1"
-                  style={
-                    !submitted && maxContentHeight > 0
-                      ? { minHeight: `${maxContentHeight}px` }
-                      : undefined
-                  }
+                  className={cn(
+                    'space-y-1',
+                    !submitted &&
+                      maxContentHeight > 0 &&
+                      'min-h-[var(--ask-question-options-min-height)]',
+                  )}
+                  style={{ '--ask-question-options-min-height': `${maxContentHeight}px` }}
                 >
                   {activeQ.options.map((opt, oi) => {
                     const isSelected = activeSelections.has(oi);

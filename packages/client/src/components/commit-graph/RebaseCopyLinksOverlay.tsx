@@ -133,16 +133,18 @@ export function RebaseCopyLinksOverlay({
 
   return (
     <div
-      className="pointer-events-none absolute top-0 left-0 z-20 overflow-hidden"
-      style={{ width: 12 + graphViewportWidth, height: totalHeight }}
+      className="pointer-events-none absolute top-0 left-0 z-20 h-[var(--rebase-links-height)] w-[var(--rebase-links-viewport-width)] overflow-hidden"
+      style={{
+        '--rebase-links-viewport-width': `${12 + graphViewportWidth}px`,
+        '--rebase-links-height': `${totalHeight}px`,
+      }}
       data-testid="graph-rebase-copy-links"
     >
       <svg
+        className="h-[var(--rebase-links-height)] w-[var(--rebase-links-svg-width)] [transform:translateX(var(--rebase-links-scroll-left))] overflow-visible"
         style={{
-          width,
-          height: totalHeight,
-          overflow: 'visible',
-          transform: `translateX(-${graphScrollLeft}px)`,
+          '--rebase-links-svg-width': `${width}px`,
+          '--rebase-links-scroll-left': `-${graphScrollLeft}px`,
         }}
         width={width}
         height={totalHeight}

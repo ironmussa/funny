@@ -59,10 +59,7 @@ export function ThreadPreparationView({
       className="relative flex min-h-0 min-w-0 flex-1 flex-col"
       data-testid="thread-preparation-view"
     >
-      <div
-        className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto"
-        style={{ scrollbarGutter: 'stable', overscrollBehaviorY: 'contain' }}
-      >
+      <div className="flex min-h-0 min-w-0 flex-1 [scrollbar-gutter:stable] flex-col overflow-x-hidden overflow-y-auto overscroll-y-contain">
         <div className="mx-auto w-full max-w-3xl min-w-0 space-y-4 px-4 pt-1 pb-4 md:pt-4">
           {prompt && (
             <div className="relative pt-3">

@@ -322,11 +322,8 @@ function VirtualizedRows({
   return (
     <div className={cn(loading && 'pointer-events-none')}>
       <div
-        style={{
-          height: `${totalSize}px`,
-          width: '100%',
-          position: 'relative',
-        }}
+        className="relative h-[var(--changes-list-total-size)] w-full"
+        style={{ '--changes-list-total-size': `${totalSize}px` }}
       >
         {virtualItems.map((virtualRow) => {
           const row = treeRows[virtualRow.index];

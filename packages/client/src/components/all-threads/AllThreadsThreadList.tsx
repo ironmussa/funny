@@ -193,11 +193,8 @@ export function AllThreadsThreadList({
         padded
       >
         <div
-          style={{
-            height: `${virtualizer.getTotalSize()}px`,
-            width: '100%',
-            position: 'relative',
-          }}
+          className="relative h-[var(--all-threads-list-height)] w-full"
+          style={{ '--all-threads-list-height': `${virtualizer.getTotalSize()}px` }}
         >
           {virtualItems.map((v) => {
             const thread = threads[v.index];
@@ -224,8 +221,8 @@ export function AllThreadsThreadList({
                 data-testid={`all-threads-thread-item-${thread.id}`}
                 ref={virtualizer.measureElement}
                 onMouseMove={() => setHighlightedThreadId(thread.id)}
-                className="absolute top-0 left-0 w-full px-0.5 pb-1"
-                style={{ transform: `translateY(${v.start}px)` }}
+                className="absolute top-0 left-0 w-full [transform:translateY(var(--all-threads-row-start))] px-0.5 pb-1"
+                style={{ '--all-threads-row-start': `${v.start}px` }}
               >
                 <ThreadItem
                   thread={thread}

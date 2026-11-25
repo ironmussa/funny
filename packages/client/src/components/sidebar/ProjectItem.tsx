@@ -400,7 +400,10 @@ export const ProjectItem = memo(function ProjectItem({
               {Array.from({ length: 3 }).map((_, i) => (
                 <div key={i} className="flex items-center gap-1.5 py-1">
                   <Skeleton corners="circle" className="size-3.5" />
-                  <Skeleton className="h-3" style={{ width: `${55 + ((i * 23) % 30)}%` }} />
+                  <Skeleton
+                    className="h-3 w-[var(--project-thread-skeleton-width)]"
+                    style={{ '--project-thread-skeleton-width': `${55 + ((i * 23) % 30)}%` }}
+                  />
                 </div>
               ))}
             </div>

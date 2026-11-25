@@ -36,6 +36,8 @@ export function ArchivedThreadsSettings() {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const pageRef = useRef(1);
+  // Bumped by every first-page fetch, so only the latest one settles the list.
+  const firstPageSeqRef = useRef(0);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -45,6 +47,9 @@ export function ArchivedThreadsSettings() {
   // later pages append for infinite scroll (the caller sets `loadingMore`).
   const fetchArchived = useCallback(
     async (p: number, s: string) => {
+      const seq = p === 1 ? ++firstPageSeqRef.current : firstPageSeqRef.current;
+      // A first page superseded by a newer project or query is ignored.
+      const isStale = () => p === 1 && seq !== firstPageSeqRef.current;
       return withCleanup(
         async () => {
           const result = await api.listArchivedThreads({
@@ -53,7 +58,7 @@ export function ArchivedThreadsSettings() {
             search: s || undefined,
             projectId: selectedProjectId || undefined,
           });
-          if (result.isOk()) {
+          if (result.isOk() && !isStale()) {
             setTotal(result.value.total);
             setThreads((prev) =>
               p === 1 ? result.value.threads : [...prev, ...result.value.threads],
@@ -62,7 +67,7 @@ export function ArchivedThreadsSettings() {
           // silently ignore errors
         },
         () => {
-          if (p === 1) setSettledKey(archivedKey(selectedProjectId, s));
+          if (p === 1 && !isStale()) setSettledKey(archivedKey(selectedProjectId, s));
           setLoadingMore(false);
         },
       );

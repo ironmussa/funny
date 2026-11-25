@@ -52,4 +52,21 @@ describe('AnalyticsView loading', () => {
     expect(screen.queryByTestId('analytics-loading')).toBeNull();
     expect(screen.getByTestId('analytics-no-data')).toBeTruthy();
   });
+
+  test('a superseded request that settles last does not bring the loading back', async () => {
+    const first = deferredEmpty();
+    const second = deferredEmpty();
+    mocks.analyticsOverview.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+    mocks.analyticsTimeline.mockReturnValue(Promise.resolve(err({ message: 'none' })));
+
+    render(<AnalyticsView />);
+    fireEvent.click(screen.getByTestId('analytics-time-range-week'));
+
+    // The newer request settles first, then the superseded one.
+    await act(async () => second.settle());
+    expect(screen.queryByTestId('analytics-loading')).toBeNull();
+    await act(async () => first.settle());
+    expect(screen.queryByTestId('analytics-loading')).toBeNull();
+    expect(screen.getByTestId('analytics-no-data')).toBeTruthy();
+  });
 });

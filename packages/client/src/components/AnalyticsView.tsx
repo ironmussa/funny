@@ -72,16 +72,25 @@ export function AnalyticsView() {
   const loading = settledKey !== requestKey;
 
   useEffect(() => {
+    // A request superseded by a newer filter must not settle the newer key's
+    // spinner or overwrite its data when it finishes last.
+    let cancelled = false;
     Promise.all([
       api.analyticsOverview(projectId === '__all__' ? undefined : projectId, timeRange),
       api.analyticsTimeline(projectId === '__all__' ? undefined : projectId, timeRange, groupBy),
     ])
       .then(([overviewRes, timelineRes]) => {
+        if (cancelled) return;
         if (overviewRes.isOk()) setOverview(overviewRes.value);
         if (timelineRes.isOk()) setTimeline(timelineRes.value);
       })
       .catch(console.error)
-      .finally(() => setSettledKey(requestKey));
+      .finally(() => {
+        if (!cancelled) setSettledKey(requestKey);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [projectId, timeRange, groupBy, requestKey]);
 
   return (

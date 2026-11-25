@@ -254,12 +254,15 @@ export function handleWSResult(get: Get, set: Set, threadId: string, data: any):
 
 // ── Toast helper ────────────────────────────────────────────────
 
-const ERROR_REASON_MESSAGES: Record<string, string> = {
-  error_max_turns: 'Max turns reached — send a follow-up to continue',
-  error_max_budget_usd: 'Budget limit exceeded',
-  error_during_execution: 'Error during execution',
-  provider_error: 'Provider error (rate limit or API error)',
-};
+/** Toast messages, keyed by the agent's error reason. */
+const ERROR_REASON_MESSAGES = new Map<string, string>(
+  Object.entries({
+    error_max_turns: 'Max turns reached — send a follow-up to continue',
+    error_max_budget_usd: 'Budget limit exceeded',
+    error_during_execution: 'Error during execution',
+    provider_error: 'Provider error (rate limit or API error)',
+  } satisfies Record<string, string>),
+);
 
 function notifyThreadResult(
   threadId: string,
@@ -309,7 +312,7 @@ function notifyThreadResult(
     toast.success(`"${truncated}" completed`, toastOpts);
   } else if (resultStatus === 'failed') {
     const reason = errorReason
-      ? (ERROR_REASON_MESSAGES[errorReason] ?? errorReason)
+      ? (ERROR_REASON_MESSAGES.get(errorReason) ?? errorReason)
       : 'Unknown error';
     toast.error(`"${truncated}" failed: ${reason}`, {
       ...toastOpts,

@@ -150,6 +150,12 @@ function Badge({
 
 type GraphEdge = Edge & { kind?: string; region?: string[] };
 
+/** The React Flow nodes and edges `decorateGraph` draws. */
+interface DecoratedGraph {
+  nodes: WorkflowNode[];
+  edges: Edge[];
+}
+
 /**
  * React Flow nodes and edges for a graph: each node with its run status, its
  * loops and whether the filter dims it; loop edges animated.
@@ -158,7 +164,7 @@ export function decorateGraph(
   graph: WorkflowGraph | WorkflowGraphDto,
   runStates: Record<string, WorkflowNodeRunState> | undefined,
   filter: string,
-): { nodes: WorkflowNode[]; edges: Edge[] } {
+): DecoratedGraph {
   // SAFETY: both graph sources are built by workflowToGraph, whose edges carry `kind`.
   const graphEdges = graph.edges as GraphEdge[];
   const loopsOf = new Map<string, string[]>();

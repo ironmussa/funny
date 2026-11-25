@@ -13,6 +13,7 @@ import { sleep as effectSleep } from '@funny/shared/async';
 import { log } from '../lib/logger.js';
 import type { PtyBackend, PtyBackendCallbacks } from './pty-backend.js';
 import { ensureDaemonRunning, SOCKET_PATH } from './pty-daemon-launcher.js';
+import type { DaemonCommand } from './pty-daemon.js';
 import { NdjsonLineDecoder, SocketWriteQueue } from './pty-socket-framing.js';
 
 /** Pending capture requests waiting for a response from the daemon. */
@@ -338,7 +339,7 @@ export class DaemonPtyBackend implements PtyBackend {
     }
   }
 
-  private send(msg: Record<string, unknown>): void {
+  private send(msg: DaemonCommand): void {
     const line = JSON.stringify(msg) + '\n';
 
     if (this.connected && this.writer) {

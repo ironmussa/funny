@@ -28,17 +28,21 @@ export function isTodoToolName(name: string): boolean {
   return n === 'todowrite' || n === 'updatetodos' || n === 'towrite';
 }
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 function normalizeTodoItems(arr: JsonValue[]): TodoItem[] | null {
   const todos: TodoItem[] = [];
   for (const e of arr) {
     if (!isJsonObject(e)) continue;
     const content =
-      (typeof e.content === 'string' && e.content) ||
+      (isString(e.content) && e.content) ||
       // Codex SDK todo_list items use `{ text, completed }`, unlike the
       // `{ content, status }` shape used by Claude and ACP providers.
-      (typeof e.text === 'string' && e.text) ||
-      (typeof e.title === 'string' && e.title) ||
-      (typeof e.description === 'string' && e.description) ||
+      (isString(e.text) && e.text) ||
+      (isString(e.title) && e.title) ||
+      (isString(e.description) && e.description) ||
       '';
     if (!content) continue;
     const status =
@@ -52,19 +56,31 @@ function normalizeTodoItems(arr: JsonValue[]): TodoItem[] | null {
     todos.push({
       content,
       status,
-      activeForm: typeof e.activeForm === 'string' ? e.activeForm : undefined,
+      activeForm: isString(e.activeForm) ? e.activeForm : undefined,
     });
   }
   return todos.length > 0 ? todos : null;
 }
 
+/** Tool input arrives either as JSON text or already parsed. */
+function isInputText(input: string | JsonObject): input is string {
+  return typeof input === 'string';
+}
+
+/** A tool input that is not JSON, kept as its text. */
+type UnparsedToolInput = { value: string };
+
+function unparsedToolInput(text: string): UnparsedToolInput {
+  return { value: text };
+}
+
 export function formatInput(input: string | JsonObject | null | undefined): JsonObject {
   if (!input) return {};
-  if (typeof input === 'string') {
+  if (isInputText(input)) {
     try {
       return JSON.parse(input);
     } catch {
-      return { value: input };
+      return unparsedToolInput(input);
     }
   }
   return input;
@@ -80,8 +96,9 @@ export function getTodos(parsed: JsonObject): TodoItem[] | null {
   }
   const outcome = parsed.outcome;
   if (isJsonObject(outcome)) {
-    if (Array.isArray(outcome.todos)) {
-      const normalized = normalizeTodoItems(outcome.todos);
+    const o = outcome;
+    if (Array.isArray(o.todos)) {
+      const normalized = normalizeTodoItems(o.todos);
       if (normalized) return normalized;
     }
   }
@@ -148,51 +165,49 @@ function backgroundSummary(parsed: JsonObject): string | null {
 
 const filePathSummary = field('file_path');
 
-const SUMMARIES: Record<string, SummaryFn> = {
-  Read: filePathSummary,
-  Write: filePathSummary,
-  Edit: filePathSummary,
-  Bash: (parsed, t) =>
-    typeof parsed.command === 'string'
-      ? unwrapShellCommand(parsed.command)
-      : field('command')(parsed, t),
-  Glob: field('pattern'),
-  Grep: field('pattern'),
-  Task: field('description'),
-  Agent: field('description'),
-  WebSearch: field('query'),
-  WebFetch: field('url'),
-  NotebookEdit: field('notebook_path'),
-  TodoWrite: todoSummary,
-  updateTodos: todoSummary,
-  todo_write: todoSummary,
-  AskUserQuestion: questionSummary,
-  Think: thinkSummary,
-  ProviderError: field('error'),
-  ToolSearch: (parsed) =>
-    typeof parsed.query === 'string'
-      ? parsed.query.replace(/^select:/, '').replace(/,/g, ', ')
-      : null,
-  Skill: field('skill'),
-  TaskCreate: field('subject'),
-  TaskUpdate: taskUpdateSummary,
-  TaskOutput: (parsed) => (parsed.task_id ? String(parsed.task_id) : null),
-  TaskStop: (parsed) => (parsed.task_id ? String(parsed.task_id) : null),
-  ScheduleWakeup: field('reason'),
-  Monitor: (parsed) => (parsed.description as string) ?? (parsed.command as string) ?? null,
-  SendMessage: (parsed) => (parsed.summary as string) ?? (parsed.to as string) ?? null,
-  apply_patch: (parsed) => patchSummary(parsed),
-  ApplyPatch: (parsed) => patchSummary(parsed),
-  update_plan: (parsed) =>
-    typeof parsed.explanation === 'string'
-      ? (parsed.explanation.split('\n').find((l) => l.trim()) ?? null)
-      : null,
-  Tool: (parsed) =>
-    parsed.server && parsed.tool
-      ? `${String(parsed.server)} · ${String(parsed.tool)}`
-      : ((parsed.description as string) ?? null),
-  Background: backgroundSummary,
-};
+const SUMMARIES = new Map<string, SummaryFn>(
+  Object.entries({
+    Read: filePathSummary,
+    Write: filePathSummary,
+    Edit: filePathSummary,
+    Bash: (parsed, t) =>
+      isString(parsed.command) ? unwrapShellCommand(parsed.command) : field('command')(parsed, t),
+    Glob: field('pattern'),
+    Grep: field('pattern'),
+    Task: field('description'),
+    Agent: field('description'),
+    WebSearch: field('query'),
+    WebFetch: field('url'),
+    NotebookEdit: field('notebook_path'),
+    TodoWrite: todoSummary,
+    updateTodos: todoSummary,
+    todo_write: todoSummary,
+    AskUserQuestion: questionSummary,
+    Think: thinkSummary,
+    ProviderError: field('error'),
+    ToolSearch: (parsed) =>
+      isString(parsed.query) ? parsed.query.replace(/^select:/, '').replace(/,/g, ', ') : null,
+    Skill: field('skill'),
+    TaskCreate: field('subject'),
+    TaskUpdate: taskUpdateSummary,
+    TaskOutput: (parsed) => (parsed.task_id ? String(parsed.task_id) : null),
+    TaskStop: (parsed) => (parsed.task_id ? String(parsed.task_id) : null),
+    ScheduleWakeup: field('reason'),
+    Monitor: (parsed) => (parsed.description as string) ?? (parsed.command as string) ?? null,
+    SendMessage: (parsed) => (parsed.summary as string) ?? (parsed.to as string) ?? null,
+    apply_patch: (parsed) => patchSummary(parsed),
+    ApplyPatch: (parsed) => patchSummary(parsed),
+    update_plan: (parsed) =>
+      isString(parsed.explanation)
+        ? (parsed.explanation.split('\n').find((l) => l.trim()) ?? null)
+        : null,
+    Tool: (parsed) =>
+      parsed.server && parsed.tool
+        ? `${String(parsed.server)} · ${String(parsed.tool)}`
+        : ((parsed.description as string) ?? null),
+    Background: backgroundSummary,
+  } satisfies Record<string, SummaryFn>),
+);
 
 // For Gemini ACP tool calls, the description field contains the
 // human-readable title from the ACP protocol (e.g. file path or search query)
@@ -203,7 +218,7 @@ export function getSummary(
   parsed: JsonObject,
   t: (key: string) => string,
 ): string | null {
-  const summarize = Object.hasOwn(SUMMARIES, name) ? SUMMARIES[name] : defaultSummary;
+  const summarize = SUMMARIES.get(name) ?? defaultSummary;
   return summarize(parsed, t);
 }
 
@@ -223,14 +238,14 @@ export function unwrapShellCommand(command: string): string {
 /** The file(s) a patch touches: the first path, plus how many more. */
 function patchSummary(parsed: JsonObject): string | null {
   const paths: string[] = [];
-  if (typeof parsed.input === 'string') {
+  if (isString(parsed.input)) {
     for (const m of parsed.input.matchAll(/^\*\*\* (?:Update|Add|Delete) File: (.+)$/gm)) {
       paths.push(m[1].trim());
     }
   }
   if (Array.isArray(parsed.changes)) {
     for (const change of parsed.changes) {
-      if (isJsonObject(change) && typeof change.path === 'string') paths.push(change.path);
+      if (isJsonObject(change) && isString(change.path)) paths.push(change.path);
     }
   }
   if (paths.length === 0) return null;
@@ -240,41 +255,43 @@ function patchSummary(parsed: JsonObject): string | null {
 export function getToolLabel(name: string, t: (key: string) => string): string {
   const mcp = parseMcpToolName(name);
   if (mcp) return mcpToolTitle(mcp, t);
-  const labels: Record<string, string> = {
-    Read: t('tools.readFile'),
-    Write: t('tools.writeFile'),
-    Edit: t('tools.editFile'),
-    Bash: t('tools.runCommand'),
-    Glob: t('tools.findFiles'),
-    Grep: t('tools.searchCode'),
-    WebFetch: t('tools.fetchUrl'),
-    WebSearch: t('tools.webSearch'),
-    Task: t('tools.subagent'),
-    Agent: t('tools.subagent'),
-    TodoWrite: t('tools.todos'),
-    updateTodos: t('tools.todos'),
-    todo_write: t('tools.todos'),
-    NotebookEdit: t('tools.editNotebook'),
-    AskUserQuestion: t('tools.question'),
-    Think: t('tools.thinking'),
-    ProviderError: t('tools.providerError'),
-    Background: t('tools.background'),
-    Tool: t('tools.tool'),
-    ToolSearch: t('tools.loadTools'),
-    Skill: t('tools.skill'),
-    TaskCreate: t('tools.newTask'),
-    TaskUpdate: t('tools.updateTask'),
-    TaskOutput: t('tools.taskOutput'),
-    TaskStop: t('tools.stopTask'),
-    ScheduleWakeup: t('tools.scheduleWakeup'),
-    Monitor: t('tools.monitor'),
-    SendMessage: t('tools.sendMessage'),
-    apply_patch: t('tools.applyPatch'),
-    ApplyPatch: t('tools.applyPatch'),
-    update_plan: t('tools.updatePlan'),
-    EnterPlanMode: t('tools.planMode'),
-  };
-  return labels[name] ?? name;
+  const labels = new Map<string, string>(
+    Object.entries({
+      Read: t('tools.readFile'),
+      Write: t('tools.writeFile'),
+      Edit: t('tools.editFile'),
+      Bash: t('tools.runCommand'),
+      Glob: t('tools.findFiles'),
+      Grep: t('tools.searchCode'),
+      WebFetch: t('tools.fetchUrl'),
+      WebSearch: t('tools.webSearch'),
+      Task: t('tools.subagent'),
+      Agent: t('tools.subagent'),
+      TodoWrite: t('tools.todos'),
+      updateTodos: t('tools.todos'),
+      todo_write: t('tools.todos'),
+      NotebookEdit: t('tools.editNotebook'),
+      AskUserQuestion: t('tools.question'),
+      Think: t('tools.thinking'),
+      ProviderError: t('tools.providerError'),
+      Background: t('tools.background'),
+      Tool: t('tools.tool'),
+      ToolSearch: t('tools.loadTools'),
+      Skill: t('tools.skill'),
+      TaskCreate: t('tools.newTask'),
+      TaskUpdate: t('tools.updateTask'),
+      TaskOutput: t('tools.taskOutput'),
+      TaskStop: t('tools.stopTask'),
+      ScheduleWakeup: t('tools.scheduleWakeup'),
+      Monitor: t('tools.monitor'),
+      SendMessage: t('tools.sendMessage'),
+      apply_patch: t('tools.applyPatch'),
+      ApplyPatch: t('tools.applyPatch'),
+      update_plan: t('tools.updatePlan'),
+      EnterPlanMode: t('tools.planMode'),
+    } satisfies Record<string, string>),
+  );
+  return labels.get(name) ?? name;
 }
 
 export { toEditorUri, openFileInEditor, getEditorLabel } from '@/lib/editor-utils';

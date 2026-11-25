@@ -43,11 +43,14 @@ const runnerErrorBody = z.object({
   activityRecorded: z.boolean().optional(),
 });
 
-/** A runner's JSON error body: why it refused (a branch mismatch), and whether it recorded it. */
-function runnerError(body: string | null | undefined): {
+/** Why a runner refused, if it said, and whether it recorded an activity for it. */
+interface RunnerErrorDetail {
   text: string | null;
   activityRecorded: boolean;
-} {
+}
+
+/** A runner's JSON error body: why it refused (a branch mismatch), and whether it recorded it. */
+function runnerError(body: string | null | undefined): RunnerErrorDetail {
   if (!body) return { text: null, activityRecorded: false };
   const parsed = parseStoredJson(runnerErrorBody, body, 'runner error');
   return parsed.ok

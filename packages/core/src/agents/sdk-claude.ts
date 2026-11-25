@@ -44,10 +44,15 @@ function isString(value: unknown): value is string {
   return typeof value === 'string';
 }
 
+/** The fields of a tool call's input that name what it touches; each is checked before use. */
+interface ToolPathFields {
+  command?: unknown;
+  file_path?: unknown;
+  notebook_path?: unknown;
+}
+
 /** A tool call's input: any non-null object, read only for the fields below. */
-function isToolInput(
-  value: unknown,
-): value is { command?: unknown; file_path?: unknown; notebook_path?: unknown } {
+function isToolInput(value: unknown): value is ToolPathFields {
   return typeof value === 'object' && value !== null;
 }
 
@@ -79,7 +84,7 @@ function pathTargets(tool: string, ti: any): string[] {
 }
 
 /** Whether a tool call touches Claude's own config (`.claude`, `.config/claude`). */
-function touchesSensitivePath(toolName: string, toolInput: unknown): boolean {
+function touchesSensitivePath(toolName: string, toolInput: ToolPathFields | undefined): boolean {
   if (!SENSITIVE_PATH_TOOLS.has(toolName)) return false;
   return pathTargets(toolName, toolInput).some((target) =>
     SENSITIVE_PATH_PATTERNS.some((rx) => rx.test(target)),
@@ -728,8 +733,8 @@ export class SDKClaudeProcess extends BaseAgentProcess {
     const q = this.activeQuery;
     if (sdkMsg.type !== 'result' || !q || this.isAborted || this.inputClosed) return;
     const res = await nullAfter(
-      q.getContextUsage({ detail: 'summary' }).catch((err: unknown) => {
-        dlog.debug('getContextUsage failed', { error: String(err) });
+      q.getContextUsage({ detail: 'summary' }).catch((cause: unknown) => {
+        dlog.debug('getContextUsage failed', { error: String(cause) });
         return null;
       }),
       CONTEXT_BREAKDOWN_TIMEOUT_MS,
@@ -751,8 +756,8 @@ export class SDKClaudeProcess extends BaseAgentProcess {
       nullAfter(
         Promise.resolve()
           .then(call)
-          .catch((err: unknown) => {
-            dlog.debug(`${what} failed`, { error: String(err) });
+          .catch((cause: unknown) => {
+            dlog.debug(`${what} failed`, { error: String(cause) });
             return null;
           }),
         timeoutMs,
@@ -872,9 +877,12 @@ export class SDKClaudeProcess extends BaseAgentProcess {
   }
 
   /** The deny that points a plain check command at funny_run_checks, or null. */
-  private checkRedirect(toolName: string, toolInput: unknown): object | null {
+  private checkRedirect(
+    toolName: string,
+    toolInput: { readonly command?: unknown } | undefined,
+  ): object | null {
     if (!this.options.redirectChecks || toolName !== 'Bash') return null;
-    const command = (toolInput as { command?: unknown } | undefined)?.command;
+    const command = toolInput?.command;
     const reason = isString(command) ? checkRedirectReason(command) : null;
     if (!reason) return null;
     dlog.info('preToolUseHook REDIRECT check to funny_run_checks', {

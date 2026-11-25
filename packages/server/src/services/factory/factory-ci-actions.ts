@@ -25,14 +25,34 @@
 import type { CiState, FailingCheck, MergeMethod } from '@funny/core/github-app';
 import { sleep as interruptibleSleep } from '@funny/shared/async';
 
-import type { FactoryPullRequestRef, FactoryPullRequests } from './factory-pull-requests.js';
+import type {
+  FactoryPullRequestErrorKind,
+  FactoryPullRequestRef,
+  FactoryPullRequests,
+} from './factory-pull-requests.js';
+
+/**
+ * What a `wait_ci` / `merge` result says besides its output: the CI verdict
+ * and its checks, the merge outcome, or the kind of GitHub error. A type
+ * alias, not an interface, so it stays assignable to `ActionResult.metadata`.
+ */
+export type CiActionMetadata = {
+  verdict?: 'green' | 'no-checks' | 'red' | 'conflict' | 'blocked' | 'timeout';
+  failingChecks?: FailingCheck[];
+  blockedChecks?: FailingCheck[];
+  kind?: FactoryPullRequestErrorKind;
+  outcome?: 'merged' | 'auto-merge-enabled' | 'not-green' | 'not-mergeable';
+  method?: MergeMethod;
+  branchDeleted?: boolean;
+  ci?: CiState['kind'];
+};
 
 /** `ActionResult` of `@funny/workflows` (compared structurally). */
 export interface CiActionResult {
   ok: boolean;
   output?: string;
   error?: string;
-  metadata?: Record<string, unknown>;
+  metadata?: CiActionMetadata;
 }
 
 /** `WaitCiOpts` of `@funny/workflows`. */

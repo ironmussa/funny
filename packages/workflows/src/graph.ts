@@ -132,7 +132,13 @@ export function graphToWorkflow(workflow: ParsedWorkflow, graph: WorkflowGraph):
   };
 }
 
-export function getWorkflowNodeAction(node: ParsedNode): { type: string; value: unknown } {
+/** A node's action: the action key it sets and that key's value. */
+export interface WorkflowNodeAction {
+  type: string;
+  value: unknown;
+}
+
+export function getWorkflowNodeAction(node: ParsedNode): WorkflowNodeAction {
   for (const key of ACTION_KEYS) {
     const value = node[key];
     if (value !== undefined) return { type: key, value };

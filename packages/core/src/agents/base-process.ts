@@ -34,6 +34,15 @@ export type ResultSubtype =
   | 'error_max_budget_usd';
 
 /**
+ * ACP `PromptResponse.usage`. Some agents write `cacheRead/WriteTokens`
+ * instead of the protocol's `cachedRead/WriteTokens`; both are read.
+ */
+type AcpPromptUsage = import('@agentclientprotocol/sdk/unstable').Usage & {
+  cacheReadTokens?: number | null;
+  cacheWriteTokens?: number | null;
+};
+
+/**
  * Terminate a child process AND its entire descendant tree.
  *
  * ACP agents (and DeepAgent) spawn MCP servers as their own children, so
@@ -441,16 +450,16 @@ export abstract class BaseAgentProcess extends EventEmitter {
    * JSON metadata (quota violations, retry info, etc.). We extract just the
    * human-readable parts so the UI shows a clean message.
    */
-  protected extractErrorMessage(err: unknown): string {
-    if (err == null) return 'Unknown error';
-    if (isString(err)) return this.cleanErrorDetails(err);
-    if (!isObject(err)) return String(err);
+  protected extractErrorMessage(cause: unknown): string {
+    if (cause == null) return 'Unknown error';
+    if (isString(cause)) return this.cleanErrorDetails(cause);
+    if (!isObject(cause)) return String(cause);
 
-    const base = 'message' in err && isString(err.message) ? err.message : String(err);
+    const base = 'message' in cause && isString(cause.message) ? cause.message : String(cause);
 
     // ACP RequestError: { code, message, data: { details } }
-    if ('data' in err && err.data && isObject(err.data)) {
-      const details = 'details' in err.data ? err.data.details : undefined;
+    if ('data' in cause && cause.data && isObject(cause.data)) {
+      const details = 'details' in cause.data ? cause.data.details : undefined;
       if (isString(details)) {
         return this.cleanErrorDetails(details);
       }
@@ -531,19 +540,6 @@ export abstract class BaseAgentProcess extends EventEmitter {
     this.hasExited = true;
     this.emit('exit', exitCode);
   }
-}
-
-/**
- * The token counts of an ACP `PromptResponse.usage` (camelCase). Agents also
- * send the `cache*` spelling; omitted and `null` both mean "not reported".
- */
-interface AcpPromptUsage {
-  inputTokens?: number | null;
-  outputTokens?: number | null;
-  cachedReadTokens?: number | null;
-  cacheReadTokens?: number | null;
-  cachedWriteTokens?: number | null;
-  cacheWriteTokens?: number | null;
 }
 
 function isString<T>(value: T): value is T & string {

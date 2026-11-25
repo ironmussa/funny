@@ -161,6 +161,18 @@ export const ACTIVITY_KINDS = {
       prNumber: z.number().int(),
     }),
   },
+  // A member closed the pull request of a run that a newer run of its issue replaced.
+  'factory.close-pr': {
+    scope: 'project',
+    destructive: true,
+    record: 'always',
+    input: z.object({
+      issueNumber: z.number().int().optional(),
+      prNumber: z.number().int(),
+      /** The pull request of the run that replaced it, when it has one. */
+      replacedBy: z.number().int().optional(),
+    }),
+  },
   'factory.disabled': {
     scope: 'project',
     destructive: false,
@@ -181,6 +193,14 @@ export const ACTIVITY_KINDS = {
     record: 'always',
     input: z.object({ issueNumber: z.number().int().optional() }),
   },
+  // A parked too-large run split into its parts' issues by a member.
+  'factory.split': {
+    scope: 'project',
+    // It opens issues on GitHub and takes the label off the parent.
+    destructive: false,
+    record: 'always',
+    input: z.object({ issueNumber: z.number().int().optional() }),
+  },
   'factory.approve-merge': {
     scope: 'project',
     // The merge it allows is recorded as its own `factory.merge`.
@@ -189,6 +209,24 @@ export const ACTIVITY_KINDS = {
     input: z.object({
       issueNumber: z.number().int().optional(),
       sha: z.string().max(64).optional(),
+    }),
+  },
+  // A member's merge approval moved to another commit of the pull request
+  // (openspec factory-approval-survives-integration): recorded for the approver.
+  'factory.approval-moved': {
+    scope: 'project',
+    // The merge it allows is recorded as its own `factory.merge`.
+    destructive: false,
+    record: 'always',
+    input: z.object({
+      issueNumber: z.number().int().optional(),
+      from: z.string().max(64),
+      to: z.string().max(64),
+      change: z.enum(['same', 'adjustment']),
+      lines: z.number().int().min(0),
+      files: z.array(z.string()).max(20),
+      /** Of `files`, the ones the base brought (openspec factory-approval-follows-base-code). */
+      baseFiles: z.array(z.string()).max(20).optional(),
     }),
   },
   // flow-triggers: a schedule occurrence that started no run.
@@ -276,11 +314,20 @@ export function isActivityKind(kind: string): kind is ActivityKind {
   return Object.hasOwn(ACTIVITY_KINDS, kind);
 }
 
+/** An activity as a runner or a server caller reports it: its kind and its still unchecked input. */
+export interface ReportedActivityInput {
+  kind: string;
+  input?: unknown;
+}
+
 /**
  * Validates an activity input against its kind. Returns the stripped input, or
  * null for an unknown kind or an input that does not match.
  */
-export function parseActivityInput(kind: string, input: unknown): Activity['input'] | null {
+export function parseActivityInput({
+  kind,
+  input,
+}: ReportedActivityInput): Activity['input'] | null {
   if (!isActivityKind(kind)) return null;
   const parsed = ACTIVITY_KINDS[kind].input.safeParse(input ?? {});
   return parsed.success ? parsed.data : null;
@@ -319,6 +366,7 @@ export const ACTIVITY_EFFECTS = [
   'sandbox-stopped',
   'sandbox-destroyed',
   'pr-merged',
+  'pr-closed',
   'remote-branch-deleted',
   'agent-stopped',
   'factory-disabled',
@@ -342,12 +390,19 @@ const effectSchema = z.object({
   target: z.string(),
 });
 
+/** An activity report whose `effects` field is still unchecked. */
+export interface ReportedActivityEffects {
+  effects?: unknown;
+}
+
 /**
  * Keeps the well-formed effects of a reported list: unknown effects and extra
  * fields are dropped, the list is capped at 20 and each target at 512
  * characters. Anything that is not a list reads as null.
  */
-export function parseActivityEffects(raw: unknown): ActivityEffect[] | null {
+export function parseActivityEffects({
+  effects: raw,
+}: ReportedActivityEffects): ActivityEffect[] | null {
   if (!Array.isArray(raw)) return null;
   const effects: ActivityEffect[] = [];
   for (const item of raw) {

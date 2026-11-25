@@ -51,12 +51,24 @@ function isEventFields(value: unknown): value is EventFields {
   return typeof value === 'object' && value !== null;
 }
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
+function isNumber(value: unknown): value is number {
+  return typeof value === 'number';
+}
+
+function isBoolean(value: unknown): value is boolean {
+  return typeof value === 'boolean';
+}
+
 function record(value: unknown): EventFields {
   return isEventFields(value) ? value : {};
 }
 
 function text(value: unknown): string | undefined {
-  return typeof value === 'string' ? value : undefined;
+  return isString(value) ? value : undefined;
 }
 
 function eventIdentity(event: RealtimeEvent, data: EventFields): string {
@@ -68,7 +80,7 @@ function eventIdentity(event: RealtimeEvent, data: EventFields): string {
 function pendingPermission(value: unknown): PendingPermissionRequest | null {
   const data = record(value);
   const required = ['requestId', 'threadId', 'runId', 'toolCallId', 'toolName', 'requestedAt'];
-  if (!required.every((key) => typeof data[key] === 'string')) return null;
+  if (!required.every((key) => isString(data[key]))) return null;
   return {
     requestId: String(data.requestId),
     threadId: String(data.threadId),
@@ -86,17 +98,17 @@ function pendingPermission(value: unknown): PendingPermissionRequest | null {
 function gitStatus(value: unknown): GitStatusInfo | null {
   const data = record(value);
   if (
-    typeof data.threadId !== 'string' ||
-    typeof data.branchKey !== 'string' ||
-    typeof data.state !== 'string' ||
+    !isString(data.threadId) ||
+    !isString(data.branchKey) ||
+    !isString(data.state) ||
     !isGitState(data.state) ||
-    typeof data.dirtyFileCount !== 'number' ||
-    typeof data.unpushedCommitCount !== 'number' ||
-    typeof data.unpulledCommitCount !== 'number' ||
-    typeof data.hasRemoteBranch !== 'boolean' ||
-    typeof data.isMergedIntoBase !== 'boolean' ||
-    typeof data.linesAdded !== 'number' ||
-    typeof data.linesDeleted !== 'number'
+    !isNumber(data.dirtyFileCount) ||
+    !isNumber(data.unpushedCommitCount) ||
+    !isNumber(data.unpulledCommitCount) ||
+    !isBoolean(data.hasRemoteBranch) ||
+    !isBoolean(data.isMergedIntoBase) ||
+    !isNumber(data.linesAdded) ||
+    !isNumber(data.linesDeleted)
   )
     return null;
   return {
@@ -110,8 +122,8 @@ function gitStatus(value: unknown): GitStatusInfo | null {
     isMergedIntoBase: data.isMergedIntoBase,
     linesAdded: data.linesAdded,
     linesDeleted: data.linesDeleted,
-    ...(typeof data.prNumber === 'number' ? { prNumber: data.prNumber } : null),
-    ...(typeof data.prUrl === 'string' ? { prUrl: data.prUrl } : null),
+    ...(isNumber(data.prNumber) ? { prNumber: data.prNumber } : null),
+    ...(isString(data.prUrl) ? { prUrl: data.prUrl } : null),
     ...(data.prState === 'OPEN' || data.prState === 'MERGED' || data.prState === 'CLOSED'
       ? { prState: data.prState }
       : null),
@@ -124,7 +136,7 @@ function createAgentAction(options: {
 }) {
   const revisions = new Map<string, number>();
   const nextRevision = (key: string, provided: unknown): number => {
-    const numeric = typeof provided === 'number' ? provided : undefined;
+    const numeric = isNumber(provided) ? provided : undefined;
     const next = numeric ?? (revisions.get(key) ?? 0) + 1;
     revisions.set(key, Math.max(next, revisions.get(key) ?? 0));
     return next;
@@ -171,7 +183,7 @@ function createAgentAction(options: {
         id: toolCallId,
         messageId,
         name,
-        input: typeof data.input === 'string' ? data.input : JSON.stringify(data.input ?? {}),
+        input: isString(data.input) ? data.input : JSON.stringify(data.input ?? {}),
         timestamp: text(data.timestamp),
         author: text(data.author),
         parentToolCallId: text(data.parentToolCallId),

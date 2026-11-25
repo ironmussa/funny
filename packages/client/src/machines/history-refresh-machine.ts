@@ -37,6 +37,11 @@ interface HistoryRefreshContext {
   invalidatedDuringRefresh: boolean;
 }
 
+/** Whether the history is visible when the machine starts. */
+interface HistoryRefreshInput {
+  visible: boolean;
+}
+
 type HistoryRefreshEvent =
   | { type: 'INVALIDATED' }
   | { type: 'VISIBILITY'; visible: boolean }
@@ -48,7 +53,7 @@ export const historyRefreshMachine = setup({
   types: {
     context: {} as HistoryRefreshContext,
     events: {} as HistoryRefreshEvent,
-    input: {} as { visible: boolean },
+    input: {} as HistoryRefreshInput,
   },
   actors: {
     // Placeholder — components provide the real loader.

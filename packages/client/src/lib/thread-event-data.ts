@@ -34,9 +34,13 @@ export interface ThreadEventMetadata {
   targetBranch?: string;
 }
 
+function isString(value: string | ThreadEventMetadata): value is string {
+  return typeof value === 'string';
+}
+
 /** Thread event `data` arrives either as a JSON string or an already-parsed object. */
 export function parseThreadEventData(data: string | ThreadEventMetadata): ThreadEventMetadata {
-  if (typeof data === 'string') {
+  if (isString(data)) {
     try {
       return JSON.parse(data);
     } catch {

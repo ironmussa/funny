@@ -17,6 +17,7 @@ import {
   workflowSchema,
   threadStageSchema,
   validate,
+  type RequestInput,
   gitRefSchema,
   checkoutHashSchema,
   publishRepoSchema,
@@ -693,7 +694,7 @@ describe('publishRepoSchema.org (security ME-4)', () => {
 // ── Git request bodies that used to be read without a schema ──
 
 /** The parsed value `validate` returns for `data` (the test fails if it refuses it). */
-function parsedValue(schema: Parameters<typeof validate>[0], data: unknown): unknown {
+function parsedValue(schema: Parameters<typeof validate>[0], data: RequestInput): unknown {
   return validate(schema, data).match(
     (value) => value,
     (error) => {
@@ -703,7 +704,7 @@ function parsedValue(schema: Parameters<typeof validate>[0], data: unknown): unk
 }
 
 /** The first error message `validate` would return for `data`. */
-function errorOf(schema: Parameters<typeof validate>[0], data: unknown): string | undefined {
+function errorOf(schema: Parameters<typeof validate>[0], data: RequestInput): string | undefined {
   const result = validate(schema, data);
   return result.isErr() ? result.error.message : undefined;
 }

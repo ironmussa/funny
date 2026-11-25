@@ -35,7 +35,11 @@ import type { YamlPipelineContext } from '@funny/workflows/compiler';
 import { log } from '../lib/logger.js';
 import { loadPipelines } from '../pipelines/yaml-loader.js';
 import { resolveBuiltinAgentByName } from './agent-registry.js';
-import { RuntimeActionProvider, RuntimeProgressReporter } from './pipeline-adapter.js';
+import {
+  RuntimeActionProvider,
+  RuntimeProgressReporter,
+  type PipelineEventData,
+} from './pipeline-adapter.js';
 import type {
   ContextBuildMeta,
   ContextBuilder,
@@ -138,7 +142,7 @@ class MultiplexProgressReporter implements ProgressReporter {
     for (const reporter of this.reporters) reporter.onStepProgress(stepId, data);
   }
 
-  onPipelineEvent(event: string, data: Record<string, unknown>): void {
+  onPipelineEvent(event: string, data: PipelineEventData): void {
     for (const reporter of this.reporters) reporter.onPipelineEvent(event, data);
   }
 }

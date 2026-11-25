@@ -11,11 +11,16 @@ import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+/** Node's `os.arch()` names → Rust's target-triple architecture names. */
+interface RustArchNames {
+  readonly [nodeArch: string]: string;
+}
+
 function getTargetTriple(): string {
   const p = platform();
   const a = arch();
 
-  const archMap: Record<string, string> = { x64: 'x86_64', arm64: 'aarch64' };
+  const archMap: RustArchNames = { x64: 'x86_64', arm64: 'aarch64' };
   const rustArch = archMap[a] || a;
 
   switch (p) {

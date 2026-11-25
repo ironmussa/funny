@@ -1,3 +1,4 @@
+import type { WSToolCallData } from '@funny/shared';
 import type { JsonObject } from '@funny/shared/json';
 import { create } from 'zustand';
 
@@ -35,16 +36,26 @@ export function useThreadActiveTool(threadId: string): ActiveTool | undefined {
   return useThreadActiveToolStore((s) => s.byThread[threadId]);
 }
 
-/** Tool call input arrives as an object or as its JSON string. */
-export function parseToolInput(input: unknown): JsonObject {
-  if (typeof input === 'string') {
+/** True for a string value. */
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
+/** A decoded JSON object (or array, which has none of the fields read), as Socket.IO or `JSON.parse` hands it over. */
+function isRecord(value: unknown): value is JsonObject {
+  return typeof value === 'object' && value !== null;
+}
+
+/** A tool call's input as an object: it arrives as an object or as its JSON string. */
+export function parseToolInput(toolCall: Pick<WSToolCallData, 'input'>): JsonObject {
+  const input = toolCall.input;
+  if (isString(input)) {
     try {
       const parsed = JSON.parse(input);
-      return parsed && typeof parsed === 'object' ? parsed : {};
+      return isRecord(parsed) ? parsed : {};
     } catch {
       return {};
     }
   }
-  // SAFETY: a tool call's input object arrives in a Socket.IO event, decoded from JSON.
-  return input && typeof input === 'object' ? (input as JsonObject) : {};
+  return isRecord(input) ? input : {};
 }

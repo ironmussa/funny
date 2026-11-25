@@ -340,6 +340,76 @@ describe('integrate', () => {
     expect(readFileSync(join(work, 'b.txt'), 'utf8')).toBe('one\nTWO\n');
   });
 
+  /** The branch pushed from `work`, then brought up to date on origin from another clone (GitHub's update-branch). */
+  function updatedOnOrigin(seed: string, work: string) {
+    write(work, 'b.txt', 'mine\n');
+    commit(work, 'feature work');
+    git(work, 'push', '-q', 'origin', 'feature');
+    write(seed, 'c.txt', 'theirs\n');
+    commit(seed, 'base moved');
+    git(seed, 'push', '-q', 'origin', 'main');
+    const other = join(root, 'other');
+    git(root, 'clone', '-q', '-b', 'feature', join(root, 'origin.git'), other);
+    git(
+      other,
+      '-c',
+      'user.name=Bot',
+      '-c',
+      'user.email=b@b',
+      'merge',
+      '-q',
+      '--no-edit',
+      'origin/main',
+    );
+    git(other, 'push', '-q', 'origin', 'feature');
+    return git(other, 'rev-parse', 'HEAD');
+  }
+
+  // Found on issue #458: the merge lane updated the branch on GitHub, and the
+  // merge made on the checkout's stale head was refused as non-fast-forward.
+  test('a branch updated on origin is followed before the base is merged', async () => {
+    const { seed, work, origin } = repos();
+    const updated = updatedOnOrigin(seed, work);
+    write(seed, 'd.txt', 'later\n');
+    commit(seed, 'base moved again');
+    git(seed, 'push', '-q', 'origin', 'main');
+
+    const result = await run(work, request());
+    if (result.kind !== 'integrate') throw new Error('expected an integrate result');
+    expect(result.outcome).toBe('merged');
+    expect(result.headBefore).toBe(updated);
+    expect(git(work, 'rev-parse', 'HEAD^1')).toBe(updated);
+    expect(git(origin, 'rev-parse', 'feature')).toBe(result.headAfter);
+  });
+
+  test('a branch whose update on origin already holds the base is up to date', async () => {
+    const { seed, work } = repos();
+    const updated = updatedOnOrigin(seed, work);
+
+    const result = await run(work, request());
+    expect(result).toMatchObject({
+      outcome: 'up-to-date',
+      headBefore: updated,
+      headAfter: updated,
+    });
+    expect(git(work, 'rev-parse', 'HEAD')).toBe(updated);
+  });
+
+  test('a checkout that diverged from its branch on origin fails and pushes nothing', async () => {
+    const { seed, work, origin } = repos();
+    const updated = updatedOnOrigin(seed, work);
+    write(work, 'e.txt', 'local only\n');
+    commit(work, 'local work');
+    const local = git(work, 'rev-parse', 'HEAD');
+
+    const result = await run(work, request());
+    expect(result).toMatchObject({ outcome: 'failed' });
+    if (result.kind !== 'integrate') return;
+    expect(result.message).toContain('diverged');
+    expect(git(work, 'rev-parse', 'HEAD')).toBe(local);
+    expect(git(origin, 'rev-parse', 'feature')).toBe(updated);
+  });
+
   test('a failing integration check leaves the branch as it was and pushes nothing', async () => {
     const { seed, work } = repos();
     write(work, 'b.txt', 'mine\n');

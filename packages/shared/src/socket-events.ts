@@ -30,7 +30,9 @@ export type BrowserPtyForwardEvent = (typeof BROWSER_PTY_FORWARD_EVENTS)[number]
  */
 export const TERMINAL_SESSION_UNAVAILABLE = 'terminal session is unavailable';
 
-export function isTerminalSessionUnavailable(error: unknown): boolean {
+export function isTerminalSessionUnavailable(
+  error: unknown,
+): error is typeof TERMINAL_SESSION_UNAVAILABLE {
   return error === TERMINAL_SESSION_UNAVAILABLE;
 }
 
@@ -86,6 +88,21 @@ export type PtyListResponse = z.infer<typeof ptyListResponseSchema>;
 
 // ─── Payload parsing ─────────────────────────────────────────────────────────
 
+/**
+ * One event argument as Socket.IO decodes it off the wire: JSON values, with
+ * binary attachments as bytes. Still untrusted: parse it before use.
+ */
+export type SocketIoArgument =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | ArrayBuffer
+  | ArrayBufferView
+  | SocketIoArgument[]
+  | { [key: string]: SocketIoArgument };
+
 const objectPayloadSchema = z.union([z.record(z.string(), z.unknown()), z.null(), z.undefined()]);
 
 export const socketObjectPayloadSchema = z.preprocess(
@@ -107,12 +124,12 @@ export const browserPtyForwardPayloadSchema = z.preprocess(
 
 export type BrowserPtyForwardPayload = z.infer<typeof browserPtyForwardPayloadSchema>;
 
-function isObject(value: unknown): value is object | null {
+function isObject<T>(value: T): value is T & (object | null) {
   return typeof value === 'object';
 }
 
 /** Normalize browser fire-and-forget payloads. Returns null when invalid. */
-export function parseObjectPayload(data: unknown): SocketObjectPayload | null {
+export function parseObjectPayload(data: SocketIoArgument): SocketObjectPayload | null {
   if (data != null && (!isObject(data) || Array.isArray(data))) {
     return null;
   }
@@ -123,7 +140,7 @@ export function parseObjectPayload(data: unknown): SocketObjectPayload | null {
 
 export function parseSocketPayload<TSchema extends ZodTypeAny>(
   schema: TSchema,
-  data: unknown,
+  data: SocketIoArgument,
 ): z.infer<TSchema> | null {
   const parsed = schema.safeParse(data);
   return parsed.success ? parsed.data : null;

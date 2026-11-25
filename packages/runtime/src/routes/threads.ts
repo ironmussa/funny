@@ -88,23 +88,23 @@ function pickSteerMessageFields(body: SendMessageBody): SendMessageBody {
 }
 
 /** Map a ThreadServiceError or unknown error to a DomainError */
-function toDomainError(error: unknown): DomainError {
-  if (error instanceof ThreadServiceError) {
-    switch (error.statusCode) {
+function toDomainError(cause: unknown): DomainError {
+  if (cause instanceof ThreadServiceError) {
+    switch (cause.statusCode) {
       case 400:
-        return badRequest(error.message);
+        return badRequest(cause.message);
       case 403:
-        return forbidden(error.message);
+        return forbidden(cause.message);
       case 404:
-        return notFound(error.message);
+        return notFound(cause.message);
       case 409:
-        return conflict(error.message);
+        return conflict(cause.message);
       default:
-        return internal(error.message);
+        return internal(cause.message);
     }
   }
 
-  const e = error as any;
+  const e = cause as any;
   const isBinaryError =
     e.message?.includes('Could not find the claude CLI binary') ||
     e.message?.includes('CLAUDE_BINARY_PATH');
@@ -153,8 +153,8 @@ function failThreadOp(
   return handleServiceError(c, error);
 }
 
-function handleServiceError(c: any, error: unknown) {
-  return resultToResponse(c, err(toDomainError(error)));
+function handleServiceError(c: any, cause: unknown) {
+  return resultToResponse(c, err(toDomainError(cause)));
 }
 
 // ── Thread creation (agent operations) ───────────────────────

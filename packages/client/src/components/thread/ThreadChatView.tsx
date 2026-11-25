@@ -4,6 +4,7 @@ import { PipelineProgressBanner } from '@/components/PipelineProgressBanner';
 import { type MessageStreamHandle } from '@/components/thread/MessageStream';
 import { PromptTimeline } from '@/components/thread/PromptTimeline';
 import { ThreadConversation } from '@/components/thread/ThreadConversation';
+import { ThreadRecapCard } from '@/components/thread/ThreadRecapCard';
 import { ThreadSearchBar } from '@/components/thread/ThreadSearchBar';
 import { useThreadSearchState } from '@/hooks/use-thread-search';
 import { isThreadSearchShortcut } from '@/lib/thread-search-shortcut';
@@ -86,6 +87,7 @@ export function ThreadChatView({ activeThread }: Props) {
           streamRef={streamRef}
           enablePagination
           onVisibleMessageChange={setVisibleMessageId}
+          aboveInput={<ThreadRecapCard thread={activeThread} />}
           searchBar={
             <ThreadSearchBar
               threadId={activeThread.id}

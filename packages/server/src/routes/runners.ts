@@ -245,7 +245,7 @@ runnerRoutes.get('/:runnerId', async (c) => {
   const runnerId = c.req.param('runnerId');
   const userId = c.get('userId');
   const isRunner = c.get('isRunner');
-  const userRole = c.get('userRole') as string | undefined;
+  const userRole: string | undefined = c.get('userRole');
 
   const runner = await rm.getRunner(runnerId);
   if (!runner) return c.json({ error: 'Runner not found' }, 404);

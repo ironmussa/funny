@@ -40,10 +40,16 @@ export function parseWorkflowInvocation(prompt: string): WorkflowInvocationParse
   return { ok: true, invocation: { workflowName, prompt: tail } };
 }
 
+/** The request body that runs a workflow. */
+interface WorkflowRunBody {
+  prompt?: string;
+  inputs?: WorkflowRunInputs;
+}
+
 export function buildWorkflowRunBody(
   invocation: WorkflowInvocation,
   refs: { fileReferences?: FileRef[]; symbolReferences?: SymbolRef[] } = {},
-): { prompt?: string; inputs?: WorkflowRunInputs } {
+): WorkflowRunBody {
   const inputs = { ...(invocation.inputs ?? {}) };
   if (refs.fileReferences?.length) inputs.fileReferences = refs.fileReferences;
   if (refs.symbolReferences?.length) inputs.symbolReferences = refs.symbolReferences;

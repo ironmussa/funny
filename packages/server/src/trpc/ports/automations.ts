@@ -19,20 +19,23 @@ import type {
   PermissionMode,
   ThreadMode,
 } from '@funny/shared';
+import type { UpdateAutomationRequest } from '@funny/shared/contracts/automations';
 import { DEFAULT_MODEL, DEFAULT_THREAD_MODE, DEFAULT_PERMISSION_MODE } from '@funny/shared/models';
-import { eq, and, or, desc } from 'drizzle-orm';
+import { eq, and, or, desc, type SQL } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { err, ok } from 'neverthrow';
 
 import { db } from '../../db/index.js';
 import { automations, automationRuns, threads } from '../../db/schema.js';
 import { authorizer } from '../../lib/server-authorizer.js';
+import type { AutomationRowUpdate } from '../../services/automation-repository.js';
 import {
   parseAutomationSchedule,
   rescheduleAutomation,
   runAutomation,
   unscheduleAutomation,
 } from '../../services/automation-scheduler.js';
+import { definedFields } from './defined-fields.js';
 import { requireVisibleProject } from './project-gate.js';
 
 // ── Rows → contract types ────────────────────────────────────────
@@ -51,15 +54,21 @@ function toAutomation(row: AutomationRow): Automation {
     name: row.name,
     prompt: row.prompt,
     schedule: row.schedule,
+    // SAFETY: provider is DEFAULT_PROVIDER or a string updateAutomationBody accepted,
+    // passed through unchecked as before (likewise model / mode / permission_mode below).
     provider: row.provider as AgentProvider,
+    // SAFETY: model is DEFAULT_MODEL or a string the automation bodies accepted.
     model: row.model as AgentModel,
+    // SAFETY: mode is DEFAULT_THREAD_MODE or a string updateAutomationBody accepted.
     mode: row.mode as ThreadMode,
+    // SAFETY: permission_mode is DEFAULT_PERMISSION_MODE or a string the automation bodies accepted.
     permissionMode: row.permissionMode as PermissionMode,
     baseBranch: row.baseBranch ?? undefined,
     enabled: row.enabled === 1,
     maxRunHistory: row.maxRunHistory,
     lastRunAt: row.lastRunAt ?? undefined,
     nextRunAt: row.nextRunAt ?? undefined,
+    // SAFETY: no server write sets automations.source; it holds its column default 'ui'.
     source: row.source as AutomationSource,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -71,7 +80,10 @@ function toAutomationRun(row: AutomationRunRow): AutomationRun {
     id: row.id,
     automationId: row.automationId,
     threadId: row.threadId,
+    // SAFETY: automation_runs.status is written only by automation-scheduler.ts and
+    // automation-runs.ts, with 'running' / 'completed' / 'failed'.
     status: row.status as AutomationRun['status'],
+    // SAFETY: triage_status is 'pending' on insert, then only a runTriageStatus value.
     triageStatus: row.triageStatus as AutomationRun['triageStatus'],
     hasFindings: row.hasFindings === null ? undefined : row.hasFindings === 1,
     summary: row.summary ?? undefined,
@@ -116,12 +128,10 @@ async function canMoveToProject(
 }
 
 function buildAutomationUpdates(
-  fields: Record<string, unknown>,
+  fields: Omit<UpdateAutomationRequest, 'enabled'>,
   enabled: boolean | undefined,
-): Record<string, unknown> {
-  const updates: Record<string, unknown> = Object.fromEntries(
-    Object.entries(fields).filter(([, value]) => value !== undefined),
-  );
+): AutomationRowUpdate {
+  const updates: AutomationRowUpdate = definedFields(fields);
   if (enabled !== undefined) updates.enabled = enabled ? 1 : 0;
   return updates;
 }
@@ -142,8 +152,8 @@ function invalidSchedule(schedule: string) {
 
 export const automationsPort: AutomationsPort = {
   async inbox(userId, query) {
-    const conditions: ReturnType<typeof eq>[] = [
-      or(eq(automationRuns.status, 'completed'), eq(automationRuns.status, 'failed')) as any,
+    const conditions: (SQL | undefined)[] = [
+      or(eq(automationRuns.status, 'completed'), eq(automationRuns.status, 'failed')),
       eq(automations.userId, userId),
     ];
     if (query.triageStatus) {

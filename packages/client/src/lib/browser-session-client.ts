@@ -1,4 +1,4 @@
-import type { JsonObject } from '@bufbuild/protobuf';
+import type { JsonObject, JsonValue } from '@bufbuild/protobuf';
 import type { BrowserSessionCloseRequestReason } from '@funny/shared';
 /**
  * Client-side helpers for talking to the runner's BrowserSessionManager.
@@ -10,7 +10,7 @@ import type { BrowserSessionCloseRequestReason } from '@funny/shared';
  * Frame events are routed elsewhere — see `dispatch-browser-session-events.ts`.
  */
 import { waitFor } from '@funny/shared/async';
-import type { JsonValue } from '@funny/shared/json';
+import type { AnnotationDomInfo } from '@funny/shared/dom/extract';
 
 import { createClientLogger } from '@/lib/client-logger';
 import { sendBrowserSessionRealtime } from '@/lib/realtime/browser-session-realtime';
@@ -19,9 +19,12 @@ const log = createClientLogger('browser-session');
 
 // ── Request/response routing ──────────────────────────────────────────────
 
+/** What a request resolves to: the JSON value of the runner's `result` (absent when it sent none). */
+export type BrowserSessionResult = JsonValue | undefined;
+
 interface PendingRequest {
-  resolve: (value: unknown) => void;
-  reject: (err: unknown) => void;
+  resolve: (value: BrowserSessionResult) => void;
+  reject: (cause: unknown) => void;
 }
 
 const pending = new Map<string, PendingRequest>();
@@ -44,7 +47,7 @@ function newRequestId(): string {
 export function resolveBrowserSessionRequest(
   requestId: string,
   ok: boolean,
-  value: unknown,
+  value: BrowserSessionResult,
   error: string | undefined,
 ): void {
   const entry = pending.get(requestId);
@@ -54,7 +57,11 @@ export function resolveBrowserSessionRequest(
   else entry.reject(new Error(error ?? 'unknown error'));
 }
 
-function sendRequest(type: string, sessionId: string, extra: MessageFields): Promise<unknown> {
+function sendRequest(
+  type: string,
+  sessionId: string,
+  extra: MessageFields,
+): Promise<BrowserSessionResult> {
   const requestId = newRequestId();
   return waitFor(
     (resolve, reject) => {
@@ -98,27 +105,38 @@ function sendRequest(type: string, sessionId: string, extra: MessageFields): Pro
   );
 }
 
+/** A request's result typed as `Answer`, the value the runner computes for it (DOM inspection, screenshot). */
+function answerAs<Answer>(request: Promise<BrowserSessionResult>): Promise<Answer | undefined> {
+  // SAFETY: the runner answers this request type with `Answer`, the JSON of the
+  // value it computed; callers still check the value before they use it.
+  return request as Promise<Answer | undefined>;
+}
+
 type RealtimeFrame = Parameters<typeof sendBrowserSessionRealtime>[1];
 
-const FIRE_AND_FORGET_FRAMES: Record<string, (extra: MessageFields) => RealtimeFrame> = {
-  'browser-session:open': (extra) => ({ case: 'open', targetUrl: String(extra.url ?? '') }),
-  'browser-session:navigate': (extra) => ({
-    case: 'navigate',
-    targetUrl: String(extra.url ?? ''),
-  }),
-  'browser-session:input': (extra) => ({ case: 'input', action: extra as JsonObject }),
-  'browser-session:heartbeat': () => ({ case: 'heartbeat' }),
-  'browser-session:close': (extra) => ({
-    case: 'close',
-    reason: String(extra.reason ?? 'user'),
-    closeId: typeof extra.closeId === 'string' ? extra.closeId : undefined,
-  }),
-};
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
+const FIRE_AND_FORGET_FRAMES = new Map<string, (extra: MessageFields) => RealtimeFrame>(
+  Object.entries({
+    'browser-session:open': (extra) => ({ case: 'open', targetUrl: String(extra.url ?? '') }),
+    'browser-session:navigate': (extra) => ({
+      case: 'navigate',
+      targetUrl: String(extra.url ?? ''),
+    }),
+    'browser-session:input': (extra) => ({ case: 'input', action: extra as JsonObject }),
+    'browser-session:heartbeat': () => ({ case: 'heartbeat' }),
+    'browser-session:close': (extra) => ({
+      case: 'close',
+      reason: String(extra.reason ?? 'user'),
+      closeId: isString(extra.closeId) ? extra.closeId : undefined,
+    }),
+  } satisfies Record<string, (extra: MessageFields) => RealtimeFrame>),
+);
 
 function sendFireAndForget(type: string, sessionId: string, extra: MessageFields = {}): void {
-  const frame = Object.hasOwn(FIRE_AND_FORGET_FRAMES, type)
-    ? FIRE_AND_FORGET_FRAMES[type](extra)
-    : null;
+  const frame = FIRE_AND_FORGET_FRAMES.get(type)?.(extra) ?? null;
   if (!frame) return;
   const sent = sendBrowserSessionRealtime(sessionId, frame);
   // Only `open` reports a lost connection: the others are best-effort.
@@ -145,22 +163,28 @@ export const browserSessionClient = {
   },
 
   /** Request the element under (x, y) — returns the AnnotationDomInfo shape. */
-  inspectAt(sessionId: string, x: number, y: number): Promise<unknown> {
-    return sendRequest('browser-session:inspect-at', sessionId, { x, y });
+  inspectAt(sessionId: string, x: number, y: number): Promise<AnnotationDomInfo | undefined> {
+    return answerAs(sendRequest('browser-session:inspect-at', sessionId, { x, y }));
   },
 
   /** Request the elements inside the rectangle — returns AnnotationRegionDom['elements']. */
-  inspectRect(sessionId: string, x: number, y: number, w: number, h: number): Promise<unknown> {
-    return sendRequest('browser-session:inspect-rect', sessionId, { x, y, w, h });
+  inspectRect(
+    sessionId: string,
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+  ): Promise<AnnotationDomInfo[] | undefined> {
+    return answerAs(sendRequest('browser-session:inspect-rect', sessionId, { x, y, w, h }));
   },
 
   /** Request a viewport screenshot (PNG base64). */
-  screenshot(sessionId: string): Promise<unknown> {
-    return sendRequest('browser-session:screenshot', sessionId, {});
+  screenshot(sessionId: string): Promise<string | undefined> {
+    return answerAs(sendRequest('browser-session:screenshot', sessionId, {}));
   },
 
   /** Evaluate arbitrary JS in the page; returns whatever the expression evaluates to. */
-  execute(sessionId: string, expression: string): Promise<unknown> {
+  execute(sessionId: string, expression: string): Promise<BrowserSessionResult> {
     return sendRequest('browser-session:execute', sessionId, { expression });
   },
 
@@ -169,7 +193,7 @@ export const browserSessionClient = {
    * Resolves to `false` (no history entry available) for back/forward when
    * stuck at the ends, `true` otherwise.
    */
-  nav(sessionId: string, action: 'back' | 'forward' | 'reload'): Promise<unknown> {
+  nav(sessionId: string, action: 'back' | 'forward' | 'reload'): Promise<BrowserSessionResult> {
     return sendRequest('browser-session:nav', sessionId, { action });
   },
 

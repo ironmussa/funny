@@ -11,7 +11,13 @@ interface ExtensionManifestEntry {
 
 /** Injectable dynamic import so tests can stub module loading. The
  *  `@vite-ignore` keeps Vite from trying to analyze the runtime URL. */
-type ImportFn = (url: string) => Promise<unknown>;
+type ImportFn = (url: string) => Promise<VisualizerModule>;
+
+/** What an extension's entry module may export; the plugin itself is checked by `isVisualizerPlugin`. */
+interface VisualizerModule {
+  default?: unknown;
+  plugin?: unknown;
+}
 const defaultImport: ImportFn = (url) => import(/* @vite-ignore */ url);
 
 function isVisualizerPlugin(value: unknown): value is VisualizerPlugin {
@@ -52,7 +58,7 @@ export async function loadInstalledVisualizers(
   await Promise.all(
     manifest.map(async (ext) => {
       try {
-        const mod = (await importFn(ext.entryUrl)) as { default?: unknown; plugin?: unknown };
+        const mod = await importFn(ext.entryUrl);
         const candidate = mod.default ?? mod.plugin;
         if (!isVisualizerPlugin(candidate)) {
           log.error('extension did not export a valid visualizer plugin', { id: ext.id });

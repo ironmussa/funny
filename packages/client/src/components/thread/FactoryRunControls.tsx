@@ -1,20 +1,31 @@
 /**
  * A factory run's actions: open its pull request, and the member's controls
  * (retry a failed or parked run, approve merging a high-risk change the
- * factory held, stop one that has not ended). Shared by the
+ * factory held, split a run parked as too large into the issues triage
+ * proposed, stop one that has not ended). Shared by the
  * project's run list, the footer indicator's popover and the failure card in
  * the thread. Renders the buttons only; the caller lays them out.
  */
+import { lintCleanupSource, lintCleanupVetoed } from '@funny/shared/contracts/factory';
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { PRBadge } from '@/components/PRBadge';
 import { Button } from '@/components/ui/button';
-import { controlFactoryRun } from '@/data/factory/actions';
+import {
+  approveFactoryMerge,
+  controlFactoryRun,
+  markFactoryRunDone,
+  setFactoryRunLintCleanup,
+} from '@/data/factory/actions';
 import { useCanSteerProject } from '@/data/projects/hooks';
 import type { FactoryRun } from '@/lib/api/factory';
-import { ENDED_FACTORY_STATES, isFactoryRunAwaitingMergeApproval } from '@/lib/factory-run-labels';
+import {
+  ENDED_FACTORY_STATES,
+  isFactoryRunAwaitingMergeApproval,
+  isFactoryRunNoChange,
+} from '@/lib/factory-run-labels';
 import { toastError } from '@/lib/toast-error';
 
 /** The number of a GitHub pull request URL, or null. */
@@ -31,7 +42,14 @@ const RETRYABLE = new Set<FactoryRun['state']>([
   'needs_info',
 ]);
 
-export type FactoryRunActionId = 'approve-merge' | 'retry' | 'stop';
+export type FactoryRunActionId =
+  | 'approve-merge'
+  | 'lint-cleanup'
+  | 'lint-cleanup-off'
+  | 'mark-done'
+  | 'split'
+  | 'retry'
+  | 'stop';
 
 export interface FactoryRunAction {
   id: FactoryRunActionId;
@@ -39,40 +57,157 @@ export interface FactoryRunAction {
   run: () => void;
 }
 
+/** One action a run offers, if any, and the confirmation dialog it opens. */
+interface OfferedAction {
+  action: FactoryRunAction | null;
+  dialog: ReactNode;
+}
+
+/** The parts triage proposed for a run parked because its issue is too large; none otherwise. */
+function factoryRunSplitParts(run: Pick<FactoryRun, 'state' | 'triage'>): string[] {
+  if (run.state !== 'needs_info' || run.triage?.decision !== 'too_big') return [];
+  return run.triage.items ?? [];
+}
+
 /**
- * What the member may do to a run now, in the order they are offered, and the
- * confirmation dialog the merge approval opens. The dialog is returned apart
- * so a menu can close without taking it along: render it outside the menu.
+ * Split a run parked as too large: the factory opens the parts triage proposed
+ * as issues, behind a confirmation that lists them. No agent runs for it.
  */
-export function useFactoryRunActions(
-  projectId: string,
-  run: FactoryRun,
-): { actions: FactoryRunAction[]; dialog: ReactNode } {
+function useSplitAction(projectId: string, run: FactoryRun): OfferedAction {
   const { t } = useTranslation();
-  const canSteer = useCanSteerProject(projectId);
-  const [confirmingMerge, setConfirmingMerge] = useState(false);
-  const control = (action: FactoryRunActionId) =>
-    void controlFactoryRun(action, projectId, run.id).orTee((error) =>
+  const [confirmingSplit, setConfirmingSplit] = useState(false);
+  const parts = factoryRunSplitParts(run);
+  if (parts.length === 0) return { action: null, dialog: null };
+  const split = () =>
+    void controlFactoryRun('split', projectId, run.id).orTee((error) =>
       toastError(error, 'factory'),
     );
-  if (!canSteer) return { actions: [], dialog: null };
-  // A high-risk change waits for the member's approval, which a retry would not give.
+  const dialog = (
+    <ConfirmDialog
+      open={confirmingSplit}
+      onOpenChange={setConfirmingSplit}
+      title={t('factory.splitTitle', 'Split issue #{{issue}}?', { issue: run.issueNumber })}
+      description={t(
+        'factory.splitBody',
+        'The factory opens one issue per part, with the description of #{{issue}} for context, and queues them. #{{issue}} gets the list and leaves the factory. No agent runs for this.',
+        { issue: run.issueNumber },
+      )}
+      warning={
+        <ol className="list-decimal space-y-1.5 pl-4" data-testid="factory-split-parts">
+          {parts.map((part) => (
+            <li key={part}>{part}</li>
+          ))}
+        </ol>
+      }
+      confirmLabel={t('factory.split', 'Split into {{count}} issues', { count: parts.length })}
+      cancelLabel={t('common.cancel', 'Cancel')}
+      variant="default"
+      onCancel={() => setConfirmingSplit(false)}
+      onConfirm={() => {
+        setConfirmingSplit(false);
+        split();
+      }}
+    />
+  );
+  return {
+    action: {
+      id: 'split',
+      label: t('factory.split', 'Split into {{count}} issues', { count: parts.length }),
+      run: () => setConfirmingSplit(true),
+    },
+    dialog,
+  };
+}
+
+/** The actions a run offers, and the confirmation dialogs they open. */
+interface FactoryRunActions {
+  actions: FactoryRunAction[];
+  dialog: ReactNode;
+}
+
+/**
+ * The member's veto of triage's lint-cleanup class: "Not a lint cleanup" on a
+ * run triage classed as one, and, behind a confirmation, taking that back.
+ * A member never classes a run as one: that comes from triage.
+ */
+function useLintCleanupAction(projectId: string, run: FactoryRun): OfferedAction {
+  const { t } = useTranslation();
+  const [confirmingLint, setConfirmingLint] = useState(false);
+  const markLintCleanup = (on: boolean) =>
+    void setFactoryRunLintCleanup(projectId, run.id, on).orTee((error) =>
+      toastError(error, 'factory'),
+    );
+  const dialog = (
+    <ConfirmDialog
+      open={confirmingLint}
+      onOpenChange={setConfirmingLint}
+      title={t('factory.lintCleanupTitle', 'Treat this run as a lint cleanup again?')}
+      description={t(
+        'factory.lintCleanupBody',
+        'Triage classed it as a lint cleanup of rules that cannot change behavior. Its size and the risks its contract names will no longer hold it: the factory merges it by itself once its checks, review and regression proof pass, whatever commits follow. It still waits for you if it touches a sensitive path, weakens a test, adds a lint suppression or changes the lint configuration.',
+      )}
+      confirmLabel={t('factory.lintCleanupConfirm', 'Treat as a lint cleanup')}
+      cancelLabel={t('common.cancel', 'Cancel')}
+      variant="default"
+      onCancel={() => setConfirmingLint(false)}
+      onConfirm={() => {
+        setConfirmingLint(false);
+        markLintCleanup(true);
+      }}
+    />
+  );
+  if (ENDED_FACTORY_STATES.has(run.state)) return { action: null, dialog: null };
+  if (lintCleanupSource(run) !== null) {
+    return {
+      action: {
+        id: 'lint-cleanup-off',
+        label: t('factory.lintCleanupOff', 'Not a lint cleanup'),
+        run: () => markLintCleanup(false),
+      },
+      dialog: null,
+    };
+  }
+  if (!lintCleanupVetoed(run)) return { action: null, dialog: null };
+  return {
+    action: {
+      id: 'lint-cleanup',
+      label: t('factory.lintCleanup', 'Lint cleanup'),
+      run: () => setConfirmingLint(true),
+    },
+    dialog,
+  };
+}
+
+/**
+ * The agent found nothing to change and the run stayed on the board for a
+ * person: the member agrees, and the run is done.
+ */
+function useMarkDoneAction(projectId: string, run: FactoryRun): FactoryRunAction | null {
+  const { t } = useTranslation();
+  if (!isFactoryRunNoChange(run)) return null;
+  return {
+    id: 'mark-done',
+    label: t('factory.markDone', 'Mark as done'),
+    run: () =>
+      void markFactoryRunDone(projectId, run.id).orTee((error) => toastError(error, 'factory')),
+  };
+}
+
+/**
+ * The member's approval of a high-risk change the factory holds, behind a
+ * confirmation that names the commit and why it is held.
+ */
+function useApproveMergeAction(projectId: string, run: FactoryRun): OfferedAction {
+  const { t } = useTranslation();
+  const [confirmingMerge, setConfirmingMerge] = useState(false);
+  // The commit the dialog names is the one approved: the server refuses another.
+  const approve = () =>
+    void approveFactoryMerge(projectId, run.id, run.risk?.headSha ?? '').orTee((error) =>
+      // Its conflict has its own message: the run is held on another commit now.
+      toastError(error, 'factoryApprove'),
+    );
   const awaitsApproval = isFactoryRunAwaitingMergeApproval(run);
   const reasons = run.risk?.reasons ?? [];
-  const actions: FactoryRunAction[] = [];
-  if (awaitsApproval) {
-    actions.push({
-      id: 'approve-merge',
-      label: t('factory.approveMerge', 'Approve and merge'),
-      run: () => setConfirmingMerge(true),
-    });
-  }
-  if (RETRYABLE.has(run.state) && !awaitsApproval) {
-    actions.push({ id: 'retry', label: t('factory.retry', 'Retry'), run: () => control('retry') });
-  }
-  if (!ENDED_FACTORY_STATES.has(run.state)) {
-    actions.push({ id: 'stop', label: t('factory.stop', 'Stop'), run: () => control('stop') });
-  }
   const dialog = awaitsApproval ? (
     <ConfirmDialog
       open={confirmingMerge}
@@ -98,15 +233,69 @@ export function useFactoryRunActions(
       onCancel={() => setConfirmingMerge(false)}
       onConfirm={() => {
         setConfirmingMerge(false);
-        control('approve-merge');
+        approve();
       }}
     />
   ) : null;
-  return { actions, dialog };
+  if (!awaitsApproval) return { action: null, dialog: null };
+  return {
+    action: {
+      id: 'approve-merge',
+      label: t('factory.approveMerge', 'Approve and merge'),
+      run: () => setConfirmingMerge(true),
+    },
+    dialog,
+  };
+}
+
+/**
+ * What the member may do to a run now, in the order they are offered, and the
+ * confirmation dialogs they open. The dialogs are returned apart so a menu can
+ * close without taking them along: render them outside the menu.
+ */
+export function useFactoryRunActions(projectId: string, run: FactoryRun): FactoryRunActions {
+  const { t } = useTranslation();
+  const canSteer = useCanSteerProject(projectId);
+  const control = (action: 'retry' | 'stop') =>
+    void controlFactoryRun(action, projectId, run.id).orTee((error) =>
+      toastError(error, 'factory'),
+    );
+  const approval = useApproveMergeAction(projectId, run);
+  const split = useSplitAction(projectId, run);
+  const lint = useLintCleanupAction(projectId, run);
+  const done = useMarkDoneAction(projectId, run);
+  if (!canSteer) return { actions: [], dialog: null };
+  const offered: Array<FactoryRunAction | null> = [
+    approval.action,
+    split.action,
+    lint.action,
+    done,
+  ];
+  // A high-risk change waits for the member's approval, which a retry would not give.
+  if (RETRYABLE.has(run.state) && !approval.action) {
+    offered.push({ id: 'retry', label: t('factory.retry', 'Retry'), run: () => control('retry') });
+  }
+  if (!ENDED_FACTORY_STATES.has(run.state)) {
+    offered.push({ id: 'stop', label: t('factory.stop', 'Stop'), run: () => control('stop') });
+  }
+  return {
+    actions: offered.flatMap((action) => (action ? [action] : [])),
+    dialog: (
+      <>
+        {approval.dialog}
+        {split.dialog}
+        {lint.dialog}
+      </>
+    ),
+  };
 }
 
 const BUTTON_VARIANT: Record<FactoryRunActionId, 'default' | 'outline' | 'ghost'> = {
   'approve-merge': 'default',
+  'lint-cleanup': 'outline',
+  'lint-cleanup-off': 'ghost',
+  'mark-done': 'outline',
+  split: 'outline',
   retry: 'outline',
   stop: 'ghost',
 };

@@ -6,9 +6,8 @@ import type { JsonObject } from '@funny/shared/json';
 import { parseStoredJson } from '@funny/shared/json-validation';
 import { z } from 'zod';
 
-import { toACPImageBlocks } from './acp-image.js';
+import { toACPImageBlocks, type ACPImageBlock, type ImageAttachments } from './acp-image.js';
 import { BaseAgentProcess } from './base-process.js';
-import { isJsonPayloadObject } from './json-payload.js';
 import { connectMcpTools, type McpToolBridge } from './mcp-tool-bridge.js';
 import { createPiSessionManager } from './pi-sdk-session.js';
 import type { CLIMessage } from './types.js';
@@ -78,6 +77,26 @@ const PI_EXTENSION_PACKAGE_SCHEMA = z
 type PiSdk = typeof import('@earendil-works/pi-coding-agent');
 type AgentSession = Awaited<ReturnType<PiSdk['createAgentSession']>>['session'];
 type ModelRuntime = Awaited<ReturnType<PiSdk['ModelRuntime']['create']>>;
+type PiSessionEvent = import('@earendil-works/pi-coding-agent').AgentSessionEvent;
+type PiAssistantMessageEvent = Extract<
+  PiSessionEvent,
+  { type: 'message_update' }
+>['assistantMessageEvent'];
+/** A pi message as `turn_end` / `agent_end` carry it; only its `usage` block is read. */
+type PiAgentMessage = Extract<PiSessionEvent, { type: 'turn_end' }>['message'];
+/** A JSON value as pi decodes it (its arrays are read-only). */
+type PiJsonValue = null | boolean | number | string | readonly PiJsonValue[] | PiJsonObject;
+/** A JSON object as pi decodes it: a tool call's arguments. */
+type PiJsonObject = { [key: string]: PiJsonValue };
+/** A pi tool call's arguments: the model's JSON object, or the bare string some tools send. */
+type PiToolArgs = PiJsonObject | string;
+/** A pi tool result as `tool_execution_end` reports it: usually `{ content: blocks }`, or text. */
+type PiToolResult = { readonly content?: unknown } | string | null | undefined;
+/** One block of a pi tool result's `content`; only text and image blocks are read. */
+interface PiResultBlock {
+  readonly type?: unknown;
+  readonly text?: unknown;
+}
 
 export class PiSDKProcess extends BaseAgentProcess {
   private session: AgentSession | null = null;
@@ -200,8 +219,8 @@ export class PiSDKProcess extends BaseAgentProcess {
     }
   }
 
-  private handleSessionEvent(event: unknown): void {
-    if (!isPiSessionEvent(event)) return;
+  private handleSessionEvent(event: PiSessionEvent): void {
+    if (!isObject(event)) return;
     const e = event;
     switch (e.type) {
       case 'message_update':
@@ -228,12 +247,11 @@ export class PiSDKProcess extends BaseAgentProcess {
         break;
       case 'compaction_end':
         if (e.result) {
-          const tokens: PiCompactionResult = isPiCompactionResult(e.result) ? e.result : {};
           this.emit('message', {
             type: 'compact_boundary',
             trigger: e.reason === 'manual' ? 'manual' : 'auto',
-            preTokens: tokens.tokensBefore ?? 0,
-            postTokens: tokens.tokensAfter ?? 0,
+            preTokens: e.result.tokensBefore ?? 0,
+            postTokens: 'tokensAfter' in e.result ? (e.result.tokensAfter ?? 0) : 0,
             sessionId: this.session?.sessionId ?? '',
           } as CLIMessage);
         }
@@ -243,8 +261,8 @@ export class PiSDKProcess extends BaseAgentProcess {
     }
   }
 
-  private handleMessageUpdate(event: unknown): void {
-    if (!isPiAssistantMessageEvent(event)) return;
+  private handleMessageUpdate(event: PiAssistantMessageEvent | undefined): void {
+    if (!isObject(event)) return;
     const e = event;
     if (e.type === 'text_delta' && isNonEmptyString(e.delta)) {
       this.flushPendingThought();
@@ -268,7 +286,11 @@ export class PiSDKProcess extends BaseAgentProcess {
     }
   }
 
-  private emitToolUse(toolCallId: unknown, toolName: unknown, input: unknown): void {
+  private emitToolUse(
+    toolCallId: string | undefined,
+    toolName: string | undefined,
+    input: PiToolArgs | null | undefined,
+  ): void {
     const id = isNonEmptyString(toolCallId) ? toolCallId : randomUUID();
     if (this.seenToolCalls.has(id)) return;
     const normalized = normalizePiToolCall(toolName, input);
@@ -291,9 +313,9 @@ export class PiSDKProcess extends BaseAgentProcess {
   }
 
   private emitToolResult(
-    toolCallId: unknown,
-    toolName: unknown,
-    result: unknown,
+    toolCallId: string | undefined,
+    toolName: string | undefined,
+    result: PiToolResult,
     isError: boolean,
   ): void {
     const id = isNonEmptyString(toolCallId) ? toolCallId : randomUUID();
@@ -343,14 +365,15 @@ export class PiSDKProcess extends BaseAgentProcess {
     this.seenToolCalls.clear();
   }
 
-  private captureMessagesUsage(messages: unknown): void {
+  private captureMessagesUsage(messages: readonly PiAgentMessage[] | undefined): void {
     if (!Array.isArray(messages)) return;
     for (const msg of messages) this.captureUsage(msg);
   }
 
-  private captureUsage(message: unknown): void {
-    if (!isPiMessage(message)) return;
-    const usage = message.usage;
+  /** Reads the `usage` block a pi message (`turn_end`, `agent_end`) may carry. */
+  private captureUsage(message: PiAgentMessage | null | undefined): void {
+    if (!isObject(message)) return;
+    const usage = 'usage' in message ? message.usage : undefined;
     if (!isPiUsage(usage)) return;
     const input = Number(usage.input ?? 0);
     const output = Number(usage.output ?? 0);
@@ -377,7 +400,10 @@ function normalizePiToolNames(names: string[]): string[] {
   return [...normalized];
 }
 
-function normalizePiToolCall(toolName: unknown, input: unknown): { name: string; input: unknown } {
+function normalizePiToolCall(
+  toolName: string | undefined,
+  input: PiToolArgs | null | undefined,
+): { name: string; input: PiToolArgs } {
   const name = normalizePiToolName(toolName);
   switch (name) {
     case 'Bash':
@@ -393,61 +419,16 @@ function normalizePiToolCall(toolName: unknown, input: unknown): { name: string;
   }
 }
 
-function isString(value: unknown): value is string {
+function isString<T>(value: T): value is T & string {
   return typeof value === 'string';
 }
 
-function isNonEmptyString(value: unknown): value is string {
+function isNonEmptyString<T>(value: T): value is T & string {
   return typeof value === 'string' && value.length > 0;
 }
 
-/** The fields of a pi session event this adapter reads; which ones are set depends on `type`. */
-interface PiSessionEvent {
-  type?: unknown;
-  assistantMessageEvent?: unknown;
-  toolCallId?: unknown;
-  toolName?: unknown;
-  args?: unknown;
-  /** A tool's result (`tool_execution_end`) or the compaction result (`compaction_end`). */
-  result?: unknown;
-  isError?: unknown;
-  message?: unknown;
-  messages?: unknown;
-  reason?: unknown;
-}
-
-/** A pi session event: any non-null object, its fields checked where they are read. */
-function isPiSessionEvent(value: unknown): value is PiSessionEvent {
-  return typeof value === 'object' && value !== null;
-}
-
-/** A `message_update`'s assistant message event: any non-null object. */
-function isPiAssistantMessageEvent(value: unknown): value is {
-  type?: unknown;
-  delta?: unknown;
-  toolCall?: { id?: unknown; name?: unknown; arguments?: unknown };
-} {
-  return typeof value === 'object' && value !== null;
-}
-
-/** The token counts of a `compaction_end` result. */
-interface PiCompactionResult {
-  tokensBefore?: number;
-  tokensAfter?: number;
-}
-
-/** A `compaction_end` result: any non-null object. */
-function isPiCompactionResult(value: unknown): value is PiCompactionResult {
-  return typeof value === 'object' && value !== null;
-}
-
-/** A pi message (`turn_end`, `agent_end`): any non-null object. */
-function isPiMessage(value: unknown): value is { usage?: unknown } {
-  return typeof value === 'object' && value !== null;
-}
-
-/** A tool result: any non-null object, its `content` read when it is an array. */
-function isPiToolResult(value: unknown): value is { content?: unknown } {
+/** Any non-null object (arrays included). */
+function isObject<T>(value: T): value is T & object {
   return typeof value === 'object' && value !== null;
 }
 
@@ -462,7 +443,7 @@ function isPiUsage(value: unknown): value is {
   return typeof value === 'object' && value !== null;
 }
 
-function normalizePiToolName(toolName: unknown): string {
+function normalizePiToolName(toolName: string | undefined): string {
   if (!isNonEmptyString(toolName)) return 'Tool';
   switch (toolName) {
     case 'bash':
@@ -490,7 +471,7 @@ function normalizePiToolName(toolName: unknown): string {
   }
 }
 
-function normalizeCommandInput(input: unknown): unknown {
+function normalizeCommandInput(input: PiToolArgs | null | undefined): PiToolArgs {
   if (isString(input)) return { command: input };
   const record = cloneRecord(input);
   if (!record) return input ?? {};
@@ -502,7 +483,7 @@ function normalizeCommandInput(input: unknown): unknown {
   return record;
 }
 
-function normalizeFileInput(input: unknown): unknown {
+function normalizeFileInput(input: PiToolArgs | null | undefined): PiToolArgs {
   if (isString(input)) return { file_path: input };
   const record = cloneRecord(input);
   if (!record) return input ?? {};
@@ -512,7 +493,7 @@ function normalizeFileInput(input: unknown): unknown {
   return record;
 }
 
-function normalizeSearchInput(input: unknown): unknown {
+function normalizeSearchInput(input: PiToolArgs | null | undefined): PiToolArgs {
   const record = cloneRecord(input);
   if (!record) return input ?? {};
 
@@ -521,8 +502,8 @@ function normalizeSearchInput(input: unknown): unknown {
   return record;
 }
 
-function cloneRecord(input: unknown): JsonObject | null {
-  if (!isJsonPayloadObject(input) || Array.isArray(input)) return null;
+function cloneRecord(input: PiToolArgs | null | undefined): PiJsonObject | null {
+  if (!isObject(input) || Array.isArray(input)) return null;
   return { ...input };
 }
 
@@ -699,9 +680,12 @@ export function piToolsFromMcp(bridge: McpToolBridge) {
     label: tool.name,
     description: tool.description,
     parameters: tool.inputSchema as any,
-    execute: async (_toolCallId: string, params: unknown, signal: AbortSignal | undefined) => {
-      // SAFETY: pi validated the model's JSON arguments against the tool's object schema.
-      const result = await tool.call((params ?? {}) as JsonObject, signal);
+    execute: async (
+      _toolCallId: string,
+      params: JsonObject | undefined,
+      signal: AbortSignal | undefined,
+    ) => {
+      const result = await tool.call(params ?? {}, signal);
       if (result.isError) throw new Error(result.text || 'tool failed');
       return { content: [{ type: 'text' as const, text: result.text }], details: undefined };
     },
@@ -791,7 +775,7 @@ function safeStat(path: string) {
   }
 }
 
-function readJson(path: string): unknown {
+function readJson(path: string): z.infer<typeof PI_EXTENSION_PACKAGE_SCHEMA> | null {
   try {
     const parsed = parseStoredJson(PI_EXTENSION_PACKAGE_SCHEMA, readFileSync(path, 'utf8'), path);
     return parsed.ok ? parsed.value : null;
@@ -833,18 +817,18 @@ function formatModel(model: any, fallback?: string): string {
   return fallback ?? 'default';
 }
 
-function toPiImages(images: unknown): any[] {
+function toPiImages(images: ImageAttachments): ACPImageBlock[] {
   return toACPImageBlocks(images);
 }
 
-function stringifyToolResult(result: unknown): string {
+function stringifyToolResult(result: PiToolResult): string {
   if (result == null) return '';
   if (isString(result)) return result;
-  if (!isPiToolResult(result)) return String(result);
+  if (!isObject(result)) return String(result);
   const content = result.content;
   if (Array.isArray(content)) {
     const text = content
-      .map((block) => {
+      .map((block: PiResultBlock | string | null | undefined) => {
         if (isString(block)) return block;
         if (block?.type === 'text' && isString(block.text)) return block.text;
         if (block?.type === 'image') return '[image]';
@@ -861,7 +845,7 @@ function stringifyToolResult(result: unknown): string {
   }
 }
 
-function formatToolResultContent(result: unknown, isError: boolean): string {
+function formatToolResultContent(result: PiToolResult, isError: boolean): string {
   const content = stringifyToolResult(result);
   return isError && content ? `Error: ${content}` : content;
 }

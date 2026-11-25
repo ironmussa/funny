@@ -119,6 +119,7 @@ export function sandboxOps(
   const loadMachine = (threadId: string, states: readonly ThreadSandboxState[]) =>
     Effect.gen(function* () {
       const row = yield* get(threadId);
+      // SAFETY: thread_sandboxes.state is written only by the store's put ('provisioning') and transition (a machine rule's target).
       if (!row || !row.sandboxId || !states.includes(row.state as ThreadSandboxState)) {
         return yield* Effect.fail<ProvisionError>({
           kind: 'sandbox',
@@ -338,6 +339,7 @@ export function createThreadSandboxControl(deps: ThreadSandboxControlDeps) {
   const release = (threadId: string) =>
     Effect.gen(function* () {
       const row = yield* ops.get(threadId);
+      // SAFETY: thread_sandboxes.state is written only by the store's put ('provisioning') and transition (a machine rule's target).
       if (!row?.sandboxId || !RELEASABLE_STATES.has(row.state as ThreadSandboxState)) return false;
       yield* destroyMachine(row, row.sandboxId);
       yield* revokeRunner(row);

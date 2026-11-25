@@ -127,7 +127,8 @@ export function createRepoCheckOps(github: RepoGithub): RepoCheckOps {
           e.status === 405 || e.status === 409
             ? okAsync<PinnedMergeResult, GithubCallError>({
                 kind: 'not-mergeable',
-                reason: e.message,
+                // GitHub's own words say which requirement it was; the status alone does not.
+                reason: e.detail ? `${e.message} (${e.detail})` : e.message,
                 headMoved: e.status === 409,
               })
             : errAsync(e),

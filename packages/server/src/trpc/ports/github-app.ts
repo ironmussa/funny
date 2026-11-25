@@ -117,9 +117,13 @@ async function appPermissionGaps(
     return res.json();
   };
   try {
+    // SAFETY: GET /app answers the App object; its optional `permissions` map is the only
+    // field read, with a `?? {}` fallback.
     const body = (await get('/app')) as { permissions?: Record<string, string> };
     const missingPermissions = lacking(body.permissions ?? {});
     // The installations are a second question: without an answer, say what is known.
+    // SAFETY: GET /app/installations answers an array of installations (checked with
+    // Array.isArray below); only optional fields are read, through `?.` / `??`.
     const installations = (await get('/app/installations?per_page=100').catch(() => [])) as Array<{
       account?: { login?: string } | null;
       permissions?: Record<string, string>;
@@ -159,10 +163,13 @@ async function listAccounts(
     return res.json();
   };
   try {
+    // SAFETY: GET /user answers the user object; only its optional `login` is read.
     const user = (await get('/user')) as { login?: string };
     if (!user.login) return [];
     const accounts: GithubAppAccount[] = [{ login: user.login, type: 'user' }];
     // A classic token without read:org gets 403 here: still offer the personal account.
+    // SAFETY: GET /user/memberships/orgs answers an array of memberships (or [] on
+    // failure); only optional fields are read, through `?.`.
     const memberships = (await get('/user/memberships/orgs?state=active&per_page=100').catch(
       () => [],
     )) as { role?: string; organization?: { login?: string } }[];

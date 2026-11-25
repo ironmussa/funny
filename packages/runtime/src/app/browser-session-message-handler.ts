@@ -16,12 +16,29 @@ import { browserSessionManager } from '../services/browser-session-manager.js';
 
 const NS = 'browser-session';
 
+/** The payload of one `browser-session:*` command; its `type` says which one. */
+export type BrowserSessionCommandData =
+  | WSBrowserSessionOpenData
+  | WSBrowserSessionNavigateData
+  | WSBrowserSessionNavData
+  | WSBrowserSessionInputData
+  | WSBrowserSessionInspectAtData
+  | WSBrowserSessionInspectRectData
+  | WSBrowserSessionScreenshotData
+  | WSBrowserSessionExecuteData
+  | WSBrowserSessionHeartbeatData
+  | WSBrowserSessionCloseData;
+
 /**
  * Dispatches inbound WS messages typed `browser-session:*` to the manager.
  * Mirrors the shape of `handlePtyMessage` — call from the central WS handler
  * once we identify a browser-session prefix.
  */
-export function handleBrowserSessionMessage(type: string, data: unknown, userId: string): boolean {
+export function handleBrowserSessionMessage(
+  type: string,
+  data: BrowserSessionCommandData,
+  userId: string,
+): boolean {
   log.info('WS message received', { namespace: NS, type, userId });
   switch (type) {
     case 'browser-session:open': {

@@ -20,6 +20,11 @@ interface Props {
   activeThread: ThreadCore;
 }
 
+/** True for a string value. */
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 /**
  * The "idle thread" view shown after creating a backlog/idle thread but
  * before the agent has started: the project header plus a centered
@@ -47,8 +52,7 @@ export function ThreadIdleStarter({ activeThread }: Props) {
     const draftMsg = stableMessages?.find((m) => m.role === 'user');
     if (!draftMsg?.images) return undefined;
     try {
-      const parsed =
-        typeof draftMsg.images === 'string' ? JSON.parse(draftMsg.images) : draftMsg.images;
+      const parsed = isString(draftMsg.images) ? JSON.parse(draftMsg.images) : draftMsg.images;
       return parsed?.length ? parsed : undefined;
     } catch {
       return undefined;

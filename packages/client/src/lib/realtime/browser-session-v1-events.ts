@@ -6,13 +6,17 @@ import {
 } from '@funny/shared/browser-v1/interactive';
 import type { JsonPrimitive } from '@funny/shared/json';
 
-/** A browser-session event as the panel handlers expect it (`dispatchBrowserSessionEvent`). */
 /** A JSON-like event value whose unset optional fields stay undefined. */
 type EventValue = JsonPrimitive | undefined | EventValue[] | { [field: string]: EventValue };
 
+/** A browser-session event as the panel handlers expect it (`dispatchBrowserSessionEvent`). */
 export interface BrowserSessionRealtimeEvent {
   type: `browser-session:${string}`;
   data: { [field: string]: EventValue };
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
 }
 
 function controllerName(value: BrowserSessionController): 'agent' | 'user' | undefined {
@@ -120,9 +124,10 @@ function agentActionEvent(
     deltaY: value.deltaY,
     detail: value.detail,
   };
-  const data: BrowserSessionRealtimeEvent['data'] = { sessionId, kind };
-  for (const [key, field] of Object.entries(fields)) if (field !== undefined) data[key] = field;
-  return { type: 'browser-session:agent-action', data };
+  const defined = Object.fromEntries(
+    Object.entries(fields).filter(([, field]) => field !== undefined),
+  );
+  return { type: 'browser-session:agent-action', data: { sessionId, kind, ...defined } };
 }
 
 function resultEvent(
@@ -138,7 +143,7 @@ function resultEvent(
       requestId,
       ok: result.ok === true,
       value: result.value,
-      error: typeof result.error === 'string' ? result.error : undefined,
+      error: isString(result.error) ? result.error : undefined,
     },
   };
 }

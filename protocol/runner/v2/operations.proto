@@ -178,6 +178,13 @@ message JobListRunning {}
 message JobListByUser {}
 message JobUpdate { string job_id = 1; google.protobuf.Struct patch = 2; }
 message JobDeleteByThread { string thread_id = 1; }
+// factory-agent-tools: what an agent in a thread may do on its owner's issue
+// factory. The server takes the actor and the project from the thread's row.
+message FactoryListRuns { string thread_id = 1; }
+// `action` is `retry` or `stop`; anything else is refused.
+message FactoryControlRun { string thread_id = 1; string run_id = 2; string action = 3; }
+// Asks the member to approve a held merge. It never approves one.
+message FactoryRequestApproval { string thread_id = 1; string run_id = 2; }
 // Background activities (track-background-activities). The server takes the
 // user and runner from the session, never from the payload.
 message ActivityStart { google.protobuf.Struct activity = 1; }
@@ -269,6 +276,9 @@ message OperationsRequest {
     ActivityStart activity_start = 87;
     ActivityUpdate activity_update = 88;
     ActivityReconcile activity_reconcile = 89;
+    FactoryListRuns factory_list_runs = 90;
+    FactoryControlRun factory_control_run = 91;
+    FactoryRequestApproval factory_request_approval = 92;
   }
 }
 

@@ -201,7 +201,7 @@ async function probeNestedUserNamespace(): Promise<boolean> {
 }
 
 /** Any non-null object (arrays included). */
-function isObject(value: unknown): value is object {
+function isObject<T>(value: T): value is T & object {
   return typeof value === 'object' && value !== null;
 }
 
@@ -223,7 +223,11 @@ function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.length > 0;
 }
 
-const text = (value: unknown) => (isNonEmptyString(value) ? value : null);
+/** A tool input's field when it is a non-empty string, else null. */
+function text(input: JsonObject, field: string): string | null {
+  const value = input[field];
+  return isNonEmptyString(value) ? value : null;
+}
 
 /** The folder an absolute glob pattern starts in (its part before the first wildcard). */
 function patternRoot(pattern: string | null): string[] {
@@ -237,10 +241,10 @@ const PATTERN_FIELD: Record<string, string> = { Glob: 'pattern', Grep: 'glob' };
 
 /** Where a reading tool looks: its file or folder, or where an absolute pattern starts. */
 function targetsOf(toolName: string, input: JsonObject, cwd: string): string[] {
-  if (toolName === 'Read') return [text(input.file_path) ?? ''];
+  if (toolName === 'Read') return [text(input, 'file_path') ?? ''];
   const field = PATTERN_FIELD[toolName];
   if (!field) return [];
-  return [text(input.path) ?? cwd, ...patternRoot(text(input[field]))];
+  return [text(input, 'path') ?? cwd, ...patternRoot(text(input, field))];
 }
 
 /** A path with its symlinks resolved, as far as it exists (a link inside the checkout can point out). */
@@ -264,10 +268,10 @@ const inside = (path: string, root: string) => {
   return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
 };
 
-/** Why a read-only agent may not make this call, or null when it may. */ /** Why a read-only agent may not make this call, or null when it may. */
+/** Why a read-only agent may not make this call, or null when it may. */
 export function readOnlyDenial(
   toolName: string,
-  toolInput: unknown,
+  toolInput: JsonObject | null | undefined,
   /** The checkout first, then any other folder its reading tools may read (role inputs). */
   roots: readonly string[],
 ): string | null {

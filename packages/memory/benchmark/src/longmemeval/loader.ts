@@ -17,11 +17,11 @@ import type {
  * Source: https://huggingface.co/datasets/xiaowu0162/LongMemEval
  * Paper: https://arxiv.org/abs/2407.15045
  */
-const LONGMEMEVAL_URLS: Record<string, string> = {
+const LONGMEMEVAL_URLS = {
   S: 'https://huggingface.co/datasets/xiaowu0162/LongMemEval/resolve/main/data/longmemeval_s.json',
   M: 'https://huggingface.co/datasets/xiaowu0162/LongMemEval/resolve/main/data/longmemeval_m.json',
   L: 'https://huggingface.co/datasets/xiaowu0162/LongMemEval/resolve/main/data/longmemeval_l.json',
-};
+} satisfies Record<'S' | 'M' | 'L', string>;
 
 export async function loadLongMemEvalDataset(
   dataDir: string,

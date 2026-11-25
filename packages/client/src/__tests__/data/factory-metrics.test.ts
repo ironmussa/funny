@@ -15,6 +15,7 @@ function run(over: Partial<FactoryRun> = {}): FactoryRun {
     id: `r${seq}`,
     factoryId: 'f1',
     issueNumber: seq,
+    issueTitle: null,
     triggerName: null,
     inputs: {},
     prUrl: null,
@@ -39,6 +40,7 @@ function run(over: Partial<FactoryRun> = {}): FactoryRun {
     flowCommit: null,
     stepOptions: [],
     mergeApproval: null,
+    riskWaiver: null,
     ...over,
   };
 }

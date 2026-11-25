@@ -92,6 +92,10 @@ async function authorizedResourceBase64(url: string): Promise<string> {
   });
 }
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 function connect() {
   setWSStopped(false);
 
@@ -118,7 +122,7 @@ function connect() {
     const payload = event.payload;
     if (payload.case === 'user') {
       const data = payload.value.data ?? {};
-      const threadId = typeof data.threadId === 'string' ? data.threadId : '';
+      const threadId = isString(data.threadId) ? data.threadId : '';
       dispatchRealtimeEvent(payload.value.eventType, threadId, data);
     }
   });
@@ -249,7 +253,7 @@ function connect() {
     // dropped trailing events with sockets that never finished upgrading.
     const engine = socket.io.engine;
     const handleTransportUpgrade = (t: any) => {
-      const name = typeof t === 'string' ? t : (t?.name ?? 'unknown');
+      const name = isString(t) ? t : (t?.name ?? 'unknown');
       wsLog.info('Socket.IO transport upgraded', { transport: name });
       metric('ws.transport_upgrade', 1, { attributes: { transport: name } });
     };

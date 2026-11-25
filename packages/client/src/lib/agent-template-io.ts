@@ -38,6 +38,14 @@ export function exportTemplate(template: AgentTemplate): void {
   URL.revokeObjectURL(url);
 }
 
+function isObject(value: unknown): value is object {
+  return typeof value === 'object';
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 /** The fields of an imported file that are checked before the template is handed on. */
 interface TemplateFileFields {
   version?: unknown;
@@ -53,16 +61,16 @@ export function parseTemplateFromJson(json: string): CreateAgentTemplateRequest 
     return 'Invalid JSON file';
   }
 
-  if (!parsed || typeof parsed !== 'object') return 'Invalid template file format';
+  if (!parsed || !isObject(parsed)) return 'Invalid template file format';
 
   // SAFETY: `parsed` is a non-null object, and each field read below is checked first.
   const file = parsed as TemplateFileFields;
   if (file.version !== 1) return 'Unsupported template version';
-  if (!file.template || typeof file.template !== 'object') return 'Missing template data';
+  if (!file.template || !isObject(file.template)) return 'Missing template data';
 
   // SAFETY: `file.template` is a non-null object; its name is checked next.
   const tpl = file.template as { name?: unknown };
-  if (!tpl.name || typeof tpl.name !== 'string') return 'Template must have a name';
+  if (!tpl.name || !isString(tpl.name)) return 'Template must have a name';
 
   // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- validated shape from parsed JSON
   return tpl as unknown as CreateAgentTemplateRequest;

@@ -69,10 +69,7 @@ export function PlanCard({
       )}
 
       {/* Plan content */}
-      <ToolContentArea
-        className="border-border/40 border-t"
-        viewportProps={{ className: 'max-h-[50vh] scroll-fade-none' }}
-      >
+      <ToolContentArea viewportProps={{ className: 'max-h-[50vh] scroll-fade-none' }}>
         <div className="px-4 py-3">
           <div className="prose max-w-none">
             <Suspense

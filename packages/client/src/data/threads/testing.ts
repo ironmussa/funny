@@ -91,9 +91,8 @@ export function seedThreadIndex(
 export function withThreadIndex<T extends object>(patch: T): Omit<T, IndexKey> {
   const entries = Object.entries(patch);
   const isIndexKey = (key: string) => (INDEX_KEYS as readonly string[]).includes(key);
-  const fields: ThreadIndexFields = Object.fromEntries(entries.filter(([key]) => isIndexKey(key)));
+  seedThreadIndex(Object.fromEntries(entries.filter(([key]) => isIndexKey(key))));
   const rest = Object.fromEntries(entries.filter(([key]) => !isIndexKey(key)));
-  seedThreadIndex(fields);
   return rest as Omit<T, IndexKey>;
 }
 

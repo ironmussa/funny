@@ -60,24 +60,28 @@ const ansiConverter = createAnsiConverter({
 });
 
 /** Config for workflow-specific event types */
-const workflowEventConfig: Record<string, { icon: typeof Shield; label: string }> = {
-  'workflow:started': { icon: Shield, label: 'Workflow started' },
-  'workflow:completed': { icon: CheckCircle2, label: 'Workflow completed' },
-  'workflow:hooks': { icon: Shield, label: 'Pre-commit hooks' },
-  'workflow:review': { icon: Eye, label: 'Code review' },
-  'workflow:fix': { icon: Wrench, label: 'Fix applied' },
-  'workflow:precommit_fix': { icon: Wrench, label: 'Pre-commit fix' },
-};
+const workflowEventConfig = new Map(
+  Object.entries({
+    'workflow:started': { icon: Shield, label: 'Workflow started' },
+    'workflow:completed': { icon: CheckCircle2, label: 'Workflow completed' },
+    'workflow:hooks': { icon: Shield, label: 'Pre-commit hooks' },
+    'workflow:review': { icon: Eye, label: 'Code review' },
+    'workflow:fix': { icon: Wrench, label: 'Fix applied' },
+    'workflow:precommit_fix': { icon: Wrench, label: 'Pre-commit fix' },
+  }),
+);
 
 /** Config for git event types that appear inside workflows */
-const gitEventConfig: Record<string, { icon: typeof GitCommit; label: string }> = {
-  'git:commit': { icon: GitCommit, label: 'Committed' },
-  'git:push': { icon: Upload, label: 'Pushed' },
-  'git:merge': { icon: GitMerge, label: 'Merged' },
-  'git:pr_created': { icon: GitPullRequest, label: 'PR Created' },
-  'git:stage': { icon: Plus, label: 'Staged' },
-  'git:unstage': { icon: Minus, label: 'Unstaged' },
-};
+const gitEventConfig = new Map(
+  Object.entries({
+    'git:commit': { icon: GitCommit, label: 'Committed' },
+    'git:push': { icon: Upload, label: 'Pushed' },
+    'git:merge': { icon: GitMerge, label: 'Merged' },
+    'git:pr_created': { icon: GitPullRequest, label: 'PR Created' },
+    'git:stage': { icon: Plus, label: 'Staged' },
+    'git:unstage': { icon: Minus, label: 'Unstaged' },
+  }),
+);
 
 /** Dedicated sub-component for hooks events — supports expandable ANSI error output */
 const HooksEventCard = memo(function HooksEventCard({
@@ -173,12 +177,12 @@ export const WorkflowEventCard = memo(function WorkflowEventCard({
   const metadata = parseThreadEventData(event.data);
 
   // Try workflow config first, then git config
-  const wfConfig = workflowEventConfig[event.type];
-  const gConfig = gitEventConfig[event.type];
+  const wfConfig = workflowEventConfig.get(event.type);
+  const gConfig = gitEventConfig.get(event.type);
   const config = wfConfig || gConfig;
   if (!config) return null;
 
-  const Icon = config.icon;
+  const KindIcon = config.icon;
   let detail: React.ReactNode = null;
   let statusIcon: React.ReactNode = null;
 
@@ -360,7 +364,7 @@ export const WorkflowEventCard = memo(function WorkflowEventCard({
       data-testid={`workflow-event-${event.type}`}
       className="hover:bg-accent/30 flex w-full items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-xs transition-colors"
     >
-      {statusIcon || <Icon className={cn('icon-xs shrink-0 text-muted-foreground')} />}
+      {statusIcon || <KindIcon className={cn('icon-xs shrink-0 text-muted-foreground')} />}
       <span className="text-muted-foreground shrink-0 font-mono font-medium">{config.label}</span>
       {detail}
       {event.createdAt && (

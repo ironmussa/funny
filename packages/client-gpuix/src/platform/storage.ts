@@ -13,15 +13,23 @@ export function isMissingFile(error: unknown): error is Error & { code: 'ENOENT'
   return error instanceof Error && 'code' in error && error.code === 'ENOENT';
 }
 
+function isPlainObject(value: unknown): value is object {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 /** The key-value pairs held in the native storage file, in file order. */
 function parseStoredValues(raw: string): Array<[key: string, value: string]> {
   const value: unknown = JSON.parse(raw);
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+  if (!isPlainObject(value)) {
     throw new Error('Native storage root must be an object');
   }
   const values: Array<[key: string, value: string]> = [];
   for (const [key, entry] of Object.entries(value)) {
-    if (typeof entry !== 'string') throw new Error('Native storage values must be strings');
+    if (!isString(entry)) throw new Error('Native storage values must be strings');
     values.push([key, entry]);
   }
   return values;

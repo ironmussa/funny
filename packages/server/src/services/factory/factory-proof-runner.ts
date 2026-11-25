@@ -24,7 +24,7 @@ import type { RegressionProofRecord } from './factory-runs.js';
 export interface FactoryProofDeps {
   startProof(
     threadId: string,
-    body: Record<string, unknown>,
+    body: RegressionProofJobBody,
   ): Promise<Result<{ proofId: string; state: string }, string>>;
   pollProof(
     threadId: string,
@@ -49,7 +49,7 @@ const PROOF_POLL_MS = 5_000;
 const PROOF_OFFLINE_GRACE_MS = 180_000;
 
 /** The prefix of a request error that never reached the runner. */
-import { RUNNER_UNAVAILABLE_PREFIX } from './factory-runner-jobs.js';
+import { RUNNER_UNAVAILABLE_PREFIX, type RegressionProofJobBody } from './factory-runner-jobs.js';
 
 /** The runner's proof result (`ProofResult` of the runtime). */
 const PROOF_RESULT = z.object({
@@ -85,7 +85,7 @@ export async function proveOnRunner(
   fetchHead = false,
 ): Promise<ProofRun> {
   const timeoutMs = opts.timeoutMs ?? 600_000;
-  const body: Record<string, unknown> = {
+  const body: RegressionProofJobBody = {
     rules: opts.rules ?? [],
     supportGlobs: opts.supportGlobs ?? [],
     setupCommand: opts.setupCommand,
@@ -128,7 +128,7 @@ const unavailable = (why: string): ProofRun => ({ kind: 'unavailable', why });
 /** The proof job being waited for; `proofId` changes when it is started again. */
 interface PolledJob {
   threadId: string;
-  body: Record<string, unknown>;
+  body: RegressionProofJobBody;
   proofId: string;
   /** It was started again once already. */
   restarted: boolean;

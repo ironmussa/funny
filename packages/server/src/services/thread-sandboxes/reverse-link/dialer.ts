@@ -59,6 +59,7 @@ export function reverseLinkUrl(ingressUrl: string): string {
 }
 
 const defaultCreateWebSocket = (url: string, headers: Record<string, string>): ByteWebSocket => {
+  // SAFETY: Bun's WebSocket takes a `headers` option and its instances carry the binary send/receive ByteWebSocket uses.
   // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- Bun's WebSocket accepts request headers (non-standard); ByteWebSocket adds binary helpers
   return new WebSocket(url, { headers } as any) as unknown as ByteWebSocket;
 };

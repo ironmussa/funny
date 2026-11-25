@@ -23,23 +23,23 @@ import type { CLIMessage } from '../types.js';
 import type { AgentRole, AgentContext, AgentResult } from './agent-context.js';
 import { AgentExecutor, type StepInfo } from './agent-executor.js';
 import { ModelFactory } from './model-factory.js';
-import type { ToolDef } from './types.js';
+import { defineTool, type ToolDef } from './types.js';
 
 /** funny's MCP tools (and any other HTTP MCP server) as executor tools. */
 function bridgedToolDefs(bridge: McpToolBridge, signal: AbortSignal): Record<string, ToolDef> {
   return Object.fromEntries(
     bridge.tools.map((tool) => [
       tool.name,
-      {
+      defineTool({
         description: tool.description,
         parameters: z.record(z.string(), z.unknown()),
         jsonSchema: tool.inputSchema,
-        execute: async (args: unknown) => {
+        execute: async (args) => {
           // `parameters` parsed the model's JSON arguments into an object.
           const result = await tool.call(isJsonPayloadObject(args) ? args : {}, signal);
           return result.isError ? `Error: ${result.text}` : result.text;
         },
-      } satisfies ToolDef,
+      }),
     ]),
   );
 }

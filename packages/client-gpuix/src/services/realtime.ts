@@ -30,6 +30,10 @@ export interface NativeRealtimeSnapshot {
   error: string | null;
 }
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 /** A Socket.IO event's envelope fields (it arrived as JSON), read before they are checked. */
 interface SocketEnvelope {
   threadId?: JsonValue;
@@ -120,7 +124,7 @@ export class NativeRealtimeService {
     });
     const onAny = (type: string, payload: unknown) => {
       const envelope: SocketEnvelope = isSocketEnvelope(payload) ? payload : {};
-      const threadId = typeof envelope.threadId === 'string' ? envelope.threadId : '';
+      const threadId = isString(envelope.threadId) ? envelope.threadId : '';
       dispatcher.dispatch({ type, threadId, data: envelope.data ?? envelope });
     };
     const onConnect = () => {
@@ -129,7 +133,7 @@ export class NativeRealtimeService {
       if (this.lastOpenThreadId) socket.emit('thread:open', { threadId: this.lastOpenThreadId });
     };
     const onDisconnect = (reason: unknown) => {
-      this.update({ phase: 'disconnected', error: typeof reason === 'string' ? reason : null });
+      this.update({ phase: 'disconnected', error: isString(reason) ? reason : null });
       if (reason === 'io server disconnect') this.options.onSessionRejected();
     };
     const onError = (error: unknown) => {

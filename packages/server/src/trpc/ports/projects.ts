@@ -104,7 +104,7 @@ async function listPersonalProjects(userId: string): Promise<Project[]> {
       isTeamProject: true as const,
       localPath: localPath ?? undefined,
       needsSetup: !localPath,
-      role: (memberRole === 'admin' ? 'admin' : 'member') as 'admin' | 'member',
+      role: memberRole === 'admin' ? ('admin' as const) : ('member' as const),
     }));
   return [...personalProjects, ...sharedProjects];
 }

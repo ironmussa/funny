@@ -1,4 +1,4 @@
-import type { FileDiffSummary, GitStatusInfo } from '@funny/shared';
+import type { FileDiffSummary, FileStatus, GitStatusInfo } from '@funny/shared';
 import { FileCode, FilePlus, FileWarning, FileX } from 'lucide-react';
 import type { ComponentProps } from 'react';
 
@@ -10,7 +10,7 @@ import type { SearchBarProps } from '@/components/ui/search-bar';
  * of its child components so the pane itself stays free of branching.
  */
 
-const fileStatusIcons: Record<string, typeof FileCode> = {
+const fileStatusIcons: Record<FileStatus, typeof FileCode> = {
   added: FilePlus,
   modified: FileCode,
   deleted: FileX,

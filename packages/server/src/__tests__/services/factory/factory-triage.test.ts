@@ -49,6 +49,8 @@ const CONTRACT = {
 const READY = json({ decision: 'ready', contract: CONTRACT });
 
 interface Script {
+  /** The run's pull request, when it already opened one. */
+  prUrl?: string;
   /** What the triage agent says: its final message, then after the re-emit request. */
   says: Array<string | null>;
   stored?: FactoryTriage | null;
@@ -77,7 +79,7 @@ function triaging(script: Script) {
   const deps: ProviderDeps = {
     scope,
     threadIds: [],
-    prUrl: null,
+    prUrl: script.prUrl ?? null,
     launchStartedAt: null,
     triage: script.stored ?? null,
     admittedAt: '2026-11-22T00:00:00.000Z',
@@ -487,6 +489,24 @@ describe('the triage step', () => {
     expect(stored()).toMatchObject({ threadId: 'tri-crashed' });
   });
 
+  // Triage proposes; the factory still checks the diff and a member can overrule it.
+  test('triage is told when to class an issue as a lint cleanup, and its answer is kept in the contract', async () => {
+    const proposed = json({
+      decision: 'ready',
+      contract: { ...CONTRACT, lintCleanup: true, lintRules: ['eslint/max-lines'] },
+    });
+    const { provider, bodies, stored } = triaging({ says: [proposed] });
+    expect(await provider.triage!({})).toMatchObject({ ok: true, output: 'ready' });
+    const prompt = String(bodies[0]?.prompt);
+    expect(prompt).toContain('Set `lintCleanup` to true only when');
+    expect(prompt).toContain('"lintCleanup": false, "lintRules": []');
+    expect(prompt).toContain('list in `lintRules` every rule');
+    expect(stored()).toMatchObject({
+      decision: 'ready',
+      contract: { lintCleanup: true, lintRules: ['eslint/max-lines'] },
+    });
+  });
+
   test('a run that already has its contract is not triaged again', async () => {
     const { provider, bodies } = triaging({
       says: [],
@@ -498,6 +518,17 @@ describe('the triage step', () => {
 });
 
 describe('runs with overlapping paths do not work at the same time', () => {
+  test('a retried run that already has a pull request does not wait for the paths', async () => {
+    const { provider, held } = triaging({
+      says: [],
+      stored: { decision: 'ready', at: '2026-11-22T09:00:00Z', contract: CONTRACT },
+      prUrl: 'https://github.com/o/r/pull/9',
+      busy: [{ issue: 12, paths: ['src/sum.ts'] }],
+    });
+    expect(await provider.triage!({})).toMatchObject({ ok: true, output: 'ready' });
+    expect(held).toEqual([]);
+  });
+
   test('the run leaves its slot and waits for the run working on the same file', async () => {
     const { provider, held, stored } = triaging({
       says: [READY],

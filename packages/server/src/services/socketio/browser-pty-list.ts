@@ -59,7 +59,7 @@ export function setupBrowserPtyListRpc(
           terminals: dependencies.terminals,
           presence: dependencies.presence,
         });
-        ack({ status: 'ok', sessions: sessions as any });
+        ack({ status: 'ok', sessions });
       } catch (err) {
         ack({
           status: 'error',

@@ -89,7 +89,10 @@ export async function getPipelinesByProject(projectId: string, userId: string) {
   );
 }
 
-export async function updatePipeline(id: string, userId: string, updates: Record<string, unknown>) {
+/** Columns a pipeline update may set. */
+export type PipelineUpdate = Partial<typeof pipelines.$inferInsert>;
+
+export async function updatePipeline(id: string, userId: string, updates: PipelineUpdate) {
   const data = { ...updates, updatedAt: new Date().toISOString() };
   await dbRun(
     db

@@ -161,7 +161,7 @@ function parseConversation(raw: RawLocomoConversation, index: number): LocomoCon
   // LOCOMO format: questions are under "qa"
   // (questions / qa_pairs in other files); a non-array fails at map(), as it always has.
   const rawQs = raw.qa ?? raw.questions ?? raw.qa_pairs ?? [];
-  const categoryMap: Record<number, LocomoCategory> = {
+  const categoryMap: LocomoCategoryNumbers = {
     1: 'single-hop',
     2: 'multi-hop',
     3: 'temporal',
@@ -198,9 +198,19 @@ function parseConversation(raw: RawLocomoConversation, index: number): LocomoCon
   };
 }
 
+/** LOCOMO's numeric QA category → its name. */
+interface LocomoCategoryNumbers {
+  readonly [category: number]: LocomoCategory;
+}
+
+/** A normalized category spelling found in LOCOMO files → its category. */
+interface LocomoCategoryAliases {
+  readonly [alias: string]: LocomoCategory;
+}
+
 function normalizeCategory(raw: string): LocomoCategory {
   const lower = raw.toLowerCase().replace(/[\s_-]+/g, '-');
-  const map: Record<string, LocomoCategory> = {
+  const map: LocomoCategoryAliases = {
     'single-hop': 'single-hop',
     singlehop: 'single-hop',
     single: 'single-hop',

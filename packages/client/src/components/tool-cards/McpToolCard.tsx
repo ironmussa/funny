@@ -1,5 +1,5 @@
 import { threadBrowserSessionId } from '@funny/shared';
-import type { JsonObject } from '@funny/shared/json';
+import type { JsonObject, JsonValue } from '@funny/shared/json';
 import { CircleAlert, ChevronRight, Globe, Plug } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -152,10 +152,7 @@ function McpToolCardBody({
   const { t } = useTranslation();
   const [raw, setRaw] = useState(false);
   return (
-    <ToolContentArea
-      className="border-border/40 border-t"
-      viewportProps={{ className: 'max-h-[50vh] scroll-fade-none' }}
-    >
+    <ToolContentArea viewportProps={{ className: 'max-h-[50vh] scroll-fade-none' }}>
       <div className="space-y-2 px-3 pt-1.5 pb-2">
         {isBrowserTool(mcp) && <ShowInBrowserPanelButton />}
         <BrowserRecordingPreview mcp={mcp} resultText={resultText} isError={isError} />
@@ -410,7 +407,8 @@ function ResultPart({ part, isError }: { part: McpResultPart; isError: boolean }
   );
 }
 
-function prettyJson(text: string): unknown {
+/** The output as parsed JSON, so it is shown highlighted; the text itself when it is not JSON. */
+function prettyJson(text: string): JsonValue {
   try {
     return JSON.parse(text);
   } catch {

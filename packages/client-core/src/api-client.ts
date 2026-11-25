@@ -90,6 +90,18 @@ function hasName(value: unknown): value is { name?: unknown } {
   return typeof value === 'object' && value !== null;
 }
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
+function isNumber(value: unknown): value is number {
+  return typeof value === 'number';
+}
+
+function isThrownApiError(value: unknown): value is { type: unknown; message: unknown } {
+  return value !== null && typeof value === 'object' && 'type' in value && 'message' in value;
+}
+
 function parseBody(text: string): JsonObject {
   if (!text) return {};
   try {
@@ -106,21 +118,26 @@ function parseBody(text: string): JsonObject {
  */
 function flattenTrpcError(body: JsonObject): JsonObject {
   const error = body.error;
-  if (!isJsonObject(error) || typeof error.message !== 'string') return body;
+  if (!isJsonObject(error) || !isString(error.message)) return body;
   const { data } = error;
-  if (!isJsonObject(data) || typeof data.httpStatus !== 'number') return body;
-  return typeof error.friendlyMessage === 'string'
+  if (!isJsonObject(data) || !isNumber(data.httpStatus)) return body;
+  return isString(error.friendlyMessage)
     ? { error: error.message, friendlyMessage: error.friendlyMessage }
     : { error: error.message };
 }
 
 function httpErrorMessage(body: JsonObject, status: number): string {
   const rawError = body.error;
-  if (typeof rawError === 'string' && rawError.length > 0) return rawError;
+  if (isString(rawError) && rawError.length > 0) return rawError;
   return rawError ? JSON.stringify(rawError) : `HTTP ${status}`;
 }
 
-const HTTP_STATUS_TYPES: Record<number, ApiErrorType> = {
+/** HTTP status → the error type it reports (others fall back on the status class). */
+interface HttpStatusTypes {
+  readonly [status: number]: ApiErrorType;
+}
+
+const HTTP_STATUS_TYPES: HttpStatusTypes = {
   404: 'NOT_FOUND',
   403: 'FORBIDDEN',
   409: 'CONFLICT',
@@ -132,25 +149,24 @@ function httpError(body: JsonObject, status: number, message: string): ApiClient
     return {
       type: 'PROCESS_ERROR',
       message,
-      exitCode: typeof body.exitCode === 'number' ? body.exitCode : undefined,
-      stderr: typeof body.stderr === 'string' ? body.stderr : undefined,
+      exitCode: isNumber(body.exitCode) ? body.exitCode : undefined,
+      stderr: isString(body.stderr) ? body.stderr : undefined,
     };
   }
   const type = HTTP_STATUS_TYPES[status] ?? (status >= 500 ? 'INTERNAL' : 'BAD_REQUEST');
   // A server message written for the user replaces the generic per-type text.
-  const { friendlyMessage } = body;
-  return typeof friendlyMessage === 'string' && friendlyMessage.length > 0
-    ? { type, message, friendlyMessage }
+  return isString(body.friendlyMessage) && body.friendlyMessage.length > 0
+    ? { type, message, friendlyMessage: body.friendlyMessage }
     : { type, message };
 }
 
-function asApiError(error: unknown): ApiClientError {
-  if (error && typeof error === 'object' && 'type' in error && 'message' in error) {
+function asApiError(cause: unknown): ApiClientError {
+  if (isThrownApiError(cause)) {
     // SAFETY: the only objects with `type` and `message` that reach this catch are the
     // ApiClientError values this client throws itself (httpError and the network branch).
-    return error as ApiClientError;
+    return cause as ApiClientError;
   }
-  return { type: 'INTERNAL', message: String(error) };
+  return { type: 'INTERNAL', message: String(cause) };
 }
 
 export function createApiClient(dependencies: ApiClientDependencies): ApiClient {

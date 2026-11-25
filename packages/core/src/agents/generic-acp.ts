@@ -36,14 +36,32 @@ import {
   hasRenderableTodoInput,
   inferACPToolName,
   parseACPPreambleTitle,
+  type ACPToolResultData,
 } from './acp-tool-input.js';
 import { BaseAgentProcess, killProcessTree, type ResultSubtype } from './base-process.js';
-import { isJsonPayloadObject } from './json-payload.js';
 import { buildAgentChildEnv } from './reap-orphaned-agents.js';
 import type { CLIMessage, ClaudeProcessOptions } from './types.js';
 
 // Lazy-loaded SDK types (avoid crash if not installed). `/unstable` keeps the
 // full v1 surface the 1.x default import exposed (prompt `usage`, `usage_update`,
+// session config options); the wire protocol is still ACP v1.
+
+/**
+ * GenericACPProcess — one manifest-parameterized adapter that wraps any
+ * communicating via the Agent Client Protocol (ACP) over stdio.
+ *
+ * This is the hoist of the ~700-line skeleton that was duplicated across the
+ * five per-provider adapters (codex/gemini/pi/cursor/opencode). All of the
+ * model-select, mode-set, the prompt turn loop, permission handling, and the
+ * `translateUpdate` switch — lives here ONCE, parameterized by a
+ * {@link ProviderManifest}. The small per-provider divergences are toggled by
+ * the manifest's {@link QuirkFlags} (the Phase-0 audited set).
+ *
+ * Each provider becomes a zero-logic constructor shim that binds its manifest
+ * (see `opencode-acp.ts`), so the existing per-provider test suites pass
+ * unchanged.
+ */
+// Lazy-loaded SDK types (avoid crash if not installed). `/unstable` keeps the
 // session config options); the wire protocol is still ACP v1.
 type ACPSDK = typeof import('@agentclientprotocol/sdk/unstable');
 type ACPSessionUpdate = import('@agentclientprotocol/sdk/unstable').SessionUpdate;
@@ -53,6 +71,12 @@ type ACPRequestPermissionResponse =
   import('@agentclientprotocol/sdk/unstable').RequestPermissionResponse;
 type ACPConnection = import('@agentclientprotocol/sdk/unstable').ClientConnection;
 type ACPPromptRequest = import('@agentclientprotocol/sdk/unstable').PromptRequest;
+type ACPSessionConfigOption = import('@agentclientprotocol/sdk/unstable').SessionConfigOption;
+type ACPSessionConfigSelectOptions =
+  import('@agentclientprotocol/sdk/unstable').SessionConfigSelectOptions;
+type ACPToolCallStatus = import('@agentclientprotocol/sdk/unstable').ToolCallStatus;
+/** `configOptions` of a newSession / loadSession response. */
+type ACPSessionConfigOptions = readonly ACPSessionConfigOption[] | null | undefined;
 /** Context for calling agent-side ACP methods on a live connection. */
 type ACPAgentContext = ACPConnection['agent'];
 type ACPMethods = ACPSDK['methods'];
@@ -328,7 +352,8 @@ export class GenericACPProcess extends BaseAgentProcess {
           // to the provider default — losing the user's model choice on every
           // follow-up message.
           this.captureSessionConfigOptions(
-            (loadResponse as { configOptions?: unknown } | undefined)?.configOptions,
+            (loadResponse as { configOptions?: ACPSessionConfigOptions } | undefined)
+              ?.configOptions,
           );
         } finally {
           this.replayingHistory = false;
@@ -521,46 +546,42 @@ export class GenericACPProcess extends BaseAgentProcess {
    * records the configId + selectable value ids. No-op when the agent does
    * not advertise a model option.
    */
-  private captureModelConfigOption(configOptions: unknown): void {
+  private captureModelConfigOption(configOptions: ACPSessionConfigOptions): void {
     this.modelConfigOption = null;
     if (!Array.isArray(configOptions)) return;
-    for (const opt of configOptions) {
-      if (!isJsonPayloadObject(opt)) continue;
-      const o = opt;
-      if (o.category !== 'model' || o.type !== 'select') continue;
+    for (const o of configOptions) {
+      if (!o || o.category !== 'model' || o.type !== 'select') continue;
       const valueIds = this.collectSelectValueIds(o.options);
       this.modelConfigOption = { configId: String(o.id), valueIds };
       return;
     }
   }
 
-  private captureThoughtLevelConfigOption(configOptions: unknown): void {
+  private captureThoughtLevelConfigOption(configOptions: ACPSessionConfigOptions): void {
     this.thoughtLevelConfigOption = null;
     if (!Array.isArray(configOptions)) return;
-    for (const opt of configOptions) {
-      if (!isJsonPayloadObject(opt)) continue;
-      const o = opt;
-      if (o.category !== 'thought_level' || o.type !== 'select') continue;
+    for (const o of configOptions) {
+      if (!o || o.category !== 'thought_level' || o.type !== 'select') continue;
       const valueIds = this.collectSelectValueIds(o.options);
       this.thoughtLevelConfigOption = { configId: String(o.id), valueIds };
       return;
     }
   }
 
-  private captureSessionConfigOptions(configOptions: unknown): void {
+  private captureSessionConfigOptions(configOptions: ACPSessionConfigOptions): void {
     this.captureModelConfigOption(configOptions);
     this.captureThoughtLevelConfigOption(configOptions);
   }
 
-  private collectSelectValueIds(options: unknown): Set<string> {
+  private collectSelectValueIds(options: ACPSessionConfigSelectOptions | undefined): Set<string> {
     const valueIds = new Set<string>();
-    const collect = (entries: unknown): void => {
+    const collect = (entries: ACPSessionConfigSelectOptions | undefined): void => {
       if (!Array.isArray(entries)) return;
       for (const e of entries) {
-        if (!isJsonPayloadObject(e)) continue;
-        const entry = e;
-        if (isString(entry.value)) valueIds.add(entry.value);
-        if (Array.isArray(entry.options)) collect(entry.options);
+        if (!e || !isObject(e)) continue;
+        // A select option carries `value`; a group carries its own `options`.
+        if ('value' in e && isString(e.value)) valueIds.add(e.value);
+        if ('options' in e && Array.isArray(e.options)) collect(e.options);
       }
     };
     collect(options);
@@ -770,7 +791,7 @@ export class GenericACPProcess extends BaseAgentProcess {
 
     const acpKind = (toolCall.kind as string | undefined) ?? undefined;
     const title = toolCall.title ?? '';
-    const toolName = inferACPToolName(acpKind, title, undefined, toolCall.rawInput);
+    const toolName = inferACPToolName(acpKind, title, undefined, toolCall);
     const toolInput = buildACPToolInput(toolName, {
       kind: acpKind,
       title,
@@ -996,19 +1017,18 @@ export class GenericACPProcess extends BaseAgentProcess {
     this.flushPendingThought();
     if (this.toolCallsSeen.has(toolCallId)) return;
 
-    const toolName = inferACPToolName(fields.kind, fields.title, undefined, fields.rawInput);
-    const input = finalizeTodoInput(
-      toolName,
-      buildACPToolInput(toolName, fields),
-      update.rawOutput,
-    );
+    const toolName = inferACPToolName(fields.kind, fields.title, undefined, fields);
+    const input = finalizeTodoInput(toolName, buildACPToolInput(toolName, fields), update);
     const isTerminal = isTerminalToolStatus(update.status);
 
     if (this.deferIfUnrenderable(toolCallId, toolName, input, isTerminal)) return;
 
     this.emitToolUse(toolCallId, toolName, input);
     if (isTerminal) {
-      const tcOutput = extractACPToolOutput(update.rawOutput, fields.content, fields.title);
+      const tcOutput = extractACPToolOutput(
+        { rawOutput: update.rawOutput, content: fields.content },
+        fields.title,
+      );
       this.emitToolResult(toolCallId, tcOutput);
     }
   }
@@ -1028,7 +1048,10 @@ export class GenericACPProcess extends BaseAgentProcess {
     }
 
     if (isTerminal) {
-      const output = extractACPToolOutput(update.rawOutput, fields.content, fields.title);
+      const output = extractACPToolOutput(
+        { rawOutput: update.rawOutput, content: fields.content },
+        fields.title,
+      );
       this.emitToolResult(toolCallId, output);
     }
   }
@@ -1047,7 +1070,10 @@ export class GenericACPProcess extends BaseAgentProcess {
     const toolCallId = update.toolCallId;
     if (!this.manifest.quirks.synthToolUseFromOrphanUpdate) {
       if (isTerminal) {
-        const output = extractACPToolOutput(update.rawOutput, fields.content, fields.title);
+        const output = extractACPToolOutput(
+          { rawOutput: update.rawOutput, content: fields.content },
+          fields.title,
+        );
         this.emitToolResult(toolCallId, output);
       }
       return true;
@@ -1056,10 +1082,10 @@ export class GenericACPProcess extends BaseAgentProcess {
     // Trust the original tool name from the deferred tool_call — an update
     // often omits kind/title, which would degrade to 'Tool'.
     const toolName =
-      buffered?.name ?? inferACPToolName(fields.kind, fields.title, undefined, fields.rawInput);
+      buffered?.name ?? inferACPToolName(fields.kind, fields.title, undefined, fields);
     const built = buildACPToolInput(toolName, fields);
     const merged = buffered ? mergeToolInput(buffered.input, built) : built;
-    const input = finalizeTodoInput(toolName, merged, update.rawOutput);
+    const input = finalizeTodoInput(toolName, merged, update);
 
     if (this.deferIfUnrenderable(toolCallId, toolName, input, isTerminal)) return true;
 
@@ -1175,27 +1201,31 @@ function readToolCallFields(update: ACPToolCallUpdateLike): ACPToolCallFields {
   };
 }
 
-function isTerminalToolStatus(status: unknown): boolean {
+function isTerminalToolStatus(status: ACPToolCallStatus | null | undefined): boolean {
   return status === 'completed' || status === 'failed';
 }
 
 /** TodoWrite: pull todos from the tool output when missing and normalize to `{ todos }`. */
-function finalizeTodoInput(toolName: string, input: JsonObject, rawOutput: unknown): JsonObject {
+function finalizeTodoInput(
+  toolName: string,
+  input: JsonObject,
+  result: Pick<ACPToolResultData, 'rawOutput'>,
+): JsonObject {
   if (toolName !== 'TodoWrite') return input;
-  const enriched = enrichTodoWriteInputFromOutput(input, rawOutput);
+  const enriched = enrichTodoWriteInputFromOutput(input, result);
   const clean = buildTodoWriteInputFromRaw(enriched);
   return clean ? { todos: clean.todos } : enriched;
 }
 
 /** Plan entry status → markdown checkbox (completed → [x], in_progress → [~], else [ ]). */
-function planStatusMark(status: unknown): string {
+function planStatusMark(status: string | undefined): string {
   if (status === 'completed') return '[x]';
   if (status === 'in_progress') return '[~]';
   return '[ ]';
 }
 
 /** Render `[status, text]` pairs as a numbered checklist, one entry per line. */
-function formatPlanChecklist(items: Array<[unknown, unknown]>): string {
+function formatPlanChecklist(items: Array<[string | undefined, unknown]>): string {
   return items.map(([status, text], i) => `${planStatusMark(status)} ${i + 1}. ${text}`).join('\n');
 }
 

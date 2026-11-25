@@ -18,6 +18,7 @@
 import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from 'fs';
 import { join, resolve } from 'path';
 
+import type { JsonValue } from '@funny/shared/json-validation';
 import type { ProviderManifest, SpawnConfig } from '@funny/shared/provider-manifest';
 import { parseFunnyProviderFile } from '@funny/shared/provider-manifest-schema';
 import { ACP_MANIFESTS, KNOWN_ACP_PROVIDER_IDS } from '@funny/shared/provider-manifests';
@@ -170,7 +171,7 @@ function parseProviderExtensionDir(dir: string, dirName: string): DirParse {
     return { ok: false, error: `funny.provider "${providerRef}" was not found` };
   }
 
-  let json: unknown;
+  let json: JsonValue;
   try {
     json = JSON.parse(readFileSync(manifestAbs, 'utf8'));
   } catch {

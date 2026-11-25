@@ -44,6 +44,7 @@ import {
   afterStateWrite,
   NO_FREE_SLOT,
   refusedFlowWrite,
+  updateFrom,
   withFreeSlot,
   writeAlongFlow,
   writeLiveRun,
@@ -60,8 +61,6 @@ export {
   REOPENED_STEP,
   threadsOf,
   withReviewVerdict,
-  type FactoryFlowState,
-  type FactoryRunSource,
   type FactoryRunsError,
   type FactoryRunStage,
   type FactoryRunState,
@@ -158,16 +157,9 @@ export function createFactoryRunsRepository(
     ): ResultAsync<boolean, FactoryRunsError> {
       const { from, to } = STAGE_TRANSITIONS[stage];
       const changes = changesFor({ ...input, state: to })!;
-      return ResultAsync.fromPromise(
-        db
-          .update(factoryRuns)
-          .set(changes)
-          .where(and(eq(factoryRuns.id, runId), inArray(factoryRuns.state, [...from])))
-          .returning({ id: factoryRuns.id }),
-        storage,
-      )
-        .map((rows) => rows.length > 0)
-        .andThen((moved) => afterStateWrite(runId, { state: to }, moved));
+      return updateFrom(runId, changes, from).andThen((moved) =>
+        afterStateWrite(runId, { state: to }, moved),
+      );
     },
 
     /**

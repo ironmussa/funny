@@ -89,7 +89,7 @@ import {
 } from './factory-watcher-state.js';
 
 export { MAX_ATTEMPTS, pathsHeld, stackTarget } from './factory-watcher-admission.js';
-export type { CreatePoll, FactoryPoll, FactoryWatcherDeps } from './factory-watcher-state.js';
+export type { CreatePoll, FactoryWatcherDeps } from './factory-watcher-state.js';
 
 /** How often each factory polls GitHub while the server is up. */
 const POLL_INTERVAL_MS = 60 * 1000;

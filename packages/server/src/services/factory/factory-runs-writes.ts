@@ -49,14 +49,7 @@ export function updateFromParked(
   changes: Partial<Row>,
   from: readonly FactoryRunState[] = REOPENABLE_STATES,
 ): ResultAsync<boolean, FactoryRunsError> {
-  return ResultAsync.fromPromise(
-    db
-      .update(factoryRuns)
-      .set(changes)
-      .where(and(eq(factoryRuns.id, runId), inArray(factoryRuns.state, [...from])))
-      .returning({ id: factoryRuns.id }),
-    storage,
-  ).map((rows) => rows.length > 0);
+  return updateFrom(runId, changes, from);
 }
 
 /**
@@ -69,10 +62,22 @@ export function moveRun(
   changes: Partial<Row>,
 ): ResultAsync<boolean, FactoryRunsError> {
   const { from, to } = QUEUE_TRANSITIONS[transition];
+  return updateFrom(runId, { ...changes, state: to }, from);
+}
+
+/**
+ * Write `changes` to one run only while its stored state is one of `from` (a
+ * compare-and-set). Resolves whether the run was written.
+ */
+export function updateFrom(
+  runId: string,
+  changes: Partial<Row>,
+  from: readonly FactoryRunState[],
+): ResultAsync<boolean, FactoryRunsError> {
   return ResultAsync.fromPromise(
     db
       .update(factoryRuns)
-      .set({ ...changes, state: to })
+      .set(changes)
       .where(and(eq(factoryRuns.id, runId), inArray(factoryRuns.state, [...from])))
       .returning({ id: factoryRuns.id }),
     storage,

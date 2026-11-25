@@ -61,6 +61,11 @@ interface AssistantMessageUsage {
  */
 export type ProjectLookup = (id: string) => HandlerProject | undefined;
 
+/** The message's `subtype`, for the debug log; only some CLI messages have one. */
+function messageSubtype(msg: CLIMessage): string | undefined {
+  return 'subtype' in msg ? msg.subtype : undefined;
+}
+
 export class AgentMessageHandler {
   private projectLookup: ProjectLookup | undefined;
   /** What the modules split out of this handler read and call. */
@@ -157,7 +162,7 @@ export class AgentMessageHandler {
       namespace: 'agent',
       threadId,
       type: msg.type,
-      subtype: 'subtype' in msg ? msg.subtype : undefined,
+      subtype: messageSubtype(msg),
     });
 
     // System init — capture session ID and broadcast init info

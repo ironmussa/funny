@@ -28,7 +28,7 @@ export function createSqliteProvider(options: CreateSqliteOptions): DatabaseProv
   // Dynamic import to avoid errors when bun:sqlite is not available
   // SAFETY: `require` returns any; these are the same modules the type imports name.
   const { Database } = require('bun:sqlite') as typeof import('bun:sqlite');
-  // SAFETY: as above, the lazily required module is the one the type import names.
+  // SAFETY: `require` returns any; this is the same module the type import names.
   const { drizzle } = require('drizzle-orm/bun-sqlite') as typeof import('drizzle-orm/bun-sqlite');
 
   const logger = options.log ?? noop;

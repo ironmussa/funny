@@ -168,7 +168,7 @@ export type FunnyProviderFile = z.infer<typeof funnyProviderFileSchema>;
 // if either drifts, one of these assignments fails to type-check.
 // SAFETY: the empty objects are never read; these expressions exist only for their `satisfies` checks.
 void ({} as ValidatedProviderManifest satisfies ProviderManifest);
-// SAFETY: as above, a type-only guard whose value is discarded.
+// SAFETY: the empty object is never read; the expression exists only for its `satisfies` check.
 void ({} as ProviderManifest satisfies ValidatedProviderManifest);
 
 /**

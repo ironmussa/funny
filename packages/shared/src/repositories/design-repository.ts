@@ -38,7 +38,8 @@ function rowToDesign(row: DesignRow): Design {
     // SAFETY: designs rows are written only by createDesign / updateDesign, whose
     // inputs are typed DesignType and DesignFidelity; the column is plain text.
     type: row.type as DesignType,
-    // SAFETY: as above, written only from a DesignFidelity or null.
+    // SAFETY: designs rows are written only by createDesign / updateDesign, whose
+    // `fidelity` input is a typed DesignFidelity or null; the column is plain text.
     fidelity: row.fidelity as DesignFidelity | null,
     speakerNotes: row.speakerNotes === 1,
     folderPath: row.folderPath,

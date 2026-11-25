@@ -41,7 +41,8 @@ export function createPgProvider(options: CreatePgOptions): DatabaseProvider {
   // SAFETY: `require` returns any; these are the same modules the type imports name,
   // loaded lazily so SQLite-only installs never load pg.
   const { Pool, types } = require('pg') as typeof import('pg');
-  // SAFETY: as above, the lazily required module is the one the type import names.
+  // SAFETY: `require` returns any; this is the same module the type import names,
+  // loaded lazily with pg so SQLite-only installs never load it.
   const { drizzle } =
     require('drizzle-orm/node-postgres') as typeof import('drizzle-orm/node-postgres');
   const pgSchema = require('../schema.pg.js');

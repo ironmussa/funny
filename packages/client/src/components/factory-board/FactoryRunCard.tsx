@@ -35,6 +35,7 @@ import {
   factoryRunTitle,
   isFactoryRunAwaitingMergeApproval,
 } from '@/lib/factory-run-labels';
+import type { PRState } from '@/lib/git-icons';
 import { useThreadById } from '@/lib/thread-selectors';
 import { timeAgo } from '@/lib/thread-utils';
 
@@ -43,6 +44,7 @@ import { FactoryBoardChip } from './FactoryBoardChip';
 import { FactoryRunDependencyNote } from './FactoryRunDependencyNote';
 import { FactoryRunGateChips } from './FactoryRunGateChips';
 import { type FactoryRunDependencyLookup, NO_FACTORY_RUN_DEPENDENCIES } from './run-dependencies';
+import { useFactoryRunPrState } from './run-pr-state';
 import { factoryBoardStateChip } from './run-state-chip';
 import { timeInCurrentStep } from './step-timings';
 import { FactoryRunTimeInStep } from './StepTimeBadges';
@@ -72,8 +74,12 @@ function withRunPullRequest(
   gitStatus: GitStatusInfo | undefined,
   run: Pick<FactoryQueueRun, 'prUrl' | 'state'>,
   threadId: string,
+  prState: PRState,
 ): GitStatusInfo | undefined {
-  if (gitStatus?.prNumber || !run.prUrl) return gitStatus;
+  if (!run.prUrl) return gitStatus;
+  // The branch lookup may still hold the PR as open after it was merged or
+  // closed; a merged or closed state the run knows wins over it.
+  if (gitStatus?.prNumber) return prState === 'OPEN' ? gitStatus : { ...gitStatus, prState };
   const prNumber = Number(run.prUrl.match(/\/pull\/(\d+)/)?.[1]);
   if (!prNumber) return gitStatus;
   return {
@@ -91,7 +97,7 @@ function withRunPullRequest(
     }),
     prNumber,
     prUrl: run.prUrl,
-    prState: run.state === 'merged' ? 'MERGED' : 'OPEN',
+    prState,
   };
 }
 
@@ -267,6 +273,7 @@ function QueuedFactoryRunCard({
   const { t } = useTranslation();
   const [menuOpen, setMenuOpen] = useState(false);
   const prNumber = run.prUrl ? pullRequestNumber(run.prUrl) : null;
+  const prState = useFactoryRunPrState(run);
   return (
     <BoardCard
       testId={testId}
@@ -285,7 +292,7 @@ function QueuedFactoryRunCard({
           {prNumber !== null && (
             <PRBadge
               prNumber={prNumber}
-              prState={run.state === 'merged' ? 'MERGED' : 'OPEN'}
+              prState={prState}
               prUrl={run.prUrl ?? undefined}
               variant="plain"
               size="compact"
@@ -325,6 +332,7 @@ export const FactoryRunCard = memo(function FactoryRunCard({
   const threadId = factoryRunCardThread(run);
   const thread = useThreadById(threadId);
   const gitStatus = useGitStatusForThread(thread?.id);
+  const prState = useFactoryRunPrState(run);
   const open = () => onSelect(run);
   const testId = `factory-board-card-${run.id}`;
   const { actions, dialog } = useFactoryRunActions(run.projectId, run);
@@ -367,7 +375,7 @@ export const FactoryRunCard = memo(function FactoryRunCard({
       thread={thread}
       projectInfo={projectName ? { name: projectName } : undefined}
       stage={thread.stage ?? 'in_progress'}
-      gitStatus={withRunPullRequest(gitStatus, run, thread.id)}
+      gitStatus={withRunPullRequest(gitStatus, run, thread.id, prState)}
       onOpen={open}
       draggable={false}
       testId={testId}

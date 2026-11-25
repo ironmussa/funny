@@ -72,6 +72,8 @@ interface Props {
   status?: ReactNode;
   /** Replaces the footer's powerline (the factory board: links to the run's threads). */
   footerLead?: ReactNode;
+  /** What a board adds under the footer line (the factory board: what the run blocks). */
+  below?: ReactNode;
 }
 
 /** Scrolls a highlighted card into view and makes the card draggable between columns. */
@@ -278,6 +280,7 @@ export const KanbanCard = memo(function KanbanCard({
   title: titleProp,
   status,
   footerLead,
+  below,
 }: Props) {
   const title = titleProp ?? thread.title;
   const { t } = useTranslation();
@@ -337,6 +340,7 @@ export const KanbanCard = memo(function KanbanCard({
           badgeTestId={`kanban-card-attachments-${thread.id}`}
         />
       }
+      below={below}
       footer={
         <KanbanCardFooter
           thread={thread}

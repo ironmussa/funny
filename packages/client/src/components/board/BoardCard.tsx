@@ -28,6 +28,8 @@ interface Props {
   footer?: ReactNode;
   /** The time at the end of the footer line. */
   time: ReactNode;
+  /** What the board adds under the footer line (the factory board: what the run blocks). */
+  below?: ReactNode;
   /** What replaces the time on hover (a menu); keep it shown with `actionsOpen`. */
   actions?: ReactNode;
   actionsOpen?: boolean;
@@ -45,6 +47,7 @@ export function BoardCard({
   children,
   footer,
   time,
+  below,
   actions,
   actionsOpen = false,
   className,
@@ -81,8 +84,9 @@ export function BoardCard({
         <div className="text-muted-foreground flex min-w-0 flex-1 items-center gap-1.5 text-xs">
           {footer}
         </div>
-        {/* `-my-1`: the hover menu's button is taller than the line and must not grow it. */}
-        <div className="-my-1 grid shrink-0 place-items-center justify-items-end">
+        {/* `-my-1.5`: the hover menu's button (`size-7`) is taller than the line (`h-4`) and
+            must not grow it, or the footer sits further from its neighbours than they do. */}
+        <div className="-my-1.5 grid shrink-0 place-items-center justify-items-end">
           <span
             className={cn(
               'text-muted-foreground col-start-1 row-start-1 h-4 text-xs leading-4',
@@ -104,6 +108,7 @@ export function BoardCard({
           )}
         </div>
       </div>
+      {below}
     </div>
   );
 }

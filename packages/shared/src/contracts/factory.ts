@@ -435,6 +435,12 @@ export interface FactoryRun {
   flowCommit: string | null;
   /** The options each agent step ran with, in the order the steps started. */
   stepOptions: FactoryStepOptionsRecord[];
+  /**
+   * The read-only role threads (triage, review) the run started, recorded as
+   * each one starts: the run's answers (`triage`, `reviews`) name a thread only
+   * once it has answered, so a role still working is found here.
+   */
+  roleThreads: FactoryRoleThread[];
   /** A member's approval to merge its high-risk head commit, or null. */
   mergeApproval: FactoryMergeApproval | null;
   /** A member's statement that the run is a lint cleanup, or null. */
@@ -485,6 +491,16 @@ export const factoryStepOptionsRecordSchema = z.object({
 });
 
 export type FactoryStepOptionsRecord = z.infer<typeof factoryStepOptionsRecordSchema>;
+
+/** A read-only role thread a run started, as the run stores it. */
+export const factoryRoleThreadSchema = z.object({
+  role: z.enum(['triage', 'review']),
+  threadId: z.string(),
+  /** When the run started (or adopted) the thread. */
+  startedAt: z.string(),
+});
+
+export type FactoryRoleThread = z.infer<typeof factoryRoleThreadSchema>;
 
 /**
  * The run's implementing thread as it stands: the last thread a step of the

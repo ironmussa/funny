@@ -434,6 +434,7 @@ export function createTestDb() {
       stacked_on TEXT,
       merge_approval TEXT,
       risk_waiver TEXT,
+      role_threads TEXT,
       issue_title TEXT,
       trigger_id TEXT,
       trigger_name TEXT,

@@ -239,6 +239,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       flow: flow.value,
       projectDefaults,
       stepOptions,
+      roleThreads: [...job.run.roleThreads],
       record,
       legacyReplay: replaysRecordedThreads(journaled.value.length, job.run),
     });

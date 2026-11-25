@@ -2569,6 +2569,14 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    // The role threads (triage, review) a run started, recorded as each one
+    // starts: the board links a triage or a review still working to its thread.
+    name: '135_factory_runs_role_threads',
+    async up() {
+      await ctx().addColumn('factory_runs', 'role_threads', 'TEXT');
+    },
+  },
 ];
 
 /**

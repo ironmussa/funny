@@ -997,6 +997,36 @@ export function createFactoryRunsRepository(
       storage,
     ).map((rows) => rows.map(toView));
 
+  /**
+   * Rewrite the run's merge approval while it is still the approval of `sha`:
+   * read it, then write `rewrite`'s answer only if the stored value did not
+   * change (a compare-and-set). Resolves whether it was written.
+   */
+  const rewriteMergeApproval = (
+    runId: string,
+    sha: string,
+    rewrite: (approval: FactoryMergeApproval) => FactoryMergeApproval,
+  ): ResultAsync<boolean, FactoryRunsError> =>
+    ResultAsync.fromPromise(
+      db
+        .select({ mergeApproval: factoryRuns.mergeApproval })
+        .from(factoryRuns)
+        .where(eq(factoryRuns.id, runId)),
+      storage,
+    ).andThen((rows) => {
+      const stored = rows[0]?.mergeApproval ?? null;
+      const approval = parseMergeApproval(stored);
+      if (!stored || approval?.sha !== sha) return okAsync(false);
+      return ResultAsync.fromPromise(
+        db
+          .update(factoryRuns)
+          .set({ mergeApproval: JSON.stringify(rewrite(approval)) })
+          .where(and(eq(factoryRuns.id, runId), eq(factoryRuns.mergeApproval, stored)))
+          .returning({ id: factoryRuns.id }),
+        storage,
+      ).map((updated) => updated.length > 0);
+    });
+
   /** Insert a run row as given. */
   const insertRun = (input: StartRunInput): ResultAsync<FactoryRunView, FactoryRunsError> => {
     const state = input.state ?? 'queued';
@@ -1410,9 +1440,7 @@ export function createFactoryRunsRepository(
 
     /**
      * Move the run's merge approval of `from` to `to`, which holds the same
-     * change or a small adjustment of it (the caller verified that; `move` says
-     * which, a merge of the base that settled nothing by default). Nothing
-     * happens unless the stored approval is of `from`: a compare-and-set on the
+     * change or one `approvalCovers` found covered. A compare-and-set on the
      * stored value, so a new approval written meanwhile is kept. Resolves
      * whether it moved.
      */
@@ -1422,42 +1450,22 @@ export function createFactoryRunsRepository(
       to: string,
       move: Pick<FactoryApprovalMove, 'kind' | 'lines' | 'files'> = SAME_CHANGE,
     ): ResultAsync<boolean, FactoryRunsError> {
-      return ResultAsync.fromPromise(
-        db
-          .select({ mergeApproval: factoryRuns.mergeApproval })
-          .from(factoryRuns)
-          .where(eq(factoryRuns.id, runId)),
-        storage,
-      ).andThen((rows) => {
-        const stored = rows[0]?.mergeApproval ?? null;
-        const approval = parseMergeApproval(stored);
-        if (!stored || approval?.sha !== from) return okAsync(false);
-        // The gap was about a commit the approval did not cover: it covers this one.
-        const { gap: _covered, ...kept } = approval;
-        const carried: FactoryMergeApproval = {
-          ...kept,
-          sha: to,
-          carriedFrom: approval.carriedFrom ?? from,
-          moves: [
-            ...(approval.moves ?? []),
-            {
-              to,
-              at: new Date().toISOString(),
-              kind: move.kind,
-              lines: move.lines,
-              files: move.files.slice(0, MAX_MOVE_FILES),
-            },
-          ],
-        };
-        return ResultAsync.fromPromise(
-          db
-            .update(factoryRuns)
-            .set({ mergeApproval: JSON.stringify(carried) })
-            .where(and(eq(factoryRuns.id, runId), eq(factoryRuns.mergeApproval, stored)))
-            .returning({ id: factoryRuns.id }),
-          storage,
-        ).map((updated) => updated.length > 0);
-      });
+      // The gap was about a commit the approval did not cover: it covers this one.
+      return rewriteMergeApproval(runId, from, ({ gap: _covered, ...approval }) => ({
+        ...approval,
+        sha: to,
+        carriedFrom: approval.carriedFrom ?? from,
+        moves: [
+          ...(approval.moves ?? []),
+          {
+            to,
+            at: new Date().toISOString(),
+            kind: move.kind,
+            lines: move.lines,
+            files: move.files.slice(0, MAX_MOVE_FILES),
+          },
+        ],
+      }));
     },
 
     /**
@@ -1471,25 +1479,7 @@ export function createFactoryRunsRepository(
       approved: string,
       gap: FactoryApprovalGap,
     ): ResultAsync<boolean, FactoryRunsError> {
-      return ResultAsync.fromPromise(
-        db
-          .select({ mergeApproval: factoryRuns.mergeApproval })
-          .from(factoryRuns)
-          .where(eq(factoryRuns.id, runId)),
-        storage,
-      ).andThen((rows) => {
-        const stored = rows[0]?.mergeApproval ?? null;
-        const approval = parseMergeApproval(stored);
-        if (!stored || approval?.sha !== approved) return okAsync(false);
-        return ResultAsync.fromPromise(
-          db
-            .update(factoryRuns)
-            .set({ mergeApproval: JSON.stringify({ ...approval, gap }) })
-            .where(and(eq(factoryRuns.id, runId), eq(factoryRuns.mergeApproval, stored)))
-            .returning({ id: factoryRuns.id }),
-          storage,
-        ).map((updated) => updated.length > 0);
-      });
+      return rewriteMergeApproval(runId, approved, (approval) => ({ ...approval, gap }));
     },
 
     /** The parked or failed runs a thread belongs to (a member following up on it). */

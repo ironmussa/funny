@@ -640,7 +640,7 @@ const WORKING_ON_PATHS: ReadonlySet<string> = new Set([
  * factory-merge-fewer-bounces, D6): an approval nobody gives must not block
  * its files for good.
  */
-export const APPROVAL_PATH_HOLD_MS = 12 * 60 * 60 * 1000;
+const APPROVAL_PATH_HOLD_MS = 12 * 60 * 60 * 1000;
 
 /** A run as `busyPathsOf` reads it. */
 export interface PathHolder {
@@ -692,12 +692,21 @@ export function busyPathsOf(
     if (run.id === stackedOnRunId || run.stackedOn?.runId === exceptRunId) return [];
     // A run without an issue has no triage contract, so no likely paths.
     if (run.issueNumber === null || run.id === exceptRunId) return [];
-    const awaitingApproval = approvalHold !== null && awaitsApprovalAt(run, approvalHold.now);
-    if (!takesPaths(run.state) && !awaitingApproval) return [];
-    const paths = readyPathsOf(run.triage);
-    if (paths.length === 0) return [];
-    return [{ issue: run.issueNumber, paths, ...(awaitingApproval && { awaitingApproval }) }];
+    const held = pathsTakenBy(run, approvalHold);
+    return held ? [{ issue: run.issueNumber, ...held }] : [];
   });
+}
+
+/** The paths `run` takes: while it changes files, or while it waits for an approval the factory holds them for. */
+function pathsTakenBy(
+  run: PathHolder,
+  approvalHold: { now: number } | null,
+): Omit<BusyPaths, 'issue'> | null {
+  const awaitingApproval = approvalHold !== null && awaitsApprovalAt(run, approvalHold.now);
+  if (!takesPaths(run.state) && !awaitingApproval) return null;
+  const paths = readyPathsOf(run.triage);
+  if (paths.length === 0) return null;
+  return awaitingApproval ? { paths, awaitingApproval } : { paths };
 }
 
 /**

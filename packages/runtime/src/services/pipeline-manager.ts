@@ -553,10 +553,12 @@ export async function cleanupReviewerThread(
 
 // ── Verdict parser ──────────────────────────────────────────
 
-export function parseReviewVerdict(content: string): {
+interface ReviewVerdict {
   verdict: PipelineVerdict;
   findings: unknown;
-} {
+}
+
+export function parseReviewVerdict(content: string): ReviewVerdict {
   const jsonMatch = content.match(/```json\s*([\s\S]*?)```/);
   if (jsonMatch) {
     try {

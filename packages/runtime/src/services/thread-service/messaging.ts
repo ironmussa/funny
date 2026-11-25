@@ -484,12 +484,17 @@ async function buildMessageContents(
  * This avoids the double-render bug where the stored message and the
  * client-side dequeue buffer both surface the same content twice.
  */
+interface FollowUpDelivery {
+  willQueue: boolean;
+  steer: boolean;
+}
+
 function decideFollowUpDelivery(
   params: SendMessageParams,
   thread: SendThread,
   project: SendProject | null,
   effectiveProvider: AgentProvider,
-): { willQueue: boolean; steer: boolean } {
+): FollowUpDelivery {
   const followUpMode = followUpModeFor(project);
   const turnInFlight = isTurnInFlight(params.threadId, thread.status);
 

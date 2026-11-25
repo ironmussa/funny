@@ -322,8 +322,18 @@ app.post('/write', async (c) => {
   return c.json({ ok: true });
 });
 
+/** File extensions (lowercase, no dot) to MIME types. */
+interface MimeTypes {
+  readonly [extension: string]: string;
+}
+
+/** HTTP header names to values. */
+interface RawFileHeaders {
+  [name: string]: string;
+}
+
 /** Map common extensions to MIME types for the /raw endpoint. */
-const EXT_TO_MIME: Record<string, string> = {
+const EXT_TO_MIME: MimeTypes = {
   png: 'image/png',
   jpg: 'image/jpeg',
   jpeg: 'image/jpeg',
@@ -357,12 +367,12 @@ const EXT_TO_MIME: Record<string, string> = {
 /**
  * Response headers for a raw file, from its (canonical) path. Exported for tests.
  */
-export function rawFileHeaders(filePath: string): Record<string, string> {
+export function rawFileHeaders(filePath: string): RawFileHeaders {
   const ext = filePath.includes('.')
     ? filePath.substring(filePath.lastIndexOf('.') + 1).toLowerCase()
     : '';
   const contentType = EXT_TO_MIME[ext] ?? 'application/octet-stream';
-  const headers: Record<string, string> = {
+  const headers: RawFileHeaders = {
     'Content-Type': contentType,
     'Cache-Control': 'private, max-age=60',
     'Content-Disposition': `inline; filename="${encodeURIComponent(basename(filePath))}"`,

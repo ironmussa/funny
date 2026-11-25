@@ -37,10 +37,14 @@ interface PluginJson {
   author?: { name: string; email?: string };
 }
 
+interface CommandFrontmatter {
+  description?: string;
+}
+
 /**
  * Parse YAML frontmatter from a command .md file to extract description.
  */
-function parseCommandFrontmatter(mdPath: string): { description?: string } {
+function parseCommandFrontmatter(mdPath: string): CommandFrontmatter {
   if (!existsSync(mdPath)) return {};
 
   try {

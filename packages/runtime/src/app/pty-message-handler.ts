@@ -220,8 +220,13 @@ function handlePtySpawn(data: any, userId: string, send: (msg: any) => void): vo
     });
 }
 
+/** Signal names a client may send, to their numbers. */
+interface SignalNumbers {
+  readonly [signal: string]: number;
+}
+
 function handlePtySignal(data: any): void {
-  const VALID_SIGNALS: Record<string, number> = {
+  const VALID_SIGNALS: SignalNumbers = {
     SIGINT: 2,
     SIGTERM: 15,
     SIGKILL: 9,

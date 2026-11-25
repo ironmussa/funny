@@ -259,15 +259,6 @@ export function SkillsSettings() {
     });
   }, []);
 
-  const loadRecommended = useCallback(async () => {
-    const result = await api.getRecommendedSkills();
-    if (result.isOk()) {
-      // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
-      setRecommended(result.value.skills as unknown as RecommendedSkill[]);
-    }
-    // Silently fail
-  }, []);
-
   useEffect(() => {
     loadSkills();
   }, [loadSkills]);
@@ -277,8 +268,14 @@ export function SkillsSettings() {
   }, [loadPlugins]);
 
   useEffect(() => {
-    loadRecommended();
-  }, [loadRecommended]);
+    void api.getRecommendedSkills().then((result) => {
+      if (result.isOk()) {
+        // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
+        setRecommended(result.value.skills as unknown as RecommendedSkill[]);
+      }
+      // Silently fail
+    });
+  }, []);
 
   const handleRemove = async (name: string) => {
     setRemovingName(name);

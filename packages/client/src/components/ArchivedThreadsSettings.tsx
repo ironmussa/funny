@@ -19,6 +19,8 @@ import { useThreadStore } from '@/stores/thread-store';
 
 const PAGE_SIZE = 100;
 
+const archivedKey = (projectId: string | null, search: string) => `${projectId ?? ''}|${search}`;
+
 export function ArchivedThreadsSettings() {
   const { t } = useTranslation();
   const projects = useProjects();
@@ -27,7 +29,9 @@ export function ArchivedThreadsSettings() {
   const { statusByBranch, threadToBranchKey } = useGitStatusMaps();
   const [threads, setThreads] = useState<Thread[]>([]);
   const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
+  // The project + query of the last first-page fetch that settled. The first
+  // page is loading whenever the current ones have not settled yet.
+  const [settledKey, setSettledKey] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -38,11 +42,9 @@ export function ArchivedThreadsSettings() {
   const projectMap = useMemo(() => Object.fromEntries(projects.map((p) => [p.id, p])), [projects]);
 
   // Fetch one page. page 1 replaces the list (initial load / new search);
-  // later pages append for infinite scroll.
+  // later pages append for infinite scroll (the caller sets `loadingMore`).
   const fetchArchived = useCallback(
     async (p: number, s: string) => {
-      if (p === 1) setLoading(true);
-      else setLoadingMore(true);
       return withCleanup(
         async () => {
           const result = await api.listArchivedThreads({
@@ -60,13 +62,15 @@ export function ArchivedThreadsSettings() {
           // silently ignore errors
         },
         () => {
-          setLoading(false);
+          if (p === 1) setSettledKey(archivedKey(selectedProjectId, s));
           setLoadingMore(false);
         },
       );
     },
     [selectedProjectId],
   );
+
+  const loading = settledKey !== archivedKey(selectedProjectId, debouncedSearch);
 
   // Reset to page 1 and refetch whenever the debounced query changes.
   useEffect(() => {
@@ -84,6 +88,7 @@ export function ArchivedThreadsSettings() {
     if (loading || loadingMore || threads.length >= total) return;
     const next = pageRef.current + 1;
     pageRef.current = next;
+    setLoadingMore(true);
     fetchArchived(next, debouncedSearch);
   }, [loading, loadingMore, threads.length, total, fetchArchived, debouncedSearch]);
 

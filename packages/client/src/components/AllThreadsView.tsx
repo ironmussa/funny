@@ -117,8 +117,12 @@ export function AllThreadsView() {
     return params;
   };
 
-  // Sync URL query params → local state when URL changes (e.g. browser back/forward)
-  useEffect(() => {
+  // Sync URL query params → local state when URL changes (e.g. browser back/forward).
+  // Adjusted during render (react.dev "you might not need an effect"): the state
+  // initializers above already read the first URL, so only a change is applied.
+  const [syncedSearchParams, setSyncedSearchParams] = useState(searchParams);
+  if (syncedSearchParams !== searchParams) {
+    setSyncedSearchParams(searchParams);
     const paramProject = searchParams.get('project') || null;
     const paramStatus = searchParams.get('status');
 
@@ -151,7 +155,7 @@ export function AllThreadsView() {
     if (paramDir === 'asc' || paramDir === 'desc') {
       setSortDir(paramDir);
     }
-  }, [searchParams]);
+  }
 
   const filteredProject = projectFilter ? projects.find((p) => p.id === projectFilter) : null;
 

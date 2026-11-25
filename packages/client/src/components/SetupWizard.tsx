@@ -71,29 +71,35 @@ function WelcomeSlide({ onNext }: { onNext: () => void }) {
   );
 }
 
+async function readCliStatus(): Promise<CliStatus> {
+  const result = await api.setupStatus();
+  if (result.isOk()) return result.value.claudeCli;
+  return {
+    available: false,
+    path: null,
+    error: 'server_unreachable',
+    version: null,
+  };
+}
+
 function ClaudeCheckSlide({ onNext }: { onNext: () => void }) {
   const [status, setStatus] = useState<CliStatus | null>(null);
   const [checking, setChecking] = useState(true);
 
-  const checkCli = useCallback(async () => {
-    setChecking(true);
-    const result = await api.setupStatus();
-    if (result.isOk()) {
-      setStatus(result.value.claudeCli);
-    } else {
-      setStatus({
-        available: false,
-        path: null,
-        error: 'server_unreachable',
-        version: null,
-      });
-    }
+  const showCliStatus = useCallback((cliStatus: CliStatus) => {
+    setStatus(cliStatus);
     setChecking(false);
   }, []);
 
+  const checkCli = useCallback(async () => {
+    setChecking(true);
+    showCliStatus(await readCliStatus());
+  }, [showCliStatus]);
+
+  // `checking` starts true, so the first check only has to show its result.
   useEffect(() => {
-    checkCli();
-  }, [checkCli]);
+    void readCliStatus().then(showCliStatus);
+  }, [showCliStatus]);
 
   return (
     <>

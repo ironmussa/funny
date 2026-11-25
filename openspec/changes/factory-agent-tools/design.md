@@ -96,7 +96,7 @@ _Alternative: block until the member answers._ Rejected: a member may answer hou
 
 `factory.approvalRequests({ projectId })` returns the caller's own requests, newest first. The client reads it through `data/factory/` as a query, polled every 15 seconds while shown, like the run list (the factory sends no realtime events today). Only a thread of a project where the caller has a factory polls, and only a board card of a run that waits for an approval.
 
-The thread view renders one card per pending request whose `threadId` is the open thread, after the factory run's own cards in the message stream. A closed request shows no card. `FactoryRunCard` shows a small marker ("an agent asked for your approval") next to its existing approve button. Both use shadcn components, `LabelBadge` for the risk class and state, monospace for the commit, and carry `data-testid`s (`factory-approval-card-{id}`, `factory-approval-approve-{id}`, `factory-approval-decline-{id}`).
+The thread view renders one card per request whose `threadId` is the open thread, as a timeline card (`lib/factory-timeline.ts`) at the time the agent asked: below the latest turn until the thread goes on, then among the messages. An answered request keeps its card as a record. An approved one says what the run is doing now (its state and why it waits), because an approved run may still queue behind a run that changes the same files. `FactoryRunCard` shows a small marker ("an agent asked for your approval") next to its existing approve button. Both use shadcn components, `LabelBadge` for the risk class and state, monospace for the commit, and carry `data-testid`s (`factory-approval-card-{id}`, `factory-approval-approve-{id}`, `factory-approval-decline-{id}`).
 
 The card is shown only to the factory's owner. A steer sharee viewing the thread sees nothing (the query is scoped by factory owner).
 
@@ -122,4 +122,4 @@ The card is shown only to the factory's owner. A steer sharee viewing the thread
 
 ## Open Questions
 
-- Whether a resolved request should stay in the thread as history. The first version shows pending requests only; the record keeps the rest.
+- Whether the card should also say who answered when a team shares a factory. Today a factory has one owner, so "you" is always right.

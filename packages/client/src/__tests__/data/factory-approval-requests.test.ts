@@ -23,8 +23,7 @@ mock.module('@/lib/api/factory', () => ({ factoryApi: api }));
 
 const { approveFactoryMerge, declineFactoryApprovalRequest } =
   await import('@/data/factory/actions');
-const { useFactoryApprovalRequests, usePendingApprovalRequestsOfThread } =
-  await import('@/data/factory/hooks');
+const { useFactoryApprovalRequests } = await import('@/data/factory/hooks');
 const { buildFactoryRun } = await import('@/data/factory/testing');
 
 const pending: FactoryApprovalRequest = {
@@ -54,19 +53,21 @@ describe('factory approval requests', () => {
     expect(api.listApprovalRequests).not.toHaveBeenCalled();
   });
 
-  test("a thread reads its own pending requests, and a decline records the server's answer", async () => {
-    api.listApprovalRequests.mockReturnValue(
-      okAsync([pending, { ...pending, id: 'q2', threadId: 't-other' }]),
-    );
+  test("a decline records the server's answer, and the request stays listed", async () => {
+    api.listApprovalRequests.mockReturnValue(okAsync([pending]));
     api.declineApprovalRequest.mockReturnValue(okAsync({ ...pending, state: 'declined' }));
-    const { result } = renderHook(() => usePendingApprovalRequestsOfThread('p1', 't1'));
-    await waitFor(() => expect(result.current.map((request) => request.id)).toEqual(['q1']));
+    const { result } = renderHook(() => useFactoryApprovalRequests('p1'));
+    await waitFor(() =>
+      expect(result.current?.map((request) => request.state)).toEqual(['pending']),
+    );
 
     await act(async () => {
       expect((await declineFactoryApprovalRequest('p1', 'q1')).isOk()).toBe(true);
     });
     expect(api.declineApprovalRequest).toHaveBeenCalledWith('p1', 'q1');
-    await waitFor(() => expect(result.current).toEqual([]));
+    await waitFor(() =>
+      expect(result.current?.map((request) => request.state)).toEqual(['declined']),
+    );
   });
 
   test('a refused decline leaves the request as it was', async () => {
@@ -74,12 +75,12 @@ describe('factory approval requests', () => {
     api.declineApprovalRequest.mockReturnValue(
       errAsync({ type: 'CONFLICT', message: 'no longer pending' }),
     );
-    const { result } = renderHook(() => usePendingApprovalRequestsOfThread('p1', 't1'));
+    const { result } = renderHook(() => useFactoryApprovalRequests('p1'));
     await waitFor(() => expect(result.current).toHaveLength(1));
     await act(async () => {
       expect((await declineFactoryApprovalRequest('p1', 'q1')).isErr()).toBe(true);
     });
-    expect(result.current.map((request) => request.state)).toEqual(['pending']);
+    expect(result.current?.map((request) => request.state)).toEqual(['pending']);
   });
 
   test('approving a run names the commit and reads the requests again', async () => {
@@ -87,13 +88,15 @@ describe('factory approval requests', () => {
       .mockReturnValueOnce(okAsync([pending]))
       .mockReturnValue(okAsync([{ ...pending, state: 'approved' }]));
     api.approveMerge.mockReturnValue(okAsync(buildFactoryRun({ id: 'r1', state: 'queued' })));
-    const { result } = renderHook(() => usePendingApprovalRequestsOfThread('p1', 't1'));
+    const { result } = renderHook(() => useFactoryApprovalRequests('p1'));
     await waitFor(() => expect(result.current).toHaveLength(1));
 
     await act(async () => {
       await approveFactoryMerge('p1', 'r1', pending.sha);
     });
     expect(api.approveMerge).toHaveBeenCalledWith('p1', 'r1', pending.sha);
-    await waitFor(() => expect(result.current).toEqual([]));
+    await waitFor(() =>
+      expect(result.current?.map((request) => request.state)).toEqual(['approved']),
+    );
   });
 });

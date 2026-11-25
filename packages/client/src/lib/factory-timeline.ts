@@ -4,11 +4,11 @@
  * messages like any other event. A card newer than every loaded message stays
  * below the latest turn's status, where it happened.
  */
-import type { FactoryRun } from '@funny/shared/contracts/factory';
+import type { FactoryApprovalRequest, FactoryRun } from '@funny/shared/contracts/factory';
 
 import { isFactoryRunFailed, isFactoryRunNoChange } from './factory-run-labels';
 
-export type FactoryCardKind = 'proof' | 'failure';
+export type FactoryCardKind = 'proof' | 'failure' | 'approval-request';
 
 export interface FactoryTimelineCard {
   kind: FactoryCardKind;
@@ -16,6 +16,38 @@ export interface FactoryTimelineCard {
   at: string | null;
   projectId: string;
   threadId: string;
+  /** The request an `approval-request` card shows. */
+  requestId?: string;
+}
+
+/** A card's identity in a list: a thread may hold several approval requests. */
+export function factoryCardKey(card: Pick<FactoryTimelineCard, 'kind' | 'requestId'>): string {
+  return card.requestId ? `${card.kind}-${card.requestId}` : card.kind;
+}
+
+/**
+ * The cards of what the agent of a thread asked the member to approve
+ * (openspec factory-agent-tools): one per request, at the time it was made,
+ * and kept once it is answered so the thread records what was asked.
+ */
+export function approvalRequestCards(
+  requests: ReadonlyArray<Pick<FactoryApprovalRequest, 'id' | 'createdAt' | 'threadId'>>,
+  ids: { projectId: string; threadId: string },
+): FactoryTimelineCard[] {
+  return requests
+    .flatMap((request) =>
+      request.threadId === ids.threadId
+        ? [
+            {
+              kind: 'approval-request' as const,
+              at: request.createdAt,
+              requestId: request.id,
+              ...ids,
+            },
+          ]
+        : [],
+    )
+    .sort((a, b) => a.at.localeCompare(b.at));
 }
 
 type CardRun = Pick<

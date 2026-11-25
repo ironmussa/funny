@@ -1,5 +1,6 @@
 import { execute, getRemoteUrl } from '@funny/core/git';
 import type { GitHubIssue, PRIssueComment, PRReactionSummary } from '@funny/shared';
+import type { JsonValue } from '@funny/shared/json-validation';
 import type { Context } from 'hono';
 import type { ContentfulStatusCode } from 'hono/utils/http-status';
 
@@ -132,10 +133,16 @@ export async function githubApiFetch(
   return res;
 }
 
+/**
+ * A GraphQL variable as sent in the JSON request body. `undefined` drops the
+ * variable from the body, which GraphQL reads as "not provided".
+ */
+type GraphQLVariableValue = string | number | boolean | null | undefined | readonly string[];
+
 /** Run a GitHub GraphQL query. Returns parsed `data` or throws. */
 export async function githubGraphQL<T = any>(
   query: string,
-  variables: Record<string, unknown>,
+  variables: Record<string, GraphQLVariableValue>,
   token: string,
 ): Promise<T> {
   const res = await fetch('https://api.github.com/graphql', {
@@ -238,12 +245,15 @@ export function mapIssueComment(cm: any): PRIssueComment {
   };
 }
 
+/** A JSON request body for the GitHub REST API. */
+type GithubJsonBody = { [key: string]: JsonValue };
+
 /** Send a JSON body to the GitHub REST API (POST / PATCH / PUT / DELETE). */
 export function sendGithubJson(
   path: string,
   token: string,
   method: 'POST' | 'PATCH' | 'PUT' | 'DELETE',
-  payload: unknown,
+  payload: GithubJsonBody,
 ): Promise<Response> {
   return githubApiFetch(path, token, {
     method,

@@ -684,6 +684,31 @@ pub struct JobDeleteByThread {
     #[prost(string, tag="1")]
     pub thread_id: ::prost::alloc::string::String,
 }
+/// factory-agent-tools: what an agent in a thread may do on its owner's issue
+/// factory. The server takes the actor and the project from the thread's row.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct FactoryListRuns {
+    #[prost(string, tag="1")]
+    pub thread_id: ::prost::alloc::string::String,
+}
+/// `action` is `retry` or `stop`; anything else is refused.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct FactoryControlRun {
+    #[prost(string, tag="1")]
+    pub thread_id: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub run_id: ::prost::alloc::string::String,
+    #[prost(string, tag="3")]
+    pub action: ::prost::alloc::string::String,
+}
+/// Asks the member to approve a held merge. It never approves one.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct FactoryRequestApproval {
+    #[prost(string, tag="1")]
+    pub thread_id: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub run_id: ::prost::alloc::string::String,
+}
 /// Background activities (track-background-activities). The server takes the
 /// user and runner from the session, never from the payload.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -736,7 +761,7 @@ pub struct OperationsRequest {
     pub session: ::core::option::Option<SessionContext>,
     #[prost(message, optional, tag="2")]
     pub metadata: ::core::option::Option<RequestMetadata>,
-    #[prost(oneof="operations_request::Operation", tags="10, 11, 12, 13, 14, 15, 16, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89")]
+    #[prost(oneof="operations_request::Operation", tags="10, 11, 12, 13, 14, 15, 16, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92")]
     pub operation: ::core::option::Option<operations_request::Operation>,
 }
 /// Nested message and enum types in `OperationsRequest`.
@@ -877,6 +902,12 @@ pub mod operations_request {
         ActivityUpdate(super::ActivityUpdate),
         #[prost(message, tag="89")]
         ActivityReconcile(super::ActivityReconcile),
+        #[prost(message, tag="90")]
+        FactoryListRuns(super::FactoryListRuns),
+        #[prost(message, tag="91")]
+        FactoryControlRun(super::FactoryControlRun),
+        #[prost(message, tag="92")]
+        FactoryRequestApproval(super::FactoryRequestApproval),
     }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]

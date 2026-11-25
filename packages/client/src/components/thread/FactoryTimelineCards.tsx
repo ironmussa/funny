@@ -1,15 +1,26 @@
 /**
- * A factory run's cards in its thread (proof, failure), placed by time: the
+ * A thread's factory cards (a run's proof and failure, and what the agent asked
+ * the member to approve), placed by time: the
  * message list renders the ones with messages after them, the stream renders
  * the newest below the latest turn's status (see `lib/factory-timeline.ts`).
  */
 import { useFactoryTimelineCards } from '@/hooks/use-factory-timeline-cards';
-import { isTrailingFactoryCard, type FactoryTimelineCard } from '@/lib/factory-timeline';
+import {
+  factoryCardKey,
+  isTrailingFactoryCard,
+  type FactoryTimelineCard,
+} from '@/lib/factory-timeline';
 
+import { FactoryApprovalRequestCard } from './FactoryApprovalRequestCard';
 import { FactoryRunFailure } from './FactoryRunFailureCard';
 import { FactoryRunProof } from './FactoryRunProofCard';
 
 export function FactoryTimelineCardView({ card }: { card: FactoryTimelineCard }) {
+  if (card.kind === 'approval-request') {
+    return card.requestId ? (
+      <FactoryApprovalRequestCard projectId={card.projectId} requestId={card.requestId} />
+    ) : null;
+  }
   return card.kind === 'proof' ? (
     <FactoryRunProof projectId={card.projectId} threadId={card.threadId} />
   ) : (
@@ -35,5 +46,5 @@ export function TrailingFactoryCards({
   const trailing = cards
     .filter((card) => isTrailingFactoryCard(card, messages))
     .sort((a, b) => (a.at ?? '￿').localeCompare(b.at ?? '￿'));
-  return trailing.map((card) => <FactoryTimelineCardView key={card.kind} card={card} />);
+  return trailing.map((card) => <FactoryTimelineCardView key={factoryCardKey(card)} card={card} />);
 }

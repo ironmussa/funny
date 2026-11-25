@@ -92,8 +92,12 @@ function CopyButton({ text }: { text: string }) {
   );
 }
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 function extractText(node: any): string {
-  if (typeof node === 'string') return node;
+  if (isString(node)) return node;
   if (!node) return '';
   if (Array.isArray(node)) return node.map(extractText).join('');
   if (node.props?.children) return extractText(node.props.children);
@@ -229,7 +233,7 @@ export const baseMarkdownComponents = {
   },
   // Drop the list marker on task-list items so the Checkbox stands alone.
   li: ({ className, children, ...props }: any) => {
-    const isTask = typeof className === 'string' && className.includes('task-list-item');
+    const isTask = isString(className) && className.includes('task-list-item');
     return (
       <li className={cn(className, isTask && 'list-none')} {...props}>
         {children}

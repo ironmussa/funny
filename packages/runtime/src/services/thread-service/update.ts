@@ -21,7 +21,7 @@ import { ResultAsync } from 'neverthrow';
 import { log } from '../../lib/logger.js';
 import { hydrateReferencedFiles } from '../../utils/file-mentions.js';
 import { startAgent, stopAgent, isAgentRunning } from '../agent-runner-control.js';
-import type { IProjectRepository } from '../server-interfaces.js';
+import type { IProjectRepository, RuntimeThreadUpdate } from '../server-interfaces.js';
 import { getServices } from '../service-registry.js';
 import { threadEventBus } from '../thread-event-bus.js';
 import * as tm from '../thread-manager.js';
@@ -53,7 +53,7 @@ async function updateThreadImpl(params: UpdateThreadParams) {
   const thread = await tm.getThread(params.threadId);
   if (!thread) throw new ThreadServiceError('Thread not found', 404);
 
-  const updates: Record<string, any> = {};
+  const updates: RuntimeThreadUpdate = {};
   if (params.title !== undefined) {
     updates.title = params.title;
   }

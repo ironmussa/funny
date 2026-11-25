@@ -83,7 +83,7 @@ describe('pipeline-manager CRUD', () => {
     );
     await expect(getPipelineById('pipe-1')).resolves.toEqual({ id: 'pipe-1' });
     await expect(getPipelinesByProject('p-1')).resolves.toEqual([{ id: 'pipe-1' }]);
-    await expect(updatePipeline('pipe-1', { enabled: false })).resolves.toBeUndefined();
+    await expect(updatePipeline('pipe-1', { enabled: 0 })).resolves.toBeUndefined();
     await expect(deletePipeline('pipe-1')).resolves.toBeUndefined();
   });
 });

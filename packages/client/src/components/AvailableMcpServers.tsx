@@ -42,6 +42,22 @@ function getMcpEndpoint(server: McpServer): string | null {
   return null;
 }
 
+/** True when a browser API (e.g. `requestIdleCallback`) exists as a function in this engine. */
+function isCallable(value: unknown): value is (...args: never[]) => void {
+  return typeof value === 'function';
+}
+
+/** Runs `run` when the browser is idle (or after `fallbackMs`), and returns its cancel. */
+function scheduleIdle(run: () => void, timeout: number, fallbackMs: number): () => void {
+  const id = isCallable(globalThis.requestIdleCallback)
+    ? requestIdleCallback(run, { timeout })
+    : window.setTimeout(run, fallbackMs);
+  return () => {
+    if (isCallable(globalThis.cancelIdleCallback)) cancelIdleCallback(id);
+    else window.clearTimeout(id);
+  };
+}
+
 export function AvailableMcpServers({
   projectPath,
   projectId,
@@ -79,16 +95,9 @@ export function AvailableMcpServers({
     // and is purely informational chrome below the composer — not needed for the
     // thread to be usable. Defer to idle so it doesn't hold a socket while the
     // on-screen thread is still loading its messages.
-    let idleId: number | undefined;
-    if (typeof requestIdleCallback === 'function') {
-      idleId = requestIdleCallback(() => void load(requestSeq), { timeout: 4000 });
-    } else {
-      idleId = window.setTimeout(() => void load(requestSeq), 500);
-    }
+    const cancelIdle = scheduleIdle(() => void load(requestSeq), 4000, 500);
     return () => {
-      if (idleId === undefined) return;
-      if (typeof cancelIdleCallback === 'function') cancelIdleCallback(idleId);
-      else window.clearTimeout(idleId);
+      cancelIdle();
       if (prevLoadKeyRef.current === loadKey) {
         prevLoadKeyRef.current = undefined;
       }

@@ -1,4 +1,4 @@
-import { RefreshCw, Hammer, CircleCheck, CircleX, Circle, Copy } from 'lucide-react';
+import { RefreshCw, Hammer, CircleCheck, CircleX, CircleIcon, Copy } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -201,7 +201,7 @@ export function SystemSettings() {
           {isBuilding && (
             <div className="mt-4 space-y-2">
               <div className="flex items-center gap-2">
-                <Circle className="fill-status-warning text-status-warning size-3 animate-pulse" />
+                <CircleIcon className="fill-status-warning text-status-warning size-3 animate-pulse" />
                 <span className="text-xs font-medium">Building…</span>
               </div>
             </div>
@@ -238,7 +238,7 @@ export function SystemSettings() {
           {/* Build output log */}
           {buildOutput && (
             <div className="mt-3">
-              <ScrollArea className="border-border bg-muted h-64 rounded border">
+              <ScrollArea variant="muted-outline" className="h-64">
                 <div
                   ref={scrollRef}
                   className="h-full overflow-y-auto p-3 font-mono text-xs leading-relaxed"
@@ -281,12 +281,7 @@ function BuildIdentityCard() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <p className="settings-row-title">Build</p>
-            <Badge
-              size="xxs"
-              variant="outline"
-              className="font-mono"
-              data-testid="system-build-number"
-            >
+            <Badge size="xxs" variant="outline" mono data-testid="system-build-number">
               {/* Canonical identity = short commit SHA. Identical in local and
                   in the Railway deploy for the same commit. */}
               {BUILD_INFO.commit}

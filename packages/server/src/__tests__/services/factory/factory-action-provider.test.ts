@@ -13,6 +13,8 @@ import * as telemetry from '../../../lib/telemetry.js';
 import {
   countCiResult,
   createFactoryActionProvider,
+  MAX_STALE_MERGES,
+  MERGE_HOLD_REASONS,
   NO_CHANGE_LINE,
   regressionTestRequired,
 } from '../../../services/factory/factory-action-provider.js';
@@ -526,6 +528,122 @@ describe('factory action provider merge gate', () => {
     const merged = await provider.merge({ regressionProof: proofConfig });
     expect(merged.ok).toBe(false);
     expect(merged.error).toContain('head moved');
+  });
+});
+
+describe('factory action provider: a merge refused while a branch moved (factory-merge-fewer-bounces)', () => {
+  const proofConfig = { rules: [{ globs: ['**/*.test.ts'], command: 'bun test {{files}}' }] };
+  const refused: FactoryMergeOutcome = {
+    kind: 'not-mergeable',
+    reason: 'GitHub answered 405 to PUT /repos/o/r/pulls/9/merge (Base branch was modified)',
+  };
+
+  /**
+   * A provider whose pull request head is `heads[0]`. Each refusal in
+   * `refusals` is answered to one merge; `afterRefusal` then says what moved.
+   */
+  function racing(opts: {
+    heads: string[];
+    refusals: number;
+    afterRefusal: (at: { head: number; behind: { by: number } }) => void;
+  }) {
+    const at = { head: 0, behind: { by: 0 } };
+    const merges: Array<string | undefined> = [];
+    const records: Array<Record<string, unknown>> = [];
+    let left = opts.refusals;
+    const head = () => opts.heads[Math.min(at.head, opts.heads.length - 1)];
+    const { provider } = providerWith({
+      threadIds: ['t1'],
+      prUrl: 'https://github.com/o/r/pull/9',
+      reviews: opts.heads.map(reviewed),
+      record: async (patch: Record<string, unknown>) => {
+        records.push(patch);
+      },
+      proof: {
+        startProof: async () => ok({ proofId: `p${merges.length}`, state: 'running' }),
+        pollProof: async () => ok({ state: 'done', result: { verdict: 'pass', headSha: head() } }),
+      },
+      github: {
+        branchAhead: () => okAsync(true),
+        commentOnIssue: () => okAsync(undefined),
+        findPullRequest: () => okAsync(null),
+        pullRequests: {
+          prState: () => okAsync('open' as const),
+          changedFiles: () => okAsync({ files: [], truncated: false }),
+          publishReview: () => okAsync({ status: true }),
+          baseDistance: () => okAsync({ behindBy: at.behind.by, aheadBy: 1 }),
+          updateBranch: () => okAsync({ kind: 'updating' as const }),
+          commitParents: () => okAsync([]),
+          baseChanges: () => okAsync({ commits: [], files: [] }),
+          mergeQueueRequired: () => okAsync(false),
+          enqueue: () => okAsync({ kind: 'queued' as const }),
+          queueState: () => okAsync('merged' as const),
+          pullHead: () => okAsync({ sha: head(), baseRef: 'main', autoMerge: false }),
+          publishProofCheck: () => okAsync(undefined),
+          ciState: () => okAsync({ kind: 'green' as const }),
+          merge: (_pr: unknown, options?: FactoryMergeOptions) => {
+            merges.push(options?.sha);
+            if (left > 0) {
+              left -= 1;
+              opts.afterRefusal(at);
+              return okAsync(refused);
+            }
+            return okAsync({
+              kind: 'merged' as const,
+              method: 'squash' as const,
+              branchDeleted: false,
+            });
+          },
+        },
+      },
+    });
+    return { provider, merges, records };
+  }
+
+  const parked = (records: Array<Record<string, unknown>>) =>
+    records.filter((patch) => patch.state === 'waiting_human');
+
+  test('the head moved: the new head is proved and merged, and the run never waits for a person', async () => {
+    const { provider, merges, records } = racing({
+      heads: ['sha-1', 'sha-2'],
+      refusals: 1,
+      afterRefusal: (at) => {
+        at.head += 1;
+      },
+    });
+    const merged = await provider.merge({ regressionProof: proofConfig });
+    expect(merged.ok).toBe(true);
+    expect(merges).toEqual(['sha-1', 'sha-2']);
+    expect(parked(records)).toHaveLength(0);
+  });
+
+  test('three refusals with a branch moved each time park the run saying so', async () => {
+    const { provider, merges, records } = racing({
+      heads: ['sha-1', 'sha-2', 'sha-3', 'sha-4'],
+      refusals: 3,
+      afterRefusal: (at) => {
+        at.head += 1;
+      },
+    });
+    const merged = await provider.merge({ regressionProof: proofConfig });
+    expect(merged.ok).toBe(false);
+    expect(merged.error).toContain(`refused the merge ${MAX_STALE_MERGES} times`);
+    expect(merges).toEqual(['sha-1', 'sha-2', 'sha-3']);
+    expect(parked(records)).toEqual([
+      { state: 'waiting_human', failureReason: MERGE_HOLD_REASONS.baseMoving },
+    ]);
+  });
+
+  test('a refusal with neither branch moved is not tried again', async () => {
+    const { provider, merges } = racing({
+      heads: ['sha-1'],
+      refusals: 1,
+      afterRefusal: () => undefined,
+    });
+    const merged = await provider.merge({ regressionProof: proofConfig });
+    expect(merged.ok).toBe(false);
+    expect(merged.error).toContain('Base branch was modified');
+    expect(merges).toEqual(['sha-1']);
   });
 });
 

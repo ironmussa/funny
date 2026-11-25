@@ -137,7 +137,10 @@ function createGrpcTransport(endpoint: string, token: string): RunnerGrpcTranspo
   };
 }
 
-function durationMilliseconds(value: unknown, fallback: number): number {
+/** A protobuf Duration as the wire carries it: JSON form (`"15s"`) or the message form. */
+type WireDuration = string | { seconds?: string | number; nanos?: number } | null | undefined;
+
+function durationMilliseconds(value: WireDuration, fallback: number): number {
   if (typeof value === 'string') {
     const match = /^(-?(?:\d+(?:\.\d+)?|\.\d+))s$/.exec(value);
     if (match) {
@@ -146,7 +149,7 @@ function durationMilliseconds(value: unknown, fallback: number): number {
     }
     return fallback;
   }
-  const duration = value as { seconds?: string | number; nanos?: number } | undefined;
+  const duration = value;
   if (!duration) return fallback;
   const milliseconds = Number(duration.seconds ?? 0) * 1_000 + Number(duration.nanos ?? 0) / 1e6;
   return Number.isFinite(milliseconds) && milliseconds > 0 ? milliseconds : fallback;
@@ -406,10 +409,10 @@ export class RunnerGrpcClient {
       delay,
       { unref: true },
     );
-    void this.reconnectTask.done.catch((error: unknown) => {
+    void this.reconnectTask.done.catch((cause: unknown) => {
       log.error('Runner gRPC reconnect failed', {
         namespace: 'runner-grpc',
-        error: error instanceof Error ? error.message : String(error),
+        error: cause instanceof Error ? cause.message : String(cause),
       });
     });
   }

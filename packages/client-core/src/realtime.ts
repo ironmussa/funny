@@ -87,6 +87,10 @@ function selectActionPort(type: string): keyof RealtimeActionPorts {
 /** A realtime event's payload fields, read before they are checked. */
 type EventPayload = Record<string, unknown>;
 
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
 function isRecord(value: unknown): value is EventPayload {
   return typeof value === 'object' && value !== null;
 }
@@ -101,7 +105,7 @@ function deriveEffects(event: RealtimeEvent): RealtimeEffect[] {
           type: 'agent-result',
           threadId: event.threadId,
           status,
-          errorReason: typeof data.errorReason === 'string' ? data.errorReason : undefined,
+          errorReason: isString(data.errorReason) ? data.errorReason : undefined,
         },
       ];
     }
@@ -111,7 +115,7 @@ function deriveEffects(event: RealtimeEvent): RealtimeEffect[] {
       {
         type: 'terminal-error',
         ptyId: String(data.ptyId ?? ''),
-        message: typeof data.error === 'string' ? data.error : 'Failed to create terminal',
+        message: isString(data.error) ? data.error : 'Failed to create terminal',
       },
     ];
   }
@@ -146,10 +150,9 @@ function deriveEffects(event: RealtimeEvent): RealtimeEffect[] {
         return [
           {
             type: 'hook-failed',
-            message:
-              typeof failedHook.error === 'string'
-                ? failedHook.error.slice(0, 120)
-                : 'A pre-commit hook did not pass',
+            message: isString(failedHook.error)
+              ? failedHook.error.slice(0, 120)
+              : 'A pre-commit hook did not pass',
           },
         ];
       }
@@ -235,12 +238,19 @@ export function createRealtimeController(options: {
 
 const ACTIVE_THREAD_STATUSES = new Set(['setting_up', 'pending', 'running', 'waiting']);
 
+/** The sidebar lists that hold an active thread, and so need a resync. */
+export interface SidebarResyncTargets {
+  projectIds: string[];
+  scratch: boolean;
+  shared: boolean;
+}
+
 export function getSidebarResyncTargets(state: {
   threadIdsByProject: Record<string, string[]>;
   threadsById: Record<string, { status?: string } | undefined>;
   scratchThreadIds: string[];
   sharedThreadIds: string[];
-}): { projectIds: string[]; scratch: boolean; shared: boolean } {
+}): SidebarResyncTargets {
   const active = (id: string): boolean =>
     ACTIVE_THREAD_STATUSES.has(state.threadsById[id]?.status ?? '');
   return {

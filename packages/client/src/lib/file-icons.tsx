@@ -5,51 +5,57 @@ addCollection(vscodeIcons);
 
 const DEFAULT_FILE_ICON = 'vscode-icons:default-file';
 
-const FILE_NAME_ICON_MAP: Record<string, string> = {
-  '.dockerignore': 'vscode-icons:file-type-docker',
-  '.env': 'vscode-icons:file-type-dotenv',
-  '.gitattributes': 'vscode-icons:file-type-git',
-  '.gitignore': 'vscode-icons:file-type-git',
-  '.gitmodules': 'vscode-icons:file-type-git',
-  'bun.lock': 'vscode-icons:file-type-bun',
-  'bunfig.toml': 'vscode-icons:file-type-bunfig',
-  containerfile: 'vscode-icons:file-type-docker',
-  dockerfile: 'vscode-icons:file-type-docker',
-  license: 'vscode-icons:file-type-license',
-  'package-lock.json': 'vscode-icons:file-type-npm',
-  'package.json': 'vscode-icons:file-type-node',
-  'pnpm-lock.yaml': 'vscode-icons:file-type-pnpm',
-  'pnpm-lock.yml': 'vscode-icons:file-type-pnpm',
-  'yarn.lock': 'vscode-icons:file-type-yarn',
-  'tsconfig.json': 'vscode-icons:file-type-tsconfig',
-};
+/** Iconify icon names, keyed by file name or extension. */
+const FILE_NAME_ICON_MAP = new Map<string, string>(
+  Object.entries({
+    '.dockerignore': 'vscode-icons:file-type-docker',
+    '.env': 'vscode-icons:file-type-dotenv',
+    '.gitattributes': 'vscode-icons:file-type-git',
+    '.gitignore': 'vscode-icons:file-type-git',
+    '.gitmodules': 'vscode-icons:file-type-git',
+    'bun.lock': 'vscode-icons:file-type-bun',
+    'bunfig.toml': 'vscode-icons:file-type-bunfig',
+    containerfile: 'vscode-icons:file-type-docker',
+    dockerfile: 'vscode-icons:file-type-docker',
+    license: 'vscode-icons:file-type-license',
+    'package-lock.json': 'vscode-icons:file-type-npm',
+    'package.json': 'vscode-icons:file-type-node',
+    'pnpm-lock.yaml': 'vscode-icons:file-type-pnpm',
+    'pnpm-lock.yml': 'vscode-icons:file-type-pnpm',
+    'yarn.lock': 'vscode-icons:file-type-yarn',
+    'tsconfig.json': 'vscode-icons:file-type-tsconfig',
+  } satisfies Record<string, string>),
+);
 
-const FILE_EXTENSION_ICON_MAP: Record<string, string> = {
-  cjs: 'vscode-icons:file-type-js',
-  css: 'vscode-icons:file-type-css',
-  go: 'vscode-icons:file-type-go',
-  html: 'vscode-icons:file-type-html',
-  ini: 'vscode-icons:file-type-ini',
-  js: 'vscode-icons:file-type-js',
-  json: 'vscode-icons:file-type-json',
-  jsx: 'vscode-icons:file-type-reactjs',
-  md: 'vscode-icons:file-type-markdown',
-  mjs: 'vscode-icons:file-type-js',
-  mdx: 'vscode-icons:file-type-mdx',
-  php: 'vscode-icons:file-type-php',
-  py: 'vscode-icons:file-type-python',
-  rs: 'vscode-icons:file-type-rust',
-  scss: 'vscode-icons:file-type-scss',
-  sh: 'vscode-icons:file-type-shell',
-  sql: 'vscode-icons:file-type-sql',
-  svg: 'vscode-icons:file-type-svg',
-  toml: 'vscode-icons:file-type-toml',
-  ts: 'vscode-icons:file-type-typescript',
-  tsx: 'vscode-icons:file-type-reactts',
-  xml: 'vscode-icons:file-type-xml',
-  yaml: 'vscode-icons:file-type-yaml',
-  yml: 'vscode-icons:file-type-yaml',
-};
+/** Iconify icon names, keyed by file name or extension. */
+const FILE_EXTENSION_ICON_MAP = new Map<string, string>(
+  Object.entries({
+    cjs: 'vscode-icons:file-type-js',
+    css: 'vscode-icons:file-type-css',
+    go: 'vscode-icons:file-type-go',
+    html: 'vscode-icons:file-type-html',
+    ini: 'vscode-icons:file-type-ini',
+    js: 'vscode-icons:file-type-js',
+    json: 'vscode-icons:file-type-json',
+    jsx: 'vscode-icons:file-type-reactjs',
+    md: 'vscode-icons:file-type-markdown',
+    mjs: 'vscode-icons:file-type-js',
+    mdx: 'vscode-icons:file-type-mdx',
+    php: 'vscode-icons:file-type-php',
+    py: 'vscode-icons:file-type-python',
+    rs: 'vscode-icons:file-type-rust',
+    scss: 'vscode-icons:file-type-scss',
+    sh: 'vscode-icons:file-type-shell',
+    sql: 'vscode-icons:file-type-sql',
+    svg: 'vscode-icons:file-type-svg',
+    toml: 'vscode-icons:file-type-toml',
+    ts: 'vscode-icons:file-type-typescript',
+    tsx: 'vscode-icons:file-type-reactts',
+    xml: 'vscode-icons:file-type-xml',
+    yaml: 'vscode-icons:file-type-yaml',
+    yml: 'vscode-icons:file-type-yaml',
+  } satisfies Record<string, string>),
+);
 
 function getFileIconName(filePath: string): string {
   const fileName = filePath.split('/').pop()?.toLowerCase() ?? '';
@@ -110,7 +116,7 @@ function getFileIconName(filePath: string): string {
     return 'vscode-icons:file-type-testts';
   }
 
-  const namedIcon = FILE_NAME_ICON_MAP[fileName];
+  const namedIcon = FILE_NAME_ICON_MAP.get(fileName);
   if (namedIcon) {
     return namedIcon;
   }
@@ -120,7 +126,7 @@ function getFileIconName(filePath: string): string {
     return DEFAULT_FILE_ICON;
   }
 
-  return FILE_EXTENSION_ICON_MAP[extension] ?? DEFAULT_FILE_ICON;
+  return FILE_EXTENSION_ICON_MAP.get(extension) ?? DEFAULT_FILE_ICON;
 }
 
 export function FileExtensionIcon({

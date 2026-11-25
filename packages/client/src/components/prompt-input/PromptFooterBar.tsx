@@ -165,6 +165,11 @@ function FooterLeading(props: FooterLeadingProps) {
   );
 }
 
+/** True for a number value. */
+function isNumber(value: number | undefined): value is number {
+  return typeof value === 'number';
+}
+
 /**
  * Bottom bar — powerline / new-thread controls + context usage. Sits visually
  * OUTSIDE the bordered prompt box. Skipped entirely when it would be empty
@@ -173,7 +178,7 @@ function FooterLeading(props: FooterLeadingProps) {
  */
 export function PromptFooterBar(props: PromptFooterBarProps) {
   const { contextPct, isNewThread } = props;
-  const hasContext = typeof contextPct === 'number';
+  const hasContext = isNumber(contextPct);
   const hasLeading = isNewThread
     ? props.runtimeModes.length > 1 || !!props.sandboxToggle
     : !!props.powerlineThread;

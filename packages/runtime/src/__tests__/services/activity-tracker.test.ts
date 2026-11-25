@@ -2,11 +2,17 @@ import { describe, expect, test } from 'bun:test';
 
 import { err, ok } from 'neverthrow';
 
-import { createActivityTracker } from '../../services/activity-tracker.js';
+import {
+  createActivityTracker,
+  type ActivityReportAnswer,
+  type ActivitySpec,
+} from '../../services/activity-tracker.js';
 
 type Report = { eventType: string; payload: any };
 
-function setup(respond: (r: Report, n: number) => Promise<unknown> = async () => ({ ok: true })) {
+function setup(
+  respond: (r: Report, n: number) => Promise<ActivityReportAnswer> = async () => ({ ok: true }),
+) {
   const reports: Report[] = [];
   const events: any[] = [];
   let n = 0;
@@ -124,7 +130,7 @@ describe('trackActivity', () => {
   });
 
   test('a refused terminal report is not retried', async () => {
-    const { tracker, reports } = setup(async (r) =>
+    const { tracker, reports } = setup(async (r): Promise<ActivityReportAnswer> =>
       r.eventType === 'data:activity_update' ? { success: false, error: 'Forbidden' } : {},
     );
     await tracker.trackActivity(SPEC, async () => ok(1));
@@ -182,13 +188,13 @@ describe('reconcile', () => {
 });
 
 describe('origin, effects and recordActivity (track-funny-actions)', () => {
-  const CLEANUP = {
-    kind: 'workspace.cleanup' as const,
+  const CLEANUP: ActivitySpec = {
+    kind: 'workspace.cleanup',
     userId: 'u1',
     projectId: 'p1',
     title: 'Clean up worktree',
     input: { reason: 'manual', deleteBranch: true },
-    origin: 'implicit' as const,
+    origin: 'implicit',
   };
 
   test('origin rides on the start; effects on the next report and the terminal one', async () => {

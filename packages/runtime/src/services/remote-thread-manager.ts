@@ -11,7 +11,7 @@
  * without any changes to the handler logic.
  */
 
-import type { IThreadManager } from './server-interfaces.js';
+import type { IThreadManager, RuntimeThreadUpdate } from './server-interfaces.js';
 
 /**
  * Creates a thread manager that delegates to the server via WebSocket.
@@ -23,7 +23,7 @@ export function createRemoteThreadManager(): IThreadManager {
       return remoteGetThread(id);
     },
 
-    async updateThread(id: string, updates: Record<string, any>) {
+    async updateThread(id: string, updates: RuntimeThreadUpdate) {
       const { remoteUpdateThread } = await import('./remote-thread-data-client.js');
       return remoteUpdateThread(id, updates);
     },

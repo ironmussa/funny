@@ -6,11 +6,13 @@
 const USER_ROLES = ['admin', 'user'] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 
+function isUserRole(value: string): value is UserRole {
+  return USER_ROLES.some((role) => role === value);
+}
+
 /** Narrow an untrusted value to a known UserRole, defaulting to 'user'. */
 export function normalizeUserRole(raw: unknown): UserRole {
-  return typeof raw === 'string' && (USER_ROLES as readonly string[]).includes(raw)
-    ? (raw as UserRole)
-    : 'user';
+  return typeof raw === 'string' && isUserRole(raw) ? raw : 'user';
 }
 
 /** Hono environment type for context variables set by auth middleware. */

@@ -85,10 +85,7 @@ export async function removeMember(projectId: string, userId: string): Promise<v
 }
 
 export async function listMembers(projectId: string): Promise<ProjectMember[]> {
-  return (await db
-    .select()
-    .from(projectMembers)
-    .where(eq(projectMembers.projectId, projectId))) as ProjectMember[];
+  return await db.select().from(projectMembers).where(eq(projectMembers.projectId, projectId));
 }
 
 /** Like {@link listMembers} but joins each member with their display fields. */
@@ -97,15 +94,10 @@ export async function listMembersWithUsers(projectId: string): Promise<ProjectMe
   if (members.length === 0) return [];
 
   const ids = members.map((m) => m.userId);
-  const users = (await db
+  const users = await db
     .select({ id: user.id, name: user.name, username: user.username, email: user.email })
     .from(user)
-    .where(inArray(user.id, ids))) as Array<{
-    id: string;
-    name: string;
-    username: string | null;
-    email: string;
-  }>;
+    .where(inArray(user.id, ids));
   const byId = new Map(users.map((u) => [u.id, u]));
 
   return members.map((m) => {
@@ -182,5 +174,5 @@ export async function getMemberLocalPath(
     .select({ localPath: projectMembers.localPath })
     .from(projectMembers)
     .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId)));
-  return (rows[0] as { localPath: string | null } | undefined)?.localPath ?? null;
+  return rows[0]?.localPath ?? null;
 }

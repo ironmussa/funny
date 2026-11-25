@@ -4,6 +4,7 @@ import webpush from 'web-push';
 
 import { db, dbAll, dbGet, dbRun } from '../db/index.js';
 import { pushSubscriptions, threads } from '../db/schema.js';
+import type { BrowserEvent } from './runner-ports.js';
 
 // The endpoint check is shared with the tRPC inputs (`@funny/shared/contracts/push`).
 export { isPushEndpoint };
@@ -66,6 +67,8 @@ export async function sendPush(
           );
           sent++;
         } catch (error) {
+          // SAFETY: webpush.sendNotification rejects only with an Error object (a WebPushError
+          // carries statusCode), so reading the field cannot throw.
           const status = (error as { statusCode?: number }).statusCode;
           if (status === 404 || status === 410)
             await removeSubscription(userId, subscription.endpoint);
@@ -76,8 +79,10 @@ export async function sendPush(
   return sent;
 }
 
-export async function pushAgentResult(userId: string, event: Record<string, unknown>) {
+export async function pushAgentResult(userId: string, event: BrowserEvent) {
   if (!pushConfig() || event.type !== 'agent:result' || typeof event.threadId !== 'string') return;
+  // SAFETY: data is read only as `data?.status` and compared by includes() with string
+  // literals below, which accepts any value.
   const data = event.data as { status?: string } | undefined;
   if (!['completed', 'failed', 'error'].includes(data?.status ?? '')) return;
   const thread = await dbGet<typeof threads.$inferSelect>(

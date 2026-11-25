@@ -14,7 +14,10 @@ beforeEach(() => {
 
 describe('recordBashCheck', () => {
   test('a check the redirect catches is counted, without a log', () => {
-    recordBashCheck('t1', 'Bash', { command: 'npx vitest run src/a.test.ts 2>&1 | tail -20' });
+    recordBashCheck('t1', {
+      name: 'Bash',
+      input: { command: 'npx vitest run src/a.test.ts 2>&1 | tail -20' },
+    });
     expect(metric).toHaveBeenCalledWith('checks.bash_check', 1, {
       attributes: { kind: 'test', tool: 'vitest', redirectable: true },
     });
@@ -23,7 +26,7 @@ describe('recordBashCheck', () => {
 
   test('a check that escapes it is counted and logged with its command', () => {
     const command = 'bun test $(find src -name "*.test.ts")';
-    recordBashCheck('t1', 'Bash', { command });
+    recordBashCheck('t1', { name: 'Bash', input: { command } });
     expect(metric).toHaveBeenCalledWith('checks.bash_check', 1, {
       attributes: { kind: 'test', tool: 'bun-test', redirectable: false },
     });
@@ -34,9 +37,9 @@ describe('recordBashCheck', () => {
   });
 
   test('anything that is not a Bash check is ignored', () => {
-    recordBashCheck('t1', 'Bash', { command: 'git status' });
-    recordBashCheck('t1', 'Bash', undefined);
-    recordBashCheck('t1', 'Read', { command: 'npx vitest run' });
+    recordBashCheck('t1', { name: 'Bash', input: { command: 'git status' } });
+    recordBashCheck('t1', { name: 'Bash', input: undefined });
+    recordBashCheck('t1', { name: 'Read', input: { command: 'npx vitest run' } });
     expect(metric).not.toHaveBeenCalled();
   });
 });

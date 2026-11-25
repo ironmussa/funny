@@ -48,7 +48,7 @@ import {
   factoryRunStateVariant,
   factoryWaitReasonText,
   filterFactoryRuns,
-  factoryRunFallbackTitle,
+  factoryRunTitle,
   factoryRunRef,
 } from '@/lib/factory-run-labels';
 import { useThreadById } from '@/lib/thread-selectors';
@@ -77,7 +77,7 @@ const FactoryRunRow = memo(function FactoryRunRow({ run, projectName, now, onSel
   const navigate = useStableNavigate();
   const lastThreadId = implementingThreadOf(run);
   const thread = useThreadById(lastThreadId);
-  const title = thread?.title || factoryRunFallbackTitle(t, run);
+  const title = factoryRunTitle(t, run, thread?.title);
   const detail = runDetail(t, run);
   const open = () => {
     if (!lastThreadId) return;

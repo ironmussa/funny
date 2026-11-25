@@ -1,6 +1,10 @@
+function isString(value: string | Record<string, unknown>): value is string {
+  return typeof value === 'string';
+}
+
 /** Thread event `data` arrives either as a JSON string or an already-parsed object. */
 export function parseThreadEventData(data: string | Record<string, unknown>): Record<string, any> {
-  if (typeof data === 'string') {
+  if (isString(data)) {
     try {
       return JSON.parse(data);
     } catch {

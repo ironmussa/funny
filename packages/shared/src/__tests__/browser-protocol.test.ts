@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { create, fromBinary } from '@bufbuild/protobuf';
 
 import {
+  browserCarrierPayloadSchema,
   BROWSER_V1_CARRIER_EVENTS,
   BROWSER_V1_SCHEMA_FINGERPRINT,
   decodeBrowserCarrier,
@@ -47,6 +48,17 @@ describe('browser.v1 carrier codec', () => {
       Uint8Array.of(2, 3),
     );
     expect(normalizeBrowserCarrierPayload({ 0: 1, length: 1 })).toBeNull();
+  });
+
+  test('the payload schema accepts exactly the values that normalize to bytes', () => {
+    const bytes = Uint8Array.of(1, 2, 3);
+    for (const binary of [bytes, bytes.buffer, new DataView(bytes.buffer), Buffer.from(bytes)]) {
+      expect(browserCarrierPayloadSchema.safeParse(binary).success).toBe(true);
+    }
+    for (const other of ['bytes', [1, 2, 3], { 0: 1, length: 1 }, null, undefined]) {
+      expect(browserCarrierPayloadSchema.safeParse(other).success).toBe(false);
+      expect(normalizeBrowserCarrierPayload(other)).toBeNull();
+    }
   });
 
   test('round-trips a binary attachment without Socket.IO packet coupling', () => {

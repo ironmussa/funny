@@ -574,7 +574,10 @@ export class DeepAgentProcess extends BaseAgentProcess {
         const tcStatus = (update as any).status as string | undefined;
         if (tcStatus === 'completed' || tcStatus === 'failed') {
           toolCallsSeen.set(toolCallId, 'done');
-          const output = extractACPToolOutput(update.rawOutput, (update as any).content, title);
+          const output = extractACPToolOutput(
+            { rawOutput: update.rawOutput, content: (update as any).content },
+            title,
+          );
           this.emit('message', {
             type: 'user',
             message: {
@@ -603,8 +606,7 @@ export class DeepAgentProcess extends BaseAgentProcess {
         if (update.status === 'completed' || update.status === 'failed') {
           toolCallsSeen.set(toolCallId, 'done');
           const output = extractACPToolOutput(
-            update.rawOutput,
-            (update as any).content,
+            { rawOutput: update.rawOutput, content: (update as any).content },
             update.title || '',
           );
           const msg: CLIMessage = {

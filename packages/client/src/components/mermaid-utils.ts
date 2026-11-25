@@ -108,6 +108,12 @@ export function inlineForeignObjects(svgEl: Element): void {
   }
 }
 
+/** The pixel width and height of an exported diagram. */
+interface SvgExportSize {
+  w: number;
+  h: number;
+}
+
 /**
  * Pick the export dimensions for a mermaid SVG. The viewBox is the source of
  * truth because mermaid sets `width="100%"`/`height="100%"` for responsive
@@ -115,7 +121,7 @@ export function inlineForeignObjects(svgEl: Element): void {
  * pixel count produced a tall, narrow PNG with the wrong aspect ratio. Falls
  * back to absolute width/height attrs, then a fixed default.
  */
-export function getSvgExportDimensions(svgEl: Element): { w: number; h: number } {
+export function getSvgExportDimensions(svgEl: Element): SvgExportSize {
   const widthAttr = svgEl.getAttribute('width');
   const heightAttr = svgEl.getAttribute('height');
   const viewBox = svgEl

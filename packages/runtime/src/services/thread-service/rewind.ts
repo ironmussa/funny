@@ -31,6 +31,7 @@ import { log } from '../../lib/logger.js';
 import { metric, startSpan } from '../../lib/telemetry.js';
 import { restoreGitCheckpoint, type GitCheckpointRestoreResult } from '../git-checkpoints.js';
 import { rewindTracked } from '../git-destructive.js';
+import type { RuntimeThreadInsert, RuntimeThreadRecord } from '../server-interfaces.js';
 import { getServices } from '../service-registry.js';
 import { canDoGitOps } from '../thread-context.js';
 import * as tm from '../thread-manager.js';
@@ -59,14 +60,14 @@ export interface ForkAndRewindParams {
 }
 
 export interface ForkAndRewindResult {
-  thread: Record<string, any>;
+  thread: RuntimeThreadInsert;
   rewind: GitCheckpointRestoreResult;
 }
 
 // ── Shared validation ───────────────────────────────────────────────
 
 interface ResolvedAnchor {
-  sourceThread: Record<string, any>;
+  sourceThread: RuntimeThreadRecord;
   provider: string;
   cwd: string;
   anchorIdx: number;
@@ -82,27 +83,27 @@ async function resolveAnchor(params: {
   if (!source || source.userId !== params.userId) {
     throw new ThreadServiceError('Thread not found', 404);
   }
-  const provider = (source as any).provider ?? 'claude';
+  const provider = source.provider ?? 'claude';
   if (!canDoGitOps(source)) {
     throw new ThreadServiceError('Rewind is unavailable for scratch threads', 400);
   }
-  if (!(source as any).fileCheckpointingEnabled) {
+  if (!source.fileCheckpointingEnabled) {
     throw new ThreadServiceError(
       'This thread was started without file checkpointing. Rewind is unavailable.',
       400,
     );
   }
-  if ((source as any).status === 'running') {
+  if (source.status === 'running') {
     throw new ThreadServiceError('Stop the agent before rewinding', 409);
   }
 
   const projectPath = await getServices()
-    .projects.resolveProjectPath((source as any).projectId, params.userId)
+    .projects.resolveProjectPath(source.projectId, params.userId)
     .then((r) => {
       if (r.isErr()) throw new ThreadServiceError(r.error.message, 400);
       return r.value;
     });
-  const cwd = (source as any).worktreePath ?? projectPath;
+  const cwd = source.worktreePath ?? projectPath;
 
   const detail = await tm.getThreadWithMessages(params.threadId);
   const dbMessages: any[] = detail?.messages ?? [];
@@ -114,7 +115,7 @@ async function resolveAnchor(params: {
   }
 
   return {
-    sourceThread: source as any,
+    sourceThread: source,
     provider,
     cwd,
     anchorIdx,
@@ -248,7 +249,7 @@ async function forkAndRewindImpl(params: ForkAndRewindParams): Promise<ForkAndRe
     });
     if (forkResult.isErr()) throw forkResult.error;
     const newThread = forkResult.value;
-    const newCwd = (newThread as any).worktreePath ?? anchor.cwd;
+    const newCwd = newThread.worktreePath ?? anchor.cwd;
 
     // The fork re-points the source's checkpoint refs at its copied messages,
     // but the trees are identical, so restore from the source's checkpoint:
@@ -259,14 +260,14 @@ async function forkAndRewindImpl(params: ForkAndRewindParams): Promise<ForkAndRe
       messageId: params.messageId,
       cwd: newCwd,
       userId: params.userId,
-      activityThreadId: (newThread as { id: string }).id,
+      activityThreadId: newThread.id,
       projectId: anchor.sourceThread.projectId || null,
     });
 
     log.info('Thread forked and code rewound', {
       namespace: 'thread-rewind',
       sourceThreadId: params.sourceThreadId,
-      newThreadId: (newThread as any).id,
+      newThreadId: newThread.id,
       provider: anchor.provider,
       filesChanged: rewindResult.filesChanged.length,
     });

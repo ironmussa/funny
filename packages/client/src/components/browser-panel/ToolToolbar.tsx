@@ -38,6 +38,10 @@ const TOOLS: ToolEntry[] = [
   { id: 'draw', label: 'Draw', Icon: Pencil },
 ];
 
+function isNonEmptyString(value: string | undefined): value is string {
+  return typeof value === 'string' && value.length > 0;
+}
+
 export function ToolToolbar() {
   const tool = useBrowserPanelStore((s) => s.tool);
   const setTool = useBrowserPanelStore((s) => s.setTool);
@@ -72,7 +76,7 @@ export function ToolToolbar() {
     }
     try {
       const result = (await browserSessionClient.screenshot(sessionId)) as string;
-      if (typeof result !== 'string' || !result) {
+      if (!isNonEmptyString(result)) {
         toast.error('Empty screenshot response');
         return;
       }

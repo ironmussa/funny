@@ -5,6 +5,16 @@ export interface ReferencedItem {
   type: 'file' | 'folder';
 }
 
+/** A user message split into its referenced files and its text. */
+interface ParsedReferencedFiles {
+  files: ReferencedItem[];
+  cleanContent: string;
+  /** Content with @path markers preserved (XML block removed) for inline rendering */
+  inlineContent: string;
+  /** Map of path → ReferencedItem for quick lookup */
+  fileMap: Map<string, ReferencedItem>;
+}
+
 /**
  * UI view of the leading `<referenced-files>` block(s) of a user message
  * (format owned by `@funny/shared/attachments`). Returns the top-level
@@ -12,14 +22,7 @@ export interface ReferencedItem {
  * mentions stripped), and inline content that preserves @path markers for
  * inline chip rendering.
  */
-export function parseReferencedFiles(content: string): {
-  files: ReferencedItem[];
-  cleanContent: string;
-  /** Content with @path markers preserved (XML block removed) for inline rendering */
-  inlineContent: string;
-  /** Map of path → ReferencedItem for quick lookup */
-  fileMap: Map<string, ReferencedItem>;
-} {
+export function parseReferencedFiles(content: string): ParsedReferencedFiles {
   const { entries, body } = parseBlock(content);
   const items: ReferencedItem[] = entries.map(({ path, type }) => ({ path, type }));
   const fileMap = new Map(items.map((item) => [item.path, item]));

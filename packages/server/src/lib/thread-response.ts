@@ -11,7 +11,6 @@
 
 import type {
   AgentModel,
-  AgentProvider,
   PermissionMode,
   Thread,
   ThreadMode,
@@ -52,6 +51,9 @@ function templateVariables(row: ThreadRow): Record<string, string> | undefined {
 }
 
 export function toThread(row: ListedThreadRow): Thread {
+  // SAFETY: mode / status / stage / permission_mode / model / source / runtime
+  // are written from typed Thread values (runner data:create_thread /
+  // data:update_thread, server thread creation); the columns are plain text.
   return {
     id: row.id,
     projectId: row.projectId ?? '',
@@ -61,7 +63,7 @@ export function toThread(row: ListedThreadRow): Thread {
     mode: row.mode as ThreadMode,
     status: row.status as ThreadStatus,
     stage: row.stage as ThreadStage,
-    provider: row.provider as AgentProvider,
+    provider: row.provider,
     permissionMode: row.permissionMode as PermissionMode,
     model: row.model as AgentModel,
     branch: row.branch ?? undefined,
@@ -89,7 +91,7 @@ export function toThread(row: ListedThreadRow): Thread {
     agentTemplateId: row.agentTemplateId ?? undefined,
     agentProfileId: row.agentProfileId,
     agentProfileName: row.agentProfileName,
-    agentProfileProvider: row.agentProfileProvider as AgentProvider | null,
+    agentProfileProvider: row.agentProfileProvider,
     templateVariables: templateVariables(row),
     fileCheckpointingEnabled: row.fileCheckpointingEnabled === 1,
   };

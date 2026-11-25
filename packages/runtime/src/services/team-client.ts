@@ -47,6 +47,7 @@ import {
   RunnerConnectionSupervisor,
   requireRunnerGrpcEndpoint,
 } from './runner-connection-supervisor.js';
+import type { RunnerControlCommandResult } from './runner-control-dispatcher.js';
 import { RunnerEnrollmentClient } from './runner-enrollment-client.js';
 import { getServices } from './service-registry.js';
 
@@ -69,10 +70,16 @@ async function advertisedProviderState(): Promise<{
 }
 import { wsBroker } from './ws-broker.js';
 
+/** A terminal command the server forwarded for the browser-WS handler. */
+export interface BrowserWSMessage {
+  type: GrpcTerminalCommand['type'];
+  data: GrpcTerminalCommand['data'];
+}
+
 export type BrowserWSHandler = (
   userId: string,
-  data: unknown,
-  respond: (responseData: unknown) => void,
+  data: BrowserWSMessage,
+  respond: (responseData: WSEvent) => void,
 ) => void;
 
 /** A Hono-like app that can handle fetch requests */
@@ -169,11 +176,11 @@ export async function assignProjectToRunner(project: Project): Promise<void> {
 
 function handleBrowserWSMessage(
   userId: string,
-  data: unknown,
-  grpcRespond?: (responseData: unknown) => void,
+  data: BrowserWSMessage,
+  grpcRespond?: (responseData: WSEvent) => void,
 ): void {
   if (!state.browserWSHandler) {
-    const type = (data as { type?: string } | null)?.type ?? 'unknown';
+    const type = data.type;
     log.warn('No browser WS handler registered — dropping message', {
       namespace: 'runner',
       type,
@@ -182,7 +189,7 @@ function handleBrowserWSMessage(
     return;
   }
 
-  const respond = (responseData: unknown) => {
+  const respond = (responseData: WSEvent) => {
     grpcRespond?.(responseData);
   };
 
@@ -260,7 +267,7 @@ async function startAgentForControl(
 async function handleGrpcControl(
   command: RunnerGrpcWireMessage,
   signal: AbortSignal,
-): Promise<Record<string, unknown>> {
+): Promise<RunnerControlCommandResult> {
   if (signal.aborted) throw new Error('runner command cancelled');
 
   if (command.startAgent) {
@@ -290,8 +297,7 @@ async function handleGrpcControl(
       images: input.images,
     });
     if (result.isErr()) throw new Error(result.error.message);
-    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
-    return result.value as unknown as Record<string, unknown>;
+    return { ...result.value };
   }
 
   if (command.assignProject) {

@@ -1,11 +1,13 @@
-/** The quality gates a run has results for, as chips (openspec factory-pipeline-board). */
+/**
+ * The chips a run's gates and wait give its board card (openspec
+ * factory-pipeline-board): why it waits or what stopped it, then the gates.
+ */
 import { useTranslation } from 'react-i18next';
 
-import { LabelBadge, type LabelBadgeTone } from '@/components/ui/label-badge';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import type { LabelBadgeTone } from '@/components/ui/label-badge';
 import type { FactoryRun } from '@/lib/api/factory';
-import { cn } from '@/lib/utils';
 
+import { FactoryBoardChip } from './FactoryBoardChip';
 import { factoryRunGateChips, type FactoryGateTone } from './run-gates';
 
 const TONE: Record<FactoryGateTone, LabelBadgeTone> = {
@@ -25,32 +27,18 @@ export function FactoryRunGateChips({ run }: { run: FactoryRun }) {
       data-testid={`factory-board-gates-${run.id}`}
     >
       {chips.map((chip) => {
-        const badge = (
-          <span className={cn('inline-flex', chip.stale && 'opacity-60')}>
-            <LabelBadge
-              tone={chip.stale ? 'neutral' : TONE[chip.tone]}
-              data-testid={`factory-board-gate-${run.id}-${chip.id}`}
-              data-tone={chip.tone}
-              data-stale={chip.stale || undefined}
-            >
-              {chip.label}
-            </LabelBadge>
-          </span>
-        );
-        if (!chip.detail && !chip.stale) return <span key={chip.id}>{badge}</span>;
+        const staleNote = chip.stale ? t('factoryBoard.gate.stale', 'For an older commit') : '';
+        const detail = [chip.detail, staleNote].filter(Boolean).join('\n');
         return (
-          <Tooltip key={chip.id}>
-            <TooltipTrigger asChild>
-              <span tabIndex={0}>{badge}</span>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-              <div className="whitespace-pre-line">
-                {chip.detail}
-                {chip.stale &&
-                  `${chip.detail ? '\n' : ''}${t('factoryBoard.gate.stale', 'For an older commit')}`}
-              </div>
-            </TooltipContent>
-          </Tooltip>
+          <FactoryBoardChip
+            key={chip.id}
+            label={chip.label}
+            tone={chip.stale ? 'neutral' : TONE[chip.tone]}
+            detail={detail || undefined}
+            faded={chip.stale}
+            testId={`factory-board-gate-${run.id}-${chip.id}`}
+            data={{ 'data-tone': chip.tone, 'data-stale': chip.stale ? 'true' : undefined }}
+          />
         );
       })}
     </div>

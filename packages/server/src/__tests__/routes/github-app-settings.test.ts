@@ -246,6 +246,38 @@ describe('GitHub App settings', () => {
     expect(auths.every((auth) => auth?.startsWith('Bearer ey'))).toBe(true);
   });
 
+  test('a malformed installation does not hide the other installations', async () => {
+    const full = {
+      contents: 'write',
+      pull_requests: 'write',
+      issues: 'write',
+      workflows: 'write',
+      actions: 'read',
+      checks: 'write',
+      statuses: 'write',
+      metadata: 'read',
+    };
+    const { admin, anonymous } = setup({
+      github: (path) => {
+        if (path === '/app') return new Response(JSON.stringify({ permissions: full }));
+        if (path !== '/app/installations?per_page=100') return undefined;
+        return new Response(
+          JSON.stringify([
+            { account: { login: 42 }, permissions: { contents: 'read' } },
+            { account: 'acme', permissions: { contents: 'read' } },
+            { account: { login: 'bob' }, permissions: { contents: 'read' } },
+            { account: { login: 'alice' }, permissions: full },
+          ]),
+        );
+      },
+    });
+    await callback(anonymous, (await start(admin)).body.state);
+    expect((await status(admin)).body).toMatchObject({
+      missingPermissions: [],
+      pendingInstallations: ['unknown account', 'unknown account', 'bob'],
+    });
+  });
+
   test('an unknown, reused or expired state, or a demoted admin, stores nothing and calls GitHub never', async () => {
     const { admin, admins, anonymous, conversions, data, advance } = setup();
     expect((await callback(anonymous, 'u'.repeat(32))).status).toBe(400);

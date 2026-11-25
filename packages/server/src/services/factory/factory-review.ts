@@ -40,6 +40,7 @@ import {
   type FactoryReviewVerdict,
   type FactoryRisk,
 } from '@funny/shared/contracts/factory';
+import { errorMessage } from '@funny/shared/errors';
 import type { ActionResult, ReviewOpts } from '@funny/workflows/compiler';
 import { err, ok, type Result } from 'neverthrow';
 
@@ -574,8 +575,8 @@ export function createFactoryReviewer(deps: FactoryReviewerDeps) {
     const state: ReviewState = { threadId: null, discarded: false };
     // An early review is not awaited by anyone until the `review` step: its
     // failure must be a result, never an unhandled rejection.
-    const end = run(sha, opts, state).catch((error: unknown): ReviewEnd => {
-      const message = error instanceof Error ? error.message : String(error);
+    const end = run(sha, opts, state).catch((cause: unknown): ReviewEnd => {
+      const message = errorMessage(cause);
       return { kind: 'none', error: `The review could not finish: ${message}.` };
     });
     const review = { state, end };

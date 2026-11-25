@@ -13,6 +13,7 @@ import {
   type CreatedPersonalToken,
   type PersonalAccessTokenInfo,
 } from '@funny/shared/contracts/personal-tokens';
+import { errorMessage } from '@funny/shared/errors';
 import { and, desc, eq, isNull } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { ResultAsync } from 'neverthrow';
@@ -42,7 +43,7 @@ const toInfo = (row: TokenRow): PersonalAccessTokenInfo => ({
   revokedAt: row.revokedAt ?? undefined,
 });
 
-const storageError = (error: unknown) => (error instanceof Error ? error.message : String(error));
+const storageError = errorMessage;
 
 /** Create a token; `token` is the only time its plaintext is available. */
 export function createPersonalAccessToken(

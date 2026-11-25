@@ -24,6 +24,7 @@ import { createdThreadId, type RunnerId, type ThreadId } from '../domain/ids.js'
 import type {
   CreateThreadCommand,
   CreateThreadPorts,
+  RunnerJson,
   RunnerUnavailableReason,
   ThreadRegistration,
 } from './ports.js';
@@ -43,7 +44,7 @@ export type CreateThreadFailure =
 
 export interface CreateThreadSuccess {
   /** The runner's response body, forwarded to the client unchanged. */
-  readonly thread: unknown;
+  readonly thread: RunnerJson;
   /** Id the runner returned (top-level or nested), if any. */
   readonly threadId?: ThreadId;
   /** The actor's runner the thread was created on. */

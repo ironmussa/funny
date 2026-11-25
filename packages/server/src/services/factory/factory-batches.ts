@@ -28,6 +28,8 @@
  * index refuses while another is active.
  */
 
+import type { FailingCheck } from '@funny/core/github-app';
+import { errorMessage } from '@funny/shared/errors';
 import { parseStoredJson } from '@funny/shared/json-validation';
 import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import { ResultAsync } from 'neverthrow';
@@ -140,9 +142,9 @@ export type FactoryBatchesError = { kind: 'storage'; message: string };
 type BatchRow = typeof factoryBatches.$inferSelect;
 type AttemptRow = typeof factoryBatchAttempts.$inferSelect;
 
-const storage = (error: unknown): FactoryBatchesError => ({
+const storage = (cause: unknown): FactoryBatchesError => ({
   kind: 'storage',
-  message: error instanceof Error ? error.message : String(error),
+  message: errorMessage(cause),
 });
 
 const MEMBERS = z.array(batchMemberSchema);
@@ -374,11 +376,11 @@ export function createFactoryBatchesRepository(
       return writeTesting(id, { sha });
     },
 
-    /** End an attempt that is testing; whether it was. */
+    /** End an attempt that is testing, with the checks a red one broke; whether it was. */
     endAttempt(
       id: string,
       state: Exclude<FactoryBatchAttemptState, 'testing'>,
-      result?: unknown,
+      result?: FailingCheck[],
     ): ResultAsync<boolean, FactoryBatchesError> {
       const set: Partial<AttemptRow> = { state, endedAt: stamp() };
       if (result !== undefined) set.result = JSON.stringify(result);

@@ -92,6 +92,34 @@ interface AppPermissionGaps {
 }
 
 /**
+ * A permission set as GitHub reports it. Only `read` / `write` count as held
+ * (see `lacking`), so a value of any other type reads as not held, and a
+ * missing or malformed set as holding nothing.
+ */
+const githubPermissionsSchema = z.record(z.string(), z.string().catch('')).catch({});
+
+/** `GET /app`: the App's own permissions. */
+const githubAppSchema = z.object({ permissions: githubPermissionsSchema });
+
+/**
+ * One installation of `GET /app/installations`. Each field falls back on its
+ * own, so a malformed entry never drops the others: an account without a text
+ * login is an unknown account, and missing permissions hold nothing.
+ */
+const githubAppInstallationSchema = z
+  .object({
+    account: z
+      .object({ login: z.string().optional().catch(undefined) })
+      .nullish()
+      .catch(null),
+    permissions: githubPermissionsSchema,
+  })
+  .catch({ account: null, permissions: {} });
+
+/** `GET /app/installations`; an answer that is not a list holds no installation. */
+const githubAppInstallationsSchema = z.array(githubAppInstallationSchema).catch([]);
+
+/**
  * What the App and its installations lack of `APP_PERMISSIONS` (`GET /app` and
  * `GET /app/installations`, as the App), e.g. an App created before the issue
  * factory needed `checks: write`, or an installation that has not accepted it
@@ -105,7 +133,7 @@ async function appPermissionGaps(
 ): Promise<AppPermissionGaps | null> {
   const jwt = signAppJwt(app.appId, app.privateKey);
   if (jwt.isErr()) return null;
-  const get = async (path: string): Promise<unknown> => {
+  const get = async <T>(path: string, schema: z.ZodType<T>): Promise<T> => {
     const res = await doFetch(`${api}${path}`, {
       headers: {
         accept: 'application/vnd.github+json',
@@ -114,22 +142,18 @@ async function appPermissionGaps(
       },
     });
     if (!res.ok) throw new Error(`GitHub answered ${res.status} for ${path}`);
-    return res.json();
+    return schema.parse(await res.json());
   };
   try {
-    // SAFETY: GET /app answers the App object; its optional `permissions` map is the only
-    // field read, with a `?? {}` fallback.
-    const body = (await get('/app')) as { permissions?: Record<string, string> };
-    const missingPermissions = lacking(body.permissions ?? {});
+    const body = await get('/app', githubAppSchema);
+    const missingPermissions = lacking(body.permissions);
     // The installations are a second question: without an answer, say what is known.
-    // SAFETY: GET /app/installations answers an array of installations (checked with
-    // Array.isArray below); only optional fields are read, through `?.` / `??`.
-    const installations = (await get('/app/installations?per_page=100').catch(() => [])) as Array<{
-      account?: { login?: string } | null;
-      permissions?: Record<string, string>;
-    }>;
-    const pendingInstallations = (Array.isArray(installations) ? installations : [])
-      .filter((installation) => lacking(installation.permissions ?? {}).length > 0)
+    const installations = await get(
+      '/app/installations?per_page=100',
+      githubAppInstallationsSchema,
+    ).catch(() => []);
+    const pendingInstallations = installations
+      .filter((installation) => lacking(installation.permissions).length > 0)
       .map((installation) => installation.account?.login ?? 'unknown account');
     return { missingPermissions, pendingInstallations };
   } catch (error) {

@@ -3,7 +3,14 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-import { validateAuthRequestPassword } from '../lib/password-policy.js';
+import { authRequestPasswordsSchema, validateAuthRequestPassword } from '../lib/password-policy.js';
+
+/** A raw request body as a client could send it, well-formed or not. */
+type RawField = string | number | null | { nested: string } | string[];
+type RawAuthBody = { password?: RawField; newPassword?: RawField; email?: string } | string | null;
+
+const check = (path: string, body: RawAuthBody) =>
+  validateAuthRequestPassword(path, authRequestPasswordsSchema.parse(body));
 
 describe('validateAuthRequestPassword', () => {
   test('checks the password field of every endpoint that sets one', () => {
@@ -15,16 +22,32 @@ describe('validateAuthRequestPassword', () => {
       ['/admin/create-user', 'password'],
       ['/sign-up/email', 'password'],
     ] as const) {
-      expect(validateAuthRequestPassword(path, { [field]: 'Abcdefg1' }).ok).toBe(false);
-      expect(validateAuthRequestPassword(path, { [field]: 'abcdefghij1' }).ok).toBe(false);
-      expect(validateAuthRequestPassword(path, { [field]: 'Abcdefghij1' }).ok).toBe(true);
+      expect(check(path, { [field]: 'Abcdefg1' }).ok).toBe(false);
+      expect(check(path, { [field]: 'abcdefghij1' }).ok).toBe(false);
+      expect(check(path, { [field]: 'Abcdefghij1' }).ok).toBe(true);
     }
-    expect(validateAuthRequestPassword('/change-password', {}).ok).toBe(false);
+    expect(check('/change-password', {}).ok).toBe(false);
   });
 
   test('ignores endpoints that set no password, and admin create without one', () => {
-    expect(validateAuthRequestPassword('/sign-in/username', { password: 'x' }).ok).toBe(true);
-    expect(validateAuthRequestPassword('/admin/create-user', { email: 'a@b.c' }).ok).toBe(true);
+    expect(check('/sign-in/username', { password: 'x' }).ok).toBe(true);
+    expect(check('/admin/create-user', { email: 'a@b.c' }).ok).toBe(true);
+  });
+
+  test('a password field that is not text is refused as missing', () => {
+    for (const value of [null, 12345678901, { nested: 'Abcdefghij1' }, ['Abcdefghij1']]) {
+      expect(check('/change-password', { newPassword: value })).toEqual({
+        ok: false,
+        reason: 'Password is required',
+      });
+      expect(check('/admin/create-user', { password: value }).ok).toBe(false);
+    }
+  });
+
+  test('a body that is not an object carries no password', () => {
+    expect(check('/change-password', 'Abcdefghij1').ok).toBe(false);
+    expect(check('/change-password', null).ok).toBe(false);
+    expect(check('/admin/create-user', null).ok).toBe(true);
   });
 });
 

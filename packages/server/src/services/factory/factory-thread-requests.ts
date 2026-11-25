@@ -53,7 +53,7 @@ async function postToThread(
   ports: RunnerPorts,
   userId: string,
   path: string,
-  body: unknown,
+  body: FollowUpMessageBody | null,
 ): Promise<Result<void, ThreadRunnerError>> {
   return (await sendToThreadRunner(ports, userId, { method: 'POST', path, body })).map(
     () => undefined,

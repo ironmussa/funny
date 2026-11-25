@@ -1,17 +1,3 @@
-/**
- * @domain subdomain: Issue Factory
- * @domain subdomain-type: core
- * @domain type: application-service
- * @domain layer: application
- *
- * Each user's issue factory for a project (change issue-factory): the on/off
- * (running / paused) toggle, the mode (manual: only the issues sent to it;
- * automatic: also the watched label, change factory-manual-queue), the flow to
- * run and the concurrency. Keyed per
- * `(project, user)` and scoped to project access: anyone who may start threads
- * on the project (`steer`) runs their own factory; a viewer may only read
- * theirs. Runs are stored separately (`factory-runs`).
- */
 import {
   DEFAULT_FACTORY_BATCH,
   DEFAULT_MAX_LOW_RISK_LINES,
@@ -29,6 +15,21 @@ import {
   type FactoryStepOverrides,
   type FactoryTooBig,
 } from '@funny/shared/contracts/factory';
+/**
+ * @domain subdomain: Issue Factory
+ * @domain subdomain-type: core
+ * @domain type: application-service
+ * @domain layer: application
+ *
+ * Each user's issue factory for a project (change issue-factory): the on/off
+ * (running / paused) toggle, the mode (manual: only the issues sent to it;
+ * automatic: also the watched label, change factory-manual-queue), the flow to
+ * run and the concurrency. Keyed per
+ * `(project, user)` and scoped to project access: anyone who may start threads
+ * on the project (`steer`) runs their own factory; a viewer may only read
+ * theirs. Runs are stored separately (`factory-runs`).
+ */
+import { errorMessage } from '@funny/shared/errors';
 import { parseStoredJson } from '@funny/shared/json-validation';
 import { KNOWN_PROVIDER_IDS, providerModelProblem } from '@funny/shared/models';
 import { and, eq, exists, inArray, or } from 'drizzle-orm';
@@ -80,9 +81,9 @@ function batchOf(row: Row): FactoryBatchSettings {
   };
 }
 
-const storage = (error: unknown): FactorySettingsError => ({
+const storage = (cause: unknown): FactorySettingsError => ({
   kind: 'storage',
-  message: error instanceof Error ? error.message : String(error),
+  message: errorMessage(cause),
 });
 
 const accessErrors = {

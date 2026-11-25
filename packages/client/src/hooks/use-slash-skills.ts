@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import type { PromptSlashResource } from '@/components/prompt-editor/PromptEditor';
+import { useAdjustOnChange } from '@/hooks/use-resettable-state';
 import { api } from '@/lib/api';
 
 /**
@@ -49,7 +50,7 @@ export function useSlashSkills({
   mode = 'eager',
 }: UseSlashSkillsOptions): UseSlashSkillsResult {
   const [slashSkills, setSlashSkills] = useState<PromptSlashResource[]>([]);
-  const [slashSkillsLoading, setSlashSkillsLoading] = useState(false);
+  const [slashSkillsLoading, setSlashSkillsLoading] = useState(mode === 'eager');
   // Mirror for synchronous reads on the submit path.
   const slashSkillsRef = useRef<PromptSlashResource[]>(slashSkills);
   useLayoutEffect(() => {
@@ -86,10 +87,9 @@ export function useSlashSkills({
     return Array.from(deduped.values());
   }, [projectPath, projectId, provider, model]);
 
-  const runLoad = useCallback((): Promise<PromptSlashResource[]> => {
-    if (loadPromiseRef.current) return loadPromiseRef.current;
+  /** Starts a fetch; the caller has already shown the loading state. */
+  const startLoad = useCallback((): Promise<PromptSlashResource[]> => {
     const epoch = epochRef.current;
-    setSlashSkillsLoading(true);
     const p = fetchSkills();
     loadPromiseRef.current = p;
     void p
@@ -102,15 +102,27 @@ export function useSlashSkills({
     return p;
   }, [fetchSkills]);
 
-  // Invalidate on dep change (fetchSkills identity tracks the deps). Eager mode
-  // kicks off the fetch immediately; lazy mode waits for ensureSlashSkills.
+  const runLoad = useCallback((): Promise<PromptSlashResource[]> => {
+    if (loadPromiseRef.current) return loadPromiseRef.current;
+    setSlashSkillsLoading(true);
+    return startLoad();
+  }, [startLoad]);
+
+  // Invalidate on dep change (fetchSkills identity tracks the deps). The list
+  // is cleared during render (react.dev "adjusting state when a prop changes"),
+  // showing the loading state an eager fetch starts with.
+  useAdjustOnChange([mode, fetchSkills], () => {
+    setSlashSkills([]);
+    setSlashSkillsLoading(mode === 'eager');
+  });
+
+  // Eager mode kicks off the fetch immediately; lazy mode waits for
+  // ensureSlashSkills.
   useEffect(() => {
     epochRef.current += 1; // cancel any in-flight load
     loadPromiseRef.current = null;
-    setSlashSkills([]);
-    setSlashSkillsLoading(false);
-    if (mode === 'eager') void runLoad();
-  }, [mode, runLoad]);
+    if (mode === 'eager') void startLoad();
+  }, [mode, startLoad]);
 
   const ensureSlashSkills = useCallback(() => loadPromiseRef.current ?? runLoad(), [runLoad]);
 

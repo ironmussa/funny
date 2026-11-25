@@ -1,4 +1,4 @@
-import { createElement, useCallback, useRef, useState } from 'react';
+import { createElement, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
@@ -14,6 +14,8 @@ interface DialogState {
   projectId: string;
   targetBranch: string;
   currentBranch: string;
+  /** Settles the `ensureBranch` promise that opened the dialog. */
+  resolve: (result: boolean) => void;
 }
 
 /** Shared hook for branch checkout preflight + dialog. */
@@ -22,7 +24,6 @@ export function useBranchSwitch() {
 
   const [dialogState, setDialogState] = useState<DialogState | null>(null);
   const [loading, setLoading] = useState(false);
-  const resolverRef = useRef<((result: boolean) => void) | null>(null);
 
   /**
    * Ensure the working directory is on `targetBranch`.
@@ -51,11 +52,11 @@ export function useBranchSwitch() {
         if (hasDirtyFiles) {
           // Show the switch-branch dialog and wait for the user's choice
           return new Promise<boolean>((resolve) => {
-            resolverRef.current = resolve;
             setDialogState({
               projectId,
               targetBranch,
               currentBranch: serverCurrentBranch ?? currentBranch ?? '',
+              resolve,
             });
           });
         }
@@ -104,8 +105,7 @@ export function useBranchSwitch() {
             fetchProjectStatus(dialogState.projectId, true);
           }
           setDialogState(null);
-          resolverRef.current?.(true);
-          resolverRef.current = null;
+          dialogState.resolve(true);
         } else {
           toast.error(result.error.message || t('switchBranch.failed', 'Failed to switch branch'));
         }
@@ -116,9 +116,8 @@ export function useBranchSwitch() {
 
   const handleCancel = useCallback(() => {
     setDialogState(null);
-    resolverRef.current?.(false);
-    resolverRef.current = null;
-  }, []);
+    dialogState?.resolve(false);
+  }, [dialogState]);
 
   const branchSwitchDialog = createElement(SwitchBranchDialog, {
     open: !!dialogState,

@@ -76,22 +76,21 @@ async function load(url: string): Promise<string | null> {
  * Returns `undefined` only while the very first fetch for an uncached URL is in
  * flight (callers show their avatar-less fallback briefly).
  */
+function freshOrUndefined(url: string | undefined | null): string | undefined {
+  return url ? (getFresh(url) ?? undefined) : undefined;
+}
+
 export function useCachedAvatar(url: string | undefined | null): string | undefined {
-  const [resolved, setResolved] = useState<string | undefined>(() =>
-    url ? (getFresh(url) ?? undefined) : undefined,
-  );
+  const [state, setState] = useState(() => ({ url, resolved: freshOrUndefined(url) }));
+  // A new URL starts from its cached blob (or nothing while the first fetch is in flight).
+  let resolved = state.resolved;
+  if (state.url !== url) {
+    resolved = freshOrUndefined(url);
+    setState({ url, resolved });
+  }
 
   useEffect(() => {
-    if (!url) {
-      setResolved(undefined);
-      return;
-    }
-    const fresh = getFresh(url);
-    if (fresh) {
-      setResolved(fresh);
-      return;
-    }
-    setResolved(undefined);
+    if (!url || getFresh(url)) return;
     let active = true;
     let promise = inflight.get(url);
     if (!promise) {
@@ -101,7 +100,7 @@ export function useCachedAvatar(url: string | undefined | null): string | undefi
     promise.then((obj) => {
       // On success use the cached blob; on failure fall back to the direct URL
       // so the image still loads (just uncached) via the browser.
-      if (active) setResolved(obj ?? url);
+      if (active) setState({ url, resolved: obj ?? url });
     });
     return () => {
       active = false;

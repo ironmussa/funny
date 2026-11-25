@@ -21,6 +21,7 @@ import { ResultAsync } from 'neverthrow';
 import { z } from 'zod';
 
 import { log } from '../lib/logger.js';
+import { isString } from '../lib/value-guards.js';
 import { defaultClaudeConfigDir, normalizeClaudeConfigDir } from '../utils/claude-profile-paths.js';
 
 const AGENTS_DIR = join(homedir(), '.agents');
@@ -290,7 +291,7 @@ const manifestPathsSchema = z
   .union([z.string(), z.array(z.string())])
   .optional()
   .catch(undefined)
-  .transform((v) => (v === undefined ? [] : typeof v === 'string' ? [v] : v));
+  .transform((v) => (v === undefined ? [] : isString(v) ? [v] : v));
 
 /** The parts of `.claude-plugin/plugin.json` we read; a bad field is ignored. */
 const pluginManifestSchema = z.object({

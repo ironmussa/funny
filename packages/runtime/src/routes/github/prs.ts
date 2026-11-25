@@ -3,6 +3,7 @@ import type { GitHubPR, GitHubUserRef, PRCommit, PRFilterOptions, PRSortKey } fr
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 
+import { isString } from '../../lib/value-guards.js';
 import { recordedGithubWrite } from '../../services/github-write-activity.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 import { parseJsonBody } from '../../validation/request.js';
@@ -345,7 +346,7 @@ prRoutes.post('/pr-merge', async (c) => {
   }
 
   const method = raw.method ?? 'squash';
-  if (typeof method !== 'string' || !MERGE_METHODS.has(method)) {
+  if (!isString(method) || !MERGE_METHODS.has(method)) {
     return c.json({ error: 'Invalid merge method' }, 400);
   }
 

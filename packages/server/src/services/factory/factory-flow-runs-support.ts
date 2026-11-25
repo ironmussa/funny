@@ -19,6 +19,7 @@ import { z } from 'zod';
 import { db } from '../../db/index.js';
 import { messages, threads } from '../../db/schema.js';
 import { log } from '../../lib/logger.js';
+import { isNumber } from '../../lib/value-guards.js';
 import { recordServerActivity } from '../activities/server-activities.js';
 import type {
   StartedThread,
@@ -69,7 +70,7 @@ export function recordApprovalMove(
       projectId,
       title: approvalMoveTitle(move, issueNumber),
       input: {
-        ...(typeof issueNumber === 'number' && { issueNumber }),
+        ...(isNumber(issueNumber) && { issueNumber }),
         from: move.from,
         to: move.to,
         change: move.kind,

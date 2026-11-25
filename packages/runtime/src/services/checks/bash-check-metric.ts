@@ -10,6 +10,7 @@ import { classifyCheckCommand } from '@funny/shared/checks';
 
 import { log } from '../../lib/logger.js';
 import { metric } from '../../lib/telemetry.js';
+import { isString } from '../../lib/value-guards.js';
 
 /** A tool call as the agent's `tool_use` block carries it; `input` is the model's, unchecked. */
 export interface ToolUseCall {
@@ -22,7 +23,7 @@ export function recordBashCheck(threadId: string, call: ToolUseCall): void {
   const tool = call.name;
   const command =
     tool === 'Bash' ? (call.input as { command?: unknown } | null)?.command : undefined;
-  if (typeof command !== 'string') return;
+  if (!isString(command)) return;
   const check = classifyCheckCommand(command);
   if (!check) return;
   // Redirected only where the hook runs (Claude, project setting on); the

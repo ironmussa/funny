@@ -9,6 +9,7 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 
 import { log } from '../../lib/logger.js';
+import { isBoolean } from '../../lib/value-guards.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 import { parseJsonBody } from '../../validation/request.js';
 import {
@@ -319,7 +320,7 @@ prThreadRoutes.post('/pr-thread-resolve', async (c) => {
   const parsed = await parseJsonBody(c, prThreadResolveBodySchema);
   if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
   const raw = parsed.value;
-  if (!raw.projectId || !raw.threadNodeId || typeof raw.resolve !== 'boolean') {
+  if (!raw.projectId || !raw.threadNodeId || !isBoolean(raw.resolve)) {
     return c.json({ error: 'projectId, threadNodeId and resolve are required' }, 400);
   }
 

@@ -22,6 +22,8 @@
 
 import type { Context } from 'hono';
 
+import { isString } from './value-guards.js';
+
 /**
  * Caller address of every request on the reverse-link listener (thread
  * sandboxes). It is one value for all sandboxes, so an IP bucket keyed on it
@@ -79,5 +81,5 @@ export function callerAddress(
     const caller = hops[Math.max(0, hops.length - trustedHops)];
     if (caller) return caller;
   }
-  return typeof peer === 'string' && peer.length > 0 ? peer : null;
+  return isString(peer) && peer.length > 0 ? peer : null;
 }

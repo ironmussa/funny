@@ -17,6 +17,7 @@ import {
 import { Hono } from 'hono';
 
 import { log } from '../../lib/logger.js';
+import { isString } from '../../lib/value-guards.js';
 import { gitRuntimeService } from '../../services/git-runtime-service.js';
 import {
   pushChanges as gitServicePush,
@@ -141,7 +142,7 @@ remoteRoutes.post('/project/:projectId/publish', (c) =>
         effectsOf: (body) => [
           {
             effect: 'repo-published',
-            target: typeof body.repoUrl === 'string' ? body.repoUrl : repo.name,
+            target: isString(body.repoUrl) ? body.repoUrl : repo.name,
           },
         ],
       },

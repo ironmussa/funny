@@ -26,6 +26,7 @@ import type { ServerWebSocket, Socket } from 'bun';
 
 import { log } from '../lib/logger.js';
 import { metric } from '../lib/telemetry.js';
+import { isString } from '../lib/value-guards.js';
 import { shutdownManager, ShutdownPhase } from './shutdown-manager.js';
 
 export interface ReverseLinkRelayOptions {
@@ -132,7 +133,7 @@ export function startReverseLinkRelay(options: ReverseLinkRelayOptions): Reverse
       },
       message(ws, message) {
         const pipe = ws.data.pipe;
-        if (!pipe || typeof message === 'string') {
+        if (!pipe || isString(message)) {
           // The server only speaks after `open`, and only in binary frames.
           return ws.close(1003, 'unexpected frame');
         }

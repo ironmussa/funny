@@ -1,3 +1,4 @@
+import { isNonEmptyString } from './value-guards.js';
 /**
  * Security CR-1 — pure helper that identifies pairs of identical secrets.
  *
@@ -21,9 +22,7 @@ export function findDuplicateSecretPairs(
       ['RUNNER_AUTH_SECRET', secrets.RUNNER_AUTH_SECRET],
       ['INGEST_WEBHOOK_SECRET', secrets.INGEST_WEBHOOK_SECRET],
     ] as const
-  ).filter(
-    (entry): entry is [SecretName, string] => typeof entry[1] === 'string' && entry[1].length > 0,
-  );
+  ).filter((entry): entry is [SecretName, string] => isNonEmptyString(entry[1]));
 
   const duplicates: Array<[SecretName, SecretName]> = [];
   for (let i = 0; i < entries.length; i++) {
@@ -59,8 +58,6 @@ export function findWeakSecrets(
       ['INGEST_WEBHOOK_SECRET', secrets.INGEST_WEBHOOK_SECRET],
     ] as const
   ).flatMap((entry) =>
-    typeof entry[1] === 'string' && entry[1].length > 0 && entry[1].length < MIN_SECRET_LENGTH
-      ? [entry[0]]
-      : [],
+    isNonEmptyString(entry[1]) && entry[1].length < MIN_SECRET_LENGTH ? [entry[0]] : [],
   );
 }

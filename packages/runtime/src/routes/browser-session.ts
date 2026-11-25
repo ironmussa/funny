@@ -6,6 +6,7 @@ import {
   type BrowserSessionCommandData,
 } from '../app/browser-session-message-handler.js';
 import { log } from '../lib/logger.js';
+import { isObject } from '../lib/value-guards.js';
 import { browserSessionManager } from '../services/browser-session-manager.js';
 import type { HonoEnv } from '../types/hono-env.js';
 import { resultToResponse } from '../utils/result-response.js';
@@ -23,10 +24,7 @@ const openBrowserSessionSchema = z.object({
 const browserSessionCommandSchema = z.object({
   type: z.string().startsWith('browser-session:'),
   // Each command reads its own fields; the payload must at least be an object.
-  data: z.custom<BrowserSessionCommandData>(
-    (value) => typeof value === 'object' && value !== null,
-    'data must be an object',
-  ),
+  data: z.custom<BrowserSessionCommandData>((value) => isObject(value), 'data must be an object'),
 });
 
 /** Internal command endpoint reached only through the authenticated gRPC tunnel. */

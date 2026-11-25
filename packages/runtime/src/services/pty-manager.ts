@@ -105,6 +105,13 @@ function selectBackend(): PtyBackend {
 
 const backend = selectBackend();
 
+/** A backend (headless-xterm) that can serialize every terminal's state before shutdown. */
+function canSerializeAll<B extends object>(
+  value: B,
+): value is B & { serializeAll: () => Map<string, string> } {
+  return 'serializeAll' in value && typeof value.serializeAll === 'function';
+}
+
 // ── Session tracking (for user-scoped WS events) ───────────────────
 
 interface SessionMeta {
@@ -849,8 +856,8 @@ if (backend.name === 'daemon' && backend.detachAll) {
     'pty-manager',
     () => {
       // For headless-xterm: serialize all terminal states to DB before killing
-      if ('serializeAll' in backend && typeof (backend as any).serializeAll === 'function') {
-        const states = (backend as any).serializeAll() as Map<string, string>;
+      if (canSerializeAll(backend)) {
+        const states = backend.serializeAll();
         for (const [id, state] of states) {
           const meta = activeSessions.get(id);
           if (meta) {

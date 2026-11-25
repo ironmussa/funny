@@ -13,6 +13,7 @@
 import type { JsonObject } from '@bufbuild/protobuf';
 import type { ActivityEffect, ActivityResultRef } from '@funny/shared';
 
+import { isObject, isString } from '../lib/value-guards.js';
 import { recordActivity as defaultRecordActivity } from './activity-tracker.js';
 
 export interface GithubWrite {
@@ -34,7 +35,7 @@ export interface GithubWrite {
 async function jsonOf(res: Response): Promise<JsonObject> {
   try {
     const body: unknown = await res.clone().json();
-    if (!body || typeof body !== 'object' || Array.isArray(body)) return {};
+    if (!isObject(body) || Array.isArray(body)) return {};
     // SAFETY: `body` came out of JSON.parse and is a non-array object, so every value is JSON.
     return body as JsonObject;
   } catch {
@@ -65,8 +66,7 @@ export async function recordedGithubWrite(
   }
   const body = await jsonOf(res);
   if (res.status >= 400) {
-    const error =
-      typeof body.error === 'string' ? body.error : `GitHub write failed (${res.status})`;
+    const error = isString(body.error) ? body.error : `GitHub write failed (${res.status})`;
     void record(spec, { ok: false, error });
   } else {
     void record(spec, {

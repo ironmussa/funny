@@ -28,6 +28,7 @@ import { ResultAsync } from 'neverthrow';
 
 import { log } from '../lib/logger.js';
 import { clearThreadTrace, metric, setThreadTrace, startSpan } from '../lib/telemetry.js';
+import { isString } from '../lib/value-guards.js';
 import { stripInlineReferencedContent } from '../utils/file-mentions.js';
 import type { AgentEventRouter } from './agent-event-router.js';
 import { buildAgentEnv } from './agent-startup/agent-env.js';
@@ -865,6 +866,6 @@ export class AgentLifecycleManager {
 
 function errorMessage(cause: unknown, fallback: string): string {
   if (cause instanceof Error && cause.message) return cause.message;
-  if (typeof cause === 'string' && cause) return cause;
+  if (isString(cause) && cause) return cause;
   return fallback;
 }

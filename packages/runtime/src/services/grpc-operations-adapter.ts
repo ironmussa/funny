@@ -4,6 +4,7 @@ import { FailureCode } from '@funny/shared/runner-v2/common';
 import { nanoid } from 'nanoid';
 
 import { log } from '../lib/logger.js';
+import { isBigInt, isBoolean, isNumber, isObject, isString } from '../lib/value-guards.js';
 import { GrpcOperationOutbox } from './grpc-operation-outbox.js';
 import type { RunnerGrpcWireMessage } from './grpc-runner-client.js';
 
@@ -157,13 +158,13 @@ function normalizeProtobufString(value: string): string {
  */
 function normalizeProtobufJson(value: unknown): JsonValue | undefined {
   if (value === undefined) return undefined;
-  if (value === null || typeof value === 'boolean') return value;
-  if (typeof value === 'string') return normalizeProtobufString(value);
-  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
-  if (typeof value === 'bigint') return String(value);
+  if (value === null || isBoolean(value)) return value;
+  if (isString(value)) return normalizeProtobufString(value);
+  if (isNumber(value)) return Number.isFinite(value) ? value : null;
+  if (isBigInt(value)) return String(value);
   if (value instanceof Date) return value.toISOString();
   if (Array.isArray(value)) return value.map((item) => normalizeProtobufJson(item) ?? null);
-  if (typeof value === 'object') return normalizeProtobufObject(value);
+  if (isObject(value)) return normalizeProtobufObject(value);
   return undefined;
 }
 
@@ -177,7 +178,7 @@ function normalizeProtobufObject<Value extends object>(value: Value): JsonObject
 }
 
 function isJsonObject(value: JsonValue | undefined): value is JsonObject {
-  return value !== null && typeof value === 'object' && !Array.isArray(value);
+  return isObject(value) && !Array.isArray(value);
 }
 
 export function normalizeRunnerOperationValue<Value extends object>(

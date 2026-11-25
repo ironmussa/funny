@@ -3,6 +3,7 @@ import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { SearchBar } from '@/components/ui/search-bar';
+import { useStableCallback } from '@/hooks/use-stable-callback';
 import { api } from '@/lib/api';
 import { withCleanup } from '@/lib/while-pending';
 import { useUIStore } from '@/stores/ui-store';
@@ -132,8 +133,10 @@ export function ThreadSearchBar({
     );
   }, [current, occurrences]);
 
-  // Reset state when thread changes or bar closes
-  useEffect(() => {
+  // Reset state when the bar closes (or the thread changes while it is closed)
+  const [prevBar, setPrevBar] = useState({ open, threadId });
+  if (prevBar.open !== open || prevBar.threadId !== threadId) {
+    setPrevBar({ open, threadId });
     if (!open) {
       setQuery('');
       setCaseSensitive(false);
@@ -142,7 +145,7 @@ export function ThreadSearchBar({
       setMarkCounts(new Map());
       setLoading(false);
     }
-  }, [open, threadId]);
+  }
 
   const doSearch = useCallback(
     async (q: string, cs: boolean) => {
@@ -204,8 +207,9 @@ export function ThreadSearchBar({
   // for the thread the user reached by clicking a search result, seed the
   // query and run it immediately (no debounce) so highlights + scroll-to-
   // match happen without retyping.
-  useEffect(() => {
-    if (!open) return;
+  // The handoff lives in the UI store (outside React); the effect event reads
+  // it with the latest `doSearch` when the bar opens or the thread changes.
+  const consumePendingSearch = useStableCallback(() => {
     const ui = useUIStore.getState();
     const pending = ui.pendingThreadSearch;
     if (!pending || pending.threadId !== threadId) return;
@@ -213,7 +217,10 @@ export function ThreadSearchBar({
     setQuery(pending.query);
     setCaseSensitive(pending.caseSensitive);
     doSearch(pending.query, pending.caseSensitive);
-  }, [open, threadId, doSearch]);
+  });
+  useEffect(() => {
+    if (open) consumePendingSearch();
+  }, [open, threadId, consumePendingSearch]);
 
   const handleQueryChange = (value: string) => {
     setQuery(value);

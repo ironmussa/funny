@@ -228,11 +228,16 @@ export function PermissionApprovalCard({
     : undefined;
 
   const [highlightedBash, setHighlightedBash] = useState<string | null>(null);
+  // Losing the bash input drops its highlight; a changed input keeps the old
+  // one until the new highlight is ready.
+  const canHighlight = !!displayedInput && !!bashCommand;
+  const [couldHighlight, setCouldHighlight] = useState(canHighlight);
+  if (couldHighlight !== canHighlight) {
+    setCouldHighlight(canHighlight);
+    if (!canHighlight) setHighlightedBash(null);
+  }
   useEffect(() => {
-    if (!displayedInput || !bashCommand) {
-      setHighlightedBash(null);
-      return;
-    }
+    if (!displayedInput || !bashCommand) return;
     let cancelled = false;
     ensureHighlight(displayedInput, 'bash').then(() => {
       if (!cancelled) setHighlightedBash(highlightCode(displayedInput, 'bash'));

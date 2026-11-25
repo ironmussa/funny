@@ -337,23 +337,11 @@ export abstract class BaseAgentProcess extends EventEmitter {
   /** Map ACP `PromptResponse.usage` (camelCase) to a context-usage CLIMessage. */
   protected emitAcpPromptResponseUsage(usage: AcpPromptUsage | null | undefined): void {
     if (!usage || !isObject(usage)) return;
-    // SAFETY: `usage` is an object (checked above) from the ACP PromptResponse,
-    // whose token fields are numbers when present. They are not checked here:
-    // a missing one becomes undefined and falls back to 0, and
-    // emitContextUsageMessage drops a non-finite input count.
-    const u = usage as Record<string, unknown>;
-    // SAFETY: see the note on `u` above; each field is read optionally.
     this.emitContextUsageMessage({
-      inputTokens: (u.inputTokens as number | undefined) ?? 0,
-      outputTokens: (u.outputTokens as number | undefined) ?? 0,
-      cacheReadTokens:
-        (u.cachedReadTokens as number | undefined) ??
-        (u.cacheReadTokens as number | undefined) ??
-        0,
-      cacheWriteTokens:
-        (u.cachedWriteTokens as number | undefined) ??
-        (u.cacheWriteTokens as number | undefined) ??
-        0,
+      inputTokens: usage.inputTokens ?? 0,
+      outputTokens: usage.outputTokens ?? 0,
+      cacheReadTokens: usage.cachedReadTokens ?? usage.cacheReadTokens ?? 0,
+      cacheWriteTokens: usage.cachedWriteTokens ?? usage.cacheWriteTokens ?? 0,
     });
   }
 

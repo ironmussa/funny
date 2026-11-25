@@ -17,7 +17,7 @@ export function turnOutcomesFromEvents(
     if (e.type !== 'turn_outcome') continue;
     let parsed: TurnOutcomeEventData | null = null;
     try {
-      parsed = isString(e.data) ? JSON.parse(e.data) : (e.data as any);
+      parsed = isString(e.data) ? JSON.parse(e.data) : e.data;
     } catch {
       parsed = null;
     }

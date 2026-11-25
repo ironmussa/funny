@@ -247,7 +247,7 @@ function isPlanFilePath(fp: string): boolean {
 function extractWrittenPlanContent(tc: any): string | undefined {
   try {
     const inp = isString(tc.input) ? JSON.parse(tc.input) : tc.input;
-    const fp = (inp?.file_path || '') as string;
+    const fp: string = inp?.file_path || '';
     if (isPlanFilePath(fp) && isString(inp?.content)) return inp.content;
   } catch {
     /* ignore parse errors */
@@ -451,7 +451,7 @@ function withoutPendingStop(events: ThreadEvent[], threadStatus?: string): Threa
 function isStoppedOutcome(e: ThreadEvent): boolean {
   if (e.type !== 'turn_outcome') return false;
   try {
-    const data = isString(e.data) ? JSON.parse(e.data) : (e.data as any);
+    const data = isString(e.data) ? JSON.parse(e.data) : e.data;
     return data?.status === 'stopped';
   } catch {
     return false;
@@ -564,5 +564,5 @@ function parseEventDataCompat(data: string | Record<string, unknown>): Record<st
       return {};
     }
   }
-  return data as Record<string, any>;
+  return data;
 }

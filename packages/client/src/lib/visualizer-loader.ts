@@ -22,8 +22,12 @@ const defaultImport: ImportFn = (url) => import(/* @vite-ignore */ url);
 
 function isVisualizerPlugin(value: unknown): value is VisualizerPlugin {
   if (!value || typeof value !== 'object') return false;
-  const p = value as Record<string, unknown>;
-  return typeof p.id === 'string' && typeof p.Component === 'function';
+  return (
+    'id' in value &&
+    typeof value.id === 'string' &&
+    'Component' in value &&
+    typeof value.Component === 'function'
+  );
 }
 
 /**

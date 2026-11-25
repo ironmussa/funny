@@ -21,6 +21,7 @@ import {
   type UnsignedRunnerRequest,
 } from '../runner-access/index.js';
 import type { RunnerPresencePort, RunnerRequestPort, RunnerResponse } from '../runner-ports.js';
+import type { SandboxMessageBody } from './sandbox-thread.js';
 
 const remoteUrlSchema = z.object({ remoteUrl: z.string().nullable() });
 
@@ -96,7 +97,7 @@ export function createSandboxRunnerCalls(ports: {
     sendMessage(input: {
       userId: string;
       threadId: string;
-      body: Record<string, unknown>;
+      body: SandboxMessageBody;
     }): ResultAsync<void, string> {
       const path = `/api/threads/${encodeURIComponent(input.threadId)}/message`;
       return postToThreadRunner(input.userId, path, input.body, 'message');

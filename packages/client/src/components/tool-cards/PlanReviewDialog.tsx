@@ -184,7 +184,7 @@ export function PlanReviewDialog({
     (value: string | undefined) => setEditState({ sourcePlan: plan, value: value || '' }),
     [plan],
   );
-  const canRespond = typeof onRespond === 'function';
+  const canRespond = onRespond != null;
   const hasEditedPlan = activePlan.trim() !== plan.trim();
   const sections = useMemo(() => parsePlanSections(activePlan), [activePlan]);
   const hasSections = sections.length > 1 || (sections.length === 1 && sections[0].level > 0);
@@ -243,12 +243,12 @@ export function PlanReviewDialog({
       <DialogContent
         ref={dialogRef}
         flush
-        className="flex h-[80vh] w-[60vw] max-w-none flex-col overflow-hidden rounded-lg"
+        className="flex h-[80vh] w-[60vw] max-w-none flex-col overflow-hidden"
         data-testid="plan-review-dialog"
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <DialogHeader bordered className="overflow-hidden select-none">
-          <DialogTitle size="sm" className="flex min-w-0 items-center gap-2 overflow-hidden">
+          <DialogTitle size="sm" withIcon>
             <Pencil className="icon-base shrink-0" />
             {t('plan.reviewTitle', 'Review plan')}
           </DialogTitle>
@@ -317,7 +317,7 @@ export function PlanReviewDialog({
         )}
 
         {canRespond && (
-          <DialogFooter className="border-border shrink-0 items-center gap-2 border-t px-4 py-3 sm:justify-between sm:space-x-0">
+          <DialogFooter bordered className="items-center sm:justify-between">
             <Button
               variant="muted"
               size="sm"

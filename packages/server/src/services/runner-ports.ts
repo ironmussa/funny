@@ -1,5 +1,9 @@
 /** Transport-neutral capabilities consumed by HTTP and browser presentation code. */
 
+import type { JsonObject } from '@bufbuild/protobuf';
+import type { ThreadComment, WSEvent, WSPtyDataData } from '@funny/shared';
+import type { BrowserPtyForwardPayload } from '@funny/shared/socket-events';
+
 export interface RunnerRequest {
   method: string;
   path: string;
@@ -46,19 +50,35 @@ export class RunnerRequestTimeoutError extends Error {
   }
 }
 
+/**
+ * The data of a browser terminal message, as the browser sent it: the legacy
+ * `pty:*` socket payload (only `id` and `projectId` are validated, the other
+ * fields are passed on unread) or a browser.v1 terminal message mapped to it.
+ */
+export type RunnerTerminalEventData = BrowserPtyForwardPayload;
+
 export type RunnerTerminalEvent =
-  | { type: 'pty:spawn'; data: Record<string, any> }
-  | { type: 'pty:write'; data: Record<string, any> }
-  | { type: 'pty:resize'; data: Record<string, any> }
-  | { type: 'pty:close' | 'pty:kill'; data: Record<string, any> }
-  | { type: 'pty:signal'; data: Record<string, any> }
-  | { type: 'pty:rename'; data: Record<string, any> }
-  | { type: 'pty:reconnect' | 'pty:restore'; data: Record<string, any> };
+  | { type: 'pty:spawn'; data: RunnerTerminalEventData }
+  | { type: 'pty:write'; data: RunnerTerminalEventData }
+  | { type: 'pty:resize'; data: RunnerTerminalEventData }
+  | { type: 'pty:close' | 'pty:kill'; data: RunnerTerminalEventData }
+  | { type: 'pty:signal'; data: RunnerTerminalEventData }
+  | { type: 'pty:rename'; data: RunnerTerminalEventData }
+  | { type: 'pty:reconnect' | 'pty:restore'; data: RunnerTerminalEventData };
+
+/** A terminal a runner keeps open for a user, as the server's dispatcher tracks it. */
+export interface RunnerTerminalSession {
+  ptyId: string;
+  cwd: string;
+  projectId?: string;
+  label?: string;
+  shell?: string;
+}
 
 export interface RunnerTerminalPort {
   isAvailable(runnerId: string): Promise<boolean>;
   dispatch(runnerId: string, userId: string, event: RunnerTerminalEvent): Promise<void>;
-  listSessions(runnerId: string, userId: string): Promise<Array<Record<string, unknown>>>;
+  listSessions(runnerId: string, userId: string): Promise<RunnerTerminalSession[]>;
 }
 
 export interface RunnerPresencePort {
@@ -91,19 +111,43 @@ export interface BrowserPublication {
     priority?: number;
     coalescingKey?: string;
   };
-  legacyEvent: Record<string, unknown>;
+  /** The legacy event, or a JSON-normalized copy of one whose data may hold bigint values. */
+  legacyEvent: BrowserEvent | JsonObject;
   /** Pre-authorized application envelope. Omitted while a domain remains legacy-only. */
   browserV1?: import('@funny/shared/browser-v1/events').ApplicationEvent;
   /** Pre-authorized interactive envelope for terminal or browser-session traffic. */
   browserV1Interactive?: import('@funny/shared/browser-v1/interactive').InteractiveEnvelope;
 }
 
+/** `pty:data` from the server's terminal dispatcher, with the runner's output sequence (uint64). */
+export interface TerminalOutputEventData extends WSPtyDataData {
+  sequence: bigint;
+}
+
+/**
+ * A legacy browser event: Socket.IO emits it as is, under its `type`. The
+ * server's own events follow `WSEvent` (`@funny/shared`); a runner's are relayed
+ * with the data it sent, a decoded protobuf `Struct`.
+ */
+export interface BrowserEvent {
+  type: string;
+  threadId?: string;
+  data?: WSEvent['data'] | TerminalOutputEventData | JsonObject;
+  /** `thread:comment`: the comment posted. */
+  comment?: ThreadComment;
+  /** `thread:comment_deleted`: the comment removed. */
+  commentId?: string;
+  /** `runner:status`: the runner that went online or offline. */
+  runnerId?: string;
+  status?: 'online' | 'offline';
+}
+
 export interface BrowserEventSink {
   publish(publication: BrowserPublication): void;
-  toUser(userId: string, event: Record<string, unknown>): void;
-  toAll(event: Record<string, unknown>): void;
-  toThreadStream(threadId: string, event: Record<string, unknown>): void;
-  toThreadPresence(threadId: string, event: Record<string, unknown>): void;
-  toThreadViewers(threadId: string, event: Record<string, unknown>): void;
+  toUser(userId: string, event: BrowserEvent): void;
+  toAll(event: BrowserEvent): void;
+  toThreadStream(threadId: string, event: BrowserEvent): void;
+  toThreadPresence(threadId: string, event: BrowserEvent): void;
+  toThreadViewers(threadId: string, event: BrowserEvent): void;
   evictFromThread(userId: string, threadId: string): void;
 }

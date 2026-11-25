@@ -60,9 +60,14 @@ function UsageRing({ clamped }: { clamped: number }) {
   );
 }
 
+/** True for a number value. */
+function isNumber(value: unknown): value is number {
+  return typeof value === 'number';
+}
+
 /** Tokens used and left, when both counts are known. */
 function TokenLine({ usedTokens, maxTokens }: { usedTokens?: number; maxTokens?: number }) {
-  if (typeof usedTokens !== 'number' || typeof maxTokens !== 'number' || maxTokens <= 0) {
+  if (!isNumber(usedTokens) || !isNumber(maxTokens) || maxTokens <= 0) {
     return null;
   }
   return (
@@ -109,13 +114,15 @@ export function ContextUsageRing({
       <HoverCardContent
         side="top"
         align="end"
-        className={cn('text-sm', breakdown || account ? 'w-80' : 'w-64')}
+        className={cn(breakdown || account ? 'w-80' : 'w-64')}
       >
-        {threadId && <AgentAccountSummary account={account} profileName={agentProfileName} />}
-        <p className="font-medium">{remaining}% of context remaining until auto-compact.</p>
-        <TokenLine usedTokens={usedTokens} maxTokens={maxTokens} />
-        <p className="text-muted-foreground mt-1 text-xs">Click to compact now.</p>
-        {breakdown && <ContextBreakdownPanel breakdown={breakdown} />}
+        <div className="text-sm">
+          {threadId && <AgentAccountSummary account={account} profileName={agentProfileName} />}
+          <p className="font-medium">{remaining}% of context remaining until auto-compact.</p>
+          <TokenLine usedTokens={usedTokens} maxTokens={maxTokens} />
+          <p className="text-muted-foreground mt-1 text-xs">Click to compact now.</p>
+          {breakdown && <ContextBreakdownPanel breakdown={breakdown} />}
+        </div>
       </HoverCardContent>
     </HoverCard>
   );

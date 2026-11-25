@@ -275,6 +275,10 @@ interface MockFetchOptions {
   prs?: typeof mockPRs;
 }
 
+function isUrlString(input: RequestInfo | URL): input is string {
+  return typeof input === 'string';
+}
+
 function installMockFetch(opts: MockFetchOptions = {}) {
   const {
     diffResponse = mockDiffSummaryResponse,
@@ -285,10 +289,9 @@ function installMockFetch(opts: MockFetchOptions = {}) {
   const gitStatus = makeGitStatus();
 
   window.fetch = async (input: RequestInfo | URL, _init?: RequestInit): Promise<Response> => {
-    const url =
-      typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
+    const url = isUrlString(input) ? input : input instanceof URL ? input.toString() : input.url;
 
-    const json = (data: unknown) =>
+    const json = <Body,>(data: Body) =>
       new Response(JSON.stringify(data), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },

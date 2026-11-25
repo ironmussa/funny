@@ -61,6 +61,11 @@ interface ActiveInspectOverlayProps extends InspectOverlayProps {
   toggleInspectActive: () => void;
 }
 
+/** The runner answers `inspect-at` with the element's DOM info as an object, or nothing. */
+function isAnnotationDomInfo(value: unknown): value is AnnotationDomInfo {
+  return typeof value === 'object' && value !== null;
+}
+
 function ActiveInspectOverlay({
   overlayRef,
   canvasRef,
@@ -104,13 +109,13 @@ function ActiveInspectOverlay({
       browserSessionClient
         .inspectAt(sessionId, vx, vy)
         .then((info) => {
-          if (info && typeof info === 'object') {
+          if (isAnnotationDomInfo(info)) {
             setHover({
               cx,
               cy,
               overlayWidth: rect.width,
               overlayHeight: rect.height,
-              info: info as AnnotationDomInfo,
+              info,
             });
           } else {
             setHover(null);

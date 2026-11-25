@@ -360,11 +360,14 @@ export async function explainUnresolved(
   return 'general-runner-offline';
 }
 
-/** User-facing 502 message for a routing failure. */
-export function describeResolutionFailure(reason: RunnerResolutionFailure): {
+/** The 502 body of a routing failure: a message for the user and the failure's code. */
+interface ResolutionFailureBody {
   error: string;
   code: RunnerResolutionFailure;
-} {
+}
+
+/** User-facing 502 message for a routing failure. */
+export function describeResolutionFailure(reason: RunnerResolutionFailure): ResolutionFailureBody {
   switch (reason) {
     case 'project-runner-offline':
       return {

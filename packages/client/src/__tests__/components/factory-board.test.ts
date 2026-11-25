@@ -14,12 +14,19 @@ import {
   factoryBoardColumn,
   layoutFactoryBoard,
 } from '@/components/factory-board/board-columns';
-import { factoryRunGateChips } from '@/components/factory-board/run-gates';
+import { factoryRunGateChips, isFactoryRunHeldForRisk } from '@/components/factory-board/run-gates';
 import { factoryRunStrip } from '@/components/factory-board/run-progress';
-import { factoryRunStateChip } from '@/components/factory-board/run-state-chip';
+import {
+  factoryBoardStateChip,
+  factoryRunStateChip,
+} from '@/components/factory-board/run-state-chip';
 import { factoryRunWaitingText } from '@/components/factory-board/run-waiting';
 import { buildFactoryRun } from '@/data/factory/testing';
-import { filterFactoryRuns } from '@/lib/factory-run-labels';
+import {
+  factoryRunFallbackTitle,
+  factoryRunTitle,
+  filterFactoryRuns,
+} from '@/lib/factory-run-labels';
 
 /** An i18next with no resources: every text is its fallback, with its values filled in. */
 const i18n = i18next.createInstance();
@@ -241,11 +248,12 @@ describe('factoryRunGateChips', () => {
     });
   });
 
-  test('a proof carried to the head commit is current', () => {
+  test('a review and proof that passed for the head commit have no chip', () => {
     const chips = factoryRunGateChips(
       t,
       buildFactoryRun({
         risk: { headSha: 'head', level: 'low', reasons: [] },
+        reviews: [review('head', 'pass')],
         regressionProof: {
           headSha: 'head',
           carriedFrom: 'older',
@@ -254,17 +262,143 @@ describe('factoryRunGateChips', () => {
         },
       }),
     );
-    expect(chips.find((c) => c.id === 'proof')).toMatchObject({ tone: 'pass', stale: false });
+    expect(chips.map((c) => c.id)).toEqual(['risk']);
   });
 
-  test('CI shows its rounds and what went wrong', () => {
+  test('a failed review or proof keeps its chip', () => {
+    const chips = factoryRunGateChips(
+      t,
+      buildFactoryRun({
+        risk: { headSha: 'head', level: 'low', reasons: [] },
+        reviews: [review('head', 'fail')],
+        regressionProof: { headSha: 'head', verdict: 'fail', ranAt: hoursAgo(1) },
+      }),
+    );
+    expect(chips.map((c) => [c.id, c.tone])).toEqual([
+      ['risk', 'pass'],
+      ['review', 'fail'],
+      ['proof', 'fail'],
+    ]);
+  });
+
+  test('a proof that passed for an older commit has no chip either', () => {
+    const chips = factoryRunGateChips(
+      t,
+      buildFactoryRun({
+        risk: { headSha: 'head', level: 'low', reasons: [] },
+        regressionProof: { headSha: 'older', verdict: 'pass', ranAt: hoursAgo(1) },
+      }),
+    );
+    expect(chips.map((c) => c.id)).toEqual(['risk']);
+  });
+
+  test('CI rounds that are over have no chip; running CI says which round', () => {
     const run = buildFactoryRun({ state: 'reviewing' });
     run.metrics = { ...run.metrics, ciRounds: 3, ciRed: 1, conflicts: 1 };
-    expect(factoryRunGateChips(t, run).find((c) => c.id === 'ci')).toMatchObject({
-      tone: 'warn',
-      label: 'CI ×3',
-      detail: '1 red · 1 conflicts',
+    expect(factoryRunGateChips(t, run).find((c) => c.id === 'ci')).toBeUndefined();
+    expect(
+      factoryRunGateChips(t, { ...run, state: 'waiting_ci' }).find((c) => c.id === 'ci'),
+    ).toMatchObject({ label: 'CI running', detail: 'Round 4 · 1 red · 1 conflicts' });
+  });
+
+  test('a parked run without a commit gets a red No commit chip with the reason', () => {
+    const run = buildFactoryRun({ state: 'waiting_human', failureReason: 'no change' });
+    expect(factoryRunGateChips(t, run)).toEqual([
+      expect.objectContaining({
+        id: 'problem',
+        tone: 'fail',
+        label: 'No commit',
+        detail: 'No commit, but unsaved work in its checkout',
+      }),
+    ]);
+  });
+
+  test('a step that failed names the step; a known merge hold gets its own label', () => {
+    const failed = buildFactoryRun({
+      state: 'waiting_human',
+      failureReason: 'tests timed out',
+      currentStep: 'implement',
     });
+    expect(factoryRunGateChips(t, failed)[0]).toMatchObject({
+      id: 'problem',
+      label: 'implement failed',
+      detail: 'tests timed out',
+    });
+    const noReview = buildFactoryRun({ state: 'waiting_human', failureReason: 'no review' });
+    expect(factoryRunGateChips(t, noReview)[0]).toMatchObject({ label: 'No review' });
+  });
+
+  test('a risk hold or a failed review has no problem chip: its own chip says it', () => {
+    for (const failureReason of ['high risk', 'review failed']) {
+      const run = buildFactoryRun({ state: 'waiting_human', failureReason });
+      expect(factoryRunGateChips(t, run).some((c) => c.id === 'problem')).toBe(false);
+    }
+  });
+
+  test("a risk hold's reason moves to the High risk chip's tooltip", () => {
+    const run = buildFactoryRun({
+      state: 'waiting_human',
+      failureReason: 'high risk',
+      risk: { headSha: 'h1', level: 'high', reasons: ['touches auth'] },
+    });
+    expect(isFactoryRunHeldForRisk(run)).toBe(true);
+    expect(factoryRunGateChips(t, run)[0]).toMatchObject({
+      id: 'risk',
+      detail: 'Not merged: high risk, it needs you\ntouches auth',
+    });
+  });
+});
+
+describe('board chips carry what the card used to say in lines', () => {
+  test('a queued run waits behind an issue: a neutral chip, red when it cannot start', () => {
+    const behind = buildFactoryRun({
+      state: 'requested',
+      waitReason: { kind: 'paths-overlap', blockers: [47, 48] },
+    });
+    expect(factoryRunGateChips(t, behind)[0]).toMatchObject({
+      id: 'wait',
+      tone: 'neutral',
+      label: 'Same files as #47 +1',
+      detail: 'Waiting for #47, #48: it works on the same files',
+    });
+    const blocked = buildFactoryRun({
+      state: 'requested',
+      waitReason: { kind: 'blocker-failed', blockers: [12] },
+    });
+    expect(factoryRunGateChips(t, blocked)[0]).toMatchObject({
+      id: 'wait',
+      tone: 'fail',
+      label: 'Blocked by #12',
+    });
+  });
+
+  test("triage's questions are the Needs info chip's tooltip", () => {
+    const run = buildFactoryRun({
+      state: 'needs_info',
+      triage: { decision: 'needs_info', at: hoursAgo(1), items: ['a', 'b'] },
+    });
+    expect(factoryBoardStateChip(t, run, false)).toMatchObject({
+      label: 'Needs info',
+      detail: 'Triage asked 2 questions on the issue',
+    });
+  });
+
+  test("a failed run's reason is the Failed chip's tooltip", () => {
+    const run = buildFactoryRun({ state: 'failed', failureReason: 'tests timed out' });
+    expect(factoryBoardStateChip(t, run, true)).toMatchObject({
+      label: 'Failed',
+      tone: 'danger',
+      detail: 'tests timed out',
+    });
+  });
+});
+
+describe('factoryRunFallbackTitle', () => {
+  test("a run with no thread is named by its issue's title once the run read it", () => {
+    const named = buildFactoryRun({ issueNumber: 490, issueTitle: 'Client stores' });
+    expect(factoryRunFallbackTitle(t, named)).toBe('#490 Client stores');
+    const unnamed = buildFactoryRun({ issueNumber: 490, issueTitle: null });
+    expect(factoryRunFallbackTitle(t, unnamed)).toBe('Issue #490');
   });
 });
 
@@ -294,6 +428,43 @@ describe('factoryRunStateChip', () => {
         buildFactoryRun({ state: 'done', triage: { ...triage, splitInto: [40, 41] } }),
       ),
     ).toEqual({ label: 'Split', tone: 'info' });
+  });
+});
+
+describe('factoryBoardStateChip', () => {
+  test('a thread card leaves out the states its icon and column already show', () => {
+    for (const state of ['working', 'waiting_human', 'stopped'] as const) {
+      expect(factoryBoardStateChip(t, buildFactoryRun({ state }), true)).toBeNull();
+    }
+    expect(factoryBoardStateChip(t, buildFactoryRun({ state: 'failed' }), true)?.label).toBe(
+      'Failed',
+    );
+    expect(factoryBoardStateChip(t, buildFactoryRun({ state: 'fixing' }), true)?.label).toBe(
+      'Fixing CI',
+    );
+  });
+
+  test('a card with no thread has a clock for its icon, so it keeps the chip', () => {
+    const run = buildFactoryRun({ state: 'stopped', threadIds: ['t1'] });
+    expect(factoryBoardStateChip(t, run, false)?.label).toBe('Stopped');
+  });
+
+  test('a run stopped before any agent ran says it never started, and how', () => {
+    const queued = buildFactoryRun({ state: 'stopped', threadIds: [], admittedAt: null });
+    expect(factoryBoardStateChip(t, queued, false)).toMatchObject({
+      label: 'Not started',
+      detail: expect.stringContaining('Taken out of the queue'),
+    });
+    const admitted = buildFactoryRun({
+      state: 'stopped',
+      threadIds: [],
+      admittedAt: '2026-01-01T00:00:00.000Z',
+    });
+    expect(factoryBoardStateChip(t, admitted, false)?.detail).toContain('before its first step');
+  });
+
+  test('waiting for you is the column itself, with or without a thread', () => {
+    expect(factoryBoardStateChip(t, buildFactoryRun({ state: 'waiting_human' }), false)).toBeNull();
   });
 });
 
@@ -380,5 +551,20 @@ describe('filterFactoryRuns activeOnly', () => {
       activeOnly: true,
     });
     expect(kept.map((run) => run.id)).toEqual(['waiting_human', 'working', 'failed']);
+  });
+});
+
+describe('factoryRunTitle', () => {
+  const threadTitle = '[Factory] #490 Client stores (old name)';
+
+  test("a run is named by its ticket's title, not its thread's", () => {
+    const run = buildFactoryRun({ issueNumber: 490, issueTitle: 'Client stores' });
+    expect(factoryRunTitle(t, run, threadTitle)).toBe('#490 Client stores');
+  });
+
+  test("without the ticket's title it falls back to the thread's, then the issue number", () => {
+    const run = buildFactoryRun({ issueNumber: 490, issueTitle: null });
+    expect(factoryRunTitle(t, run, threadTitle)).toBe(threadTitle);
+    expect(factoryRunTitle(t, run, undefined)).toBe('Issue #490');
   });
 });

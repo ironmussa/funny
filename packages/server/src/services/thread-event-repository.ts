@@ -2,6 +2,7 @@
  * Thread event persistence backed by the server's database.
  */
 
+import type { JsonObject } from '@bufbuild/protobuf';
 import { eq, desc } from 'drizzle-orm';
 
 import { db } from '../db/index.js';
@@ -12,7 +13,8 @@ export interface ThreadEvent {
   id?: string;
   threadId: string;
   type: string;
-  data: Record<string, unknown>;
+  /** The event's payload as the runner sent it (a protobuf `Struct`), stored as JSON. */
+  data: JsonObject;
   timestamp?: number;
 }
 
@@ -42,7 +44,7 @@ async function createThreadEvent(event: ThreadEvent): Promise<void> {
 export async function saveThreadEvent(
   threadId: string,
   type: string,
-  data: Record<string, unknown>,
+  data: JsonObject,
   /** Same id as the live broadcast, so a reload does not show the event twice. */
   id?: string,
 ): Promise<void> {

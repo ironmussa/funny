@@ -112,6 +112,7 @@ export async function prepareSandboxLaunch(
   if (
     existing.isOk() &&
     existing.value &&
+    // SAFETY: thread_sandboxes.state is written only by the store's put ('provisioning') and transition (a machine rule's target).
     ACTIVE_SANDBOX_STATES.has(existing.value.state as SandboxState)
   ) {
     return err({

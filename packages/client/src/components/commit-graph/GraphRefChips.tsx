@@ -36,6 +36,15 @@ import { cn } from '@/lib/utils';
 export const GRAPH_REF_CHIP_HEIGHT_PX = 15;
 export const GRAPH_REF_CHIP_GAP_PX = 4;
 
+/**
+ * Size of the thread-branch arrowhead and its gap to the chip, in px: the
+ * emphasized leader line stops at the arrowhead's base (`GraphCommitRow`), so
+ * the head, not the line's round cap, is the arrow's tip.
+ */
+export const THREAD_BRANCH_MARKER_WIDTH_PX = 7;
+const THREAD_BRANCH_MARKER_HEIGHT_PX = 10;
+export const THREAD_BRANCH_MARKER_GAP_PX = 2;
+
 function branchStateLabel(t: ReturnType<typeof useTranslation>['t'], branch: GraphBranchSummary) {
   switch (branch.state) {
     case 'synced':
@@ -148,7 +157,8 @@ function ThreadBranchMarker({ branch, color }: { branch: string; color: string }
         >
           <svg
             viewBox="0 0 7 10"
-            className="h-[0.625rem] w-[0.4375rem]"
+            width={THREAD_BRANCH_MARKER_WIDTH_PX}
+            height={THREAD_BRANCH_MARKER_HEIGHT_PX}
             fill="currentColor"
             aria-hidden="true"
           >
@@ -515,11 +525,14 @@ function GraphRefChip({
 
   return (
     <div
+      // A merged PR is told by its badge and tooltip, not by fading the chip:
+      // opacity would also fade the name and let the row show through.
       className={cn(
         'inline-flex h-[var(--graph-ref-chip-height)] max-w-full min-w-0 shrink-0 items-center gap-0.5 rounded-full bg-[color:var(--graph-ref-chip-bg)] px-1 py-px text-[color:var(--graph-ref-chip-fg)] transition-[filter] hover:brightness-90',
-        isMergedRef(gitRef) && 'opacity-60',
-        // The thread's chip is outlined in a darker shade of its own color.
-        isThreadBranch && '[box-shadow:0_0_0_1.5px_var(--graph-ref-chip-outline)]',
+        // The thread's chip is outlined in a darker shade of its own color. The
+        // ring is inset: the refs line clips at the chip's exact height, so an
+        // outer ring would be cut at the top and bottom.
+        isThreadBranch && '[box-shadow:inset_0_0_0_1.5px_var(--graph-ref-chip-outline)]',
       )}
       style={{
         '--graph-ref-chip-height': `${GRAPH_REF_CHIP_HEIGHT_PX}px`,
@@ -639,7 +652,10 @@ export function GraphRefChips({
             key={`${gitRef.kind}:${gitRef.name}`}
             className="relative flex max-w-full min-w-0 items-center"
           >
-            <span className="absolute top-1/2 right-full mr-0.5 inline-flex -translate-y-1/2">
+            <span
+              className="absolute top-1/2 right-full mr-[var(--thread-branch-marker-gap)] inline-flex -translate-y-1/2"
+              style={{ '--thread-branch-marker-gap': `${THREAD_BRANCH_MARKER_GAP_PX}px` }}
+            >
               <ThreadBranchMarker branch={gitRef.name} color={color} />
             </span>
             {chip}

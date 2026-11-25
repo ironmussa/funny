@@ -1,3 +1,4 @@
+import type { JsonObject } from '@bufbuild/protobuf';
 import type { WSEvent } from '@funny/shared';
 import { isRunnerUserEventType } from '@funny/shared/runner-protocol';
 import { FailureCode } from '@funny/shared/runner-v2/common';
@@ -59,7 +60,9 @@ export class RunnerEventPublisher {
     const stored = this.store.append({
       scope: { threadId, executionId: this.executions.get(threadId)! },
       eventType: event.type,
-      data: event.data as Record<string, unknown>,
+      // SAFETY: every WS event payload is a plain JSON object: it is what the
+      // browser receives as JSON, and the server reads it back as a Struct.
+      data: event.data as JsonObject,
       durability: runnerEventDurability(event),
     });
     this.send(stored);

@@ -50,10 +50,7 @@ export async function waitForStableRendererEvidence({
   }
 }
 
-export function unsupportedVisualCaptureEvidence(
-  fixtureId: string,
-  reason: string,
-): Record<string, unknown> {
+export function unsupportedVisualCaptureEvidence(fixtureId: string, reason: string) {
   return {
     fixtureId,
     screenshot: { supported: false, reason },
@@ -61,10 +58,7 @@ export function unsupportedVisualCaptureEvidence(
   };
 }
 
-export function failedVisualCaptureEvidence(
-  fixtureId: string,
-  error: unknown,
-): Record<string, unknown> {
+export function failedVisualCaptureEvidence(fixtureId: string, error: unknown) {
   return {
     fixtureId,
     screenshot: {

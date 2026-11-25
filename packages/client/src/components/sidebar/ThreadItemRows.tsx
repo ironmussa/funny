@@ -29,9 +29,7 @@ function CreatedByIcon({ createdBy }: { createdBy?: string | null }) {
       <TooltipTrigger asChild>
         <Bot className="icon-xs text-muted-foreground shrink-0" />
       </TooltipTrigger>
-      <TooltipContent side="top" className="text-xs">
-        {t('thread.createdBy', { creator: createdBy })}
-      </TooltipContent>
+      <TooltipContent side="top">{t('thread.createdBy', { creator: createdBy })}</TooltipContent>
     </Tooltip>
   );
 }
@@ -85,9 +83,7 @@ function AgentTemplateBadge({ thread }: { thread: Thread }) {
           {agentTemplate.name}
         </span>
       </TooltipTrigger>
-      <TooltipContent side="top" className="text-xs">
-        {agentTemplate.description || agentTemplate.name}
-      </TooltipContent>
+      <TooltipContent side="top">{agentTemplate.description || agentTemplate.name}</TooltipContent>
     </Tooltip>
   );
 }
@@ -274,7 +270,7 @@ function ScratchBadge({ threadId }: { threadId: string }) {
           <NotebookPen className="icon-xs" />
         </span>
       </TooltipTrigger>
-      <TooltipContent side="top" className="text-xs">
+      <TooltipContent side="top">
         {t('thread.scratchTooltip', {
           defaultValue: 'Scratch thread — no project, no git',
         })}
@@ -305,7 +301,7 @@ function LiveBrowserIcon({ threadId }: { threadId: string }) {
           <Globe className="icon-xs" />
         </span>
       </TooltipTrigger>
-      <TooltipContent side="top" className="text-xs">
+      <TooltipContent side="top">
         {t('thread.browserOpenTooltip', { defaultValue: 'Browser open — click to show it' })}
       </TooltipContent>
     </Tooltip>

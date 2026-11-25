@@ -118,7 +118,7 @@ describe('factory runs repository', () => {
     expect((await repo.activeByIssue(factoryId, 42))._unsafeUnwrap()?.id).toBe(run.id);
     expect((await repo.countActive(factoryId))._unsafeUnwrap()).toBe(1);
 
-    (await repo.update(run.id, { state: 'merged' }))._unsafeUnwrap();
+    (await repo.updateInFlight(run.id, { state: 'merged' }))._unsafeUnwrap();
     expect((await repo.activeByIssue(factoryId, 42))._unsafeUnwrap()).toBeNull();
     expect((await repo.countActive(factoryId))._unsafeUnwrap()).toBe(0);
   });
@@ -128,7 +128,7 @@ describe('factory runs repository', () => {
     const factoryId = await makeFactory();
     const run = (await repo.start({ factoryId, issueNumber: 7 }))._unsafeUnwrap();
     (
-      await repo.update(run.id, {
+      await repo.updateInFlight(run.id, {
         state: 'pr_open',
         currentStep: 'review',
         prUrl: 'https://x/pr/1',
@@ -143,7 +143,7 @@ describe('factory runs repository', () => {
       threadIds: ['t1', 't2'],
       completedAt: null,
     });
-    (await repo.update(run.id, { state: 'failed' }))._unsafeUnwrap();
+    (await repo.updateInFlight(run.id, { state: 'failed' }))._unsafeUnwrap();
     expect((await repo.list(factoryId))._unsafeUnwrap()[0]?.completedAt).not.toBeNull();
   });
 

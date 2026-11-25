@@ -12,6 +12,10 @@ export interface UseCommitDraftResult {
   commitBodyRef: React.MutableRefObject<string>;
 }
 
+function isUpdater(value: string | ((prev: string) => string)): value is (prev: string) => string {
+  return typeof value === 'function';
+}
+
 /**
  * Owns the in-progress commit draft (title + body) for a single git context
  * (thread or project). Persists every keystroke to the global draft store and
@@ -38,7 +42,7 @@ export function useCommitDraft(draftId: string | null | undefined): UseCommitDra
   const setCommitTitle = useCallback(
     (v: string | ((prev: string) => string)) => {
       setCommitTitleRaw((prev) => {
-        const next = typeof v === 'function' ? v(prev) : v;
+        const next = isUpdater(v) ? v(prev) : v;
         if (draftId) {
           setCommitDraft(draftId, next, commitBodyRef.current);
         }
@@ -51,7 +55,7 @@ export function useCommitDraft(draftId: string | null | undefined): UseCommitDra
   const setCommitBody = useCallback(
     (v: string | ((prev: string) => string)) => {
       setCommitBodyRaw((prev) => {
-        const next = typeof v === 'function' ? v(prev) : v;
+        const next = isUpdater(v) ? v(prev) : v;
         if (draftId) {
           setCommitDraft(draftId, commitTitleRef.current, next);
         }

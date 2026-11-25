@@ -54,6 +54,9 @@ const runSchema = z.object({
   inputs: z.record(z.string(), z.unknown()).optional(),
 });
 
+/** The run request's workflow inputs, as the caller sent them. */
+type WorkflowRunInputs = NonNullable<z.infer<typeof runSchema>['inputs']>;
+
 workflowRuntimeRoutes.get('/', async (c) => {
   const userId = c.get('userId');
   if (!userId) return c.json({ error: 'Unauthenticated' }, 401);
@@ -297,10 +300,7 @@ function asWarnings(
   return issues.map((issue) => ({ ...issue, severity: 'warning' }));
 }
 
-function requiredInputsMissing(
-  workflow: ParsedWorkflow,
-  inputs: Record<string, unknown>,
-): string[] {
+function requiredInputsMissing(workflow: ParsedWorkflow, inputs: WorkflowRunInputs): string[] {
   return Object.entries(workflow.inputs ?? {})
     .filter(([, def]) => def.required === true)
     .map(([name]) => name)

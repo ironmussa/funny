@@ -118,8 +118,8 @@ export interface BrowserHostOptions {
   onExit: (detail: string) => void;
 }
 
-function toError(err: unknown): Error {
-  return err instanceof Error ? err : new Error(String(err));
+function toError(cause: unknown): Error {
+  return cause instanceof Error ? cause : new Error(String(cause));
 }
 
 /** Directory of a user's persistent browser profile on this runner. */

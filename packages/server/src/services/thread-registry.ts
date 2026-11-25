@@ -113,7 +113,7 @@ export async function updateThreadStatus(
   status: string,
   stage?: string,
 ): Promise<void> {
-  const updates: Record<string, unknown> = { status };
+  const updates: Partial<typeof threads.$inferInsert> = { status };
   if (stage) updates.stage = stage;
   if (status === 'completed' || status === 'error') {
     updates.completedAt = new Date().toISOString();

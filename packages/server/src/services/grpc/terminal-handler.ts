@@ -1,7 +1,12 @@
 import { FailureCode } from '@funny/shared/runner-v2/common';
 import { TERMINAL_SESSION_UNAVAILABLE } from '@funny/shared/socket-events';
 
-import type { RunnerTerminalEvent, RunnerTerminalPort } from '../runner-ports.js';
+import type {
+  BrowserEvent,
+  RunnerTerminalEvent,
+  RunnerTerminalPort,
+  RunnerTerminalSession,
+} from '../runner-ports.js';
 import type { RunnerGrpcConfig } from './config.js';
 import type {
   RunnerGrpcCall,
@@ -10,7 +15,55 @@ import type {
 } from './runner-grpc-server.js';
 import type { RunnerGrpcSessionRegistry } from './session-registry.js';
 
-type WireFrame = Record<string, any>;
+/**
+ * A runner.v2 `TerminalRequest` (runner to server) as proto-loader decodes it:
+ * 64-bit integers as strings, unset fields absent, one `frame` field set.
+ */
+interface TerminalRequestFrame {
+  session?: { sessionEpoch?: string };
+  terminalId?: string;
+  ready?: Record<string, never>;
+  output?: TerminalOutputFrame;
+  close?: TerminalCloseFrame;
+  gap?: { requestedSequence?: string; earliestAvailableSequence?: string };
+  failure?: { code?: number; message?: string; retryable?: boolean };
+}
+
+interface TerminalOutputFrame {
+  sequence?: string;
+  data?: Uint8Array;
+}
+
+interface TerminalCloseFrame {
+  exitCode?: number;
+  signal?: string;
+  reason?: string;
+}
+
+/**
+ * The `frame` of a runner.v2 `TerminalResponse` (server to runner). The values
+ * taken from a browser's terminal message are passed on as it sent them;
+ * proto-loader converts them to the field's type when it encodes the frame.
+ */
+type TerminalResponseFrame =
+  | {
+      open: {
+        terminalId: string;
+        cwd: unknown;
+        columns: unknown;
+        rows: unknown;
+        userId: string;
+        shell: unknown;
+        projectId: unknown;
+        label: unknown;
+        scratchThreadId: unknown;
+      };
+    }
+  | { input: { ordinal: string; data: Buffer } }
+  | { resize: { columns: unknown; rows: unknown } }
+  | { signal: { signal: unknown } }
+  | { close: { reason: string } }
+  | { resume: { terminalId: string; lastSeenOutputSequence: string; replayOnly?: boolean } };
 
 export type GrpcTerminalBrowserEvent = RunnerTerminalEvent;
 
@@ -37,6 +90,7 @@ interface ActiveTerminalStream {
 
 function unsigned(value: unknown): bigint | null {
   try {
+    // SAFETY: BigInt throws on any value it cannot convert, and the catch below maps that to null.
     const parsed = BigInt(value as string | number | bigint);
     return parsed >= 0n ? parsed : null;
   } catch {
@@ -53,14 +107,14 @@ export class RunnerGrpcTerminalDispatcher {
   private readonly terminals = new Map<string, TerminalState>();
   private readonly pendingResizes = new Map<
     string,
-    { runnerId: string; columns: number; rows: number }
+    { runnerId: string; columns: unknown; rows: unknown }
   >();
   private resizeFlushScheduled = false;
 
   constructor(
     private readonly config: RunnerGrpcConfig,
     private readonly sessions: RunnerGrpcSessionRegistry,
-    private readonly relayToUser: (userId: string, event: Record<string, unknown>) => void,
+    private readonly relayToUser: (userId: string, event: BrowserEvent) => void,
   ) {}
 
   isConnected(runnerId: string): boolean {
@@ -175,9 +229,9 @@ export class RunnerGrpcTerminalDispatcher {
     }
   }
 
-  listSessions(runnerId: string, userId: string): Array<Record<string, unknown>> {
+  listSessions(runnerId: string, userId: string): RunnerTerminalSession[] {
     const prefix = `${runnerId}\0`;
-    const sessions: Array<Record<string, unknown>> = [];
+    const sessions: RunnerTerminalSession[] = [];
     for (const [key, state] of this.terminals) {
       if (!key.startsWith(prefix) || state.userId !== userId) continue;
       sessions.push({
@@ -191,7 +245,12 @@ export class RunnerGrpcTerminalDispatcher {
     return sessions;
   }
 
-  receive(runnerId: string, epoch: bigint, call: RunnerGrpcCall, frame: WireFrame): void {
+  receive(
+    runnerId: string,
+    epoch: bigint,
+    call: RunnerGrpcCall,
+    frame: TerminalRequestFrame,
+  ): void {
     const stream = this.currentStream(runnerId, epoch, call);
     if (!stream) return;
     const terminalId = typeof frame.terminalId === 'string' ? frame.terminalId : '';
@@ -229,10 +288,10 @@ export class RunnerGrpcTerminalDispatcher {
     stream: ActiveTerminalStream,
     terminalId: string,
     state: TerminalState,
-    output: WireFrame,
+    output: TerminalOutputFrame,
   ): void {
     const sequence = unsigned(output.sequence);
-    const data = output.data as Uint8Array | undefined;
+    const data = output.data;
     if (
       sequence === null ||
       !(data instanceof Uint8Array) ||
@@ -257,7 +316,7 @@ export class RunnerGrpcTerminalDispatcher {
     runnerId: string,
     terminalId: string,
     state: TerminalState,
-    close: WireFrame,
+    close: TerminalCloseFrame,
   ): void {
     this.relayOutput(state, terminalId, state.outputDecoder.decode());
     this.relayToUser(state.userId, {
@@ -302,7 +361,11 @@ export class RunnerGrpcTerminalDispatcher {
     });
   }
 
-  private write(stream: ActiveTerminalStream, terminalId: string, frame: WireFrame): void {
+  private write(
+    stream: ActiveTerminalStream,
+    terminalId: string,
+    frame: TerminalResponseFrame,
+  ): void {
     stream.call.write({
       session: { sessionEpoch: stream.epoch.toString() },
       terminalId,
@@ -354,7 +417,7 @@ export function createTerminalHandler(
     call.once('cancelled', close);
     call.once('close', close);
     call.once('error', close);
-    call.on('data', (request: WireFrame) => {
+    call.on('data', (request: TerminalRequestFrame) => {
       const epoch = unsigned(request.session?.sessionEpoch) ?? 0n;
       if (!sessions.isActive(context.principal.runnerId, epoch)) {
         call.write({
@@ -379,7 +442,7 @@ export function createTerminalHandler(
 
 export interface TerminalHandlerOptions {
   dispatcher?: RunnerGrpcTerminalDispatcher;
-  relayToUser?: (userId: string, event: Record<string, unknown>) => void;
+  relayToUser?: (userId: string, event: BrowserEvent) => void;
 }
 
 /**
@@ -398,7 +461,7 @@ export class GrpcRunnerTerminalAdapter implements RunnerTerminalPort {
     this.dispatcher.dispatch(runnerId, userId, event);
   }
 
-  async listSessions(runnerId: string, userId: string): Promise<Array<Record<string, unknown>>> {
+  async listSessions(runnerId: string, userId: string): Promise<RunnerTerminalSession[]> {
     return this.dispatcher.listSessions(runnerId, userId);
   }
 }

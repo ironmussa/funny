@@ -9,6 +9,7 @@ import type { IAgentProcess } from '@funny/core/agents';
 import { ChromeSession } from '@funny/core/chrome';
 import type { Page } from 'playwright';
 
+import type { AgentMcpServerEntry } from '../../services/agent-startup/load-mcp-servers.js';
 import type { BrowserHost, BrowserTab } from '../../services/browser-automation/browser-host.js';
 import { RefGenerations } from '../../services/browser-automation/snapshot-refs.js';
 import type { BrowserSession } from '../../services/browser-session-manager.js';
@@ -51,6 +52,18 @@ export function expectDefined<T>(value: T | null | undefined): T {
   expect(value).not.toBeNull();
   if (value === undefined || value === null) throw new Error('expected a value');
   return value;
+}
+
+/** funny's own MCP servers are loopback HTTP entries with a bearer header. */
+export function expectHttpMcpEntry(entry: AgentMcpServerEntry | undefined): {
+  url: string;
+  headers: Record<string, string>;
+} {
+  const defined = expectDefined(entry);
+  if (!('url' in defined) || !defined.url || !('headers' in defined) || !defined.headers) {
+    throw new Error('expected an HTTP MCP server entry');
+  }
+  return { url: defined.url, headers: defined.headers };
 }
 
 // ── Browser automation ─────────────────────────────────────────

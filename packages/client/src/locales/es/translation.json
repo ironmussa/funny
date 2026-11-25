@@ -734,6 +734,10 @@
     "projectFactorySensitivePathsDesc": "Globs separados por comas. Un cambio que toca una es de riesgo alto, además de .github/, migraciones y auth/",
     "projectFactoryMaxLowRiskLines": "Tamaño de un cambio de riesgo bajo",
     "projectFactoryMaxLowRiskLinesDesc": "Un cambio con más líneas cambiadas que esto es de riesgo alto. No cuentan pruebas, Markdown, traducciones, stories, snapshots ni lockfiles",
+    "projectFactoryApprovalAdjust": "Ajuste que sigue una aprobación",
+    "projectFactoryApprovalAdjustDesc": "Después de aprobar un cambio de riesgo alto, la fábrica puede fusionar un commit posterior que difiera de él como mucho en estas líneas, solo en archivos que aprobaste y sin motivos de riesgo nuevos. Fusiona entonces líneas que ninguna persona leyó; la revisión debe pasar igualmente. 0: solo el mismo cambio",
+    "projectFactoryHoldPaths": "Reservar archivos mientras espera una aprobación",
+    "projectFactoryHoldPathsDesc": "Mientras un cambio de alto riesgo espera tu aprobación, ninguna otra ejecución empieza sobre los archivos que se espera que toque, por un máximo de 12 horas. Las ejecuciones posteriores esperan más; los cambios aprobados encuentran menos conflictos",
     "projectFactorySizeIgnoredPaths": "No cuentan en el tamaño",
     "projectFactorySizeIgnoredPathsDesc": "Globs separados por comas. Sus líneas no cuentan para el tamaño de un cambio. Las rutas sensibles siguen aplicándose a ellos",
     "projectFactoryStageLimits": "Corridas por paso",
@@ -1655,6 +1659,9 @@
     }
   },
   "errors": {
+    "factoryApprove": {
+      "CONFLICT": "Este cambio se actualizó después de que lo abriste. No se aprobó nada: revisa el commit nuevo."
+    },
     "generic": {
       "NOT_FOUND": "No se encontró el recurso solicitado.",
       "BAD_REQUEST": "No se pudo procesar la solicitud. Revisa los datos ingresados.",
@@ -1812,9 +1819,13 @@
       "failed": "Falló",
       "stopped": "Detenida",
       "split": "Dividido",
+      "notStarted": "Sin empezar",
+      "notStartedQueued": "Sacada de la cola antes de empezar: ningún agente se ejecutó, sin rama ni pull request",
+      "notStartedStopped": "Detenida antes de su primer paso: ningún agente se ejecutó, sin rama ni pull request",
       "tooBig": "Muy grande"
     },
     "wait": {
+      "pathsAwaitingApproval": "Esperando a {{blockers}}: reserva los mismos archivos mientras espera una aprobación",
       "notSent": "Bloqueada por {{blockers}}, que no está en el factory",
       "inProgress": "Esperando a que termine {{blockers}}",
       "waitingMerge": "Esperando el pull request de {{blockers}}",
@@ -1873,6 +1884,8 @@
     },
     "proof": {
       "title": "Prueba de regresión",
+      "laterRun": "Este run terminó. El issue #{{issue}} se envió de nuevo como otro run: {{state}}",
+      "laterRunPr": "pull request",
       "pass": "Aprobada",
       "fail": "Fallida",
       "skipped": "Omitida",
@@ -1902,11 +1915,58 @@
       "noReview": "El commit que se fusionaría no tiene veredicto del paso de review del flujo, así que nadie lo revisó. Revisa el pull request y haz el merge tú.",
       "reviewFailed": "La review del commit que se fusionaría no pasó. Lee sus hallazgos en el pull request y luego pide en este hilo que los arregle, o haz el merge tú.",
       "rewritten": "La rama ya no contiene el commit que se revisó (un rebase o un force push), así que lo que se fusionaría no se revisó. Mira el nuevo head en el pull request antes de hacer el merge tú.",
-      "mergeRounds": "Las rondas de arreglos del agente no lograron que el cambio se fusione con su rama base. Revisa el pull request y resuélvelo tú."
+      "mergeRounds": "Las rondas de arreglos del agente no lograron que el cambio se fusione con su rama base. Revisa el pull request y resuélvelo tú.",
+      "baseMoving": "GitHub rechazó el merge varias veces porque la rama base o el pull request no dejaban de cambiar. Reintenta la ejecución cuando la rama esté quieta."
     },
     "approveMerge": "Aprobar y hacer merge",
+    "markDone": "Marcar como hecho",
+    "lintCleanup": "Limpieza de lint",
+    "lintCleanupOff": "No es limpieza de lint",
+    "lintCleanupTitle": "¿Volver a tratar esta ejecución como limpieza de lint?",
+    "lintCleanupBody": "Triage la clasificó como limpieza de lint de reglas que no pueden cambiar el comportamiento. Su tamaño y los riesgos que nombra su contrato dejarán de retenerla: la fábrica la fusiona sola cuando pasen sus checks, su revisión y su prueba de regresión, sin importar los commits que sigan. Seguirá esperándote si toca una ruta sensible, debilita un test, añade una supresión de lint o cambia la configuración del lint.",
+    "lintCleanupConfirm": "Tratar como limpieza de lint",
     "approveMergeTitle": "¿Hacer merge de este cambio de riesgo alto?",
-    "approveMergeBody": "El factory hará merge del commit {{sha}} del issue #{{issue}} si sus checks, su review y su prueba de regresión siguen pasando. Un commit nuevo en la rama necesita una nueva aprobación."
+    "approveMergeBody": "El factory hará merge del commit {{sha}} del issue #{{issue}} si sus checks, su review y su prueba de regresión siguen pasando. Un commit nuevo en la rama necesita una nueva aprobación.",
+    "approvalGap": {
+      "title": "Aprobaste",
+      "unknown": "No se pudo calcular qué cambió desde entonces: lee el cambio completo.",
+      "lines_one": "Desde entonces difiere {{count}} línea del cambio:",
+      "lines_other": "Desde entonces difieren {{count}} líneas del cambio:",
+      "newFile": "no estaba en el cambio aprobado",
+      "baseFile": "código que trajo la base",
+      "moreFiles_one": "y {{count}} archivo más",
+      "moreFiles_other": "y {{count}} archivos más",
+      "newRisks": "Razones de riesgo nuevas:",
+      "why": "La aprobación no siguió al commit nuevo. Razón de la fábrica: {{reason}}.",
+      "compare": "Commits desde la aprobación",
+      "board_one": "Pide de nuevo: cambió {{count}} línea",
+      "board_other": "Pide de nuevo: cambiaron {{count}} líneas",
+      "boardChip": "Pide de nuevo",
+      "boardUnknown": "Pide de nuevo: el cambio difiere de lo que aprobaste"
+    },
+    "approvalRequest": {
+      "title": "Se necesita tu aprobación para fusionar #{{issue}}",
+      "titleNoIssue": "Se necesita tu aprobación para fusionar esta ejecución",
+      "approvedTitle": "Aprobaste fusionar #{{issue}}",
+      "declinedTitle": "Rechazaste aprobar #{{issue}}",
+      "expiredTitle": "La solicitud para aprobar #{{issue}} expiró",
+      "asked": "Lo pidió el agente de este hilo. Nada queda aprobado hasta que lo apruebes.",
+      "highRisk": "Riesgo alto",
+      "commit": "commit",
+      "size": "{{count}} líneas cambiadas",
+      "reasons": "Por qué la fábrica lo retiene",
+      "decline": "Rechazar",
+      "loading": "Leyendo la ejecución…",
+      "stale": "El pull request cambió después de que el agente lo pidió, así que esta solicitud ya no aplica.",
+      "declinedNote": "No se aprobó nada. La ejecución sigue retenida.",
+      "runNow": "La ejecución ahora:",
+      "boardChip": "Aprobación pedida",
+      "boardMarker": "Un agente pidió tu aprobación"
+    },
+    "split_one": "Dividir en {{count}} issue",
+    "split_other": "Dividir en {{count}} issues",
+    "splitTitle": "¿Dividir el issue #{{issue}}?",
+    "splitBody": "La factory abre un issue por cada parte, con la descripción de #{{issue}} como contexto, y los pone en la cola. #{{issue}} recibe la lista y sale de la factory. No corre ningún agente para esto."
   },
   "projectSecrets": {
     "title": "Secretos",
@@ -1980,6 +2040,7 @@
       "sandbox-stopped": "Sandbox detenido",
       "sandbox-destroyed": "Sandbox destruido",
       "pr-merged": "Pull request fusionado",
+      "pr-closed": "Pull request cerrado",
       "remote-branch-deleted": "Rama remota borrada",
       "agent-stopped": "Agente detenido",
       "factory-disabled": "Factory desactivada",
@@ -2007,6 +2068,7 @@
     "empty": "No hay nada en el factory",
     "emptyDescription": "Los issues enviados al factory de un proyecto aparecen aquí mientras esperan y se ejecutan.",
     "issueTitle": "Issue #{{number}}",
+    "issueTitleNamed": "#{{number}} {{title}}",
     "showAll": "Todos",
     "showActive": "Activos",
     "layoutList": "Lista",
@@ -2063,8 +2125,24 @@
     },
     "ci": {
       "running": "CI en curso",
-      "rounds": "CI ×{{count}}",
-      "detail": "{{red}} en rojo · {{conflicts}} conflictos"
+      "roundsDetail": "Ronda {{round}} · {{red}} en rojo · {{conflicts}} conflictos"
+    },
+    "wait": {
+      "blockedBy": "Bloqueado por {{issues}}",
+      "after": "Después de {{issues}}",
+      "sameFiles": "Mismos archivos que {{issues}}",
+      "circular": "Dependencia circular",
+      "unreadable": "Bloqueos ilegibles",
+      "noProofRules": "Sin reglas de proof",
+      "noFreeSlot": "Sin hueco libre"
+    },
+    "problem": {
+      "noReview": "Sin review",
+      "rewritten": "Rama reescrita",
+      "noVerdict": "Sin veredicto",
+      "noCommit": "Sin commit",
+      "stepFailed": "Falló {{step}}",
+      "other": "Problema"
     },
     "waiting": {
       "questions": "Triage hizo {{count}} preguntas en el issue",
@@ -2089,6 +2167,11 @@
     }
   },
   "factoryRunDetail": {
+    "lintCleanupTriage": "Triage la clasificó como limpieza de lint de reglas que no pueden cambiar el comportamiento: su tamaño y los riesgos de su contrato no la retienen. Puedes indicar que no lo es.",
+    "approvalAdjustment": "{{lines}} líneas difieren en {{files}} archivos",
+    "approvalMovedTo": "trasladado a",
+    "approvalSameChange": "mismo cambio",
+    "approvedAt": "Merge aprobado en",
     "carriedFrom": "desde {{sha}}",
     "ci": "{{rounds}} rondas de CI · {{red}} en rojo · {{conflicts}} conflictos · {{fixes}} arreglos del agente",
     "flow": "Flujo",

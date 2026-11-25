@@ -112,7 +112,7 @@ function useThreadShares({
   }, [open, projectId, selfId, refreshShares]);
 
   /** Run `action`, then re-read the shares, with the buttons disabled meanwhile. */
-  const busyWhile = async (action: () => Promise<unknown>) => {
+  const busyWhile = async (action: () => Promise<void>) => {
     await whilePending(setBusy, async () => {
       await action();
       await refreshShares();
@@ -198,15 +198,14 @@ export function ShareThreadDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <span hidden data-testid="share-thread-available" />
 
-      <DialogContent
-        className="max-w-md gap-0 overflow-hidden p-0"
-        data-testid="share-thread-dialog"
-      >
-        <DialogHeader className="min-w-0 px-6 pt-6 pb-0">
-          <DialogTitle className="min-w-0 leading-snug wrap-anywhere">
-            {threadTitle ? `Share “${threadTitle}”` : 'Share this thread'}
-          </DialogTitle>
-        </DialogHeader>
+      <DialogContent flush className="max-w-md overflow-hidden" data-testid="share-thread-dialog">
+        <div className="min-w-0 px-6 pt-6">
+          <DialogHeader className="min-w-0">
+            <DialogTitle className="min-w-0 leading-snug wrap-anywhere">
+              {threadTitle ? `Share “${threadTitle}”` : 'Share this thread'}
+            </DialogTitle>
+          </DialogHeader>
+        </div>
 
         <LevelPicker level={level} onLevel={setLevel} />
         <MemberPicker
@@ -279,12 +278,10 @@ function MemberPicker({
 }) {
   return (
     <div className="min-w-0 px-6 pt-4">
-      <Command className="rounded-lg border" shouldFilter>
+      <Command className="border" shouldFilter>
         <CommandInput placeholder="Add a project member…" className="h-10" />
         <CommandList className="max-h-44">
-          <CommandEmpty className="text-muted-foreground py-6 text-center text-sm">
-            No project members to add.
-          </CommandEmpty>
+          <CommandEmpty>No project members to add.</CommandEmpty>
           <CommandGroup>
             {members.map((m) => (
               <CommandItem
@@ -292,11 +289,10 @@ function MemberPicker({
                 value={m.name}
                 disabled={busy}
                 onSelect={() => onPick(m.userId)}
-                className="gap-2"
                 data-testid={`share-add-${m.userId}`}
               >
                 <Avatar className="h-7 w-7 shrink-0">
-                  <AvatarFallback name={m.name} className="text-xs">
+                  <AvatarFallback name={m.name} textSize="xs">
                     {m.name.charAt(0).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
@@ -327,7 +323,7 @@ function ShareRow({
       data-testid={`share-row-${share.sharedWithUserId}`}
     >
       <Avatar className="h-8 w-8 shrink-0">
-        <AvatarFallback name={name} className="text-xs">
+        <AvatarFallback name={name} textSize="xs">
           {(share.user?.name ?? '?').charAt(0).toUpperCase()}
         </AvatarFallback>
       </Avatar>
@@ -341,9 +337,9 @@ function ShareRow({
         {accessLabel(share.level ?? 'view')}
       </span>
       <Button
-        variant="ghost"
+        variant="muted-destructive"
         size="icon-sm"
-        className="text-muted-foreground hover:text-status-error h-7 w-7 shrink-0"
+        className="h-7 w-7 shrink-0"
         disabled={busy}
         onClick={() => onRevoke(share.sharedWithUserId)}
         data-testid={`share-revoke-${share.sharedWithUserId}`}
@@ -373,7 +369,7 @@ function AccessList({
       <div className="space-y-1" data-testid="share-current-list">
         <div className="flex items-center gap-3 rounded-md px-1 py-1.5">
           <Avatar className="h-8 w-8 shrink-0">
-            <AvatarFallback name={selfName} className="text-xs">
+            <AvatarFallback name={selfName} textSize="xs">
               {selfName.charAt(0).toUpperCase()}
             </AvatarFallback>
           </Avatar>

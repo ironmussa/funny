@@ -9,6 +9,7 @@
  * across the many consumers in routes and services.
  */
 
+import type { RuntimeThreadInsert, RuntimeThreadUpdate } from './server-interfaces.js';
 import { getServices } from './service-registry.js';
 
 // ── Thread CRUD ─────────────────────────────────────────────
@@ -18,8 +19,8 @@ export const listThreads = (
 export const getThread = (id: string) => getServices().threads.getThread(id);
 export const getThreadByExternalRequestId = (id: string) =>
   getServices().threads.getThreadByExternalRequestId(id);
-export const createThread = (data: Record<string, any>) => getServices().threads.createThread(data);
-export const updateThread = (id: string, updates: Record<string, any>) =>
+export const createThread = (data: RuntimeThreadInsert) => getServices().threads.createThread(data);
+export const updateThread = (id: string, updates: RuntimeThreadUpdate) =>
   getServices().threads.updateThread(id, updates);
 export const resolvePendingPermissionRequest = (
   ...args: Parameters<

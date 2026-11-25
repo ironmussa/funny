@@ -32,6 +32,13 @@ export function recordedFailureResponse(c: Context, error: DomainError) {
   return c.json({ error: error.message, activityRecorded: true }, STATUS_MAP[error.type] as any);
 }
 
+/** The JSON error answer: the message, plus the process's stderr and exit code when it ran one. */
+interface ErrorResponseBody {
+  error: string;
+  stderr?: string;
+  exitCode?: number;
+}
+
 /** Convert a Result<T, DomainError> into a Hono JSON response */
 export function resultToResponse<T>(
   c: Context,
@@ -41,7 +48,7 @@ export function resultToResponse<T>(
   return result.match(
     (value) => c.json(value as any, successStatus as any),
     (error) => {
-      const body: Record<string, unknown> = { error: error.message };
+      const body: ErrorResponseBody = { error: error.message };
       if (error.type === 'PROCESS_ERROR') {
         if (error.stderr) body.stderr = error.stderr;
         if (error.exitCode != null) body.exitCode = error.exitCode;

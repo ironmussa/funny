@@ -62,7 +62,7 @@ function ThreadAttachmentsBadge({
           <span className="text-2xs leading-none">{files.length}</span>
         </span>
       </TooltipTrigger>
-      <TooltipContent side="top" className="max-w-xs text-xs">
+      <TooltipContent side="top" className="max-w-xs">
         <div className="font-medium">
           {t('thread.attachments', {
             defaultValue: '{{count}} attached files',

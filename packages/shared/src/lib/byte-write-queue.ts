@@ -5,21 +5,24 @@
  * reverse runner link, so a slow peer can never grow memory without limit.
  */
 
+/** A received WebSocket message: text, or binary as an ArrayBuffer, a view or a Blob. */
+export type WebSocketFrameData = string | ArrayBuffer | ArrayBufferView | Blob;
+
 /** Minimal client WebSocket surface (WHATWG / Bun `WebSocket`) of a byte pipe. */
 export interface ByteWebSocket {
   binaryType: string;
   readonly bufferedAmount: number;
   readonly readyState: number;
-  onopen: ((ev: unknown) => void) | null;
-  onmessage: ((ev: { data: unknown }) => void) | null;
-  onclose: ((ev: unknown) => void) | null;
-  onerror: ((ev: unknown) => void) | null;
+  onopen: ((ev: Event) => void) | null;
+  onmessage: ((ev: { data: WebSocketFrameData }) => void) | null;
+  onclose: ((ev: Event) => void) | null;
+  onerror: ((ev: Event) => void) | null;
   send(data: Uint8Array): void;
   close(code?: number, reason?: string): void;
 }
 
 /** A binary WebSocket frame as bytes; null for a text frame. */
-export function frameBytes(data: unknown): Uint8Array | null {
+export function frameBytes(data: WebSocketFrameData): Uint8Array | null {
   if (data instanceof ArrayBuffer) return new Uint8Array(data);
   if (ArrayBuffer.isView(data))
     return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);

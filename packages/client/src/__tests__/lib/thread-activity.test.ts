@@ -3,7 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import type { ThreadStatus } from '@funny/shared';
 import type { FactoryRun } from '@funny/shared/contracts/factory';
 
-import { hasLaterRunOfIssue, threadActivity } from '@/lib/thread-activity';
+import { hasLaterRunOfIssue, latestLaterRunOfIssue, threadActivity } from '@/lib/thread-activity';
 
 const thread = (status: ThreadStatus) => ({ status });
 const run = (state: FactoryRun['state'], failureReason: string | null = null) => ({
@@ -96,5 +96,36 @@ describe('hasLaterRunOfIssue', () => {
         old,
       ),
     ).toBe(false);
+  });
+});
+
+describe('latestLaterRunOfIssue', () => {
+  const r = (id: string, issueNumber: number | null, startedAt: string, factoryId = 'f1') => ({
+    id,
+    factoryId,
+    issueNumber,
+    startedAt,
+  });
+  const old = r('a', 434, '2026-11-23T22:02:14.146Z');
+
+  test('the newest later run of the same issue in the same factory', () => {
+    const later = r('b', 434, '2026-11-23T22:56:22.751Z');
+    const latest = r('c', 434, '2026-11-24T01:00:00.000Z');
+    expect(latestLaterRunOfIssue([latest, later, old], old)).toBe(latest);
+    expect(latestLaterRunOfIssue([later, latest, old], old)).toBe(latest);
+  });
+
+  test('null for an earlier run, another issue, another factory, or a run without an issue', () => {
+    const runs = [
+      old,
+      r('b', 434, '2026-11-23T21:00:00.000Z'),
+      r('c', 435, '2026-11-24T01:00:00.000Z'),
+      r('d', 434, '2026-11-24T01:00:00.000Z', 'f2'),
+    ];
+    expect(latestLaterRunOfIssue(runs, old)).toBeNull();
+    const issueless = r('e', null, '2026-11-23T20:00:00.000Z');
+    expect(
+      latestLaterRunOfIssue([issueless, r('f', null, '2026-11-24T01:00:00.000Z')], issueless),
+    ).toBeNull();
   });
 });

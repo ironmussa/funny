@@ -20,6 +20,11 @@ interface PinToolProps {
   isActive: boolean;
 }
 
+/** The runner answers `inspect-at` with the element's DOM info as an object, or nothing. */
+function isAnnotationDomInfo(value: unknown): value is AnnotationDomInfo {
+  return typeof value === 'object' && value !== null;
+}
+
 /**
  * Pin tool. Always renders existing pin markers (so they remain visible when
  * the user switches tools). Click-to-add behavior is gated by `isActive`.
@@ -63,8 +68,8 @@ export function PinTool({ overlayRef, canvasRef, isActive }: PinToolProps) {
     browserSessionClient
       .inspectAt(sessionId, viewportX, viewportY)
       .then((dom) => {
-        if (dom && typeof dom === 'object') {
-          updateAnnotationDom(id, dom as AnnotationDomInfo);
+        if (isAnnotationDomInfo(dom)) {
+          updateAnnotationDom(id, dom);
         }
       })
       .catch((err) => {

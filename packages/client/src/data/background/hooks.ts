@@ -13,13 +13,11 @@ import { getJobsData, getWatchersData } from './store';
  * and `watcher-utils` selectors take). Unchanged rows keep their reference.
  */
 
-const EMPTY = {};
+/** The one empty result, so an empty list keeps its reference. */
+const EMPTY: Record<string, never> = {};
 
-function toById<T extends { id: string }>(
-  rows: readonly T[] | undefined,
-  data: EntityStore<T>,
-): Record<string, T> {
-  if (!rows || rows.length === 0) return EMPTY as Record<string, T>;
+function toById<T extends { id: string }>(rows: readonly T[] | undefined, data: EntityStore<T>) {
+  if (!rows || rows.length === 0) return EMPTY;
   return Object.fromEntries(rows.map((row) => [row.id, data.fromRow(row)]));
 }
 

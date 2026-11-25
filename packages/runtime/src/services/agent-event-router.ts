@@ -24,6 +24,9 @@ import { getServices } from './service-registry.js';
 import { threadEventBus, type AgentCompletedEvent } from './thread-event-bus.js';
 import { transitionStatus } from './thread-status-machine.js';
 
+/** The `data` of the realtime event of type `T`. */
+export type WSEventData<T extends WSEvent['type']> = Extract<WSEvent, { type: T }>['data'];
+
 export class AgentEventRouter {
   /** Per-thread message queue to serialize async message handling. */
   private messageQueues = new Map<string, Promise<void>>();
@@ -63,17 +66,12 @@ export class AgentEventRouter {
     if (!userMessageId) return;
 
     const createdAt = new Date().toISOString();
-    const data: TurnOutcomeEventData = {
+    const data = {
       userMessageId,
       status: event.status,
       completedAt: createdAt,
-    };
-    await getServices().threadEvents.saveThreadEvent(
-      event.threadId,
-      'turn_outcome',
-      // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
-      data as unknown as Record<string, unknown>,
-    );
+    } satisfies TurnOutcomeEventData;
+    await getServices().threadEvents.saveThreadEvent(event.threadId, 'turn_outcome', data);
     this.emitWSToUser(event.threadId, event.userId, 'thread:event', {
       event: {
         id: crypto.randomUUID(),
@@ -220,11 +218,11 @@ export class AgentEventRouter {
 
   // ── Helpers ────────────────────────────────────────────────────
 
-  emitWSToUser(
+  emitWSToUser<T extends WSEvent['type']>(
     threadId: string,
     userId: string | undefined,
-    type: WSEvent['type'],
-    data: unknown,
+    type: T,
+    data: WSEventData<T>,
   ): void {
     const event = { type, threadId, data } as WSEvent;
     if (userId) {

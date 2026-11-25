@@ -1,4 +1,5 @@
 import type {
+  BrowserEvent,
   BrowserEventSink,
   BrowserPublication,
   RunnerPresencePort,
@@ -7,6 +8,7 @@ import type {
   RunnerResponse,
   RunnerTerminalEvent,
   RunnerTerminalPort,
+  RunnerTerminalSession,
 } from '../../services/runner-ports.js';
 
 export class FakeRunnerRequestPort implements RunnerRequestPort {
@@ -28,7 +30,7 @@ export class FakeRunnerRequestPort implements RunnerRequestPort {
 export class FakeRunnerTerminalPort implements RunnerTerminalPort {
   readonly available = new Set<string>();
   readonly events: Array<{ runnerId: string; userId: string; event: RunnerTerminalEvent }> = [];
-  readonly sessions = new Map<string, Array<Record<string, unknown>>>();
+  readonly sessions = new Map<string, RunnerTerminalSession[]>();
 
   async isAvailable(runnerId: string): Promise<boolean> {
     return this.available.has(runnerId);
@@ -39,7 +41,7 @@ export class FakeRunnerTerminalPort implements RunnerTerminalPort {
     this.events.push({ runnerId, userId, event });
   }
 
-  async listSessions(runnerId: string, userId: string): Promise<Array<Record<string, unknown>>> {
+  async listSessions(runnerId: string, userId: string): Promise<RunnerTerminalSession[]> {
     return structuredClone(this.sessions.get(`${runnerId}\0${userId}`) ?? []);
   }
 }
@@ -69,7 +71,7 @@ export class FakeBrowserEventSink implements BrowserEventSink {
   readonly deliveries: Array<{
     target: 'user' | 'all' | 'thread-stream' | 'thread-presence' | 'thread-viewers' | 'evict';
     id?: string;
-    event?: Record<string, unknown>;
+    event?: BrowserPublication['legacyEvent'];
   }> = [];
 
   publish(publication: BrowserPublication): void {
@@ -79,19 +81,19 @@ export class FakeBrowserEventSink implements BrowserEventSink {
     this.deliveries.push({ target: scope.kind, id, event: publication.legacyEvent });
   }
 
-  toUser(userId: string, event: Record<string, unknown>): void {
+  toUser(userId: string, event: BrowserEvent): void {
     this.deliveries.push({ target: 'user', id: userId, event });
   }
-  toAll(event: Record<string, unknown>): void {
+  toAll(event: BrowserEvent): void {
     this.deliveries.push({ target: 'all', event });
   }
-  toThreadStream(threadId: string, event: Record<string, unknown>): void {
+  toThreadStream(threadId: string, event: BrowserEvent): void {
     this.deliveries.push({ target: 'thread-stream', id: threadId, event });
   }
-  toThreadPresence(threadId: string, event: Record<string, unknown>): void {
+  toThreadPresence(threadId: string, event: BrowserEvent): void {
     this.deliveries.push({ target: 'thread-presence', id: threadId, event });
   }
-  toThreadViewers(threadId: string, event: Record<string, unknown>): void {
+  toThreadViewers(threadId: string, event: BrowserEvent): void {
     this.deliveries.push({ target: 'thread-viewers', id: threadId, event });
   }
   evictFromThread(userId: string, threadId: string): void {

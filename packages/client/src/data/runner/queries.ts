@@ -28,18 +28,18 @@ import { getDataLayer } from '../runtime';
 const log = createClientLogger('runner-queries');
 
 function warnAndRethrow(what: string) {
-  return (error: unknown): never => {
+  return (cause: unknown): never => {
     log.warn(`failed to load ${what}`, {
-      error: errorMessage(error),
+      error: errorMessage(cause),
     });
-    throw error;
+    throw cause;
   };
 }
 
 /** Refetch a query now, ignoring its freshness; failures stay in the query state. */
-function refetch(
+function refetch<Data>(
   layer: DataLayer,
-  query: { queryKey: readonly unknown[]; queryFn: () => unknown },
+  query: { queryKey: readonly unknown[]; queryFn: () => Data },
 ) {
   return layer.queryClient.fetchQuery({ ...query, staleTime: 0 }).then(
     () => undefined,

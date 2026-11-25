@@ -9,12 +9,16 @@ interface Persisted extends ContextUsage {
   savedAt: number;
 }
 
+function isNumber(value: unknown): value is number {
+  return typeof value === 'number';
+}
+
 export function loadContextUsage(threadId: string): ContextUsage | undefined {
   try {
     const raw = localStorage.getItem(KEY_PREFIX + threadId);
     if (!raw) return undefined;
     const parsed = JSON.parse(raw) as Persisted;
-    if (!parsed || typeof parsed.cumulativeInputTokens !== 'number') return undefined;
+    if (!parsed || !isNumber(parsed.cumulativeInputTokens)) return undefined;
     if (Date.now() - parsed.savedAt > MAX_AGE_MS) {
       localStorage.removeItem(KEY_PREFIX + threadId);
       return undefined;

@@ -152,6 +152,11 @@ function useMaxRowBottom() {
   };
 }
 
+/** True for a number value. */
+function isNumber(value: unknown): value is number {
+  return typeof value === 'number';
+}
+
 /** Memoized message list with true virtualization over loaded grouped items. */
 export const MemoizedMessageList = memo(
   // eslint-disable-next-line max-lines-per-function, react-doctor/no-giant-component -- Legacy virtualized renderer; this pass only extracts measurement and row helpers.
@@ -479,7 +484,7 @@ export const MemoizedMessageList = memo(
           return false;
         }
         const offsetForIndex = rowVirtualizer.getOffsetForIndex(index, 'start')?.[0];
-        if (typeof offsetForIndex === 'number') {
+        if (isNumber(offsetForIndex)) {
           rowVirtualizer.scrollToOffset(
             Math.max(0, offsetForIndex + leadingStickySpacerHeight - anchor.offsetFromViewportTop),
             { align: 'start' },
@@ -628,7 +633,7 @@ export const MemoizedMessageList = memo(
         const nextUserRowStart =
           visibleVirtualItems.find((item) => item.index === nextUserRowIndex)?.start ??
           rowVirtualizer.getOffsetForIndex(nextUserRowIndex, 'start')?.[0];
-        if (typeof nextUserRowStart === 'number') {
+        if (isNumber(nextUserRowStart)) {
           stickyPushBase = nextUserRowStart + leadingStickySpacerHeight - stickyContentHeight;
         }
       }

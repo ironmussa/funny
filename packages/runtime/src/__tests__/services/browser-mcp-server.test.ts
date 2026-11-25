@@ -21,7 +21,7 @@ import {
   BROWSER_INSTRUCTIONS,
   BROWSER_MCP_SERVER_NAME,
 } from '../../services/browser-automation/browser-mcp-server.js';
-import { expectDefined } from '../helpers/builders-agents.js';
+import { expectDefined, expectHttpMcpEntry } from '../helpers/builders-agents.js';
 
 afterAll(() => stopAgentMcpHttp());
 
@@ -41,14 +41,14 @@ describe('withBrowserMcpServer', () => {
   });
 
   test('every agent gets the server over loopback HTTP with a bearer token, keeping other servers', async () => {
-    const servers = await withBrowserMcpServer('t1', 'u1', { funny: {} });
+    const servers = await withBrowserMcpServer('t1', 'u1', { funny: { command: 'funny' } });
     expect(Object.keys(servers ?? {})).toEqual(['funny', BROWSER_MCP_SERVER_NAME]);
     const entry = expectDefined(servers)[BROWSER_MCP_SERVER_NAME];
     expect(entry).toMatchObject({
       type: 'http',
       url: expect.stringMatching(/^http:\/\/127\.0\.0\.1:\d+\/mcp\/funny_browser$/),
     });
-    expect(entry.headers.Authorization).toMatch(/^Bearer \S{40,}$/);
+    expect(expectHttpMcpEntry(entry).headers.Authorization).toMatch(/^Bearer \S{40,}$/);
   });
 
   test('skips spawns without a user', async () => {
@@ -72,7 +72,9 @@ describe('withBrowserMcpServer', () => {
 describe('funny_browser over HTTP', () => {
   test("lists the browser tools and runs them for the token's thread", async () => {
     const servers = await withBrowserMcpServer('t-http', 'u1', undefined);
-    const client = await connect(expectDefined(servers)[BROWSER_MCP_SERVER_NAME]);
+    const client = await connect(
+      expectHttpMcpEntry(expectDefined(servers)[BROWSER_MCP_SERVER_NAME]),
+    );
     try {
       const { tools } = await client.listTools();
       expect(tools.map((t) => t.name)).toEqual(
@@ -94,7 +96,7 @@ describe('funny_browser over HTTP', () => {
 
   test('refuses requests without a valid token or with a revoked one', async () => {
     const first = expectDefined(await withBrowserMcpServer('t-rot', 'u1', undefined));
-    const entry = first[BROWSER_MCP_SERVER_NAME];
+    const entry = expectHttpMcpEntry(first[BROWSER_MCP_SERVER_NAME]);
     const post = (headers: Record<string, string>) =>
       fetch(entry.url, {
         method: 'POST',
@@ -110,7 +112,7 @@ describe('funny_browser over HTTP', () => {
 
     // Spawns of the same thread share the token (agent reuse compares it)…
     const again = expectDefined(await withBrowserMcpServer('t-rot', 'u1', undefined));
-    expect(again[BROWSER_MCP_SERVER_NAME].headers).toEqual(entry.headers);
+    expect(expectHttpMcpEntry(again[BROWSER_MCP_SERVER_NAME]).headers).toEqual(entry.headers);
     expect((await post(entry.headers)).status).toBe(200);
 
     // …until the thread is deleted.

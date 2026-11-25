@@ -702,6 +702,21 @@ function withFreeSlot<T>(
   return ResultAsync.fromPromise(run, storage);
 }
 
+/** Write `changes` on a run that has not ended; resolves whether it was still live. */
+function writeLiveRun(
+  runId: string,
+  changes: Partial<Row>,
+): ResultAsync<boolean, FactoryRunsError> {
+  return ResultAsync.fromPromise(
+    db
+      .update(factoryRuns)
+      .set(changes)
+      .where(and(eq(factoryRuns.id, runId), notInArray(factoryRuns.state, [...TERMINAL_STATES])))
+      .returning({ id: factoryRuns.id }),
+    storage,
+  ).map((rows) => rows.length > 0);
+}
+
 /** A new run's row: every column empty, with `given` on top. */
 function newRunRow(
   given: Pick<Row, 'id' | 'factoryId' | 'issueNumber' | 'state' | 'source'> & Partial<Row>,
@@ -1303,18 +1318,7 @@ export function createFactoryRunsRepository(
     updateInFlight(runId: string, input: UpdateRunInput): ResultAsync<boolean, FactoryRunsError> {
       const changes = changesFor(input);
       if (!changes) return okAsync(true);
-      return ResultAsync.fromPromise(
-        db
-          .update(factoryRuns)
-          .set(changes)
-          .where(
-            and(eq(factoryRuns.id, runId), notInArray(factoryRuns.state, [...TERMINAL_STATES])),
-          )
-          .returning({ id: factoryRuns.id }),
-        storage,
-      )
-        .map((rows) => rows.length > 0)
-        .andThen((live) => afterStateWrite(runId, input, live));
+      return writeLiveRun(runId, changes).andThen((live) => afterStateWrite(runId, input, live));
     },
 
     /**
@@ -1408,16 +1412,7 @@ export function createFactoryRunsRepository(
       runId: string,
       waiver: FactoryRiskWaiver | null,
     ): ResultAsync<boolean, FactoryRunsError> {
-      return ResultAsync.fromPromise(
-        db
-          .update(factoryRuns)
-          .set({ riskWaiver: waiver ? JSON.stringify(waiver) : null })
-          .where(
-            and(eq(factoryRuns.id, runId), notInArray(factoryRuns.state, [...TERMINAL_STATES])),
-          )
-          .returning({ id: factoryRuns.id }),
-        storage,
-      ).map((rows) => rows.length > 0);
+      return writeLiveRun(runId, { riskWaiver: waiver ? JSON.stringify(waiver) : null });
     },
 
     /** The runs parked for a member's approval of a high-risk pull request. */

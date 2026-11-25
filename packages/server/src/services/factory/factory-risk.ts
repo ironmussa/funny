@@ -116,42 +116,45 @@ const addedLines = (patch: string) =>
  * warnings were not hidden, not that the change does nothing else: its tests,
  * its review and its checks answer that.
  */
-export function lintCleanupRefusals(input: RiskInput): RiskReason[] {
+function lintCleanupRefusals(input: RiskInput): RiskReason[] {
   const { files, truncated } = input.change;
-  const config = files.filter((file) => LINT_CONFIG.test(file.path)).map((file) => file.path);
   const code = files.filter(
     (file) => file.additions > 0 && countsTowardSize(file.path, input.sizeIgnoredPaths),
   );
-  const unread = code.filter((file) => file.patch === undefined).map((file) => file.path);
-  const silenced = code
-    .filter(
-      (file) =>
-        file.patch !== undefined && addedLines(file.patch).some((line) => SUPPRESSION.test(line)),
-    )
-    .map((file) => file.path);
-  const refusals: RiskReason[] = [];
-  if (truncated) {
-    refusals.push({ key: 'lint-cleanup:truncated', text: 'the file list was not read whole' });
-  }
-  if (config.length > 0) {
-    refusals.push({
-      key: 'lint-cleanup:config',
-      text: `it changes the lint or type-check configuration (${named(config)})`,
-    });
-  }
-  if (silenced.length > 0) {
-    refusals.push({
-      key: 'lint-cleanup:suppression',
-      text: `it adds a lint or type-check suppression (${named(silenced)})`,
-    });
-  }
-  if (unread.length > 0) {
-    refusals.push({
-      key: 'lint-cleanup:unread',
-      text: `GitHub gave no diff for ${named(unread)}, so no suppression could be looked for`,
-    });
-  }
-  return refusals;
+  const pathsOf = (kept: PullRequestFiles['files']) => kept.map((file) => file.path);
+  const checks: Array<{ key: string; paths: string[]; text: (paths: string) => string }> = [
+    {
+      key: 'config',
+      paths: pathsOf(files.filter((file) => LINT_CONFIG.test(file.path))),
+      text: (paths) => `it changes the lint or type-check configuration (${paths})`,
+    },
+    {
+      key: 'suppression',
+      paths: pathsOf(code.filter(addsSuppression)),
+      text: (paths) => `it adds a lint or type-check suppression (${paths})`,
+    },
+    {
+      key: 'unread',
+      paths: pathsOf(code.filter((file) => file.patch === undefined)),
+      text: (paths) => `GitHub gave no diff for ${paths}, so no suppression could be looked for`,
+    },
+  ];
+  const whole: RiskReason[] = truncated
+    ? [{ key: 'lint-cleanup:truncated', text: 'the file list was not read whole' }]
+    : [];
+  return [
+    ...whole,
+    ...checks.flatMap((check) =>
+      check.paths.length > 0
+        ? [{ key: `lint-cleanup:${check.key}`, text: check.text(named(check.paths)) }]
+        : [],
+    ),
+  ];
+}
+
+/** Whether the file's patch adds a comment that silences a linter or the type checker. */
+function addsSuppression(file: PullRequestFiles['files'][number]): boolean {
+  return file.patch !== undefined && addedLines(file.patch).some((line) => SUPPRESSION.test(line));
 }
 
 /** Whether `path` matches `glob`; a glob that cannot be compiled matches nothing. */

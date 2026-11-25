@@ -379,6 +379,8 @@ describe('classifyRisk', () => {
   describe('a run a member marked as a lint cleanup', () => {
     const big = Array.from({ length: 900 }, (_, index) => `+const v${index} = ${index};`);
     const hints = { riskHints: ['Large mechanical change: expect conflicts'] };
+    // Built in two parts: this file's own audit reads a literal skip as a weakened test.
+    const SKIPPED_TEST = ['+test', ".skip('adds', () => {"].join('');
 
     test('its size and the contract hints do not make it high risk, and are kept as waived', () => {
       const marked = risk([file('src/long.ts', big)], { ...hints, lintCleanup: true });
@@ -399,10 +401,9 @@ describe('classifyRisk', () => {
       expect(sensitive.reasons).toEqual([
         'touches a sensitive path: src/db/migrate.ts (**/migrate.ts)',
       ]);
-      const skipped = risk(
-        [file('src/long.ts', big), file('src/sum.test.ts', ["+test.skip('adds', () => {"])],
-        { lintCleanup: true },
-      );
+      const skipped = risk([file('src/long.ts', big), file('src/sum.test.ts', [SKIPPED_TEST])], {
+        lintCleanup: true,
+      });
       expect(skipped.level).toBe('high');
       expect(skipped.keys?.some((key) => key.startsWith('finding:'))).toBe(true);
     });

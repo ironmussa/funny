@@ -68,9 +68,10 @@ repoRoutes.get('/repos', async (c) => {
       if (!userRes.ok) {
         return c.json({ error: 'Failed to fetch GitHub user for search' }, 502);
       }
+      // SAFETY: GitHub's `GET /user` answers the authenticated user, with `login`.
       const user = (await userRes.json()) as { login: string };
       const orgLogins: string[] = orgsRes.ok
-        ? ((await orgsRes.json()) as Array<{ login: string }>).map((o) => o.login)
+        ? (await orgsRes.json()).map((o: { login: string }) => o.login)
         : [];
       if (!orgsRes.ok) {
         log.warn('github orgs fetch failed; search will be limited to user repos', {
@@ -88,6 +89,8 @@ repoRoutes.get('/repos', async (c) => {
       if (!searchRes.ok) {
         return c.json({ error: 'GitHub search failed' }, 502);
       }
+      // SAFETY: GitHub's repository search response for a 2xx answer (checked
+      // above); its items are passed to the client as GitHubRepo unvalidated.
       const data = (await searchRes.json()) as { items: GitHubRepo[]; total_count: number };
       repos = data.items;
       hasMore = data.total_count > page * perPage;
@@ -100,6 +103,8 @@ repoRoutes.get('/repos', async (c) => {
       if (!res.ok) {
         return c.json({ error: 'Failed to fetch repos' }, 502);
       }
+      // SAFETY: GitHub's list-repositories response for a 2xx answer (checked
+      // above) is an array of repositories, passed on as GitHubRepo unvalidated.
       repos = (await res.json()) as GitHubRepo[];
       // GitHub uses Link header for pagination
       const linkHeader = res.headers.get('Link') || '';

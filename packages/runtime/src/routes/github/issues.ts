@@ -63,7 +63,8 @@ async function loadIssuesPage(ctx: GithubListContext, token: string | null) {
   if (token) return fetchIssuesWithLinks(owner, repo, { state, perPage, cursor, token });
   const rest = await fetchRepoIssues(owner, repo, { state, page, perPage, token: null });
   if (!rest) return null;
-  return { ...rest, pullRequests: [] as LinkablePR[], nextCursor: null };
+  const pullRequests: LinkablePR[] = [];
+  return { ...rest, pullRequests, nextCursor: null };
 }
 
 issueRoutes.get('/issues-enriched', async (c) => {
@@ -120,7 +121,7 @@ issueRoutes.get('/issue-comments', async (c) => {
   try {
     const res = await fetchIssueComments(repo, issueNumber);
     if (!res.ok) return c.json({ error: `GitHub API error: ${res.status}` }, 502);
-    const comments: PRIssueComment[] = ((await res.json()) as any[]).map(mapIssueComment);
+    const comments: PRIssueComment[] = (await res.json()).map(mapIssueComment);
     return c.json({ comments });
   } catch (error: any) {
     return c.json({ error: error.message }, 502);

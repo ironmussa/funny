@@ -2,7 +2,6 @@ import { execute, getRemoteUrl } from '@funny/core/git';
 import type { GitHubIssue, PRIssueComment, PRReactionSummary } from '@funny/shared';
 import type { JsonValue } from '@funny/shared/json-validation';
 import type { Context } from 'hono';
-import type { ContentfulStatusCode } from 'hono/utils/http-status';
 
 import { parseGithubOwnerRepo } from '../../lib/github-remote.js';
 import { log } from '../../lib/logger.js';
@@ -155,8 +154,12 @@ export async function githubGraphQL<T = any>(
     body: JSON.stringify({ query, variables }),
   });
   if (!res.ok) throw new Error(`GitHub GraphQL error: ${res.status}`);
+  // SAFETY: a GraphQL response carries `data` and/or `errors`; the caller's
+  // query decides the shape of `data`, which is not validated here.
   const body = (await res.json()) as { data?: T; errors?: Array<{ message: string }> };
   if (body.errors?.length) throw new Error(body.errors.map((e) => e.message).join('; '));
+  // SAFETY: without errors GitHub returns `data` for the query; a response
+  // missing it is passed on as undefined, as the callers already handled.
   return body.data as T;
 }
 
@@ -193,6 +196,8 @@ export async function fetchRepoIssues(
       });
   if (!res.ok) return null;
 
+  // SAFETY: the shape of GitHub's issue search response. Not validated: a
+  // missing `items` becomes [] and a missing `total_count` becomes 0 below.
   const body = (await res.json()) as { total_count: number; items: GitHubIssue[] };
   const items = Array.isArray(body.items) ? body.items : [];
   // Defensive: type:issue should already exclude PRs, but keep the guard.
@@ -293,7 +298,7 @@ export async function fetchAllPages(
   for (let page = 1; ; page++) {
     const res = await githubApiFetch(`${path}${separator}per_page=100&page=${page}`, token);
     if (!res.ok) return { ok: false, status: res.status };
-    const body = (await res.json()) as any;
+    const body = await res.json();
     const data: any[] = (field ? body?.[field] : body) ?? [];
     items.push(...data);
     if (data.length < 100) return { ok: true, items };
@@ -334,7 +339,7 @@ async function resolveGithubProjectContext(
   organizationId: string | null,
 ): Promise<
   | { ok: true; owner: string; repo: string; token: string }
-  | { ok: false; status: number; error: string }
+  | { ok: false; status: 400 | 401 | 404; error: string }
 > {
   const project = await requireAccessibleProject(projectId, userId, organizationId);
   if (!project) return { ok: false, status: 404, error: 'Project not found' };
@@ -369,7 +374,7 @@ export async function githubRepoFor(
     c.get('userId'),
     c.get('organizationId'),
   );
-  if (!ctx.ok) return c.json({ error: ctx.error }, ctx.status as ContentfulStatusCode);
+  if (!ctx.ok) return c.json({ error: ctx.error }, ctx.status);
   return { owner: ctx.owner, repo: ctx.repo, token: ctx.token };
 }
 

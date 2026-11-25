@@ -71,6 +71,9 @@ projectHooksRoutes.put('/:id/hooks/:hookType/:index', async (c) => {
   const projectResult = await requireProject(projectId, userId, orgId ?? undefined);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
+  // SAFETY: not checked against HookType: the name is one path segment, read
+  // as `.husky/<name>`. A name with no hook file has no commands, so the index
+  // check in project-hooks-service throws and the route answers 404.
   const hookType = c.req.param('hookType') as import('@funny/shared').HookType;
   const index = parseInt(c.req.param('index'), 10);
 
@@ -95,6 +98,9 @@ projectHooksRoutes.delete('/:id/hooks/:hookType/:index', async (c) => {
   const projectResult = await requireProject(projectId, userId, orgId ?? undefined);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
+  // SAFETY: not checked against HookType: the name is one path segment, read
+  // as `.husky/<name>`. A name with no hook file has no commands, so the index
+  // check in project-hooks-service throws and the route answers 404.
   const hookType = c.req.param('hookType') as import('@funny/shared').HookType;
   const index = parseInt(c.req.param('index'), 10);
 

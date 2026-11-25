@@ -58,8 +58,8 @@ prFileRoutes.get('/pr-files', async (c) => {
       if (!res.ok) {
         return c.json({ error: `GitHub API error: ${res.status}` }, 502);
       }
-      const data = (await res.json()) as any;
-      return c.json({ files: ((data.files as any[]) ?? []).map(mapPrFile) });
+      const data = await res.json();
+      return c.json({ files: (data.files ?? []).map(mapPrFile) });
     }
 
     // Otherwise, get all changed files across the entire PR (paginated)
@@ -130,12 +130,14 @@ prFileRoutes.get('/commit-authors', async (c) => {
           },
         });
     if (!res.ok) return c.json({ authors: [] });
+    // SAFETY: GitHub's list-commits response for a 2xx answer (checked above)
+    // is an array of commits; each field is read optionally below.
     const data = (await res.json()) as any[];
     const authors = data
       .map((c: any) => ({
-        sha: c.sha as string,
-        login: (c.author?.login as string) ?? null,
-        avatar_url: (c.author?.avatar_url as string) ?? null,
+        sha: c.sha,
+        login: c.author?.login ?? null,
+        avatar_url: c.author?.avatar_url ?? null,
       }))
       .filter((a) => a.sha && a.avatar_url);
     return c.json({ authors });
@@ -163,7 +165,7 @@ prFileRoutes.get('/pr-file-content', async (c) => {
     if (!prRes.ok) {
       return c.json({ error: `Failed to fetch PR: ${prRes.status}` }, 502);
     }
-    const prData = (await prRes.json()) as any;
+    const prData = await prRes.json();
     const baseRef = prData.base?.ref;
     const headRef = prData.head?.ref;
 
@@ -232,7 +234,7 @@ async function revertPullRequestFile(
     if (!prRes.ok) {
       return c.json({ error: `Failed to fetch PR: ${prRes.status}` }, 502);
     }
-    const prData = (await prRes.json()) as any;
+    const prData = await prRes.json();
     const baseRef = prData.base?.ref;
     const headRef = prData.head?.ref;
     if (!baseRef || !headRef) {
@@ -252,7 +254,7 @@ async function revertPullRequestFile(
     if (!baseFileRes.ok) {
       return c.json({ error: `Failed to fetch base file: ${baseFileRes.status}` }, 502);
     }
-    const baseFileData = (await baseFileRes.json()) as any;
+    const baseFileData = await baseFileRes.json();
     return restoreBaseFile(c, file, baseRef, baseFileData.content);
   } catch (error: any) {
     return c.json({ error: error.message }, 502);
@@ -275,7 +277,7 @@ async function headFileSha(c: Context<HonoEnv>, f: PullRequestFile): Promise<str
   );
   if (res.status === 404) return c.json({ error: 'File not found on head branch' }, 404);
   if (!res.ok) return c.json({ error: `Failed to fetch head file: ${res.status}` }, 502);
-  return ((await res.json()) as any).sha;
+  return (await res.json()).sha;
 }
 
 /** Body of GitHub's contents API write, minus the `sha` and `branch` added here. */
@@ -306,7 +308,7 @@ async function writeHeadFile(
     },
   );
   if (!res.ok) {
-    const errBody = (await res.json().catch(() => ({}))) as any;
+    const errBody = await res.json().catch(() => ({}));
     const verb = method === 'DELETE' ? 'delete' : 'update';
     return c.json({ error: errBody.message || `Failed to ${verb} file: ${res.status}` }, 502);
   }

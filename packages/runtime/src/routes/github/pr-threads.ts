@@ -102,7 +102,7 @@ prThreadRoutes.get('/pr-threads', async (c) => {
       return c.json({ error: `GitHub API error: ${res.status}` }, 502);
     }
 
-    const rawComments = (await res.json()) as any[];
+    const rawComments: any[] = await res.json();
 
     // Group comments into threads: root comments (no in_reply_to_id) start threads,
     // replies reference their root via in_reply_to_id
@@ -223,7 +223,9 @@ prThreadRoutes.get('/pr-conversation', async (c) => {
     if (!commentsRes.ok) return c.json({ error: `GitHub API error: ${commentsRes.status}` }, 502);
     if (!reviewsRes.ok) return c.json({ error: `GitHub API error: ${reviewsRes.status}` }, 502);
 
-    const rawComments = (await commentsRes.json()) as any[];
+    const rawComments: any[] = await commentsRes.json();
+    // SAFETY: GitHub's list-reviews response for a 2xx answer (checked above)
+    // is an array of reviews; each field is read optionally below.
     const rawReviews = (await reviewsRes.json()) as any[];
 
     const comments: PRIssueComment[] = rawComments.map(mapIssueComment);
@@ -235,6 +237,9 @@ prThreadRoutes.get('/pr-conversation', async (c) => {
         author: rv.user?.login ?? '',
         author_avatar_url: rv.user?.avatar_url ?? '',
         body: rv.body ?? '',
+        // SAFETY: GitHub's review states are APPROVED, CHANGES_REQUESTED,
+        // COMMENTED, DISMISSED and PENDING, the PRReview states; an absent
+        // state is shown as a comment.
         state: (rv.state ?? 'COMMENTED') as PRReview['state'],
         submitted_at: rv.submitted_at ?? '',
         html_url: rv.html_url ?? '',
@@ -298,7 +303,7 @@ prThreadRoutes.post('/pr-review-reply', async (c) => {
       { body: raw.body },
     );
     if (!res.ok) return githubErrorWithBody(c, res);
-    const cm = (await res.json()) as any;
+    const cm = await res.json();
     const comment: PRThreadComment = {
       id: cm.id,
       author: cm.user?.login ?? '',
@@ -364,6 +369,8 @@ prThreadRoutes.post('/pr-reaction', async (c) => {
   try {
     const res = await sendGithubJson(path, ctx.token, 'POST', { content: raw.content });
     if (!res.ok) return githubErrorWithBody(c, res);
+    // SAFETY: GitHub's create-reaction response for a 2xx answer (checked
+    // above) is the reaction, with its numeric `id` and `content`.
     const reaction = (await res.json()) as { id: number; content: string };
     return c.json({ id: reaction.id, content: reaction.content });
   } catch (error: any) {
@@ -388,7 +395,7 @@ prThreadRoutes.patch('/pr-comment', async (c) => {
   try {
     const res = await sendGithubJson(path, ctx.token, 'PATCH', { body: raw.body });
     if (!res.ok) return githubErrorWithBody(c, res);
-    const cm = (await res.json()) as any;
+    const cm = await res.json();
     return c.json({
       id: cm.id,
       body: cm.body ?? '',

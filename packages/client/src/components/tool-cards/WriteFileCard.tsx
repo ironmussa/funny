@@ -51,11 +51,16 @@ export function WriteFileCard({
 
   const hljsLang = ext ? extToHljsLang(ext) : 'plaintext';
   const [highlighted, setHighlighted] = useState<string | null>(null);
+  // Losing the content drops its highlight; changed content keeps the old one
+  // until the new highlight is ready.
+  const hasContent = content != null;
+  const [hadContent, setHadContent] = useState(hasContent);
+  if (hadContent !== hasContent) {
+    setHadContent(hasContent);
+    if (!hasContent) setHighlighted(null);
+  }
   useEffect(() => {
-    if (content == null) {
-      setHighlighted(null);
-      return;
-    }
+    if (content == null) return;
     let cancelled = false;
     ensureHighlight(content, hljsLang).then(() => {
       if (!cancelled) setHighlighted(highlightCode(content, hljsLang));

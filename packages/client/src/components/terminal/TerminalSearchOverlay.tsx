@@ -61,13 +61,20 @@ export function TerminalSearchOverlay({
     return () => dispose.dispose();
   }, [activeTabId]);
 
+  // Clearing the query drops the match count along with the decorations.
+  const hasQuery = query !== '';
+  const [hadQuery, setHadQuery] = useState(hasQuery);
+  if (hadQuery !== hasQuery) {
+    setHadQuery(hasQuery);
+    if (!hasQuery) setResult(null);
+  }
+
   // Re-run search incrementally on query/option changes
   useEffect(() => {
     const addon = searchAddonRegistry.get(activeTabId);
     if (!addon) return;
     if (!query) {
       addon.clearDecorations();
-      setResult(null);
       return;
     }
     addon.findNext(query, {

@@ -3,7 +3,7 @@
  * without waiting for the poll, a missing or stale thread fails the step, and a
  * stopped run ends the wait.
  */
-import { describe, expect, test } from 'bun:test';
+import { beforeEach, describe, expect, test } from 'bun:test';
 
 import {
   createThreadWaits,
@@ -14,6 +14,13 @@ import {
   type ThreadRecord,
   type WakeSource,
 } from '../../../services/factory/factory-thread-waits.js';
+import {
+  createTestDb,
+  seedMessage,
+  seedMessageQueue,
+  seedProject,
+  seedThread,
+} from '../../helpers/test-db.js';
 
 const created = new Date(0).toISOString();
 
@@ -26,10 +33,12 @@ function waitsOver(
   record: { current: ThreadRecord | null },
   now = () => 0,
   wakes: { current: WakeSource[] } = { current: [] },
+  pendingInput: { current: boolean } = { current: false },
 ) {
   return createThreadWaits({
     readThread: async () => record.current,
     readWakeSources: async () => wakes.current,
+    readPendingInput: async () => pendingInput.current,
     readOutput: async () => 'summary',
     // A poll that never elapses on its own: only a signal or a stop wakes it.
     sleep: (_ms, signal) =>
@@ -180,6 +189,62 @@ describe('factory thread waits', () => {
     expect(outcome.status).toBe('completed');
   });
 
+  test('a follow-up queued behind a running turn is not settled by that turn ending', async () => {
+    // #449: the factory sent the implement prompt again while the agent ran;
+    // it waited in the queue, and the running turn's end was taken for its end.
+    const finishedAt = new Date(9_000).toISOString();
+    const record: RecordSlot = {
+      current: { status: 'completed', createdAt: created, completedAt: finishedAt },
+    };
+    const pending = { current: true };
+    let settled = false;
+    const wait = waitsOver(
+      record,
+      () => 9_500,
+      { current: [] },
+      pending,
+    )('t-queued', new AbortController().signal, { completedAt: null, sentAt: created }).then(
+      (outcome) => {
+        settled = true;
+        return outcome;
+      },
+    );
+    await Bun.sleep(1);
+    expect(settled).toBe(false);
+
+    // The queue hands the follow-up over: the agent runs it, then finishes.
+    pending.current = false;
+    record.current = { status: 'running', createdAt: created, completedAt: finishedAt };
+    signalThreadTerminal('t-queued');
+    await Bun.sleep(1);
+    expect(settled).toBe(false);
+
+    record.current = {
+      status: 'completed',
+      createdAt: created,
+      completedAt: new Date(20_000).toISOString(),
+    };
+    signalThreadTerminal('t-queued');
+    expect((await wait).status).toBe('completed');
+  });
+
+  test('an unanswered message holds the step only within the grace after the finish', async () => {
+    const record = {
+      current: {
+        status: 'completed',
+        createdAt: created,
+        completedAt: new Date(1_000).toISOString(),
+      },
+    };
+    const outcome = await waitsOver(
+      record,
+      () => 1_000 + WAKE_GRACE_MS,
+      { current: [] },
+      { current: true },
+    )('t-stuck-queue', new AbortController().signal);
+    expect(outcome.status).toBe('completed');
+  });
+
   test('a stopped thread is settled even with a job still running', async () => {
     const record = { current: { status: 'stopped', createdAt: created, completedAt: created } };
     const wakes = { current: [{ live: true, updatedAt: created }] };
@@ -289,5 +354,56 @@ describe('factory thread waits', () => {
       controller.abort();
       expect((await wait).status).toBe('cancelled');
     });
+  });
+});
+
+describe('factory thread waits over the database', () => {
+  const finishedAt = '2026-11-24T07:09:08.975Z';
+  let testDb: ReturnType<typeof createTestDb>;
+
+  beforeEach(async () => {
+    testDb = createTestDb();
+    const { setConnection } = await import('../../../db/index.js');
+    setConnection({
+      db: testDb.db,
+      schema: testDb.schema,
+      sqlite: testDb.sqlite,
+      mode: 'sqlite',
+      close: async () => testDb.sqlite.close(),
+    });
+    seedProject(testDb.db, { id: 'p1', userId: 'alice' });
+    seedThread(testDb.db, {
+      id: 't1',
+      projectId: 'p1',
+      userId: 'alice',
+      status: 'completed',
+      completedAt: finishedAt,
+    });
+  });
+
+  /** One look at the thread: settled, or still held (`null`). */
+  async function settles(): Promise<string | null> {
+    const controller = new AbortController();
+    const waits = createThreadWaits({
+      now: () => Date.parse(finishedAt) + 1_000,
+      sleep: async () => controller.abort(),
+    });
+    const outcome = await waits('t1', controller.signal);
+    return outcome.status === 'cancelled' ? null : outcome.status;
+  }
+
+  test('a message still in the queue holds a finished thread', async () => {
+    seedMessageQueue(testDb.db, { threadId: 't1' });
+    expect(await settles()).toBeNull();
+  });
+
+  test('a user message newer than the finish holds a finished thread', async () => {
+    seedMessage(testDb.db, { threadId: 't1', timestamp: '2026-11-24T07:09:09.112Z' });
+    expect(await settles()).toBeNull();
+  });
+
+  test('a thread with every message answered is settled', async () => {
+    seedMessage(testDb.db, { threadId: 't1', timestamp: '2026-11-24T07:01:32.782Z' });
+    expect(await settles()).toBe('completed');
   });
 });

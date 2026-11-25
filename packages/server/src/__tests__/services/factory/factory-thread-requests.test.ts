@@ -199,6 +199,28 @@ describe('factory thread requests', () => {
       expect((await row('t-run')).worktreePath).toBe('/srv/wt/t-run');
     });
 
+    // #449: a run ended as "no change" while its agent, still running, held
+    // 10 unpushed commits. A running thread is unchecked, and unchecked is not clean.
+    test('keepUnsaved reports a running thread as kept, without asking its runner', async () => {
+      runner('r-alice', 'alice');
+      worktreeThread('t-run', { status: 'running' });
+
+      const kept = await cleanupFactoryWorktrees(ports(), 'alice', ['t-run'], undefined, {
+        keepUnsaved: true,
+      });
+
+      expect(requests.requests).toEqual([]);
+      expect(kept).toEqual([
+        {
+          threadId: 't-run',
+          worktreePath: '/srv/wt/t-run',
+          dirtyFileCount: 0,
+          unpushedCommitCount: 0,
+        },
+      ]);
+      expect((await row('t-run')).worktreePath).toBe('/srv/wt/t-run');
+    });
+
     // Issue #229: a run that ended without a pull request had 85 uncommitted
     // files in its worktree. The runner decides, and what it keeps stays recorded.
     test('keepUnsaved asks the runner to remove only an unchanged worktree', async () => {

@@ -234,7 +234,10 @@ export async function sendFactoryFollowUp(
  * removes a worktree only when nothing would be lost with it, and the ones it
  * kept are returned. A runner that cannot answer (offline, or from before that
  * route) leaves the worktree in place, never deleting on a guess, and it is
- * returned too (with zero counts): unchecked is not clean.
+ * returned too (with zero counts): unchecked is not clean. So is a thread
+ * still running: its checkout is left alone and, with `keepUnsaved`, returned
+ * as kept, since its agent may still commit (#449: a run ended as "no change"
+ * while its agent, still running, held 10 unpushed commits).
  */
 export async function cleanupFactoryWorktrees(
   ports: RunnerPorts,
@@ -253,6 +256,7 @@ export async function cleanupFactoryWorktrees(
       projectId: threads.projectId,
       worktreePath: threads.worktreePath,
       branch: threads.branch,
+      status: threads.status,
     })
     .from(threads)
     .where(
@@ -262,11 +266,21 @@ export async function cleanupFactoryWorktrees(
         eq(threads.mode, 'worktree'),
         ne(threads.runtime, 'sandbox'),
         isNotNull(threads.worktreePath),
-        notInArray(threads.status, ACTIVE_STATUSES),
       ),
     );
   for (const thread of rows) {
     if (!thread.projectId || !thread.worktreePath) continue;
+    if (ACTIVE_STATUSES.includes(thread.status)) {
+      if (options.keepUnsaved) {
+        kept.push({
+          threadId: thread.id,
+          worktreePath: thread.worktreePath,
+          dirtyFileCount: 0,
+          unpushedCommitCount: 0,
+        });
+      }
+      continue;
+    }
     const workspace = {
       id: thread.id,
       projectId: thread.projectId,

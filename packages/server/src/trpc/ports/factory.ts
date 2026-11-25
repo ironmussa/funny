@@ -97,7 +97,13 @@ async function reschedule(factoryId: string, projectId: string): Promise<void> {
 
 type RunControlAction = 'stop' | 'retry' | 'approve-merge';
 
-const withoutSha = (run: FactoryRunView): { run: FactoryRunView; sha: string | null } => ({
+/** A controlled run, and the commit the control was for (only an approval names one). */
+interface ControlledRun {
+  run: FactoryRunView;
+  sha: string | null;
+}
+
+const withoutSha = (run: FactoryRunView): ControlledRun => ({
   run,
   sha: null,
 });

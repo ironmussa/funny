@@ -9,6 +9,7 @@ import { reduceQuestionTab } from '@/components/tool-cards/question-tab-state';
 import { useEditorDictation } from '@/hooks/use-editor-dictation';
 import { useSlashSkills } from '@/hooks/use-slash-skills';
 import { createClientLogger } from '@/lib/client-logger';
+import { cn } from '@/lib/utils';
 
 import {
   OtherAnswerEditor,
@@ -24,8 +25,6 @@ import {
   useCurrentThreadProviderModel,
   type Question,
 } from './utils';
-
-import { cn } from '@/lib/utils';
 
 const cardLog = createClientLogger('AskUserQuestion');
 

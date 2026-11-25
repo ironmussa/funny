@@ -36,9 +36,9 @@ interface Refs {
 function isUpdater(value: SetStateAction<boolean>): value is (prev: boolean) => boolean {
   return typeof value === 'function';
 }
-
+/** True for a number. The value comes from runner JSON, so the declared type is not checked. */
 /** True for a number value. */
-function isNumber(value: unknown): value is number {
+function isNumber(value: number | undefined): value is number {
   return typeof value === 'number';
 }
 

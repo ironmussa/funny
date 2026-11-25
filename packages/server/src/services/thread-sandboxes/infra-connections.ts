@@ -12,6 +12,7 @@
  */
 
 import type { SandboxError, SandboxProvider, SandboxProviderRegistry } from '@funny/sandbox';
+import { errorMessage } from '@funny/shared/errors';
 import { parseStoredJson } from '@funny/shared/json-validation';
 import { and, eq } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
@@ -43,10 +44,12 @@ export type InfraConnectionError =
 type Row = typeof infraConnections.$inferSelect;
 
 const storedConfigSchema = z.record(z.string(), z.unknown());
+/** A connection's provider config: an object the provider's own schema validates. */
+type ProviderConfig = z.output<typeof storedConfigSchema>;
 
-const storage = (error: unknown): InfraConnectionError => ({
+const storage = (cause: unknown): InfraConnectionError => ({
   kind: 'storage',
-  message: error instanceof Error ? error.message : String(error),
+  message: errorMessage(cause),
 });
 
 const toView = (row: Row): InfraConnectionView => ({
@@ -59,7 +62,7 @@ const toView = (row: Row): InfraConnectionView => ({
 });
 
 export function createInfraConnectionService(registry: SandboxProviderRegistry) {
-  const instantiate = (provider: string, credential: string, config: unknown) =>
+  const instantiate = (provider: string, credential: string, config: ProviderConfig) =>
     registry
       .instantiate({ providerId: provider, credential, config })
       .mapErr((error): InfraConnectionError =>
@@ -104,7 +107,7 @@ export function createInfraConnectionService(registry: SandboxProviderRegistry) 
     /** Validate with the provider, then store the credential encrypted. */
     add(
       userId: string,
-      input: { provider: string; label: string; credential: string; config?: unknown },
+      input: { provider: string; label: string; credential: string; config?: ProviderConfig },
     ): ResultAsync<InfraConnectionView, InfraConnectionError> {
       const provider = instantiate(input.provider, input.credential, input.config ?? {});
       if (provider.isErr()) return errAsync(provider.error);

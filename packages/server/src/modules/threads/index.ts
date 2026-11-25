@@ -44,7 +44,7 @@ export { normalizeCreationRequest, type CreationPayload } from './domain/creatio
 export { authenticatedUserId, authorizedThreadId } from './domain/ids.js';
 export { makeCreateThread } from './application/create-thread.js';
 export { makeForkThread, type ForkThread } from './application/fork-thread.js';
-export type { ActorContext, CreationIntent, ForkVariant } from './application/ports.js';
+export type { ActorContext, CreationIntent, ForkVariant, RunnerJson } from './application/ports.js';
 
 export { withForkInputs, type OwnershipForkSource } from './domain/fork-input.js';
 export { threadOwnedBy, type ThreadOwnedBy } from './domain/proofs/thread-owned-by.js';

@@ -16,6 +16,7 @@
 import type { BranchRules } from '@funny/core/github-app';
 import type { FactoryReadiness, FactoryRunMetrics } from '@funny/shared/contracts/factory';
 import { parse as parseYaml } from 'yaml';
+import { z } from 'zod';
 
 import type { FactoryGithubPort, FactoryRepoReader } from './factory-github.js';
 
@@ -36,8 +37,11 @@ function matchesFilter(branch: string, pattern: string): boolean {
   return new RegExp(`^${regex}$`).test(branch);
 }
 
-const asList = (value: unknown): string[] =>
-  Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
+/** A workflow's `branches` / `branches-ignore` list: its strings, or none when it is not a list. */
+const branchFilterList = z
+  .array(z.unknown())
+  .catch([])
+  .transform((items) => items.filter((item): item is string => typeof item === 'string'));
 
 /** Whether a branch filter list lets `branch` through (`!pattern` excludes, the last match wins). */
 function passesBranches(branch: string, patterns: string[]): boolean {
@@ -59,9 +63,11 @@ interface PushFilters {
 
 /** Whether a `push` trigger's branch filters let a push to a queue branch run it. */
 function pushFiltersRunOnQueueBranch(filters: PushFilters): boolean {
-  const ignored = asList('branches-ignore' in filters ? filters['branches-ignore'] : undefined);
+  const ignored = branchFilterList.parse(
+    'branches-ignore' in filters ? filters['branches-ignore'] : undefined,
+  );
   if (ignored.some((pattern) => matchesFilter(QUEUE_BRANCH, pattern))) return false;
-  const branches = asList('branches' in filters ? filters.branches : undefined);
+  const branches = branchFilterList.parse('branches' in filters ? filters.branches : undefined);
   // Only tags: no branch push runs it.
   if (branches.length === 0) return !('tags' in filters) || 'branches-ignore' in filters;
   return passesBranches(QUEUE_BRANCH, branches);

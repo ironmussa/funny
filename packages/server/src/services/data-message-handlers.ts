@@ -10,9 +10,11 @@
  */
 
 import type { JsonObject } from '@bufbuild/protobuf';
+import type { AgentTemplate } from '@funny/shared';
 import { errorMessage } from '@funny/shared/errors';
 import type { JobPatch, WatcherPatch } from '@funny/shared/repositories';
 import { and, eq, or } from 'drizzle-orm';
+import { z } from 'zod';
 
 import { db, dbAll, dbGet } from '../db/index.js';
 import { repos } from '../db/repos.js';
@@ -20,6 +22,7 @@ import * as schema from '../db/schema.js';
 import { audit } from '../lib/audit.js';
 import { log } from '../lib/logger.js';
 import {
+  liveActivityIdsSchema,
   reconcileRunnerActivities,
   startActivityFromRunner,
   updateActivityFromRunner,
@@ -31,6 +34,17 @@ import { onFactoryThreadTerminal } from './factory/factory-run-control.js';
 import * as messageQueueRepo from './message-queue-repository.js';
 import * as projectRepo from './project-repository.js';
 import * as startupCommandsRepo from './startup-commands-repository.js';
+
+/**
+ * @domain subdomain: Team Collaboration
+ * @domain subdomain-type: supporting
+ * @domain type: handler
+ * @domain layer: application
+ *
+ * Per-type executors for runner → server data messages. Callers MUST run the
+ * ownership (`data-ownership.ts`) and project-scope (`data-scope.ts`) guards
+ * before dispatching here — see `handleDataMessageWithAck` in data-handler.ts.
+ */
 
 /**
  * Columns that decide who owns a thread and what it belongs to. The data
@@ -50,12 +64,21 @@ const RUNNER_IMMUTABLE_THREAD_FIELDS = new Set([
   'createdAt',
 ]);
 
+/**
+ * A runner's `data:update_thread` updates: an object of column changes. Any
+ * other value (missing, a primitive, an array) changes nothing.
+ */
+const runnerThreadUpdatesSchema = z.record(z.string(), z.json()).catch({});
+type RunnerThreadUpdates = z.output<typeof runnerThreadUpdatesSchema>;
+
+/** A string field of a runner's message; any other value reads as absent. */
+const optionalString = z.string().optional().catch(undefined);
+
 function stripRunnerImmutableThreadFields(
   runnerUserId: string | null,
   threadId: string,
-  updates: unknown,
+  updates: RunnerThreadUpdates,
 ): JsonObject {
-  if (!updates || typeof updates !== 'object' || Array.isArray(updates)) return {};
   // The updates arrive as the decoded `Struct` of an `UpdateThread` operation.
   const allowed: JsonObject = {};
   const refused: string[] = [];
@@ -115,14 +138,12 @@ const TERMINAL_THREAD_STATUSES = new Set(['completed', 'failed', 'stopped', 'int
  */
 function notifyTerminalStatusPersisted(
   runnerUserId: string | null,
-  threadId: unknown,
-  updates: unknown,
+  threadId: string | undefined,
+  updates: RunnerThreadUpdates,
 ): void {
-  // SAFETY: `?.status` is defined for any value (a primitive yields undefined) and status
-  // stays unknown until the typeof check below.
-  const status = (updates as { status?: unknown } | null)?.status;
-  if (!runnerUserId || typeof threadId !== 'string') return;
-  if (typeof status !== 'string' || !TERMINAL_THREAD_STATUSES.has(status)) return;
+  const status = optionalString.parse(updates.status);
+  if (!runnerUserId || threadId === undefined) return;
+  if (status === undefined || !TERMINAL_THREAD_STATUSES.has(status)) return;
   // A thread started by an automation completes its run here (durable signal).
   void onAutomationThreadTerminal(threadId, status).catch((error) =>
     log.error('Failed to complete automation run', {
@@ -162,10 +183,10 @@ async function isOrgMember(userId: string, orgId: string): Promise<boolean> {
  */
 async function resolveCreateProjectOrg(
   ownerId: string,
-  rawOrgId: unknown,
+  orgId: string | undefined,
 ): Promise<string | null | false> {
-  if (typeof rawOrgId !== 'string' || !rawOrgId) return null;
-  return (await isOrgMember(ownerId, rawOrgId)) ? rawOrgId : false;
+  if (!orgId) return null;
+  return (await isOrgMember(ownerId, orgId)) ? orgId : false;
 }
 
 /**
@@ -173,11 +194,14 @@ async function resolveCreateProjectOrg(
  * only when owned by the runner's user or shared — never another tenant's
  * private template (system prompt, MCP config).
  */
-async function findAgentTemplateForRunner(ownerId: string, templateId: unknown): Promise<unknown> {
+async function findAgentTemplateForRunner(
+  ownerId: string,
+  templateId: string | undefined,
+): Promise<AgentTemplate | AgentTemplateRow | null> {
   const { BUILTIN_AGENT_TEMPLATES } = await import('@funny/shared');
   const builtin = BUILTIN_AGENT_TEMPLATES.find((t: { id: string }) => t.id === templateId);
   if (builtin) return builtin;
-  if (!ownerId || typeof templateId !== 'string') return null;
+  if (!ownerId || templateId === undefined) return null;
   const row = await dbGet(
     db
       .select()
@@ -192,13 +216,12 @@ async function findAgentTemplateForRunner(ownerId: string, templateId: unknown):
   return row ?? null;
 }
 
+type AgentTemplateRow = typeof schema.agentTemplates.$inferSelect;
+
 // ── Watcher / job patch allow-lists ──────────────────────────────
 
 /** A runner-sent patch's own fields (the decoded `Struct` of a watcher / job update). */
 type PatchFields = ReadonlyMap<string, unknown>;
-
-const ownFields = (raw: unknown): PatchFields =>
-  new Map(raw && typeof raw === 'object' ? Object.entries(raw) : []);
 
 /** Keep `patch[key]` when it passes `ok`; drop it otherwise. */
 function copyIf<K extends string, T>(
@@ -213,13 +236,18 @@ function copyIf<K extends string, T>(
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const isNumOrNull = (v: unknown): v is number | null => v === null || isNum(v);
 const isStr = (v: unknown): v is string => typeof v === 'string';
+/** A runner's watcher / job patch: an object of fields; any other value patches nothing. */
+const runnerPatchSchema = z
+  .record(z.string(), z.unknown())
+  .catch({})
+  .transform((fields): PatchFields => new Map(Object.entries(fields)));
+type RunnerPatch = z.output<typeof runnerPatchSchema>;
 
 /**
  * Fields a runner may change on its own watcher — never owner, thread, key,
  * or caps. Values are type-checked; anything else is dropped.
  */
-function pickWatcherPatch(raw: unknown): WatcherPatch {
-  const patch = ownFields(raw);
+function pickWatcherPatch(patch: RunnerPatch): WatcherPatch {
   const out: Partial<Record<keyof WatcherPatch, string | number>> = {};
   copyIf(out, patch, 'nextWakeAt', isNum);
   copyIf(out, patch, 'lastDelayMs', isNum);
@@ -237,8 +265,7 @@ function pickWatcherPatch(raw: unknown): WatcherPatch {
  * `threadId` are never re-assignable. `pid` stays patchable because the
  * ownership guard already restricts updates to the runner user's own jobs.
  */
-function pickJobPatch(raw: unknown): JobPatch {
-  const patch = ownFields(raw);
+function pickJobPatch(patch: RunnerPatch): JobPatch {
   const out: Partial<Record<keyof JobPatch, string | number | null>> = {};
   copyIf(out, patch, 'pid', isNumOrNull);
   copyIf(out, patch, 'status', isStr);
@@ -270,13 +297,18 @@ const DATA_MESSAGE_HANDLERS: DataMessageHandlers = {
   },
   'data:update_thread': async ({ runnerUserId, data }) => {
     const threadRepo = repos.threads();
+    const requested = runnerThreadUpdatesSchema.parse(data.payload.updates);
     const updates = stripRunnerImmutableThreadFields(
       runnerUserId,
       data.payload.threadId,
-      data.payload.updates,
+      requested,
     );
     await threadRepo.updateThread(data.payload.threadId, updates);
-    notifyTerminalStatusPersisted(runnerUserId, data.payload.threadId, data.payload.updates);
+    notifyTerminalStatusPersisted(
+      runnerUserId,
+      optionalString.parse(data.payload.threadId),
+      requested,
+    );
     return { type: 'data:update_thread_response', ok: true };
   },
   'data:create_pending_permission_request': async ({ data }) => {
@@ -431,7 +463,7 @@ const DATA_MESSAGE_HANDLERS: DataMessageHandlers = {
   },
   'data:get_agent_template': async ({ ownerId, data }) => ({
     type: 'data:get_agent_template_response',
-    template: await findAgentTemplateForRunner(ownerId, data.templateId),
+    template: await findAgentTemplateForRunner(ownerId, optionalString.parse(data.templateId)),
   }),
   'data:list_projects': async ({ ownerId }) => {
     // Collaborator model: the runner needs the user's owned projects AND
@@ -500,7 +532,7 @@ const DATA_MESSAGE_HANDLERS: DataMessageHandlers = {
     // (clone succeeded, or the runner ran HI-3 containment against its own
     // $HOME before proxying creation here).
     // A runner may only file a project under an org its owner belongs to.
-    const orgId = await resolveCreateProjectOrg(ownerId, data.orgId);
+    const orgId = await resolveCreateProjectOrg(ownerId, optionalString.parse(data.orgId));
     if (orgId === false) {
       return {
         type: 'data:create_project_response',
@@ -828,7 +860,7 @@ const DATA_MESSAGE_HANDLERS: DataMessageHandlers = {
       .watchers()
       .update(
         data.payload.id,
-        pickWatcherPatch(data.payload.patch),
+        pickWatcherPatch(runnerPatchSchema.parse(data.payload.patch)),
         isNum(expected) ? { expectedNextWakeAt: expected } : undefined,
       );
     return { type: 'data:watcher_update_response', ok: true, applied };
@@ -856,7 +888,9 @@ const DATA_MESSAGE_HANDLERS: DataMessageHandlers = {
     jobs: ownerId ? await repos.jobs().listByUser(ownerId) : OWNER_SCOPED_LIST_FALLBACK,
   }),
   'data:job_update': async ({ data }) => {
-    const applied = await repos.jobs().update(data.payload.id, pickJobPatch(data.payload.patch));
+    const applied = await repos
+      .jobs()
+      .update(data.payload.id, pickJobPatch(runnerPatchSchema.parse(data.payload.patch)));
     return { type: 'data:job_update_response', ok: true, applied };
   },
   'data:job_delete_by_thread': async ({ data }) => {
@@ -886,7 +920,10 @@ const DATA_MESSAGE_HANDLERS: DataMessageHandlers = {
       : { type: 'data:ack', success: false, error: result.error };
   },
   'data:activity_reconcile': async ({ runnerId, data }) => {
-    const changed = await reconcileRunnerActivities(runnerId, data.payload?.liveIds);
+    const changed = await reconcileRunnerActivities(
+      runnerId,
+      liveActivityIdsSchema.parse(data.payload?.liveIds),
+    );
     return { type: 'data:activity_reconcile_response', ok: true, interrupted: changed.length };
   },
 

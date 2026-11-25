@@ -41,6 +41,7 @@ import {
   isBehaviorNeutralLintCleanup,
   type FactoryRiskWaiver,
 } from '@funny/shared/contracts/factory';
+import { errorMessage } from '@funny/shared/errors';
 import { and, eq, inArray } from 'drizzle-orm';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
@@ -88,11 +89,11 @@ const storage = (error: { message: string }): FactoryRunControlError => ({
 
 /** Look at the factory now; the request does not wait for the tick. */
 function wake(factoryId: string): void {
-  void pokeFactory(factoryId).catch((error: unknown) =>
+  void pokeFactory(factoryId).catch((cause: unknown) =>
     log.error('Issue factory poke failed', {
       namespace: 'factory',
       factoryId,
-      error: error instanceof Error ? error.message : String(error),
+      error: errorMessage(cause),
     }),
   );
 }

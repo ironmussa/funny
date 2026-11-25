@@ -2574,8 +2574,8 @@ async function backfillFactoryRunIssueTitles(): Promise<void> {
  *   thread_shares.level:  steer→contributor, else (view)→viewer
  * Org membership stays canonical in Better Auth `member` (design D1) — not copied.
  */
-export async function backfillResourceGrants(
-  exec: (q: ReturnType<typeof sql>) => Promise<unknown>,
+export async function backfillResourceGrants<ExecResult>(
+  exec: (q: ReturnType<typeof sql>) => Promise<ExecResult>,
 ) {
   // project_members → project grants. `WHERE NOT EXISTS` keeps it idempotent and
   // avoids the INSERT…SELECT…ON CONFLICT parse ambiguity (rejected by SQLite).

@@ -73,22 +73,26 @@ interface TunnelState {
   chunks: Uint8Array[];
   readers: Array<{
     resolve(value: IteratorResult<Uint8Array>): void;
-    reject(error: unknown): void;
+    reject(cause: unknown): void;
   }>;
   responseResolve(value: TunnelResponseHead): void;
-  responseReject(error: unknown): void;
+  responseReject(cause: unknown): void;
   completedResolve(): void;
-  completedReject(error: unknown): void;
+  completedReject(cause: unknown): void;
   settled: boolean;
   error?: TunnelDispatchError;
   timer: ReturnType<typeof setTimeout>;
   removeAbortListener?: () => void;
 }
 
-function parseUnsigned(value: unknown): bigint | null {
+/** A wire uint64: the protobuf codec gives a bigint or string, the JSON codec a string or number. */
+type WireUnsigned = string | number | bigint;
+
+function parseUnsigned(value: WireUnsigned | undefined): bigint | null {
+  if (value === undefined) return null;
   try {
-    // SAFETY: BigInt throws on any value it cannot convert, and the catch below maps that to null.
-    const parsed = BigInt(value as string | number | bigint);
+    // BigInt throws on a string it cannot convert; the catch below maps that to null.
+    const parsed = BigInt(value);
     return parsed >= 0n ? parsed : null;
   } catch {
     return null;
@@ -125,9 +129,9 @@ function waitUntilWritable(call: RunnerGrpcCall): Promise<void> {
       cleanup();
       resolve();
     };
-    const onError = (error: unknown) => {
+    const onError = (cause: unknown) => {
       cleanup();
-      reject(error);
+      reject(cause);
     };
     const onClose = () => {
       cleanup();

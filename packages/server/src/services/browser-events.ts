@@ -21,6 +21,7 @@ import {
 import {
   BrowserSessionAgentActionKind,
   BrowserSessionController,
+  type BrowserSessionMessageSchema,
   BrowserSessionPointerKind,
   InteractiveEnvelopeSchema,
 } from '@funny/shared/browser-v1/interactive';
@@ -86,14 +87,30 @@ export function relayToUser(userId: string, event: BrowserEvent): void {
   browserEvents?.toUser(userId, event);
 }
 
-function jsonObject(value: unknown): JsonObject {
+/** A browser-session result, or a whole result event, as a JSON object for the legacy wire. */
+function jsonObject(value: JsonObject | BrowserEvent): JsonObject {
   const normalized = jsonValue(value, new WeakSet<object>());
   return normalized && typeof normalized === 'object' && !Array.isArray(normalized)
     ? normalized
     : { value: normalized };
 }
 
-function jsonValue(value: unknown, seen: WeakSet<object>): JsonValue {
+/**
+ * What a browser-session result or event may hold on its way to the legacy JSON
+ * wire: JSON itself, plus the values JSON cannot hold, which `jsonValue` turns
+ * into JSON (a bigint into text, `undefined` / a function / a symbol into null).
+ */
+type WireInput =
+  | JsonValue
+  | BrowserEvent
+  | bigint
+  | undefined
+  | symbol
+  | ((...args: never[]) => void)
+  | readonly WireInput[]
+  | { readonly [key: string]: WireInput };
+
+function jsonValue(value: WireInput, seen: WeakSet<object>): JsonValue {
   if (value === null || typeof value === 'string' || typeof value === 'boolean') return value;
   if (typeof value === 'number') return Number.isFinite(value) ? value : String(value);
   if (typeof value === 'bigint') return value.toString();
@@ -109,6 +126,11 @@ function jsonValue(value: unknown, seen: WeakSet<object>): JsonValue {
 /** A runner's browser-session event data: a decoded protobuf `Struct`. */
 type BrowserSessionData = JsonObject;
 
+/** The typed browser.v1 payload of one browser-session message. */
+type BrowserSessionPayload = NonNullable<
+  Parameters<typeof create<typeof BrowserSessionMessageSchema>>[1]
+>['payload'];
+
 interface BrowserSessionDelivery {
   deliveryClass: DeliveryClass;
   delivery: BrowserDeliveryClass;
@@ -116,7 +138,7 @@ interface BrowserSessionDelivery {
 
 /** How one browser-session event travels: its typed payload plus its delivery class. */
 interface BrowserSessionMapping extends BrowserSessionDelivery {
-  payload: any;
+  payload: BrowserSessionPayload;
   priority: number;
   coalescingKey?: string;
 }
@@ -177,7 +199,7 @@ const AGENT_ACTION_KINDS: AgentActionKinds = {
 };
 
 /** A whole pixel, or absent when the runner did not send a number. */
-function optionalPixel(value: unknown): number | undefined {
+function optionalPixel(value: JsonValue | undefined): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? Math.round(value) : undefined;
 }
 
@@ -194,39 +216,37 @@ function agentActionValue(data: BrowserSessionData) {
   };
 }
 
-function viewportOf(value: unknown): { width: number; height: number } | undefined {
-  if (!value || typeof value !== 'object') return undefined;
-  // SAFETY: the guard above proves value is a non-null object; both fields stay unknown
-  // until the typeof checks below.
-  const { width, height } = value as { width?: unknown; height?: unknown };
+function viewportOf(value: JsonValue | undefined): { width: number; height: number } | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const { width, height } = value;
   if (typeof width !== 'number' || typeof height !== 'number') return undefined;
   return { width: Math.round(width), height: Math.round(height) };
 }
 
-function controllerOf(value: unknown): BrowserSessionController {
+function controllerOf(value: JsonValue | undefined): BrowserSessionController {
   if (value === 'agent') return BrowserSessionController.AGENT;
   if (value === 'user') return BrowserSessionController.USER;
   return BrowserSessionController.UNSPECIFIED;
 }
 
-function stringOrUndefined(value: unknown): string | undefined {
+function stringOrUndefined(value: JsonValue | undefined): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
-function numberOrUndefined(value: unknown): number | undefined {
+function numberOrUndefined(value: JsonValue | undefined): number | undefined {
   return typeof value === 'number' ? value : undefined;
 }
 
 /** A snapshot-recoverable mapping at priority 0, unless `overrides` says otherwise. */
 function sessionMapping(
-  payload: unknown,
+  payload: BrowserSessionPayload,
   overrides: Partial<Omit<BrowserSessionMapping, 'payload'>> = {},
 ): BrowserSessionMapping {
   return { ...SNAPSHOT_RECOVERABLE, priority: 0, ...overrides, payload };
 }
 
 /** A latest-state mapping coalesced per session under `browser-<name>:<sessionId>`. */
-function coalescedMapping(name: string, sessionId: string, payload: unknown) {
+function coalescedMapping(name: string, sessionId: string, payload: BrowserSessionPayload) {
   return sessionMapping(payload, { ...COALESCIBLE, coalescingKey: `browser-${name}:${sessionId}` });
 }
 

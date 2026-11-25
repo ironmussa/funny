@@ -19,7 +19,7 @@ import { projectRole } from '../lib/server-authorizer.js';
 import { decideProjectAccess } from '../middleware/project-access.js';
 
 export interface ProjectAccessErrors<E> {
-  storage: (error: unknown) => E;
+  storage: (cause: unknown) => E;
   notFound: () => E;
   forbidden: () => E;
 }

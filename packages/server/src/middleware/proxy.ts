@@ -167,7 +167,10 @@ async function readRequestBody(c: Context<ServerEnv>): Promise<Uint8Array | null
   }
 }
 
-function isTunnelTimeout(tunnelErr: unknown): boolean {
+/** A runner request that timed out: the gRPC sink's error, or a tunnel's by name. */
+type TunnelTimeout = RunnerRequestTimeoutError | { readonly name: 'TunnelTimeoutError' };
+
+function isTunnelTimeout(tunnelErr: unknown): tunnelErr is TunnelTimeout {
   return (
     tunnelErr instanceof RunnerRequestTimeoutError ||
     (typeof tunnelErr === 'object' &&

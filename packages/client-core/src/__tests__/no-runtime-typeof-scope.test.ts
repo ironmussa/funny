@@ -30,6 +30,8 @@ describe('anti-slop/no-runtime-typeof in the client packages', () => {
         [process.execPath, 'scripts/bun-lint.ts', '--format', 'agent', ...SCOPE],
         { cwd: ROOT, stdout: 'pipe', stderr: 'pipe' },
       );
+      // A linter that did not start (bad config, missing plugin) prints no warnings either.
+      expect(run.exitCode).toBe(0);
       const output = `${run.stdout.toString()}\n${run.stderr.toString()}`;
       const warnings = output
         .split('\n')

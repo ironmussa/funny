@@ -16,6 +16,7 @@ import { z } from 'zod';
 
 import { db } from '../../db/index.js';
 import { agentTemplates, threads } from '../../db/schema.js';
+import { definedFields } from './defined-fields.js';
 
 type TemplateRow = typeof agentTemplates.$inferSelect;
 
@@ -73,17 +74,9 @@ async function readRow(id: string): Promise<TemplateRow | undefined> {
   return rows[0];
 }
 
-const SCALAR_FIELDS = [
-  'name',
-  'description',
-  'icon',
-  'color',
-  'model',
-  'systemPromptMode',
-  'systemPrompt',
-  'agentName',
-  'shared',
-] as const;
+/** Columns a template update may set. */
+type TemplateUpdate = Partial<typeof agentTemplates.$inferInsert>;
+
 const JSON_FIELDS = [
   'disallowedTools',
   'mcpServers',
@@ -92,16 +85,19 @@ const JSON_FIELDS = [
   'variables',
 ] as const;
 
-/** Column name → the value a PATCH writes to it. */
-interface TemplateColumnUpdates {
-  [column: string]: unknown;
-}
-
 /** Column writes for a PATCH body: scalars as given, list fields as JSON. */
-function templateUpdates(body: UpdateAgentTemplateBody): TemplateColumnUpdates {
-  const updates: TemplateColumnUpdates = {};
-  for (const key of SCALAR_FIELDS) if (body[key] !== undefined) updates[key] = body[key];
-  for (const key of JSON_FIELDS) if (body[key] !== undefined) updates[key] = toJson(body[key]);
+function templateUpdates(body: UpdateAgentTemplateBody): TemplateUpdate {
+  const {
+    disallowedTools,
+    mcpServers,
+    builtinSkillsDisabled,
+    customSkillPaths,
+    variables,
+    ...scalars
+  } = body;
+  const updates: TemplateUpdate = definedFields(scalars);
+  const lists = { disallowedTools, mcpServers, builtinSkillsDisabled, customSkillPaths, variables };
+  for (const key of JSON_FIELDS) if (lists[key] !== undefined) updates[key] = toJson(lists[key]);
   return updates;
 }
 

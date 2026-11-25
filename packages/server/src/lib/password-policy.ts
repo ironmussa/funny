@@ -40,6 +40,17 @@ export function validatePasswordStrength(password: unknown): PasswordPolicyResul
   return { ok: true };
 }
 
+/** The fields of a Better Auth request body that carry a password to set. */
+interface PasswordRequestBody {
+  password?: unknown;
+  newPassword?: unknown;
+}
+
+/** Auth path → the body field carrying its password. */
+interface PasswordFieldByAuthPath {
+  [path: string]: keyof PasswordRequestBody;
+}
+
 /**
  * Better Auth endpoints that set a password, and the body field carrying it.
  * Better Auth itself checks only its own minimum length on some of these, and
@@ -47,11 +58,6 @@ export function validatePasswordStrength(password: unknown): PasswordPolicyResul
  * above on every one of them in a `before` hook. Add an endpoint here when a
  * new plugin or route can set a password.
  */
-/** The body field that carries the password, by Better Auth endpoint path. */
-interface PasswordFieldByAuthPath {
-  [path: string]: string;
-}
-
 const PASSWORD_FIELD_BY_AUTH_PATH: PasswordFieldByAuthPath = {
   '/sign-up/email': 'password',
   '/change-password': 'newPassword',
@@ -70,9 +76,11 @@ export function validateAuthRequestPassword(path: string, body: unknown): Passwo
   const field = PASSWORD_FIELD_BY_AUTH_PATH[path];
   if (!field) return { ok: true };
   const value =
-    // SAFETY: the guard admits only non-null objects, and the field is read as unknown;
-    // validatePasswordStrength checks its type, so a missing or non-string value is refused.
-    body && typeof body === 'object' ? (body as Record<string, unknown>)[field] : undefined;
+    body && typeof body === 'object'
+      ? // SAFETY: `body` is a non-null object; its password field is read as
+        // `unknown` and checked by validatePasswordStrength.
+        (body as PasswordRequestBody)[field]
+      : undefined;
   if (path === '/admin/create-user' && value === undefined) return { ok: true };
   return validatePasswordStrength(value);
 }

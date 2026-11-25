@@ -26,7 +26,11 @@ import type {
 } from '../runner-thread-launcher.js';
 import type { JournalCodec } from '../workflow-engine/journal-repository.js';
 import { createLeaseGate } from '../workflow-engine/lease-gate.js';
-import type { FactoryProofDeps, FactoryThreadMode } from './factory-action-provider.js';
+import type {
+  FactoryProofDeps,
+  FactoryThreadMode,
+  StepAgentBody,
+} from './factory-action-provider.js';
 import { approvalMoveTitle, type ApprovalMove } from './factory-approval-carry.js';
 import type { FactoryBatchesRepository } from './factory-batches.js';
 import type { FactoryFlowContext, FactoryFlow, FactoryFlowError } from './factory-flow.js';
@@ -94,7 +98,7 @@ export interface FactoryFlowRunsDeps {
     content: string,
     expectedBranch?: string,
     /** The step's agent options, carried on the message body. */
-    options?: Record<string, unknown>,
+    options?: Partial<StepAgentBody>,
   ) => Promise<Result<void, string>>;
   /** The merge queue's batches (tests); default: the database's. */
   batches?: FactoryBatchesRepository;

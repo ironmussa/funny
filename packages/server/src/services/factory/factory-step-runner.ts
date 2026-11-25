@@ -17,13 +17,13 @@ import { sleep as interruptibleSleep } from '@funny/shared/async';
 import { err, ok, type Result } from 'neverthrow';
 import { z } from 'zod';
 
-import { RUNNER_UNAVAILABLE_PREFIX } from './factory-runner-jobs.js';
+import { RUNNER_UNAVAILABLE_PREFIX, type FactoryStepJobBody } from './factory-runner-jobs.js';
 
 /** Start, poll and stop a factory step on the runner of a run's thread. */
 export interface FactoryStepDeps {
   startStep(
     threadId: string,
-    body: Record<string, unknown>,
+    body: FactoryStepJobBody,
   ): Promise<Result<{ stepId: string; state: string }, string>>;
   pollStep(
     threadId: string,
@@ -117,7 +117,7 @@ function verdictOf(polled: Result<{ state: string; result?: unknown }, string>):
 export async function runStepOnRunner(
   steps: FactoryStepDeps,
   threadId: string,
-  body: Record<string, unknown> & { timeoutMs: number },
+  body: FactoryStepJobBody & { timeoutMs: number },
   signal: AbortSignal,
 ): Promise<StepRun> {
   const started = await steps.startStep(threadId, body);

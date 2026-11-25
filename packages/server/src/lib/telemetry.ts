@@ -26,11 +26,20 @@ export const telemetry: AbbacchioClient = createClient({
   interval: 2000,
 });
 
+/**
+ * A metric or span attribute value. The transport exports strings, numbers and
+ * booleans as such, drops `null` / `undefined`, and stringifies anything else.
+ */
+export type TelemetryAttributeValue = string | number | boolean | null | undefined;
+
+/** Attributes of a metric data point or a span. */
+export type TelemetryAttributes = Record<string, TelemetryAttributeValue>;
+
 /** Record a metric (counter or gauge) */
 export function metric(
   name: string,
   value: number,
-  opts?: { type?: 'sum' | 'gauge'; unit?: string; attributes?: Record<string, unknown> },
+  opts?: { type?: 'sum' | 'gauge'; unit?: string; attributes?: TelemetryAttributes },
 ) {
   telemetry.addMetric({
     name,
@@ -45,7 +54,7 @@ export function metric(
 export function recordHistogram(
   name: string,
   value: number,
-  opts?: { unit?: string; attributes?: Record<string, unknown> },
+  opts?: { unit?: string; attributes?: TelemetryAttributes },
 ): void {
   telemetry.addHistogram({
     name,
@@ -69,7 +78,7 @@ export interface SpanHandle {
   traceId: string;
   spanId: string;
   name: string;
-  attributes: Record<string, unknown>;
+  attributes: TelemetryAttributes;
   durationMs: number;
   end: (status?: 'ok' | 'error', errorMsg?: string) => void;
 }
@@ -77,7 +86,7 @@ export interface SpanHandle {
 /** Start a trace span — returns a handle whose name/attributes can be updated before end() */
 export function startSpan(
   name: string,
-  opts?: { traceId?: string; parentSpanId?: string; attributes?: Record<string, unknown> },
+  opts?: { traceId?: string; parentSpanId?: string; attributes?: TelemetryAttributes },
 ): SpanHandle {
   const traceId = opts?.traceId ?? randomHex(16);
   const spanId = randomHex(8);

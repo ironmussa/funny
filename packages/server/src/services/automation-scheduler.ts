@@ -204,7 +204,7 @@ function tick(id: string): Promise<void> {
 function logFailure(
   work: Promise<void>,
   message: string,
-  fields: Record<string, unknown> = {},
+  fields: { automationId?: string } = {},
 ): Promise<void> {
   return work.catch((error: unknown) => {
     log.error(message, {

@@ -45,14 +45,9 @@ function serializeUtilityModel(setting: UtilityModelSetting | null): string | nu
   return setting ? JSON.stringify(setting) : null;
 }
 
-/** Provider id → whether a key is saved for it. */
+/** Provider key id → whether the user saved one. */
 interface ProviderKeyPresence {
-  [provider: string]: boolean;
-}
-
-/** Column name → the value a profile update writes to it. */
-interface ProfileColumnUpdates {
-  [column: string]: any;
+  [id: string]: boolean;
 }
 
 /** Build the providerKeys presence map (id → boolean) for the API response. */
@@ -181,7 +176,7 @@ export async function upsertProfile(
     defaultEditor?: string;
     useInternalEditor?: boolean;
     terminalShell?: string;
-    toolPermissions?: Record<string, any>;
+    toolPermissions?: Record<string, string>;
     theme?: string;
     utilityModel?: UtilityModelSetting | null;
     threadRecapEnabled?: boolean;
@@ -205,7 +200,7 @@ export async function upsertProfile(
   const existing = await getProfile(userId);
 
   if (existing) {
-    const set: ProfileColumnUpdates = { updatedAt: now };
+    const set: Partial<typeof userProfiles.$inferInsert> = { updatedAt: now };
     if (updates.gitName !== undefined) set.gitName = updates.gitName || null;
     if (updates.gitEmail !== undefined) set.gitEmail = updates.gitEmail || null;
     if (updates.setupCompleted !== undefined) set.setupCompleted = updates.setupCompleted ? 1 : 0;

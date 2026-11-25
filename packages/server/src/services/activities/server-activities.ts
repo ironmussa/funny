@@ -28,6 +28,7 @@ import {
   ACTIVITY_ERROR_MAX,
   ACTIVITY_STEP_MAX,
   ACTIVITY_TITLE_MAX,
+  type ActivityInput,
   type ActivityKind,
   parseActivityEffects,
   parseActivityInput,
@@ -47,7 +48,8 @@ export interface ServerActivitySpec {
   projectId?: string | null;
   threadId?: string | null;
   title: string;
-  input: Record<string, unknown>;
+  /** The input of an activity kind (checked against `kind` before it is stored). */
+  input: ActivityInput<ActivityKind>;
   origin: ActivityOrigin;
 }
 
@@ -112,7 +114,7 @@ export function createServerActivities(deps: ServerActivityDeps = {}) {
   }
 
   /** The validated input, or null (logged) when it does not match the kind. */
-  function inputOf(spec: ServerActivitySpec): Record<string, unknown> | null {
+  function inputOf(spec: ServerActivitySpec): Activity['input'] | null {
     const input = parseActivityInput(spec);
     if (!input) {
       log.warn('Server activity input does not match its kind', {
@@ -126,7 +128,7 @@ export function createServerActivities(deps: ServerActivityDeps = {}) {
   async function insert(
     id: string,
     spec: ServerActivitySpec,
-    input: Record<string, unknown>,
+    input: Activity['input'],
     final?: ServerActivityOutcome,
   ): Promise<void> {
     const row: ActivityInsert = {

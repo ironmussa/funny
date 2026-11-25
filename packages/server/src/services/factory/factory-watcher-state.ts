@@ -12,6 +12,7 @@ import type { ConcurrencyGate } from '@funny/pipelines';
 import { type Result } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
+import type { CreationPayload } from '../../modules/threads/index.js';
 import { type ServerActivities } from '../activities/server-activities.js';
 import {
   startThreadOnRunner,
@@ -21,7 +22,7 @@ import {
   type StartThreadInput,
 } from '../runner-thread-launcher.js';
 import type { ThreadRuntimeMode } from '../thread-sandboxes/project-sandbox-settings.js';
-import type { FactoryThreadMode } from './factory-action-provider.js';
+import type { FactoryThreadMode, StepAgentBody } from './factory-action-provider.js';
 import {
   createFactoryFlowRuns,
   type FactoryFlowRunsDeps,
@@ -70,7 +71,7 @@ export interface FactoryWatcherDeps {
    */
   launchSandbox?: (
     userId: string,
-    body: Record<string, unknown>,
+    body: CreationPayload,
   ) => Promise<Result<StartedThread, StartThreadError>>;
   /** Override for tests of `runsPushedCommits` (whether the thread is isolated in a sandbox). */
   runsPushedCommits?: (threadId: string) => Promise<boolean>;
@@ -89,7 +90,7 @@ export interface FactoryWatcherDeps {
     content: string,
     expectedBranch?: string,
     /** The step's agent options, carried on the message body. */
-    options?: Record<string, unknown>,
+    options?: Partial<StepAgentBody>,
   ) => Promise<Result<void, string>>;
   /** Where the merged-run cleanup tells the enabler's browsers about the cleared threads. */
   browserEvents?: BrowserEventsPort;

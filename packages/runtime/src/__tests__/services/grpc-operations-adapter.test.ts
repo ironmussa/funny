@@ -5,6 +5,7 @@ import {
   mapRunnerOperation,
   mapRunnerOperationOutcome,
   normalizeRunnerOperationValue,
+  type RunnerOperation,
 } from '../../services/grpc-operations-adapter.js';
 
 describe('GrpcOperationsAdapter mapping', () => {
@@ -47,7 +48,7 @@ describe('GrpcOperationsAdapter mapping', () => {
       action: 'retry',
       payload: P,
     };
-    const expected: Record<string, { kind: string; value: Record<string, unknown> }> = {
+    const expected: Record<string, RunnerOperation> = {
       'data:get_thread': { kind: 'getThread', value: { threadId: 't1' } },
       'data:get_thread_by_external_request_id': {
         kind: 'getThreadByExternalRequestId',

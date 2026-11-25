@@ -10,6 +10,7 @@
  * one, publishing a repository and deleting issues, each recorded as one `github.write`
  * activity once GitHub has answered. The route's own answer is unchanged.
  */
+import type { JsonObject } from '@bufbuild/protobuf';
 import type { ActivityEffect, ActivityResultRef } from '@funny/shared';
 
 import { recordActivity as defaultRecordActivity } from './activity-tracker.js';
@@ -24,15 +25,18 @@ export interface GithubWrite {
     filePath?: string;
     repo?: string;
   };
-  /** What a successful answer changed, read from its JSON body. */
-  effectsOf: (body: Record<string, unknown>) => ActivityEffect[];
-  resultRefOf?: (body: Record<string, unknown>) => ActivityResultRef | undefined;
+  /** What a successful answer changed, read from its JSON body (`{}` when it is not an object). */
+  effectsOf: (body: JsonObject) => ActivityEffect[];
+  resultRefOf?: (body: JsonObject) => ActivityResultRef | undefined;
 }
 
-async function jsonOf(res: Response): Promise<Record<string, unknown>> {
+/** The route's answer as a JSON object; `{}` for any other body. */
+async function jsonOf(res: Response): Promise<JsonObject> {
   try {
-    const body = await res.clone().json();
-    return body && typeof body === 'object' ? (body as Record<string, unknown>) : {};
+    const body: unknown = await res.clone().json();
+    if (!body || typeof body !== 'object' || Array.isArray(body)) return {};
+    // SAFETY: `body` came out of JSON.parse and is a non-array object, so every value is JSON.
+    return body as JsonObject;
   } catch {
     return {};
   }

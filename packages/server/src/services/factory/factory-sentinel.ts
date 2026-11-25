@@ -42,6 +42,7 @@ import type { Result } from 'neverthrow';
 import { log } from '../../lib/logger.js';
 import { metric } from '../../lib/telemetry.js';
 import type { StartedThread, StartThreadError } from '../runner-thread-launcher.js';
+import type { FactoryLaunchBody } from './factory-action-provider.js';
 import type { FactoryIncidentRecord, FactoryIncidentsRepository } from './factory-incidents.js';
 import { prNumberOf } from './factory-pull-requests.js';
 import { REVIEWER_DISALLOWED_TOOLS } from './factory-review.js';
@@ -93,7 +94,7 @@ export interface SentinelDeps {
    */
   cleared?: Set<string>;
   /** Start a thread as this factory's enabler. */
-  launch(body: Record<string, unknown>): Promise<Result<StartedThread, StartThreadError>>;
+  launch(body: FactoryLaunchBody): Promise<Result<StartedThread, StartThreadError>>;
   /** A thread's stored status, or null when it no longer exists. */
   threadStatus(threadId: string): Promise<string | null>;
   finalMessage(threadId: string): Promise<string | null>;

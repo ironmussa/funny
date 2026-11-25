@@ -1,12 +1,13 @@
-import type { AgentProvider } from '@funny/shared';
+import type { AgentProvider, McpServer } from '@funny/shared';
 import { errorMessage } from '@funny/shared/errors';
 
 import { log } from '../../lib/logger.js';
 import type { RuntimeThreadRecord } from '../server-interfaces.js';
+import type { AgentMcpServers } from './load-mcp-servers.js';
 
 export interface AgentTemplateResolution {
   disallowedTools?: string[];
-  mcpServers?: Record<string, any>;
+  mcpServers?: AgentMcpServers;
   systemPrompt?: string;
   builtinSkillsDisabled?: string[];
   customSkillPaths?: string[];
@@ -18,7 +19,7 @@ interface ResolveAgentTemplateInput {
   thread: RuntimeThreadRecord | undefined;
   provider: AgentProvider;
   disallowedTools?: string[];
-  mcpServers?: Record<string, any>;
+  mcpServers?: AgentMcpServers;
 }
 
 /** A template's list column: JSON text from the database, or a list already parsed. */
@@ -67,7 +68,7 @@ function applyTemplate(
   templateVariables: StoredTemplateVariables,
 ): void {
   const tplDisallowed = parseJsonCol<string>(tpl.disallowedTools);
-  const tplMcpServers = parseJsonCol<any>(tpl.mcpServers);
+  const tplMcpServers = parseJsonCol<McpServer>(tpl.mcpServers);
   mergeTemplateDisallowedTools(out, tplDisallowed);
   mergeTemplateMcpServers(out, tplMcpServers);
 
@@ -104,9 +105,9 @@ function mergeTemplateDisallowedTools(out: AgentTemplateResolution, tplDisallowe
 }
 
 /** Merge template MCP servers (additive). */
-function mergeTemplateMcpServers(out: AgentTemplateResolution, tplMcpServers: any[]): void {
+function mergeTemplateMcpServers(out: AgentTemplateResolution, tplMcpServers: McpServer[]): void {
   if (tplMcpServers.length === 0) return;
-  const merged: Record<string, any> = { ...(out.mcpServers ?? {}) };
+  const merged: AgentMcpServers = { ...(out.mcpServers ?? {}) };
   out.mcpServers = merged;
   for (const srv of tplMcpServers) {
     merged[srv.name] = srv;

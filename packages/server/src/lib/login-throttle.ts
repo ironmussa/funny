@@ -22,7 +22,7 @@
  * lockout dropped, rather than letting the map grow.
  */
 
-import { audit } from './audit.js';
+import { audit, type AuditMeta } from './audit.js';
 
 interface FailureRecord {
   /** Count of recorded failures in the current sliding window. */
@@ -117,7 +117,7 @@ export function checkLoginAllowed(
 }
 
 /** Record a failed login attempt; locks the account if the threshold is hit. */
-export function recordLoginFailure(identifier: string, meta: Record<string, unknown> = {}): void {
+export function recordLoginFailure(identifier: string, meta: AuditMeta = {}): void {
   const key = normalize(identifier);
   if (!key) return;
   const t = now();

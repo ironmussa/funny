@@ -102,7 +102,8 @@ interface SignalCmd {
   signal: number;
 }
 
-type DaemonCommand =
+/** What a client sends the daemon, one NDJSON line each. */
+export type DaemonCommand =
   | SpawnCmd
   | WriteCmd
   | ResizeCmd
@@ -112,6 +113,16 @@ type DaemonCommand =
   | ShutdownCmd
   | PingCmd
   | SignalCmd;
+
+/** What the daemon writes to its clients, one NDJSON line each. */
+type DaemonEvent =
+  | { evt: 'spawned'; id: string }
+  | { evt: 'data'; id: string; data: string }
+  | { evt: 'exit'; id: string; exitCode: number }
+  | { evt: 'error'; id: string; error: string }
+  | { evt: 'sessions'; sessions: ReturnType<typeof listSessions> }
+  | { evt: 'captured'; id: string; state: string | null }
+  | { evt: 'pong' };
 
 // ── Session Management ───────────────────────────────────────────────
 
@@ -126,7 +137,7 @@ interface ClientFraming {
 }
 const framing = new WeakMap<import('bun').Socket, ClientFraming>();
 
-function sendTo(socket: import('bun').Socket, msg: Record<string, unknown>): void {
+function sendTo(socket: import('bun').Socket, msg: DaemonEvent): void {
   writeLine(socket, JSON.stringify(msg) + '\n');
 }
 
@@ -145,7 +156,7 @@ function writeLine(socket: import('bun').Socket, line: string): void {
   }
 }
 
-function broadcast(msg: Record<string, unknown>): void {
+function broadcast(msg: DaemonEvent): void {
   const line = JSON.stringify(msg) + '\n';
   for (const client of clients) writeLine(client, line);
 }

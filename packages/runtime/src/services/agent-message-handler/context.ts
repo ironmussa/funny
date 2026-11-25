@@ -5,14 +5,14 @@
  * @domain layer: application
  */
 
-import type { WSEvent } from '@funny/shared';
+import type { Project, WSEvent } from '@funny/shared';
 
 import type { WSEventData } from '../agent-event-router.js';
 import type { AgentStateTracker } from '../agent-state.js';
 import type { IThreadManager } from '../server-interfaces.js';
 
-/** A project as the message handler reads it: its directory, plus opaque extras. */
-export type HandlerProject = { path: string; [key: string]: any };
+/** What the message handler reads of a project: where it lives on disk. */
+export type HandlerProject = Pick<Project, 'path'>;
 
 /**
  * What the modules split out of `AgentMessageHandler` need from it: its

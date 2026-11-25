@@ -277,7 +277,7 @@ export interface FactoryActionProviderDeps {
   /** Stop a thread this run started after it was stopped (a launch racing the stop). */
   abandon?(threadId: string): Promise<void>;
   /** Start a thread on the enabler's runner (`startThreadOnRunner` for the enabler). */
-  launch(body: Record<string, unknown>): Promise<Result<StartedThread, StartThreadError>>;
+  launch(body: FactoryLaunchBody): Promise<Result<StartedThread, StartThreadError>>;
   /** Resolves with the thread's terminal status (or why it never will reach one). */
   waitThread(threadId: string, signal: AbortSignal, after?: WaitAfter): Promise<ThreadOutcome>;
   /** Continue the first thread for later agent steps; without it each step starts a thread. */
@@ -323,15 +323,18 @@ export interface StepOptionsEntry extends ResolvedStepOptions {
   threadId: string;
 }
 
-/** The agent options a launch or follow-up body carries (unset fields are omitted). */
-export interface StepAgentBody {
+/**
+ * The agent options a launch or follow-up body carries (unset fields are
+ * omitted). A type alias, not an interface, so it fits a creation payload.
+ */
+export type StepAgentBody = {
   provider: string;
   model: string;
   permissionMode: string;
   effort?: string;
   allowedTools?: string[];
   disallowedTools?: string[];
-}
+};
 
 /** The body fields of a step's resolved options: every kept field explicit, the rest only when set. */
 export function stepAgentBody(options: ResolvedStepOptions): StepAgentBody {
@@ -365,15 +368,45 @@ export interface FactoryContinuation {
   followUpOffBranch?(threadId: string, content: string): Promise<Result<void, string>>;
 }
 
-/** Field → value of the thread-creation body a step sends to the runner. */
-export interface StepThreadBody {
-  [field: string]: unknown;
-}
+/**
+ * What the factory starts a thread with: the fields of the runner's
+ * thread-creation request (`createThreadSchema`) it sets. In `sandbox` mode
+ * the watcher sends it to the sandbox thread launcher instead (`launchFor`).
+ * A type alias, not an interface, so it stays a creation payload.
+ */
+export type FactoryLaunchBody = {
+  projectId: string;
+  title: string;
+  mode: FactoryThreadMode;
+  source: 'factory';
+  prompt: string;
+  baseBranch?: string;
+  /** Start the worktree from `origin/<baseBranch>`. */
+  baseFromRemote?: boolean;
+  /** The worktree's branch: the run's, so the thread and its pull request share it. */
+  branch?: string;
+  /** The agent may only read (`threads.read_only`). */
+  readOnly?: boolean;
+  /** What a read-only agent reads besides its checkout (the issue's text). */
+  roleInputs?: Record<string, string>;
+  provider?: string;
+  model?: string;
+  permissionMode?: string;
+  effort?: string;
+  allowedTools?: string[];
+  disallowedTools?: string[];
+};
 
-/** Field → value of the metadata a step's result carries. */
-export interface StepMetadata {
-  [field: string]: unknown;
-}
+/**
+ * The metadata of a `merge` that sent the change back: why, what the agent
+ * reads, and the node that regenerates it (when one does).
+ */
+export type SentBackMetadata = {
+  outcome: 'sent_back';
+  why: 'conflict' | 'checks';
+  feedback: string;
+  regenerate?: string;
+};
 
 /** The thread an agent step waits on; `after` when a follow-up runs it again. */
 export interface StepThread {

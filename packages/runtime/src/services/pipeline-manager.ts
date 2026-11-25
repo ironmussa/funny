@@ -33,6 +33,7 @@ import { loadPipelines, type LoadedPipeline } from '../pipelines/yaml-loader.js'
 import { beginActivity, type ActivityHandle } from './activity-tracker.js';
 import { BUILTIN_AGENTS, resolveAgent, resolveBuiltinAgentByName } from './agent-registry.js';
 import { RuntimeActionProvider, RuntimeProgressReporter } from './pipeline-adapter.js';
+import type { PipelineRunUpdate, PipelineUpdate } from './server-interfaces.js';
 import { getServices } from './service-registry.js';
 import * as tm from './thread-manager.js';
 
@@ -168,7 +169,7 @@ export function getPipelinesByProject(projectId: string) {
   return getServices().pipelines.getPipelinesByProject(projectId);
 }
 
-export function updatePipeline(id: string, updates: Record<string, unknown>) {
+export function updatePipeline(id: string, updates: PipelineUpdate) {
   return getServices().pipelines.updatePipeline(id, updates);
 }
 
@@ -187,7 +188,7 @@ async function createRun(data: {
   return getServices().pipelines.createRun(data);
 }
 
-async function updateRun(id: string, updates: Record<string, unknown>) {
+async function updateRun(id: string, updates: PipelineRunUpdate) {
   return getServices().pipelines.updateRun(id, updates);
 }
 

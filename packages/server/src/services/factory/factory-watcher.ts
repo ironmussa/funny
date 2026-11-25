@@ -42,6 +42,7 @@ import { createFactoryFlowRuns } from './factory-flow-runs.js';
 import { type FactoryGithubPort } from './factory-github.js';
 import { createFactoryIncidentsRepository } from './factory-incidents.js';
 import { prNumberOf } from './factory-pull-requests.js';
+import type { FactoryStepJobBody } from './factory-runner-jobs.js';
 import { createFactoryRunsRepository, IN_FLIGHT_STATES, threadsOf } from './factory-runs.js';
 import { createFactorySentinel } from './factory-sentinel.js';
 import {
@@ -139,7 +140,7 @@ export async function startFactoryWatcher(d: FactoryWatcherDeps): Promise<void> 
   const steps =
     d.steps ??
     ((userId: string) => ({
-      startStep: (tid: string, body: Record<string, unknown>) =>
+      startStep: (tid: string, body: FactoryStepJobBody) =>
         startFactoryStepOnRunner(d.ports, userId, tid, body),
       pollStep: (tid: string, stepId: string) =>
         pollFactoryStepOnRunner(d.ports, userId, tid, stepId),

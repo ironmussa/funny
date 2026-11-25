@@ -10,6 +10,10 @@
  */
 
 import { parseStoredJson } from '@funny/shared/json-validation';
+import type {
+  startFactoryStepSchema,
+  startRegressionProofSchema,
+} from '@ironmussa/funny-runtime/validation/schemas';
 import { err, ok, type Result } from 'neverthrow';
 import { z } from 'zod';
 
@@ -19,6 +23,15 @@ import type { RunnerPorts } from '../runner-thread-launcher.js';
 
 /** The prefix of an error that means the runner could not be reached (the wait may ride it out). */
 export const RUNNER_UNAVAILABLE_PREFIX = 'runner unavailable: ';
+
+/** The runner's `POST /api/threads/:id/regression-proof` body (its `startRegressionProofSchema`). */
+export type RegressionProofJobBody = z.input<typeof startRegressionProofSchema>;
+
+/** The runner's `POST /api/threads/:id/factory-steps` body (its `startFactoryStepSchema`). */
+export type FactoryStepJobBody = z.input<typeof startFactoryStepSchema>;
+
+/** What starts a job on the runner of a run's thread: a regression proof or a factory step. */
+export type RunnerJobBody = RegressionProofJobBody | FactoryStepJobBody;
 
 const runnerErrorBody = z.object({ error: z.string() }).passthrough();
 
@@ -35,7 +48,7 @@ async function send(
   userId: string,
   method: 'GET' | 'POST' | 'DELETE',
   path: string,
-  body: Record<string, unknown> | null,
+  body: RunnerJobBody | null,
 ): Promise<Result<{ status: number; body: string | null }, string>> {
   const sink = authorizedRunnerRequests(ports.requests);
   try {
@@ -77,7 +90,7 @@ export async function startRunnerJob<T>(
   ports: RunnerPorts,
   userId: string,
   path: string,
-  body: Record<string, unknown>,
+  body: RunnerJobBody,
   schema: z.ZodType<T>,
   label: string,
 ): Promise<Result<T, string>> {

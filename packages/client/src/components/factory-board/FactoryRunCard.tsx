@@ -378,6 +378,18 @@ function QueuedFactoryRunCard({
   );
 }
 
+/** The run's threads, at the bottom of the card's menu under its actions; null with none. */
+function runThreadMenuItems(run: Props['run']) {
+  return factoryRunCardThreadLinks(run).length > 0 ? <FactoryRunThreadMenuItems run={run} /> : null;
+}
+
+/** The time in the step, which takes the footer's time slot in place of the card's age. */
+function runStepTime(run: Props['run'], now: Props['now']) {
+  return timeInCurrentStep(run) && run.currentStep ? (
+    <FactoryRunTimeInStep run={run} now={now} />
+  ) : undefined;
+}
+
 /**
  * A run with a thread is the thread's own kanban card (title, footer with
  * links to the run's threads, PR and time, menu) with the run's chips under the title; a run
@@ -407,14 +419,8 @@ export const FactoryRunCard = memo(function FactoryRunCard({
     prState,
   });
   const menuItems = factoryRunMenuItems(run, actions);
-  // The run's threads go at the bottom of the card's menu, under its actions.
-  const threadItems =
-    factoryRunCardThreadLinks(run).length > 0 ? <FactoryRunThreadMenuItems run={run} /> : null;
-  // The time in the step takes the footer's time slot, in place of the card's age.
-  const stepTime =
-    timeInCurrentStep(run) && run.currentStep ? (
-      <FactoryRunTimeInStep run={run} now={now} />
-    ) : undefined;
+  const threadItems = runThreadMenuItems(run);
+  const stepTime = runStepTime(run, now);
   const status = (
     <FactoryRunStatus
       run={run}

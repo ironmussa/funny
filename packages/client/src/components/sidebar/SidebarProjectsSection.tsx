@@ -45,6 +45,34 @@ interface Props extends ProjectItemHandlers {
   scrollRef: RefObject<HTMLDivElement | null>;
 }
 
+/** The header's toggle that hides the threads the issue factory started from the sidebar. */
+function FactoryThreadsToggle() {
+  const { t } = useTranslation();
+  const hideFactoryThreads = useSidebarFilterStore((s) => s.hideFactoryThreads);
+  const toggleHideFactoryThreads = useSidebarFilterStore((s) => s.toggleHideFactoryThreads);
+  const label = hideFactoryThreads
+    ? t('sidebar.showFactoryThreads', 'Show factory threads')
+    : t('sidebar.hideFactoryThreads', 'Hide factory threads');
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="muted"
+          data-testid="sidebar-toggle-factory-threads"
+          size="icon"
+          aria-pressed={hideFactoryThreads}
+          aria-label={label}
+          className={cn('size-5', hideFactoryThreads && 'text-primary bg-primary/10')}
+          onClick={toggleHideFactoryThreads}
+        >
+          <Factory className="icon-sm" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="right">{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 /**
  * Projects header (with "add project" button) + scrollable projects list +
  * closed-project groups. Extracted from Sidebar.tsx so it doesn't need to import
@@ -67,7 +95,6 @@ export function SidebarProjectsSection({
   useExternalClaudeSessionsSync();
   const [closedExpanded, setClosedExpanded] = useState(false);
   const hideFactoryThreads = useSidebarFilterStore((s) => s.hideFactoryThreads);
-  const toggleHideFactoryThreads = useSidebarFilterStore((s) => s.toggleHideFactoryThreads);
 
   const { onCloseProject, onReopenProject, ...sharedHandlers } = handlers;
 
@@ -112,30 +139,7 @@ export function SidebarProjectsSection({
           {t('sidebar.projects')}
         </button>
         <div className="flex items-center gap-0.5">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="muted"
-                data-testid="sidebar-toggle-factory-threads"
-                size="icon"
-                aria-pressed={hideFactoryThreads}
-                aria-label={
-                  hideFactoryThreads
-                    ? t('sidebar.showFactoryThreads', 'Show factory threads')
-                    : t('sidebar.hideFactoryThreads', 'Hide factory threads')
-                }
-                className={cn('size-5', hideFactoryThreads && 'text-primary bg-primary/10')}
-                onClick={toggleHideFactoryThreads}
-              >
-                <Factory className="icon-sm" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="right">
-              {hideFactoryThreads
-                ? t('sidebar.showFactoryThreads', 'Show factory threads')
-                : t('sidebar.hideFactoryThreads', 'Hide factory threads')}
-            </TooltipContent>
-          </Tooltip>
+          <FactoryThreadsToggle />
           <Tooltip>
             <TooltipTrigger asChild>
               <Button

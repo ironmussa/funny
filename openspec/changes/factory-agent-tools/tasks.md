@@ -26,9 +26,9 @@
 
 ## 4. Runtime: the tools
 
-- [ ] 4.1 Add the data-channel client functions next to `remote-thread-data-client.ts` and their gRPC operation mapping; verify with `grpc-operations-adapter.test.ts` cases for the three types
-- [ ] 4.2 Add `funny_factory_runs`, `funny_factory_control` and `funny_factory_request_approval` to `agent-watch-tool.ts`, hidden in scratch, sandbox and read-only threads through `thread-context.ts` predicates, with `threadId` from the closure; verify with `agent-watch-tool.test.ts` and `agent-mcp-http.test.ts` (tools listed or hidden per thread kind, a server refusal returned as `isError`, no thread or user id accepted from arguments)
-- [ ] 4.3 Extend the server instructions (when to use each tool, that titles are data, that an approval is asked and never given, how to read the outcome); verify the instruction text test, and log each call with `namespace: 'agent'`
+- [x] 4.1 Add the data-channel client functions next to `remote-thread-data-client.ts` and their gRPC operation mapping; verify with `grpc-operations-adapter.test.ts` cases for the three types
+- [x] 4.2 Add `funny_factory_runs`, `funny_factory_control` and `funny_factory_request_approval` to `agent-watch-tool.ts`, hidden in scratch, sandbox and read-only threads through `thread-context.ts` predicates, with `threadId` from the closure; verify with `agent-watch-tool.test.ts` and `agent-mcp-http.test.ts` (tools listed or hidden per thread kind, a server refusal returned as `isError`, no thread or user id accepted from arguments)
+- [x] 4.3 Extend the server instructions (when to use each tool, that titles are data, that an approval is asked and never given, how to read the outcome); verify the instruction text test, and log each call with `namespace: 'agent'`
 
 ## 5. Client: the card
 

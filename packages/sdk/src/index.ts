@@ -7,4 +7,6 @@ export type {
   WebhookErrorResponse,
   CLIMessage,
   CLIMessageRole,
+  WireObject,
+  WireValue,
 } from './types.js';

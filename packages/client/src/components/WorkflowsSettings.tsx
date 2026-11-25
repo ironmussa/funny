@@ -1,3 +1,4 @@
+import type { JsonObject } from '@funny/shared/json';
 import {
   isErrorDiagnostic,
   type WorkflowDefinitionResponse,
@@ -201,9 +202,9 @@ function WorkflowsDesigner({ projectId }: { projectId: string | null }) {
 
   const runWorkflow = useCallback(async () => {
     if (!selectedName || hasErrors || !selectedThreadId) return;
-    let inputs: Record<string, unknown>;
+    let inputs: JsonObject;
     try {
-      inputs = JSON.parse(inputsSource) as Record<string, unknown>;
+      inputs = JSON.parse(inputsSource) as JsonObject;
     } catch {
       toast.error('Inputs must be valid JSON');
       return;
@@ -730,7 +731,7 @@ function actionOf(node: ParsedNode): NodeAction {
 }
 
 /** The starting value of each action when the editor switches a node to it. */
-const DEFAULT_ACTION_VALUES: Record<(typeof ACTION_KEYS)[number], Record<string, unknown>> = {
+const DEFAULT_ACTION_VALUES: Record<(typeof ACTION_KEYS)[number], JsonObject> = {
   spawn_agent: { prompt: '' },
   run_command: { command: '' },
   bash: { command: '' },
@@ -750,6 +751,6 @@ const DEFAULT_ACTION_VALUES: Record<(typeof ACTION_KEYS)[number], Record<string,
   integrate: {},
 };
 
-function defaultActionValue(actionType: (typeof ACTION_KEYS)[number]) {
+function defaultActionValue(actionType: (typeof ACTION_KEYS)[number]): JsonObject {
   return { ...DEFAULT_ACTION_VALUES[actionType] };
 }

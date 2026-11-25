@@ -1,3 +1,4 @@
+import type { JsonObject } from '@funny/shared/json';
 import { Check, Copy, FileCode2 } from 'lucide-react';
 import { Suspense, lazy, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -21,7 +22,7 @@ export function PlanCard({
   hideLabel,
   displayTime,
 }: {
-  parsed: Record<string, unknown>;
+  parsed: JsonObject;
   output?: string;
   hideLabel?: boolean;
   displayTime?: string | null;

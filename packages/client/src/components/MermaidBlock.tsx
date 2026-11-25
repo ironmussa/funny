@@ -218,8 +218,6 @@ function useMermaidPanZoom(): PanZoom {
   };
 }
 
-const MERMAID_INLINE_HEIGHT = 420;
-
 export function MermaidBlock({ chart }: { chart: string }) {
   const { svg, error } = useMermaidSvg(chart);
   const [expanded, setExpanded] = useState(false);
@@ -250,14 +248,15 @@ export function MermaidBlock({ chart }: { chart: string }) {
   return (
     <>
       <div
-        className="group border-border bg-card relative overflow-hidden rounded border"
-        style={{ height: MERMAID_INLINE_HEIGHT }}
+        className="group border-border bg-card relative h-[420px] overflow-hidden rounded border"
         data-testid="mermaid-diagram"
       >
         <div
           ref={pz.containerRef}
-          className="absolute inset-0 flex items-center justify-center select-none"
-          style={{ cursor: pz.isDragging ? 'grabbing' : 'grab' }}
+          className={cn(
+            'absolute inset-0 flex items-center justify-center select-none',
+            pz.isDragging ? 'cursor-grabbing' : 'cursor-grab',
+          )}
           onPointerDown={pz.onPointerDown}
           onPointerMove={pz.onPointerMove}
           onPointerUp={pz.onPointerUp}
@@ -266,10 +265,9 @@ export function MermaidBlock({ chart }: { chart: string }) {
           <div
             key={svg}
             ref={fitOnMount}
-            className="[&>svg]:max-w-none"
+            className="origin-center [transform:var(--mermaid-transform)] [&>svg]:max-w-none"
             style={{
-              transform: `translate(${pz.offset.x}px, ${pz.offset.y}px) scale(${pz.scale})`,
-              transformOrigin: 'center center',
+              '--mermaid-transform': `translate(${pz.offset.x}px, ${pz.offset.y}px) scale(${pz.scale})`,
             }}
             // SVG is sanitized by sanitizeMermaidSvg() (scripts removed,
             // javascript: URLs scrubbed).
@@ -616,8 +614,10 @@ export function MermaidExpandedDialog({
 
         <div
           ref={pz.containerRef}
-          className="bg-background flex min-h-0 flex-1 items-center justify-center overflow-hidden select-none"
-          style={{ cursor: pz.isDragging ? 'grabbing' : 'grab' }}
+          className={cn(
+            'bg-background flex min-h-0 flex-1 items-center justify-center overflow-hidden select-none',
+            pz.isDragging ? 'cursor-grabbing' : 'cursor-grab',
+          )}
           onPointerDown={pz.onPointerDown}
           onPointerMove={pz.onPointerMove}
           onPointerUp={pz.onPointerUp}
@@ -626,10 +626,9 @@ export function MermaidExpandedDialog({
           <div
             key={dialogSvg}
             ref={fitOnMount}
-            className="[&>svg]:max-w-none"
+            className="origin-center [transform:var(--mermaid-transform)] [&>svg]:max-w-none"
             style={{
-              transform: `translate(${pz.offset.x}px, ${pz.offset.y}px) scale(${pz.scale})`,
-              transformOrigin: 'center center',
+              '--mermaid-transform': `translate(${pz.offset.x}px, ${pz.offset.y}px) scale(${pz.scale})`,
             }}
             // SVG is sanitized by sanitizeMermaidSvg() and mermaid runs at
             // SVG output is sanitized before insertion.

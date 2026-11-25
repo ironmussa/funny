@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'bun:test';
+import { afterEach, describe, expect, it, vi, setDefaultTimeout } from 'bun:test';
 
 import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -6,6 +6,10 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
 import { MermaidBlock, MermaidExpandedDialog } from './MermaidBlock';
+
+// The proof and pre-push run these files together under `bun test --parallel`; on a
+// loaded machine a first render (cold module load) ran well past the 5 s default.
+setDefaultTimeout(60_000);
 
 const chart = 'flowchart LR\nA[Client] --> B[Server]';
 
@@ -50,12 +54,13 @@ describe('MermaidBlock', () => {
     const svg = screen.getByTestId('mermaid-diagram').querySelector('svg')!;
     expect(svg.textContent).toContain('Client');
     const wrapper = svg.parentElement!;
-    const fitted = wrapper.style.transform;
+    expect(wrapper).toHaveClass('[transform:var(--mermaid-transform)]');
+    const fitted = wrapper.style.getPropertyValue('--mermaid-transform');
     expect(fitted).not.toContain('scale(1)');
     fireEvent.click(screen.getByTestId('mermaid-inline-zoom-in'));
-    expect(wrapper.style.transform).not.toBe(fitted);
+    expect(wrapper.style.getPropertyValue('--mermaid-transform')).not.toBe(fitted);
     fireEvent.click(screen.getByTestId('mermaid-inline-zoom-reset'));
-    expect(wrapper.style.transform).toBe(fitted);
+    expect(wrapper.style.getPropertyValue('--mermaid-transform')).toBe(fitted);
     fireEvent.click(screen.getByTestId('mermaid-inline-expand'));
     expect(screen.getByRole('dialog').querySelector('svg text')).not.toBeNull();
     expect(screen.getByTestId('mermaid-copy-code')).toBeInTheDocument();

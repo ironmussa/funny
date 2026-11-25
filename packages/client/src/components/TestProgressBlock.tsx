@@ -146,8 +146,10 @@ function SlowList({ items, t }: { items: SlowItem[]; t: T }) {
 function StartTruncatedPath({ path, className }: { path: string; className?: string }) {
   return (
     <span
-      className={cn('min-w-0 overflow-hidden text-ellipsis whitespace-nowrap', className)}
-      style={{ direction: 'rtl', textAlign: 'left' }}
+      className={cn(
+        'min-w-0 overflow-hidden text-left text-ellipsis whitespace-nowrap [direction:rtl]',
+        className,
+      )}
       title={path}
     >
       <bdi dir="ltr">{path}</bdi>

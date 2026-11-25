@@ -5,7 +5,6 @@ import {
   GUTTER_BG_ADDED,
   GUTTER_BG_CARD,
   GUTTER_BG_REMOVED,
-  H_SCROLL_STYLE,
 } from '@/lib/diff/conflict-colors';
 import { countTextMatches, getDiffHighlight } from '@/lib/diff/highlight';
 import type { DiffLine } from '@/lib/diff/types';
@@ -44,21 +43,24 @@ export const SplitRow = memo(function SplitRow({
     rightConflictBg ?? (right?.type === 'add' ? GUTTER_BG_ADDED : GUTTER_BG_CARD);
   return (
     <div
-      className="flex font-mono text-(length:--diff-font-size)"
-      style={wrap ? { minHeight: 'var(--diff-row-height)' } : { height: 'var(--diff-row-height)' }}
+      className={cn(
+        'flex font-mono text-(length:--diff-font-size)',
+        wrap ? 'min-h-[var(--diff-row-height)]' : 'h-[var(--diff-row-height)]',
+      )}
     >
       {/* Left (old) */}
       <div
         className={cn(
           'flex flex-1 border-r border-border/30',
           wrap ? 'items-start overflow-visible' : 'items-center overflow-hidden',
+          leftBg && 'bg-[color:var(--split-pane-bg)]',
         )}
-        style={leftBg ? { backgroundColor: leftBg } : undefined}
+        style={leftBg ? { '--split-pane-bg': leftBg } : undefined}
         data-pane="left"
       >
         <div
-          className="relative z-10 flex shrink-0 items-center"
-          style={{ backgroundColor: leftGutterBg }}
+          className="relative z-10 flex shrink-0 items-center bg-[color:var(--split-gutter-bg)]"
+          style={{ '--split-gutter-bg': leftGutterBg }}
         >
           <span className="text-muted-foreground/40 w-11 shrink-0 pr-1 text-right select-none">
             {left?.oldNo ?? ''}
@@ -76,9 +78,9 @@ export const SplitRow = memo(function SplitRow({
           <span
             className={cn(
               wrap ? 'whitespace-pre-wrap break-all pr-4' : 'whitespace-pre pr-4',
+              !wrap && 'relative z-0 [transform:translateX(calc(-1*var(--h-scroll,0px)))]',
               left.type === 'del' ? 'text-diff-removed' : 'text-foreground/80',
             )}
-            style={wrap ? undefined : H_SCROLL_STYLE}
             dangerouslySetInnerHTML={{
               __html: getDiffHighlight(
                 left.text,
@@ -99,13 +101,14 @@ export const SplitRow = memo(function SplitRow({
         className={cn(
           'flex flex-1',
           wrap ? 'items-start overflow-visible' : 'items-center overflow-hidden',
+          rightBg && 'bg-[color:var(--split-pane-bg)]',
         )}
-        style={rightBg ? { backgroundColor: rightBg } : undefined}
+        style={rightBg ? { '--split-pane-bg': rightBg } : undefined}
         data-pane="right"
       >
         <div
-          className="relative z-10 flex shrink-0 items-center"
-          style={{ backgroundColor: rightGutterBg }}
+          className="relative z-10 flex shrink-0 items-center bg-[color:var(--split-gutter-bg)]"
+          style={{ '--split-gutter-bg': rightGutterBg }}
         >
           <span className="text-muted-foreground/40 w-11 shrink-0 pr-1 text-right select-none">
             {right?.newNo ?? ''}
@@ -123,9 +126,9 @@ export const SplitRow = memo(function SplitRow({
           <span
             className={cn(
               wrap ? 'whitespace-pre-wrap break-all pr-4' : 'whitespace-pre pr-4',
+              !wrap && 'relative z-0 [transform:translateX(calc(-1*var(--h-scroll,0px)))]',
               right.type === 'add' ? 'text-diff-added' : 'text-foreground/80',
             )}
-            style={wrap ? undefined : H_SCROLL_STYLE}
             dangerouslySetInnerHTML={{
               __html: getDiffHighlight(
                 right.text,

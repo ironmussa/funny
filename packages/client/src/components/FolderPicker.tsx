@@ -267,7 +267,7 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent flush className="flex flex-col" style={{ maxWidth: '60vw', height: '70vh' }}>
+      <DialogContent flush className="flex h-[70vh] max-w-[60vw] flex-col">
         <div className="p-4 pb-2">
           <DialogHeader>
             <DialogTitle size="sm">{t('folderPicker.title')}</DialogTitle>

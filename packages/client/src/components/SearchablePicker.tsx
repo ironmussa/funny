@@ -276,9 +276,11 @@ function SearchablePickerContent({
         />
       </div>
       <div
-        className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-1"
+        className={cn(
+          'min-h-0 flex-1 overflow-y-auto overscroll-contain p-1',
+          mobile ? 'max-h-[60dvh]' : 'max-h-[min(60vh,440px)]',
+        )}
         ref={listRef}
-        style={{ maxHeight: mobile ? '60dvh' : 'min(60vh, 440px)' }}
       >
         {loading && items.length === 0 && loadingText && (
           <LoadingState padding="sm" fill={false} label={loadingText} />
@@ -294,11 +296,8 @@ function SearchablePickerContent({
           )}
         {filtered.length > 0 && (
           <div
-            style={{
-              height: `${rowVirtualizer.getTotalSize()}px`,
-              width: '100%',
-              position: 'relative',
-            }}
+            className="relative h-[var(--searchable-picker-list-height)] w-full"
+            style={{ '--searchable-picker-list-height': `${rowVirtualizer.getTotalSize()}px` }}
           >
             {rowVirtualizer.getVirtualItems().map((virtualRow) => {
               const item = filtered[virtualRow.index];
@@ -306,10 +305,10 @@ function SearchablePickerContent({
               return (
                 <div
                   key={item.key}
-                  className="group/item absolute top-0 left-0 w-full"
+                  className="group/item absolute top-0 left-0 h-[var(--searchable-picker-row-height)] w-full [transform:translateY(var(--searchable-picker-row-start))]"
                   style={{
-                    height: `${virtualRow.size}px`,
-                    transform: `translateY(${virtualRow.start}px)`,
+                    '--searchable-picker-row-height': `${virtualRow.size}px`,
+                    '--searchable-picker-row-start': `${virtualRow.start}px`,
                   }}
                 >
                   <button
@@ -406,9 +405,8 @@ function SearchablePickerContent({
         className={cn(
           // oxlint-disable-next-line shadcn/require-static-classes -- width is a Tailwind class prop from the caller
           width,
-          'flex flex-col overflow-hidden',
+          'flex flex-col overflow-hidden max-h-[min(70vh,520px)]',
         )}
-        style={{ maxHeight: 'min(70vh, 520px)' }}
         onOpenAutoFocus={(e) => {
           e.preventDefault();
           searchInputRef.current?.focus();

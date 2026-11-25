@@ -1,4 +1,5 @@
 import { threadBrowserSessionId } from '@funny/shared';
+import type { JsonObject, JsonValue } from '@funny/shared/json';
 import { CircleAlert, ChevronRight, Globe, Plug } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -24,7 +25,6 @@ import {
   mcpResultPreview,
   mcpToolTitle,
   parseMcpResult,
-  type JsonValue,
   type McpResult,
   type McpResultPart,
   type McpToolName,
@@ -33,7 +33,7 @@ import { ToolContentArea } from './MobileContentPreview';
 
 interface Props {
   mcp: McpToolName;
-  parsed: Record<string, unknown>;
+  parsed: JsonObject;
   output?: string;
   hideLabel?: boolean;
   displayTime: string | null;
@@ -124,7 +124,7 @@ export function McpToolCard({ mcp, parsed, output, hideLabel, displayTime }: Pro
 
 /** Inputs not already shown as the summary or the highlighted code block. */
 function otherMcpInputs(
-  parsed: Record<string, unknown>,
+  parsed: JsonObject,
   shownKeys: (string | undefined)[],
 ): [string, unknown][] {
   return Object.entries(parsed).filter(

@@ -41,15 +41,12 @@ const plainCopies = new WeakMap<object, Thread>();
 function toPlainThread(row: Thread): Thread {
   const cached = plainCopies.get(row);
   if (cached) return cached;
-  const plain = {} as Record<string, unknown>;
-  for (const key of Object.keys(row)) {
-    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
-    if (!key.startsWith('$')) plain[key] = (row as unknown as Record<string, unknown>)[key];
-  }
-  // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
-  plainCopies.set(row, plain as unknown as Thread);
-  // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
-  return plain as unknown as Thread;
+  // SAFETY: the copy holds every own field of the thread row except TanStack DB's `$…` virtual props.
+  const plain = Object.fromEntries(
+    Object.entries(row).filter(([key]) => !key.startsWith('$')),
+  ) as Thread;
+  plainCopies.set(row, plain);
+  return plain;
 }
 
 type SyncParams = SyncedCollectionParams<Thread>;

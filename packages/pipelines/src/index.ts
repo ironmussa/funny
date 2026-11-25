@@ -81,6 +81,7 @@ export type {
   StepStatus,
   StepSubItem,
   StepProgressData,
+  PipelineEventData,
   ProgressReporter,
   StepErrorConfig,
   OnErrorStrategy,

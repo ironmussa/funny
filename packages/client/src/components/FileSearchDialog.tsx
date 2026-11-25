@@ -25,7 +25,6 @@ interface FileSearchDialogProps {
 
 const RESULT_LIMIT = 200;
 const ROW_HEIGHT_PX = 32;
-const LIST_MAX_HEIGHT_PX = 360;
 const EMPTY_MATCHES: RankedFileSearchMatch[] = [];
 
 export function FileSearchDialog({ open, onOpenChange }: FileSearchDialogProps) {
@@ -181,11 +180,7 @@ function FileSearchDialogContent({ open, onOpenChange }: FileSearchDialogProps) 
             />
           </div>
 
-          <div
-            ref={scrollRef}
-            className="overflow-y-auto"
-            style={{ maxHeight: LIST_MAX_HEIGHT_PX }}
-          >
+          <div ref={scrollRef} className="max-h-[360px] overflow-y-auto">
             {!hasTarget ? (
               <EmptyRow text={t('fileSearch.noProject', 'Select a project first')} />
             ) : error ? (
@@ -196,11 +191,8 @@ function FileSearchDialogContent({ open, onOpenChange }: FileSearchDialogProps) 
               <EmptyRow text={t('fileSearch.noResults', 'No files found')} />
             ) : items.length > 0 ? (
               <div
-                style={{
-                  height: virtualizer.getTotalSize(),
-                  width: '100%',
-                  position: 'relative',
-                }}
+                className="relative h-[var(--file-search-list-height)] w-full"
+                style={{ '--file-search-list-height': `${virtualizer.getTotalSize()}px` }}
               >
                 {virtualizer.getVirtualItems().map((vRow) => {
                   const item = items[vRow.index];
@@ -214,12 +206,12 @@ function FileSearchDialogContent({ open, onOpenChange }: FileSearchDialogProps) 
                       aria-selected={isActive}
                       tabIndex={isActive ? 0 : -1}
                       className={cn(
-                        'absolute left-0 top-0 flex w-full cursor-pointer items-center gap-2 px-3',
+                        'absolute left-0 top-0 flex h-[var(--file-search-row-height)] w-full cursor-pointer items-center [transform:translateY(var(--file-search-row-start))] gap-2 px-3',
                         isActive && 'bg-accent text-accent-foreground',
                       )}
                       style={{
-                        height: vRow.size,
-                        transform: `translateY(${vRow.start}px)`,
+                        '--file-search-row-height': `${vRow.size}px`,
+                        '--file-search-row-start': `${vRow.start}px`,
                       }}
                       onMouseEnter={() => setActiveIndex(vRow.index)}
                       onClick={() => handleSelect(item.match.path)}

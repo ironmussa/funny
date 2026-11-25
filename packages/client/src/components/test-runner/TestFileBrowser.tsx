@@ -108,8 +108,8 @@ function SpecItem({
     <>
       <div
         data-testid={`test-spec-${spec.file}-${spec.line}`}
-        className="group text-muted-foreground hover:bg-sidebar-accent/50 flex h-[24px] cursor-pointer items-center gap-1.5 text-xs transition-colors"
-        style={{ paddingLeft: `${8 + depth * INDENT_PX}px` }}
+        className="group text-muted-foreground hover:bg-sidebar-accent/50 flex h-[24px] cursor-pointer items-center gap-1.5 pl-[var(--test-tree-indent)] text-xs transition-colors"
+        style={{ '--test-tree-indent': `${8 + depth * INDENT_PX}px` }}
         role={hasMultipleProjects ? 'button' : undefined}
         tabIndex={hasMultipleProjects ? 0 : undefined}
         aria-expanded={hasMultipleProjects ? expanded : undefined}
@@ -172,8 +172,8 @@ function SpecItem({
           <div
             key={project}
             data-testid={`test-spec-${spec.file}-${spec.line}-${project}`}
-            className="group text-muted-foreground hover:bg-sidebar-accent/50 flex h-[24px] cursor-pointer items-center gap-1.5 text-xs transition-colors"
-            style={{ paddingLeft: `${8 + (depth + 1) * INDENT_PX}px` }}
+            className="group text-muted-foreground hover:bg-sidebar-accent/50 flex h-[24px] cursor-pointer items-center gap-1.5 pl-[var(--test-tree-indent)] text-xs transition-colors"
+            style={{ '--test-tree-indent': `${8 + (depth + 1) * INDENT_PX}px` }}
           >
             <StatusDot status={fileStatus} />
             <span className="font-mono-explorer flex-1 truncate text-xs">{project}</span>
@@ -249,8 +249,9 @@ function SuiteItem({
         className={cn(
           'flex h-[24px] w-full cursor-pointer select-none items-center gap-1.5 text-left text-xs',
           'text-muted-foreground transition-colors hover:bg-sidebar-accent/50',
+          'pl-[var(--test-tree-indent)]',
         )}
-        style={{ paddingLeft: `${8 + depth * INDENT_PX}px` }}
+        style={{ '--test-tree-indent': `${8 + depth * INDENT_PX}px` }}
         onClick={() => toggleSuite(suiteKey)}
       >
         <ChevronRight
@@ -362,8 +363,9 @@ function TreeItem({
           className={cn(
             'flex h-[24px] w-full cursor-pointer select-none items-center gap-1.5 text-left text-xs',
             'text-muted-foreground transition-colors hover:bg-sidebar-accent/50',
+            'pl-[var(--test-tree-indent)]',
           )}
-          style={{ paddingLeft: `${8 + depth * INDENT_PX}px` }}
+          style={{ '--test-tree-indent': `${8 + depth * INDENT_PX}px` }}
         >
           <ChevronRight
             className={cn('icon-sm shrink-0 transition-transform', isExpanded && 'rotate-90')}
@@ -425,8 +427,9 @@ function TreeItem({
           status === 'running'
             ? 'bg-sidebar-accent text-sidebar-accent-foreground'
             : 'hover:bg-sidebar-accent/50 text-muted-foreground',
+          'pl-[var(--test-tree-indent)]',
         )}
-        style={{ paddingLeft: `${8 + depth * INDENT_PX}px` }}
+        style={{ '--test-tree-indent': `${8 + depth * INDENT_PX}px` }}
       >
         <button
           type="button"
@@ -516,8 +519,8 @@ function TreeItem({
       {isFileExpanded &&
         (isSpecsLoading ? (
           <div
-            className="text-muted-foreground flex h-6 items-center gap-2 text-xs"
-            style={{ paddingLeft: `${8 + (depth + 1) * INDENT_PX}px` }}
+            className="text-muted-foreground flex h-6 items-center gap-2 pl-[var(--test-tree-indent)] text-xs"
+            style={{ '--test-tree-indent': `${8 + (depth + 1) * INDENT_PX}px` }}
           >
             <Loader2 className="icon-xs animate-spin" />
             Discovering tests…
@@ -552,8 +555,8 @@ function TreeItem({
           ))
         ) : specs ? (
           <div
-            className="text-muted-foreground flex h-6 items-center text-xs"
-            style={{ paddingLeft: `${8 + (depth + 1) * INDENT_PX}px` }}
+            className="text-muted-foreground flex h-6 items-center pl-[var(--test-tree-indent)] text-xs"
+            style={{ '--test-tree-indent': `${8 + (depth + 1) * INDENT_PX}px` }}
           >
             No tests found
           </div>

@@ -176,7 +176,7 @@ export function ReviewPane() {
       />
       {/* Normal ReviewPane content */}
       <Tabs value={reviewSubTab} onValueChange={(v) => setReviewSubTab(v as ReviewSubTab)} asChild>
-        <div className="flex h-full flex-col text-xs" style={{ contain: 'strict' }}>
+        <div className="flex h-full flex-col text-xs [contain:strict]">
           {/* Header with tabs */}
           <ReviewPaneTabsHeader onClose={() => setReviewPaneOpen(false)} />
 

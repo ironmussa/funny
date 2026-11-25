@@ -17,6 +17,7 @@ import { randomUUID } from 'crypto';
 import { z } from 'zod';
 
 import { BaseAgentProcess, type ResultSubtype } from '../base-process.js';
+import { isJsonPayloadObject } from '../json-payload.js';
 import { connectMcpTools, mcpInstructionsBlock, type McpToolBridge } from '../mcp-tool-bridge.js';
 import type { CLIMessage } from '../types.js';
 import type { AgentRole, AgentContext, AgentResult } from './agent-context.js';
@@ -34,12 +35,19 @@ function bridgedToolDefs(bridge: McpToolBridge, signal: AbortSignal): Record<str
         parameters: z.record(z.string(), z.unknown()),
         jsonSchema: tool.inputSchema,
         execute: async (args) => {
-          const result = await tool.call(args ?? {}, signal);
+          // `parameters` parsed the model's JSON arguments into an object.
+          const result = await tool.call(isJsonPayloadObject(args) ? args : {}, signal);
           return result.isError ? `Error: ${result.text}` : result.text;
         },
       }),
     ]),
   );
+}
+
+/** The role and context a prompt carries (or the defaults for a plain-text prompt). */
+interface PromptPayload {
+  role: AgentRole;
+  context: AgentContext;
 }
 
 export class LLMApiProcess extends BaseAgentProcess {
@@ -128,7 +136,7 @@ export class LLMApiProcess extends BaseAgentProcess {
 
   // ── Prompt parsing ──────────────────────────────────────────
 
-  private parsePromptPayload(): { role: AgentRole; context: AgentContext } {
+  private parsePromptPayload(): PromptPayload {
     try {
       const parsed = JSON.parse(this.options.prompt);
       if (parsed.role && parsed.context) {

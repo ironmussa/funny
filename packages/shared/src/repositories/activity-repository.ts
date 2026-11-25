@@ -53,14 +53,14 @@ export type ActivityInsert = Omit<
 
 type StoredRow = RepoDeps['schema']['activities']['$inferSelect'];
 
-const inputSchema = z.record(z.string(), z.unknown());
+const inputSchema = z.record(z.string(), z.json());
 const resultRefSchema = z.object({
   projectId: z.string().optional(),
   prUrl: z.string().optional(),
   snapshot: z.string().optional(),
 });
 
-function parseInput(raw: string | null): Record<string, unknown> {
+function parseInput(raw: string | null): Activity['input'] {
   if (!raw) return {};
   const parsed = parseStoredJson(inputSchema, raw, 'activity input');
   return parsed.ok ? parsed.value : {};

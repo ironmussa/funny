@@ -30,12 +30,15 @@ export function GraphGutterHorizontalScroller({
         ref={scrollbarRef}
         aria-label={t('graph.gutterHorizontalScroll', 'Scroll graph lanes')}
         title={t('graph.gutterHorizontalScroll', 'Scroll graph lanes')}
-        className="scroll-fade-none scrollbar-visible overflow-x-auto overflow-y-hidden"
-        style={{ width: graphViewportWidth, height: 10 }}
+        className="scroll-fade-none scrollbar-visible h-2.5 w-[var(--graph-hscroll-viewport-width)] overflow-x-auto overflow-y-hidden"
+        style={{ '--graph-hscroll-viewport-width': `${graphViewportWidth}px` }}
         onScroll={handleScroll}
         data-testid="graph-gutter-horizontal-scrollbar"
       >
-        <div style={{ width: gutterWidth, height: 1 }} />
+        <div
+          className="h-px w-[var(--graph-hscroll-content-width)]"
+          style={{ '--graph-hscroll-content-width': `${gutterWidth}px` }}
+        />
       </div>
     </div>
   );

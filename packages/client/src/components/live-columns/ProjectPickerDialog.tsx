@@ -50,8 +50,8 @@ export function ProjectPickerDialog({ open, onOpenChange, onSelect, placeholder,
               onSelect={() => commit(p.id)}
             >
               <span
-                className="size-2.5 shrink-0 rounded-full"
-                style={{ backgroundColor: p.color || colorFromName(p.name) }}
+                className="size-2.5 shrink-0 rounded-full bg-[color:var(--project-dot-color)]"
+                style={{ '--project-dot-color': p.color || colorFromName(p.name) }}
               />
               <span className="truncate">{p.name}</span>
             </CommandItem>

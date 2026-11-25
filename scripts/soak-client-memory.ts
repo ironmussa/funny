@@ -147,7 +147,13 @@ function longThread(threadId: string, projectId: string) {
   };
 }
 
-async function responseJson(response: APIResponse): Promise<Record<string, unknown>> {
+/** The fields the soak reads from the server's answers: the sign-in token, a created row's id. */
+interface ApiAnswer {
+  token?: string;
+  id?: string;
+}
+
+async function responseJson(response: APIResponse): Promise<ApiAnswer> {
   const body = await response.text();
   if (!response.ok()) {
     throw new Error(`${response.url()} failed: ${response.status()} ${body}`);

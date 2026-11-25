@@ -29,10 +29,10 @@ export function AgentPointer({
       data-testid="browser-agent-pointer"
       data-pointer-kind={pointer.kind}
       aria-hidden
-      className="pointer-events-none absolute z-10 transition-[left,top] duration-300 ease-out"
+      className="pointer-events-none absolute top-[var(--agent-pointer-top)] left-[var(--agent-pointer-left)] z-10 transition-[left,top] duration-300 ease-out"
       style={{
-        left: `${(pointer.x / viewport.width) * 100}%`,
-        top: `${(pointer.y / viewport.height) * 100}%`,
+        '--agent-pointer-left': `${(pointer.x / viewport.width) * 100}%`,
+        '--agent-pointer-top': `${(pointer.y / viewport.height) * 100}%`,
       }}
     >
       {pulsing && (

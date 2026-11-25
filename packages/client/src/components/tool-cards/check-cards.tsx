@@ -7,6 +7,7 @@
  * Bash card: only funny's own runs get the widget.
  */
 import { checkInputKey } from '@funny/shared/checks';
+import type { JsonObject } from '@funny/shared/json';
 import { ChevronRight, ListChecks } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -78,7 +79,7 @@ function CheckRunDetails({
   command,
   cwd,
 }: {
-  parsed: Record<string, unknown>;
+  parsed: JsonObject;
   command: string | null;
   cwd: string | null;
 }) {
@@ -178,7 +179,7 @@ function SummaryText({ text, testId }: { text: string; testId: string }) {
 }
 
 /** Where a call's progress is: its result once it returned, else the runner's announcement. */
-function useCheckRunSource(parsed: Record<string, unknown>, output: string | undefined) {
+function useCheckRunSource(parsed: JsonObject, output: string | undefined) {
   const threadId = useThreadId();
   const inputKey = useMemo(() => checkInputKey(parsed), [parsed]);
   const announced = useCheckRun(threadId, inputKey);
@@ -209,7 +210,7 @@ export function CheckRunCard({
   output,
   displayTime,
 }: {
-  parsed: Record<string, unknown>;
+  parsed: JsonObject;
   output?: string;
   displayTime: string | null;
 }) {

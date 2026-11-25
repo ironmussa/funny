@@ -68,8 +68,12 @@ export const ACTIVE_SANDBOX_STATES: ReadonlySet<SandboxState> = new Set([
 
 const broken = { FAIL: 'failed', LOST: 'lost' } as const;
 
+interface SandboxMachineTypes {
+  events: { type: SandboxEventType };
+}
+
 export const sandboxMachine = setup({
-  types: {} as { events: { type: SandboxEventType } },
+  types: {} as SandboxMachineTypes,
 }).createMachine({
   id: 'thread-sandbox',
   initial: 'provisioning',

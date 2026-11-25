@@ -151,8 +151,10 @@ function ExpandedImage({ src, name }: { src: string; name?: string }) {
 
       <div
         ref={pz.containerRef}
-        className="bg-background flex min-h-0 flex-1 items-center justify-center overflow-hidden select-none"
-        style={{ cursor: zoomed ? (pz.isDragging ? 'grabbing' : 'grab') : 'default' }}
+        className={cn(
+          'bg-background flex min-h-0 flex-1 items-center justify-center overflow-hidden select-none',
+          zoomed ? (pz.isDragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-default',
+        )}
         onPointerDown={pz.onPointerDown}
         onPointerMove={pz.onPointerMove}
         onPointerUp={pz.onPointerUp}
@@ -163,11 +165,14 @@ function ExpandedImage({ src, name }: { src: string; name?: string }) {
           src={src}
           alt={name ?? 'preview'}
           draggable={false}
-          className="max-h-full max-w-full object-contain"
+          className={cn(
+            'max-h-full max-w-full origin-center object-contain [transform:translate(var(--media-preview-pan-x),var(--media-preview-pan-y))_scale(var(--media-preview-scale))]',
+            pz.isDragging ? '[transition:none]' : '[transition:transform_120ms]',
+          )}
           style={{
-            transform: `translate(${pz.offset.x}px, ${pz.offset.y}px) scale(${pz.scale})`,
-            transformOrigin: 'center center',
-            transition: pz.isDragging ? 'none' : 'transform 120ms',
+            '--media-preview-pan-x': `${pz.offset.x}px`,
+            '--media-preview-pan-y': `${pz.offset.y}px`,
+            '--media-preview-scale': pz.scale,
           }}
         />
       </div>

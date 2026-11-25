@@ -2,6 +2,7 @@ import type { BrowserSessionAgentActionKind } from '@funny/shared';
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 
+import { cn } from '@/lib/utils';
 import { useBrowserPointerStore, type AgentActionState } from '@/stores/browser-pointer-store';
 
 /** What the chip by the agent's cursor says for each action. */
@@ -22,7 +23,16 @@ const ACTION_LABELS: Record<BrowserSessionAgentActionKind, string> = {
 /** How the effects place a page point: percent of the page viewport. */
 type Viewport = { width: number; height: number };
 
-function at(viewport: Viewport, x: number, y: number) {
+/** A page point as CSS lengths. */
+type Point = { left: string; top: string };
+
+/**
+ * An element placed at a point sets it as `--agent-action-left` / `--agent-action-top`
+ * and adds these classes, which read them into `left` / `top`.
+ */
+const AT_POINT_CLASSES = 'left-[var(--agent-action-left)] top-[var(--agent-action-top)]';
+
+function at(viewport: Viewport, x: number, y: number): Point {
   return { left: `${(x / viewport.width) * 100}%`, top: `${(y / viewport.height) * 100}%` };
 }
 
@@ -51,7 +61,7 @@ function ScrollArrow({ action }: { action: AgentActionState }) {
 /** What each effect gets: the action, where it happens (if anywhere) and the viewport. */
 interface EffectProps {
   action: AgentActionState;
-  point: { left: string; top: string } | null;
+  point: Point | null;
   viewport: Viewport;
   done: () => void;
 }
@@ -95,8 +105,11 @@ function DoubleClickRing({ point }: EffectProps) {
   if (!point) return null;
   return (
     <span
-      className="bg-status-info/40 absolute size-12 -translate-x-1/2 -translate-y-1/2 animate-ping rounded-full [animation-delay:150ms] [animation-iteration-count:2]"
-      style={point}
+      className={cn(
+        'bg-status-info/40 absolute size-12 -translate-x-1/2 -translate-y-1/2 animate-ping rounded-full [animation-delay:150ms] [animation-iteration-count:2]',
+        AT_POINT_CLASSES,
+      )}
+      style={{ '--agent-action-left': point.left, '--agent-action-top': point.top }}
     />
   );
 }
@@ -104,7 +117,10 @@ function DoubleClickRing({ point }: EffectProps) {
 function ScrollMarker({ action, point }: EffectProps) {
   if (!point) return null;
   return (
-    <div className="absolute" style={point}>
+    <div
+      className={cn('absolute', AT_POINT_CLASSES)}
+      style={{ '--agent-action-left': point.left, '--agent-action-top': point.top }}
+    >
       <ScrollArrow action={action} />
     </div>
   );
@@ -127,8 +143,13 @@ function ActionLabel({ action, point, done }: EffectProps) {
     <span
       data-testid="browser-agent-action-label"
       onAnimationEnd={done}
-      className="animate-out fade-out bg-foreground/85 text-background absolute translate-x-5 translate-y-5 rounded-full px-2 py-0.5 text-xs whitespace-nowrap shadow-md [animation-delay:1000ms] [animation-duration:500ms] [animation-fill-mode:both]"
-      style={point ?? { left: '0.75rem', bottom: '0.75rem', transform: 'none' }}
+      className={cn(
+        'animate-out fade-out bg-foreground/85 text-background absolute translate-x-5 translate-y-5 rounded-full px-2 py-0.5 text-xs whitespace-nowrap shadow-md [animation-delay:1000ms] [animation-duration:500ms] [animation-fill-mode:both]',
+        point ? AT_POINT_CLASSES : 'bottom-3 left-3 [transform:none]',
+      )}
+      style={
+        point ? { '--agent-action-left': point.left, '--agent-action-top': point.top } : undefined
+      }
     >
       {labelFor(action)}
     </span>

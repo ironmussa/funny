@@ -41,6 +41,14 @@ export interface CommitStatusInput {
   targetUrl?: string;
 }
 
+/** The body of GitHub's create-commit-status request. */
+type CommitStatusBody = {
+  state: CommitStatusInput['state'];
+  context: string;
+  description: string;
+  target_url?: string;
+};
+
 /** Set a commit status on `sha`. Needs `statuses: write`. */
 export function setCommitStatus(
   github: RepoGithub,
@@ -48,7 +56,7 @@ export function setCommitStatus(
   sha: string,
   status: CommitStatusInput,
 ): ResultAsync<void, GithubCallError> {
-  const body: Record<string, string> = {
+  const body: CommitStatusBody = {
     state: status.state,
     context: status.context,
     description: status.description.slice(0, MAX_STATUS_DESCRIPTION),

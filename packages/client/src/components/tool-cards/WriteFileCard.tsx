@@ -1,11 +1,12 @@
 import { ChevronRight, FileText } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { PreviewModeToggle } from '@/components/PreviewModeToggle';
 import { MessageContent } from '@/components/thread/MessageContent';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { ensureHighlight, extToHljsLang, highlightCode } from '@/hooks/use-highlight';
+import { useAsyncHighlight } from '@/hooks/use-async-highlight';
+import { extToHljsLang } from '@/hooks/use-highlight';
 import { useResettableState } from '@/hooks/use-resettable-state';
 import { isMarkdownFile } from '@/lib/markdown-file';
 import { markdownFileBasePath } from '@/lib/markdown-file-links';
@@ -50,25 +51,7 @@ export function WriteFileCard({
   ]);
 
   const hljsLang = ext ? extToHljsLang(ext) : 'plaintext';
-  const [highlighted, setHighlighted] = useState<string | null>(null);
-  // Losing the content drops its highlight; changed content keeps the old one
-  // until the new highlight is ready.
-  const hasContent = content != null;
-  const [hadContent, setHadContent] = useState(hasContent);
-  if (hadContent !== hasContent) {
-    setHadContent(hasContent);
-    if (!hasContent) setHighlighted(null);
-  }
-  useEffect(() => {
-    if (content == null) return;
-    let cancelled = false;
-    ensureHighlight(content, hljsLang).then(() => {
-      if (!cancelled) setHighlighted(highlightCode(content, hljsLang));
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [content, hljsLang]);
+  const highlighted = useAsyncHighlight(content, hljsLang);
 
   return (
     <div

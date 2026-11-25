@@ -94,6 +94,23 @@ interface CommitDetailDataArgs {
   projectModeId: string | null;
 }
 
+/**
+ * What the selection allows: whether there is a git context to read from, if a
+ * commit is to be loaded, and the body the commit list already has (shown
+ * until the full body loads).
+ */
+function commitSelection({
+  selectedCommit,
+  selectedHash,
+  effectiveThreadId,
+  projectModeId,
+}: CommitDetailDataArgs) {
+  const hasGitContext = !!(effectiveThreadId || projectModeId);
+  const willLoad = !!selectedHash && hasGitContext;
+  const initialBody = willLoad ? selectedCommit?.body.trim() || null : null;
+  return { hasGitContext, willLoad, initialBody };
+}
+
 /** Loaded files / commit body / file search / diff content of the selected commit. */
 function useCommitDetailData({
   selectedCommit,
@@ -102,9 +119,12 @@ function useCommitDetailData({
   projectModeId,
 }: CommitDetailDataArgs) {
   const { t } = useTranslation();
-  const hasGitContext = !!(effectiveThreadId || projectModeId);
-  const willLoad = !!selectedHash && hasGitContext;
-  const initialBody = willLoad ? selectedCommit?.body.trim() || null : null;
+  const { hasGitContext, willLoad, initialBody } = commitSelection({
+    selectedCommit,
+    selectedHash,
+    effectiveThreadId,
+    projectModeId,
+  });
   const [commitFiles, setCommitFiles] = useState<CommitFile[]>([]);
   const [filesLoading, setFilesLoading] = useState(willLoad);
   const [commitBody, setCommitBody] = useState<string | null>(initialBody);
@@ -119,8 +139,8 @@ function useCommitDetailData({
   useAdjustOnChange(
     [selectedHash, selectedCommit?.body, hasGitContext, effectiveThreadId, projectModeId],
     () => {
-      if (willLoad) setFilesLoading(true);
-      else setCommitFiles([]);
+      setFilesLoading(willLoad);
+      if (!willLoad) setCommitFiles([]);
       setCommitBody(initialBody);
       setFileSearch('');
     },

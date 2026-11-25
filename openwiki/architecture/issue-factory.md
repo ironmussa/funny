@@ -380,7 +380,8 @@ reads the role's prose as a decision:
   keeps a stored verdict of the head commit, and the proof step keeps the run's stored passing
   proof of it (`reusedProof`, event `regression_proof_reused`).
 - **Merge approval** of a high-risk change (`factory.approveMerge`): recorded for the held head
-  commit only. When the base is merged into that commit and the merge settled nothing (the
+  commit only. The call carries the commit the member was shown (`expectedSha`) and is refused
+  when the run is held on another one (openspec `factory-agent-tools`). When the base is merged into that commit and the merge settled nothing (the
   `integrate` step, or the merge lane updating the branch), the approval moves to the merge commit
   with its review and proof (`carryChecks` in `factory-action-provider.ts`,
   `carryMergeApproval` in `factory-runs.ts`, `carriedFrom` names the approved commit). Any other
@@ -417,6 +418,39 @@ reads the role's prose as a decision:
   in the enabler's name. The note is in memory; after a restart use Retry.
 - **Lost access**: if the enabler loses `steer`, the factory is turned off and their open runs are
   stopped (`factory.disabled_access_lost` audit).
+
+## From a thread's agent
+
+An agent in a project thread reaches the thread owner's factory through three tools of the `funny`
+MCP server (openspec `factory-agent-tools`, `runtime/services/agent-factory-tools.ts`):
+
+| Tool                             | What it does                                                                                     |
+| -------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `funny_factory_runs`             | Lists the owner's runs in the thread's project: state, wait reason, risk, approval, its request. |
+| `funny_factory_control`          | Retries or stops one run, through the board's control. The activity row names the thread.        |
+| `funny_factory_request_approval` | Asks the member to approve a held high-risk merge. It never approves.                            |
+
+**An agent asks, a member approves.** The tools travel as three data-channel types
+(`data:factory_list_runs`, `data:factory_control_run`, `data:factory_request_approval`, rule
+`refs`). The server takes the actor and the project from the thread's row
+(`factory-agent-tools.ts` in `server/services/factory/`), re-checks the owner's `steer`, and has
+no path from this channel to `approveMerge`: the control's action type is `'retry' | 'stop'`.
+
+`factoryToolAccess` decides where the tools are refused: a sandbox thread or runner (also refused
+by type in `data-scope.ts`, `NEVER_FROM_SANDBOX_TYPES`), a read-only thread, a scratch thread, and
+a thread the factory started. In a thread shared at `steer`, only listing works. Each refusal is
+audited (`factory.agent_tool_refused`) and answered to the agent as a tool error.
+
+An approval request is a row of `factory_approval_requests`, bound to one run and one commit, at
+most one pending per run. It carries no text: the card in the thread
+(`FactoryApprovalRequestCard.tsx`) and the marker on the board read the run. Its states are
+`pending → approved | declined | expired` (`factory-approval-requests.ts`): approving the run
+closes it as approved, `factory.declineApprovalRequest` declines it and leaves the run held, and
+it expires when the run is held on another commit or leaves the hold. The server brings a request
+in line with its run when the run is approved, retried or stopped, when the agent asks again, and
+whenever requests are read. The agent learns the outcome from `funny_factory_runs`.
+
+The run list an agent gets holds no text written outside funny: no issue title, no review text.
 
 ## The factory view
 
@@ -489,6 +523,8 @@ The search, project and state filters and the **Active** filter (hides `merged`,
 - GitHub calls use the deployment's GitHub App token for the repo, capped by the enabler's own
   access; a read-level enabler cannot merge. A merge happens only on green checks and does not
   bypass branch protections.
+- An agent never approves a merge. A thread's agent can retry or stop the owner's runs and ask for
+  an approval; the approval itself needs the owner's browser session and names the commit shown.
 - The flow is read only from the default branch; issue text is not inlined into prompts (the agent
   reads the issue by URL).
 

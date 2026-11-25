@@ -262,7 +262,3 @@ export function createFactoryApprovalRequestsRepository(
     },
   };
 }
-
-export type FactoryApprovalRequestsRepository = ReturnType<
-  typeof createFactoryApprovalRequestsRepository
->;

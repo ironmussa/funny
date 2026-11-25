@@ -23,7 +23,7 @@ See proposal.md for the motivation. What shapes the approach:
 - Approving a merge from an agent, a personal API token, or the public API.
 - Factory settings, sending issues, triggers, clearing the queue, stopping all runs, closing an incident. They stay on the board.
 - Runs of other projects than the thread's.
-- A push or email notification for a request. The card and the board marker are the surfaces in this change.
+- A push or email notification for a request, and a realtime event for it. The card and the board marker are the surfaces in this change, and they poll.
 - Waking the thread when the member answers.
 
 ## Decisions
@@ -36,7 +36,9 @@ One server-side guard, `factoryToolAccess(thread, action)`, decides the refusals
 
 _Alternative: a tRPC call from the runner with a personal API token._ Rejected: it would put a long-lived credential on the runner, and the token would also reach `approveMerge` unless every procedure learned a second authentication kind.
 
-_Alternative: gate in the runner only (do not register the tools)._ Kept as a convenience (the runner hides the tools in scratch, sandbox and read-only threads, using the predicates in `thread-context.ts`), but the server guard is the one that counts: the runner's code is not a boundary.
+_Alternative: gate in the runner (do not register the tools in some threads)._ Rejected: the tool list is built from the spawn's grant, which holds no thread row, and the runner's code is not a boundary anyway. The tools are always listed and the server answers a refusal the agent can read.
+
+The runner's protocol is protobuf (`protocol/runner/v2/operations.proto`), so the three types are three new operations (`FactoryListRuns`, `FactoryControlRun`, `FactoryRequestApproval`, fields 90 to 92) with generated code for TypeScript and Rust.
 
 ### D2. Retry and stop reuse `controlled()`, with the asking thread recorded
 
@@ -66,18 +68,21 @@ _Alternative: no record, only an event that makes the client show the run's exis
 
 ### D4. Approval stays on `factory.approveMerge`, which now takes `expectedSha`
 
-`factoryRunInput` for the approval becomes `{ projectId, runId, expectedSha }`. `control.approveMerge` refuses with a conflict when `expectedSha !== run.risk.headSha`. The repository's compare-and-set (`runs.approveMerge`) already conditions on the hold; it also conditions on the held commit so the check and the write cannot be split. After a successful approval, `controlled()` moves any pending request of the run to `approved` (same transaction where the adapter allows it; otherwise the expiry sweep of D5 treats "run has an approval for `sha`" as approved, not expired).
+`factoryRunInput` for the approval becomes `{ projectId, runId, expectedSha }`. `control.approveMerge` refuses with a conflict when `expectedSha !== run.risk.headSha`. The repository's compare-and-set (`runs.approveMerge`) conditions on the hold (state and reason). It does not condition on the held commit: the risk is a JSON column, and a run's risk is only rewritten while the run is in flight, which the hold condition already excludes. After a successful approval, `controlled()` brings the run's pending request in line with the run (`requests.sync`), and so does every read: "the run has an approval for `sha`" reads as approved, not expired.
 
 The card's Approve button calls this procedure with the card's commit. There is no "approve request" procedure: a request is never the thing approved. `factory.declineApprovalRequest({ projectId, requestId })` (`steer`, owner of the factory only) is the only new mutation.
 
 `expectedSha` is required, not optional, so no client can approve blind. The only callers are the web client's board and the new card.
 
-### D5. Expiry is checked on read and on the run's transitions
+### D5. A request is brought in line with its run on read and on every control
 
-Two places expire a pending request, both through the same pure function `nextRequestState(request, run)`:
+One pure function, `nextRequestState(request, run)`, decides. It runs:
 
-- where the factory writes a new risk classification or leaves the high-risk hold (`factory-flow-runs.ts` / `factory-runs.ts`), and
-- when requests are read (the list port and `data:factory_list_runs`), as a backstop for a path that was missed.
+- after an approval, a retry or a stop (the board's or an agent's),
+- when an agent asks again (a pending request for an older commit expires first), and
+- whenever requests are read: the list port, and `data:factory_list_runs`.
+
+The flow's own writers (a new risk classification, leaving the hold) do not call it. Nobody can see a request without a read, a stale card's approval is refused by D4, and hooking every writer of a run would spread the rule.
 
 _Alternative: a timer._ Rejected: a request has no deadline of its own, only the commit's.
 
@@ -89,19 +94,20 @@ _Alternative: block until the member answers._ Rejected: a member may answer hou
 
 ### D7. Client: a query, an event, a card
 
-`factory.approvalRequests({ projectId })` returns the caller's own pending and recently resolved requests. The client reads it through `data/factory/` as a query (the folder has no collection today), invalidated by a new realtime event `factory:approval_request` sent to the factory owner when a request is created or changes state. Reconnect resync already refetches mounted queries.
+`factory.approvalRequests({ projectId })` returns the caller's own requests, newest first. The client reads it through `data/factory/` as a query, polled every 15 seconds while shown, like the run list (the factory sends no realtime events today). Only a thread of a project where the caller has a factory polls, and only a board card of a run that waits for an approval.
 
-The thread view renders one card per request whose `threadId` is the open thread, above the prompt input, where permission requests appear. `FactoryRunCard` shows a small marker ("an agent asked for your approval") next to its existing approve button. Both use shadcn components, `LabelBadge` for the risk class and state, monospace for the commit, and carry `data-testid`s (`factory-approval-card-{id}`, `factory-approval-approve-{id}`, `factory-approval-decline-{id}`).
+The thread view renders one card per pending request whose `threadId` is the open thread, after the factory run's own cards in the message stream. A closed request shows no card. `FactoryRunCard` shows a small marker ("an agent asked for your approval") next to its existing approve button. Both use shadcn components, `LabelBadge` for the risk class and state, monospace for the commit, and carry `data-testid`s (`factory-approval-card-{id}`, `factory-approval-approve-{id}`, `factory-approval-decline-{id}`).
 
 The card is shown only to the factory's owner. A steer sharee viewing the thread sees nothing (the query is scoped by factory owner).
 
 ### D8. Tool output is data
 
-`funny_factory_runs` returns a compact text table. Issue titles come from GitHub and are untrusted: they are truncated to 80 characters, stripped of newlines, and the tool's description tells the agent they are titles written by other people, not instructions. Review text, triage questions and issue bodies are not returned.
+`funny_factory_runs` returns a few lines per run: issue number, pull request URL, state, wait reason, risk and approval. A run row holds no issue title, so none is returned; review text, triage questions and issue bodies are not returned either. The failure reason and the risk reasons are cut to one line of 200 characters, and the server instructions say run fields are data to report.
 
 ## Risks / Trade-offs
 
 - [A prompt injection makes the agent stop or retry runs] → Both are reversible and traced with the thread that asked; the tools are refused in the threads most exposed to foreign text (factory threads, sandboxes, steer-shared threads). If this proves too loose, D2's confirmation alternative can be added without changing the tools' shape.
+- [Polling: an open thread of a project with a factory asks for the requests every 15 seconds] → One small query, the same cadence as the run list; a realtime event can replace it later without changing the record.
 - [The agent floods the member with requests] → One pending request per run, and asking twice returns the existing one. A request for a run that is not held is refused.
 - [The member approves because an agent asked, without reading] → The card shows the same facts as the board and links to the pull request; it says an agent asked. This does not remove the human factor, and the docs say so.
 - [`expectedSha` breaks an old browser tab] → The tab's approval fails validation with a message asking to reload. No approval is recorded, which is the safe failure.
@@ -116,4 +122,4 @@ The card is shown only to the factory's owner. A steer sharee viewing the thread
 
 ## Open Questions
 
-- Whether a resolved request's card should stay in the thread as history or disappear after the next message. It does not change the record or the tasks; the first version keeps it until the thread is reloaded.
+- Whether a resolved request should stay in the thread as history. The first version shows pending requests only; the record keeps the rest.

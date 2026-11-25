@@ -48,7 +48,7 @@ function ThreadApprovalRequests({ projectId, threadId }: { projectId: string; th
   ));
 }
 
-export function FactoryApprovalRequestCard({
+function FactoryApprovalRequestCard({
   projectId,
   request,
 }: {
@@ -96,7 +96,6 @@ function ApprovalRequestBody({
   // The request is for one commit: once the run is held on another (or not
   // held), there is nothing here to approve. The server expires it too.
   const current = isFactoryRunAwaitingMergeApproval(run) && run.risk?.headSha === request.sha;
-  const prNumber = run.prUrl ? pullRequestNumber(run.prUrl) : null;
   const decline = () =>
     void declineFactoryApprovalRequest(projectId, request.id).orTee((error) =>
       toastError(error, 'factory'),
@@ -113,6 +112,50 @@ function ApprovalRequestBody({
     );
   }
 
+  return (
+    <>
+      <ApprovalRequestFacts request={request} run={run} />
+      <p className="text-muted-foreground">
+        {t(
+          'factory.approvalRequest.asked',
+          'The agent of this thread asked. Nothing is approved until you approve it here or on the factory board.',
+        )}
+      </p>
+      {approve && (
+        <div className="flex items-center justify-end gap-1">
+          <Button
+            variant="ghost"
+            size="xs"
+            onClick={decline}
+            data-testid={`factory-approval-decline-${request.id}`}
+          >
+            {t('factory.approvalRequest.decline', 'Decline')}
+          </Button>
+          <Button
+            variant="default"
+            size="xs"
+            onClick={approve.run}
+            data-testid={`factory-approval-approve-${request.id}`}
+          >
+            {approve.label}
+          </Button>
+        </div>
+      )}
+      {dialog}
+    </>
+  );
+}
+
+/** The run's own facts: issue, pull request, commit, size, and why the factory holds it. */
+function ApprovalRequestFacts({
+  request,
+  run,
+}: {
+  request: FactoryApprovalRequest;
+  run: FactoryRun;
+}) {
+  const { t } = useTranslation();
+  const prNumber = run.prUrl ? pullRequestNumber(run.prUrl) : null;
   const reasons = run.risk?.reasons ?? [];
   return (
     <>
@@ -163,33 +206,6 @@ function ApprovalRequestBody({
           </ul>
         </div>
       )}
-      <p className="text-muted-foreground">
-        {t(
-          'factory.approvalRequest.asked',
-          'The agent of this thread asked. Nothing is approved until you approve it here or on the factory board.',
-        )}
-      </p>
-      {approve && (
-        <div className="flex items-center justify-end gap-1">
-          <Button
-            variant="ghost"
-            size="xs"
-            onClick={decline}
-            data-testid={`factory-approval-decline-${request.id}`}
-          >
-            {t('factory.approvalRequest.decline', 'Decline')}
-          </Button>
-          <Button
-            variant="default"
-            size="xs"
-            onClick={approve.run}
-            data-testid={`factory-approval-approve-${request.id}`}
-          >
-            {approve.label}
-          </Button>
-        </div>
-      )}
-      {dialog}
     </>
   );
 }

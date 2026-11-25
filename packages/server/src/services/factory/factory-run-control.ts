@@ -66,7 +66,7 @@ export type FactoryRunControlError = {
 };
 
 /** The refusal of an approval that names another commit than the held one. */
-export const HELD_COMMIT_CHANGED =
+const HELD_COMMIT_CHANGED =
   'The change was updated after you opened it. Reload and review the new commit.';
 
 const notFound: FactoryRunControlError = { kind: 'not-found', message: 'Run not found' };

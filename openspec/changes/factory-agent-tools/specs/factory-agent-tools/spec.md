@@ -10,10 +10,10 @@ the member to approve merging a held high-risk change, without ever being able t
 ### Requirement: An agent lists the thread owner's factory runs
 
 An agent in a project thread SHALL be able to list the runs of the thread owner's factory in the
-thread's project. Each run SHALL show its issue number and title, its pull request, its state,
+thread's project. Each run SHALL show its issue number, its pull request, its state,
 why it waits when it waits, its risk class, whether its held commit is approved, and its open
 merge approval request when it has one. The list SHALL contain no run of another member's
-factory and no run of another project.
+factory, no run of another project, and no text written outside funny (issue titles, review text).
 
 #### Scenario: Runs of the thread's project
 
@@ -139,7 +139,8 @@ moves to a newer commit only by the rules of `issue-factory`, after a member app
 ### Requirement: The tools are refused where the agent's input is not the owner's
 
 The three tools SHALL be refused in a sandbox thread, a read-only thread, a scratch thread and
-a thread the factory itself started. Retrying, stopping and asking for an approval SHALL also be
+a thread the factory itself started. The refusal is the server's: it does not depend on what the
+runner lists or sends. Retrying, stopping and asking for an approval SHALL also be
 refused in a thread that is shared at `steer`. A refusal SHALL change nothing and SHALL tell the
 agent why.
 

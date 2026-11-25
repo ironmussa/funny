@@ -17,6 +17,7 @@ import type { WSEventData } from './agent-event-router.js';
 import {
   emitGitStatus as emitThreadGitStatus,
   LATEST_TURN_WINDOW,
+  loadLatestTurn,
   persistChangedFilesSummary as persistSessionChanges,
 } from './agent-message-handler/changed-files-summary.js';
 import type { HandlerProject, MessageHandlerContext } from './agent-message-handler/context.js';
@@ -902,6 +903,11 @@ export class AgentMessageHandler {
   // ── Changed-files session summary ──────────────────────────────
 
   static readonly LATEST_TURN_WINDOW = LATEST_TURN_WINDOW;
+
+  /** The newest page of messages that holds the latest user turn (see `loadLatestTurn`). */
+  private loadLatestTurn(threadId: string) {
+    return loadLatestTurn(this.ctx, threadId);
+  }
 
   /**
    * Snapshot the files modified during the just-completed session and persist

@@ -7,7 +7,6 @@ import { describe, expect, test, vi } from 'bun:test';
 import type { CLIMessage } from '@funny/core/agents';
 
 import { AgentMessageHandler } from '../../services/agent-message-handler.js';
-import { loadLatestTurn } from '../../services/agent-message-handler/changed-files-summary.js';
 import { AgentStateTracker } from '../../services/agent-state.js';
 import { buildThreadRecord, createThreadManagerFake } from '../helpers/builders.js';
 
@@ -132,7 +131,7 @@ describe('AgentMessageHandler — tool call round trips', () => {
       ctx.tm.getThreadWithMessages = getThreadWithMessages;
       return { ...ctx, getThreadWithMessages };
     }
-    const load = (handler: AgentMessageHandler) => loadLatestTurn(handler['ctx'], THREAD_ID);
+    const load = (handler: AgentMessageHandler) => handler['loadLatestTurn'](THREAD_ID);
     const LIMIT = AgentMessageHandler.LATEST_TURN_WINDOW;
 
     test('loads only the newest window when it contains the latest user message', async () => {

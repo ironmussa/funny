@@ -38,6 +38,7 @@ mock.module('@/data/projects/hooks', () => ({
   ],
 }));
 mock.module('@/data/factory/actions', () => ({
+  approveFactoryMerge: () => okAsync(null),
   controlFactoryRun: (...args: unknown[]) => {
     mocks.control(...args);
     return okAsync(null);

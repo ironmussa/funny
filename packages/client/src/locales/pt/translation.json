@@ -1623,6 +1623,9 @@
     }
   },
   "errors": {
+    "factoryApprove": {
+      "CONFLICT": "Esta alteração foi atualizada depois de você abri-la. Nada foi aprovado: revise o novo commit."
+    },
     "generic": {
       "NOT_FOUND": "O recurso solicitado não foi encontrado.",
       "BAD_REQUEST": "A solicitação não pôde ser processada. Verifique os dados informados.",

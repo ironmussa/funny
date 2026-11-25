@@ -44,8 +44,8 @@ export const factoryApi = {
     trpcCall(() => procedures.stopRun.mutate({ projectId, runId })),
   retryRun: (projectId: string, runId: string) =>
     trpcCall(() => procedures.retryRun.mutate({ projectId, runId })),
-  approveMerge: (projectId: string, runId: string) =>
-    trpcCall(() => procedures.approveMerge.mutate({ projectId, runId })),
+  approveMerge: (projectId: string, runId: string, expectedSha: string) =>
+    trpcCall(() => procedures.approveMerge.mutate({ projectId, runId, expectedSha })),
   submitIssues: (input: SubmitFactoryIssuesInput) =>
     trpcCall(() => procedures.submitIssues.mutate(input)),
   listFlows: (projectId: string) => trpcCall(() => procedures.flows.query({ projectId })),

@@ -1664,6 +1664,9 @@
     }
   },
   "errors": {
+    "factoryApprove": {
+      "CONFLICT": "This change was updated after you opened it. Nothing was approved: review the new commit."
+    },
     "generic": {
       "NOT_FOUND": "The requested resource was not found.",
       "BAD_REQUEST": "The request could not be processed. Please check your input.",

@@ -48,23 +48,35 @@ export function saveFactorySettings(
 }
 
 /**
- * Stop or retry one run of the caller's factory, or approve merging the
- * high-risk change it holds. Not optimistic: the server decides whether the
- * run can still be controlled, and its answer is recorded. The caller shows
- * the error.
+ * Stop or retry one run of the caller's factory. Not optimistic: the server
+ * decides whether the run can still be controlled, and its answer is recorded.
+ * The caller shows the error.
  */
 export function controlFactoryRun(
-  action: 'stop' | 'retry' | 'approve-merge',
+  action: 'stop' | 'retry',
   projectId: string,
   runId: string,
   layer: DataLayer = getDataLayer(),
 ): ResultAsync<FactoryRun, DomainError> {
-  const call = {
-    stop: factoryApi.stopRun,
-    retry: factoryApi.retryRun,
-    'approve-merge': factoryApi.approveMerge,
-  }[action];
+  const call = { stop: factoryApi.stopRun, retry: factoryApi.retryRun }[action];
   return call(projectId, runId).map((run) => {
+    writeFactoryRun(projectId, run, layer);
+    return run;
+  });
+}
+
+/**
+ * Approve merging the high-risk change a run holds. `expectedSha` is the
+ * commit on screen: the server refuses when the run is held on another one.
+ * Not optimistic, like `controlFactoryRun`.
+ */
+export function approveFactoryMerge(
+  projectId: string,
+  runId: string,
+  expectedSha: string,
+  layer: DataLayer = getDataLayer(),
+): ResultAsync<FactoryRun, DomainError> {
+  return factoryApi.approveMerge(projectId, runId, expectedSha).map((run) => {
     writeFactoryRun(projectId, run, layer);
     return run;
   });

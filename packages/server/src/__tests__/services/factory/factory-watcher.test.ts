@@ -2452,7 +2452,23 @@ describe('factory operator controls', () => {
       },
     });
 
-    const approved = await createFactoryRunControl().approveMerge('alice', factoryId, run.id);
+    // Naming another commit than the held one approves nothing.
+    const stale = await createFactoryRunControl().approveMerge(
+      'alice',
+      factoryId,
+      run.id,
+      'd'.repeat(12),
+    );
+    expect(stale.isErr() && stale.error.kind).toBe('conflict');
+    const untouched = (await createFactoryRunsRepository().get(run.id))._unsafeUnwrap();
+    expect(untouched).toMatchObject({ state: 'waiting_human', mergeApproval: null });
+
+    const approved = await createFactoryRunControl().approveMerge(
+      'alice',
+      factoryId,
+      run.id,
+      'c2b585c51b2e',
+    );
 
     const { run: after, sha } = approved._unsafeUnwrap();
     expect(sha).toBe('c2b585c51b2e');
@@ -2542,7 +2558,7 @@ describe('factory operator controls', () => {
     const control = createFactoryRunControl();
 
     for (const run of [failed, parked]) {
-      const approved = await control.approveMerge('alice', factoryId, run.id);
+      const approved = await control.approveMerge('alice', factoryId, run.id, 'a'.repeat(12));
       expect(approved.isErr() && approved.error.kind).toBe('conflict');
     }
     const rows = (await createFactoryRunsRepository().list(factoryId))._unsafeUnwrap();

@@ -224,13 +224,14 @@ function createFactoryPort(
     userId: string,
     projectId: string,
     runId: string,
+    expectedSha = '',
   ): ResultAsync<FactoryRunView, ApiFailure> =>
     ownFactory(userId, projectId)
       .andThen((factoryId) => {
         const run = {
           stop: () => control.stop(userId, factoryId, runId).map(withoutSha),
           retry: () => control.retry(factoryId, runId).map(withoutSha),
-          'approve-merge': () => control.approveMerge(userId, factoryId, runId),
+          'approve-merge': () => control.approveMerge(userId, factoryId, runId, expectedSha),
         }[action];
         return run().mapErr(controlFailure);
       })
@@ -332,8 +333,8 @@ function createFactoryPort(
       return controlled('retry', userId, projectId, runId);
     },
 
-    async approveMerge(userId, projectId, runId) {
-      return controlled('approve-merge', userId, projectId, runId);
+    async approveMerge(userId, projectId, runId, expectedSha) {
+      return controlled('approve-merge', userId, projectId, runId, expectedSha);
     },
 
     async submitIssues(userId, projectId, input) {

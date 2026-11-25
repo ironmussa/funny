@@ -164,18 +164,19 @@ describe('factory over tRPC', () => {
 
     // A viewer may not approve; the owner does, once.
     seedProjectMember(t.db, { projectId: 'p1', userId: 'vic', role: 'viewer' });
-    expect((await mutate('vic', 'approveMerge', { projectId: 'p1', runId: held.id })).status).toBe(
-      403,
-    );
-    const approved = await mutate('alice', 'approveMerge', { projectId: 'p1', runId: held.id });
+    const approval = { projectId: 'p1', runId: held.id, expectedSha: 'c2b585c51b2e' };
+    expect((await mutate('vic', 'approveMerge', approval)).status).toBe(403);
+    // An approval that names no commit is not a valid request.
+    expect(
+      (await mutate('alice', 'approveMerge', { projectId: 'p1', runId: held.id })).status,
+    ).toBe(400);
+    const approved = await mutate('alice', 'approveMerge', approval);
     expect(approved).toMatchObject({
       status: 200,
       body: { state: 'queued', mergeApproval: { sha: 'c2b585c51b2e', userId: 'alice' } },
     });
     // The run moved on: approving again is refused, and that is recorded too.
-    expect(
-      (await mutate('alice', 'approveMerge', { projectId: 'p1', runId: held.id })).status,
-    ).toBe(409);
+    expect((await mutate('alice', 'approveMerge', approval)).status).toBe(409);
     await mutate('alice', 'stopRun', { projectId: 'p1', runId: held.id });
 
     // Recording does not hold up the answer: wait for the rows.

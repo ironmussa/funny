@@ -37,6 +37,15 @@ export const factoryProjectInput = z.object({ projectId }).strict();
 export const factoryRunInput = z.object({ projectId, runId: z.string().min(1) }).strict();
 
 /**
+ * A member's approval of a held high-risk merge. `expectedSha` is the commit
+ * the member was shown: the approval is refused when the run is held on
+ * another one (openspec factory-agent-tools).
+ */
+export const factoryApproveMergeInput = z
+  .object({ projectId, runId: z.string().min(1), expectedSha: z.string().min(7) })
+  .strict();
+
+/**
  * What a factory admits (change factory-manual-queue): `manual`, only the
  * issues sent to it; `automatic`, also the open issues carrying its label.
  */

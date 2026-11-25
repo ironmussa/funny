@@ -18,14 +18,17 @@ const mocks = ((): {
   queue: FactoryQueueRun[] | undefined;
   navigate: ReturnType<typeof vi.fn>;
   incidents: Record<string, FactoryIncident>;
-} => ({ queue: [], navigate: vi.fn(), incidents: {} }))();
+  threads: Record<string, { id: string; title: string }>;
+} => ({ queue: [], navigate: vi.fn(), incidents: {}, threads: {} }))();
 
 mock.module('@/data/factory/hooks', () => ({
   useFactoryQueueRuns: () => mocks.queue,
   useFactorySettings: (projectId: string) =>
     mocks.incidents[projectId] ? { incident: mocks.incidents[projectId] } : null,
 }));
-mock.module('@/lib/thread-selectors', () => ({ useThreadById: () => undefined }));
+mock.module('@/lib/thread-selectors', () => ({
+  useThreadById: (id?: string) => (id ? mocks.threads[id] : undefined),
+}));
 mock.module('@/data/projects/hooks', () => ({
   useCanSteerProject: () => true,
   useProjects: () => [{ id: 'p1', name: 'funny' }],
@@ -354,9 +357,33 @@ describe('the step timeline', () => {
     expect(screen.queryByTestId('factory-run-detail-wait-1')).toBeNull();
   });
 
-  test('no timeline without timings', () => {
+  test('without timings: no durations, the flow steps with their state', () => {
     renderBody(queueRun({ state: 'working' }));
-    expect(screen.queryByTestId('factory-run-detail-timeline')).toBeNull();
+    expect(screen.queryByTestId('factory-run-detail-timing-0')).toBeNull();
+  });
+
+  test('one Flow tab: the timed steps, then the steps not reached', () => {
+    const minAgo = (n: number) => new Date(Date.now() - n * 60_000).toISOString();
+    renderBody(
+      queueRun({
+        state: 'working',
+        currentStep: 'implement',
+        flowSteps: ['triage', 'implement', 'merge'],
+        stepTimings: [
+          {
+            step: 'triage',
+            visit: '1',
+            attempt: 1,
+            status: 'succeeded',
+            startedAt: minAgo(10),
+            finishedAt: minAgo(8),
+          },
+        ],
+      }),
+    );
+    expect(screen.queryByTestId('factory-run-detail-tab-timeline')).toBeNull();
+    expect(screen.getByTestId('factory-run-detail-timing-0')).toHaveTextContent('triage');
+    expect(screen.getByTestId('factory-run-detail-step-merge').dataset.status).toBe('pending');
   });
 });
 
@@ -459,5 +486,65 @@ describe('the analytics layout', () => {
       '/pull/50',
     );
     expect(screen.getByTestId('factory-view-incident-p2-close')).toBeTruthy();
+  });
+});
+
+describe('the run panel tabs', () => {
+  test('one tab per section with something to show; a section shows when its tab is picked', () => {
+    renderBody(
+      queueRun({
+        state: 'reviewing',
+        triage: {
+          decision: 'ready',
+          at: new Date().toISOString(),
+          threadId: 't-tri',
+          items: ['Must pass lint'],
+        },
+        reviews: [verdict('aaa1111ff', true, 't-rev-1')],
+      }),
+    );
+    const tabs = screen.getByTestId('factory-run-detail-tabs');
+    expect(within(tabs).getByTestId('factory-run-detail-tab-triage')).toBeTruthy();
+    expect(within(tabs).getByTestId('factory-run-detail-tab-reviews')).toBeTruthy();
+    // No proof yet: no tab for it.
+    expect(within(tabs).queryByTestId('factory-run-detail-tab-proof')).toBeNull();
+    // Only the picked tab's section is shown.
+    expect(screen.queryByTestId('factory-run-detail-reviews')).toBeNull();
+    fireEvent.mouseDown(screen.getByTestId('factory-run-detail-tab-reviews'), { button: 0 });
+    expect(screen.getByTestId('factory-run-detail-reviews')).toBeTruthy();
+  });
+});
+
+describe('the agent threads tab', () => {
+  test('every row reads role, steps and "Thread"; a loaded thread\'s title stays out of the row', () => {
+    mocks.threads = {
+      't-impl': { id: 't-impl', title: '[Factory] #479 A very long thread title' },
+    };
+    renderBody(
+      queueRun({
+        state: 'working',
+        threadIds: ['t-impl'],
+        stepOptions: [
+          {
+            stepId: 'implement',
+            threadId: 't-impl',
+            provider: 'claude',
+            model: 'opus',
+            effort: null,
+            permissionMode: 'autoEdit',
+            allowedTools: null,
+            disallowedTools: null,
+            thread: 'continue',
+          },
+        ],
+      }),
+    );
+    fireEvent.mouseDown(screen.getByTestId('factory-run-detail-tab-threads'), { button: 0 });
+    const link = screen.getByTestId('factory-run-detail-thread-t-impl');
+    expect(link).toHaveTextContent('Thread');
+    const row = link.closest('li')!;
+    expect(row).toHaveTextContent('implement');
+    expect(row).not.toHaveTextContent('A very long thread title');
+    mocks.threads = {};
   });
 });

@@ -45,7 +45,12 @@ import { log } from '../../lib/logger.js';
 import type { StartedThread, StartThreadError } from '../runner-thread-launcher.js';
 import type { FactoryLaunchBody, IssueRunScope } from './factory-action-provider.js';
 import { issueInstruction, type FactoryIssueText } from './factory-issue-text.js';
-import { contractText, launchedThread, readOnlyRoleLaunch } from './factory-review.js';
+import {
+  contractText,
+  launchedThread,
+  readOnlyRoleLaunch,
+  releaseRoleWorkspace,
+} from './factory-review.js';
 import { READ_ONLY_SHELL_RULE, readRoleResult } from './factory-role-results.js';
 import { HIGH_RISK_HOLD, type UpdateRunInput } from './factory-runs.js';
 import type { ThreadOutcome, WaitAfter } from './factory-thread-waits.js';
@@ -293,6 +298,12 @@ export interface FactoryTriageDeps {
     completedAt(threadId: string): Promise<string | null>;
   };
   worktreeBase(): Promise<{ baseBranch?: string; baseFromRemote?: boolean } | { error: string }>;
+  /**
+   * Remove the role thread's worktree and branch once its answer is stored:
+   * nothing reads its checkout again (a new commit gets a new reviewer). Only
+   * an unchanged worktree is removed; the thread and its messages stay.
+   */
+  releaseWorkspace?(threadId: string): Promise<void>;
   /** Post a comment on the run's issue. */
   comment(body: string): Promise<Result<void, string>>;
   /** Present when the factory opens a too-large issue's parts as issues (its `split` setting). */
@@ -626,7 +637,11 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
     }
     const result = await resultOf(threadId);
     if (deps.signal.aborted) return STOPPED;
-    return result.isErr() ? degrade(threadId, result.error.reason) : actOn(result.value, threadId);
+    if (result.isErr()) return degrade(threadId, result.error.reason);
+    const acted = await actOn(result.value, threadId);
+    // The answer is stored (a re-triage starts a new thread): the checkout is not read again.
+    await releaseRoleWorkspace(deps.releaseWorkspace, threadId, deps.scope.runId);
+    return acted;
   }
 
   return {

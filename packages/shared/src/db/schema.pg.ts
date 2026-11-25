@@ -344,7 +344,8 @@ export const factorySettings = pgTable(
 /**
  * One factory run per admitted issue (change issue-factory). At most one run
  * per issue is in flight: the partial unique index
- * `factory_runs_one_active_per_issue` (migration 098) enforces it.
+ * `factory_runs_one_active_per_issue` (migration 098; since 134 it leaves out
+ * every terminal state, `done` included) enforces it.
  */
 // Dialect mirror: schema.pg.ts and schema.sqlite.ts must declare the same columns.
 // fallow-ignore-next-line code-duplication

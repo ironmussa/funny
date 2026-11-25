@@ -90,6 +90,18 @@ import { FactoryQueueView } from '@/components/FactoryQueueView';
 import { useFactoryViewStore } from '@/stores/factory-view-store';
 
 const recent = () => new Date(Date.now() - 3600_000).toISOString();
+const implementStep = (threadId: string) => ({
+  stepId: 'implement',
+  threadId,
+  provider: 'claude',
+  model: 'opus',
+  effort: null,
+  permissionMode: 'autoEdit',
+  allowedTools: null,
+  disallowedTools: null,
+  thread: 'continue' as const,
+});
+
 const queueRun = (id: string, state: FactoryRun['state'], over: Partial<FactoryQueueRun> = {}) => ({
   ...buildFactoryRun({ id, state, completedAt: null, admittedAt: recent() }),
   projectId: 'p1',
@@ -244,19 +256,22 @@ describe('FactoryBoard', () => {
     mocks.requests = {};
   });
 
-  test("a run with a thread is the thread's kanban card: its powerline with the PR, its menu, and the run's chips", async () => {
+  test("a run with a thread is the thread's kanban card: the PR, its threads in its menu, and the run's chips", async () => {
     mocks.threads['t-impl'] = buildThread({ id: 't-impl', title: '[Factory] #434 Thread recap' });
     const run = queueRun('r1', 'waiting_human', {
       threadIds: ['t-impl'],
+      stepOptions: [implementStep('t-impl')],
       prUrl: 'https://github.com/o/r/pull/443',
       failureReason: 'review failed',
     });
     renderBoard([run]);
     const card = screen.getByTestId('factory-board-card-r1');
     expect(card.textContent).toContain('[Factory] #434 Thread recap');
-    // The footer line holds the thread's powerline and the PR; the title keeps the card's full width.
+    // Each of the run's threads has its own worktree, so no powerline: the
+    // card's menu links its threads, and the footer holds the PR.
     const footer = within(card).getByTestId('factory-board-card-r1-footer');
-    expect(within(footer).getByTestId('kanban-card-powerline-t-impl')).toBeTruthy();
+    expect(within(card).queryByTestId('factory-board-thread-link-t-impl')).toBeNull();
+    expect(within(footer).queryByTestId('kanban-card-powerline-t-impl')).toBeNull();
     expect(within(footer).getByTestId('kanban-card-pr-t-impl').textContent).toBe('#443');
     expect(within(card).queryByTestId('factory-board-issue-r1')).toBeNull();
     expect(screen.queryByTestId('factory-board-pr-r1')).toBeNull();
@@ -267,9 +282,28 @@ describe('FactoryBoard', () => {
     fireEvent.click(card);
     expect(mocks.navigate).toHaveBeenCalledWith(run);
     fireEvent.pointerDown(within(card).getByTestId('kanban-card-more-t-impl'));
-    fireEvent.click(await screen.findByTestId('factory-board-retry-r1'));
+    const threadLink = await screen.findByTestId('factory-board-thread-link-t-impl');
+    // The run's threads sit at the bottom of the menu, after its actions.
+    const retry = await screen.findByTestId('factory-board-retry-r1');
+    expect(
+      retry.compareDocumentPosition(threadLink) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    fireEvent.click(retry);
     expect(mocks.control).toHaveBeenCalledWith('retry', 'p1', 'r1');
     expect(mocks.navigate).toHaveBeenCalledTimes(1);
+  });
+
+  test("a thread in the card's menu opens its thread, not the run panel", async () => {
+    mocks.threads['t-impl'] = buildThread({ id: 't-impl', title: '[Factory] #434 Thread recap' });
+    const run = queueRun('r1', 'working', {
+      threadIds: ['t-impl'],
+      stepOptions: [implementStep('t-impl')],
+    });
+    renderBoard([run]);
+    fireEvent.pointerDown(screen.getByTestId('kanban-card-more-t-impl'));
+    fireEvent.click(await screen.findByTestId('factory-board-thread-link-t-impl'));
+    expect(mocks.navigate).toHaveBeenCalledTimes(1);
+    expect(String(mocks.navigate.mock.calls[0]?.[0])).toContain('/threads/t-impl');
   });
 
   test('cards cannot be dragged, and opening one selects the run', () => {
@@ -426,15 +460,16 @@ describe('FactoryBoard', () => {
 });
 
 describe('state dot and selection', () => {
-  test('a stopped run and a run waiting on a person show a state dot, not a clock or the thread pin', () => {
+  test('a run waiting on a person shows a state dot, not a clock or the thread pin; a finished run shows none', () => {
     mocks.threads = { t1: buildThread({ id: 't1', projectId: 'p1', status: 'completed' }) };
     renderBoard([
       queueRun('stopped', 'stopped', { threadIds: [] }),
+      queueRun('merged', 'merged', { threadIds: ['t1'], completedAt: recent() }),
       queueRun('waiting', 'waiting_human', { threadIds: ['t1'] }),
     ]);
-    expect(screen.getByTestId('factory-board-dot-stopped').getAttribute('data-state')).toBe(
-      'stopped',
-    );
+    // Done's chip (Stopped, Merged) already says how the run ended.
+    expect(screen.queryByTestId('factory-board-dot-stopped')).toBeNull();
+    expect(screen.queryByTestId('factory-board-dot-merged')).toBeNull();
     expect(screen.getByTestId('factory-board-dot-waiting').getAttribute('data-state')).toBe(
       'waiting_human',
     );
@@ -454,6 +489,13 @@ describe('state dot and selection', () => {
       </MemoryRouter>,
     );
     expect(screen.queryByTestId('factory-bulk-actions')).toBeNull();
+    // A finished run has no dot, so it keeps no blank slot before its title:
+    // only the hover checkbox, until a run is picked.
+    const mergedBox = () => screen.getByTestId('factory-board-select-merged');
+    expect(mergedBox().closest('[data-collapsed]')).toBeTruthy();
+    expect(
+      screen.getByTestId('factory-board-select-broken').closest('[data-collapsed]'),
+    ).toBeNull();
     for (const id of ['broken', 'busy', 'merged']) {
       fireEvent.click(screen.getByTestId(`factory-board-select-${id}`));
     }

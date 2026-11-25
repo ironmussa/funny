@@ -62,12 +62,16 @@ interface Props {
   testId?: string;
   /** Items a board puts first in the card's menu (the factory board: the run's actions). */
   menuItems?: ReactNode;
+  /** Items a board puts last in the card's menu (the factory board: the run's threads). */
+  menuEndItems?: ReactNode;
   /** Replaces the footer's time (the factory board: the run's time in its step). */
   time?: ReactNode;
   /** Replaces the thread's title (the factory board: the run's issue title). */
   title?: string;
   /** Replaces the thread's status pin (the factory board: the run's state, selectable). */
   status?: ReactNode;
+  /** Replaces the footer's powerline (the factory board: links to the run's threads). */
+  footerLead?: ReactNode;
 }
 
 /** Scrolls a highlighted card into view and makes the card draggable between columns. */
@@ -111,22 +115,26 @@ function KanbanCardFooter({
   thread,
   projectInfo,
   gitStatus,
+  lead,
 }: {
   thread: Thread;
   projectInfo: Props['projectInfo'];
   gitStatus: GitStatusInfo | undefined;
+  lead?: ReactNode;
 }) {
   return (
     <>
-      <ThreadPowerline
-        thread={thread}
-        showPRBadge={false}
-        projectName={projectInfo?.name}
-        projectColor={projectInfo?.color}
-        gitStatus={gitStatus}
-        diffStatsSize="xxs"
-        data-testid={`kanban-card-powerline-${thread.id}`}
-      />
+      {lead ?? (
+        <ThreadPowerline
+          thread={thread}
+          showPRBadge={false}
+          projectName={projectInfo?.name}
+          projectColor={projectInfo?.color}
+          gitStatus={gitStatus}
+          diffStatsSize="xxs"
+          data-testid={`kanban-card-powerline-${thread.id}`}
+        />
+      )}
       <ThreadWatcherIndicator threadId={thread.id} />
       {gitStatus?.prNumber ? (
         <PRBadge
@@ -147,12 +155,14 @@ function KanbanCardFooter({
 function KanbanCardMenu({
   thread,
   menuItems,
+  menuEndItems,
   onArchive,
   onDelete,
   onOpenChange,
 }: {
   thread: Thread;
   menuItems: ReactNode;
+  menuEndItems?: ReactNode;
   onArchive: Props['onArchive'];
   onDelete: Props['onDelete'];
   onOpenChange: (open: boolean) => void;
@@ -214,6 +224,12 @@ function KanbanCardMenu({
             </DropdownMenuItem>
           </>
         )}
+        {menuEndItems && (
+          <>
+            <DropdownMenuSeparator />
+            {menuEndItems}
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -257,9 +273,11 @@ export const KanbanCard = memo(function KanbanCard({
   draggable: canDrag = true,
   testId,
   menuItems,
+  menuEndItems,
   time,
   title: titleProp,
   status,
+  footerLead,
 }: Props) {
   const title = titleProp ?? thread.title;
   const { t } = useTranslation();
@@ -320,7 +338,12 @@ export const KanbanCard = memo(function KanbanCard({
         />
       }
       footer={
-        <KanbanCardFooter thread={thread} projectInfo={projectInfo} gitStatus={gitStatusProp} />
+        <KanbanCardFooter
+          thread={thread}
+          projectInfo={projectInfo}
+          gitStatus={gitStatusProp}
+          lead={footerLead}
+        />
       }
       time={time ?? timeAgo(thread.completedAt || thread.createdAt, t, now)}
       actionsOpen={openDropdown}
@@ -328,6 +351,7 @@ export const KanbanCard = memo(function KanbanCard({
         <KanbanCardMenu
           thread={thread}
           menuItems={menuItems}
+          menuEndItems={menuEndItems}
           onArchive={onArchive}
           onDelete={onDelete}
           onOpenChange={handleDropdownChange}

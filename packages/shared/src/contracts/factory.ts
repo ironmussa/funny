@@ -1228,3 +1228,31 @@ export interface FactoryIncident {
   candidates: FactoryIncidentCandidate[];
   result: FactoryIncidentResult | null;
 }
+
+const RISK_HINT_PREFIX = 'the contract names a risk: ';
+/** How much of a contract's risk note a risk reason keeps. */
+const MAX_RISK_HINT_CHARS = 200;
+
+/** `text` cut at a word to fit `max` characters, ending with an ellipsis. */
+function cutAtWord(text: string, max: number): string {
+  const cut = text.slice(0, max - 1);
+  const space = cut.lastIndexOf(' ');
+  return `${(space > max / 2 ? cut.slice(0, space) : cut).trimEnd()}…`;
+}
+
+/** The risk reason for a contract's risk note: cut at a word with an ellipsis when too long. */
+export function contractRiskReason(hint: string): string {
+  const shown = hint.length <= MAX_RISK_HINT_CHARS ? hint : cutAtWord(hint, MAX_RISK_HINT_CHARS);
+  return `${RISK_HINT_PREFIX}${shown}`;
+}
+
+/**
+ * A stored risk reason as shown. Runs classified before notes were cut at a
+ * word hold one cut mid-word at exactly the limit, with no ellipsis.
+ */
+export function displayRiskReason(reason: string): string {
+  if (!reason.startsWith(RISK_HINT_PREFIX)) return reason;
+  const hint = reason.slice(RISK_HINT_PREFIX.length);
+  if (hint.length !== MAX_RISK_HINT_CHARS || hint.endsWith('…')) return reason;
+  return `${RISK_HINT_PREFIX}${cutAtWord(hint, MAX_RISK_HINT_CHARS)}`;
+}

@@ -241,6 +241,8 @@ function reviewing(script: ReviewScript) {
     body?: string;
     description: string;
   }> = [];
+  /** What happened to the reviewer threads, in order: re-emit requests (`ask:<id>`) and worktree releases (`free:<id>`). */
+  const events: string[] = [];
   const turn = new Map<string, number>();
   const indexOf = (threadId: string) =>
     threadId === script.launched ? 0 : Number(threadId.replace('rev-', '')) - 1;
@@ -288,12 +290,16 @@ function reviewing(script: ReviewScript) {
         followUpOffBranch: async (threadId, content) => {
           if (script.followUpFails) return err('the runner is offline');
           followUps.push({ threadId, content });
+          events.push(`ask:${threadId}`);
           turn.set(threadId, (turn.get(threadId) ?? 0) + 1);
           return ok(undefined);
         },
       },
       abandon: async (threadId) => {
         abandoned.push(threadId);
+      },
+      releaseRoleWorkspace: async (threadId) => {
+        events.push(`free:${threadId}`);
       },
       enterStage: async (stage) => {
         stages.push(stage);
@@ -308,7 +314,7 @@ function reviewing(script: ReviewScript) {
     const writes = recorded.flatMap((input) => (input.reviews ? [input.reviews] : []));
     return writes.at(-1) ?? [];
   };
-  return { provider, bodies, followUps, recorded, stages, abandoned, stored, published };
+  return { provider, bodies, followUps, recorded, stages, abandoned, stored, published, events };
 }
 
 describe('the review step', () => {
@@ -403,6 +409,35 @@ describe('the review step', () => {
       ok: true,
       output: 'pass',
       metadata: { verdict: 'fail', allowsMerge: true },
+    });
+  });
+
+  // The reviewer's checkout is not read once its verdict is stored (a new
+  // commit gets a new reviewer); its worktree and branch stayed until the run ended.
+  describe("the reviewer thread's worktree", () => {
+    test('is freed once the verdict is stored', async () => {
+      const { provider, stored, events } = reviewing({ says: [[passOf(SHA_A)]] });
+      await provider.review!({});
+      expect(stored()).toMatchObject([{ sha: SHA_A, threadId: 'rev-1' }]);
+      expect(events).toEqual(['free:rev-1']);
+    });
+
+    test('is kept while the reviewer is asked again, and freed after its verdict', async () => {
+      const { provider, events } = reviewing({ says: [['prose', passOf(SHA_A)]] });
+      await provider.review!({});
+      expect(events).toEqual(['ask:rev-1', 'free:rev-1']);
+    });
+
+    test('is kept when there is no verdict: the run waits for a person with it', async () => {
+      const { provider, events } = reviewing({ says: [['prose', 'more prose']] });
+      await provider.review!({});
+      expect(events).toEqual(['ask:rev-1']);
+    });
+
+    test('a reviewer thread that fails keeps it', async () => {
+      const { provider, events } = reviewing({ says: [[]], ends: ['failed'] });
+      await provider.review!({});
+      expect(events).toEqual([]);
     });
   });
 

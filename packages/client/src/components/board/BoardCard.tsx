@@ -68,8 +68,11 @@ export function BoardCard({
       onKeyDown={onKeyDown}
     >
       <div className="flex min-w-0 items-start gap-2">
-        {/* `status-glyph-dots`: like a sidebar thread row, a dot theme (Minimal) shows dots here. */}
-        <span className="status-glyph-dots mt-0.5 flex shrink-0">{status}</span>
+        {/* `status-glyph-dots`: like a sidebar thread row, a dot theme (Minimal) shows dots here.
+            No glyph, or one marked `data-collapsed` (shown only on hover), leaves no gap before the title. */}
+        <span className="status-glyph-dots mt-0.5 flex shrink-0 empty:hidden has-[[data-collapsed]]:hidden group-hover/card:has-[[data-collapsed]]:flex">
+          {status}
+        </span>
         <div className="min-w-0 flex-1">{title}</div>
       </div>
       {children}

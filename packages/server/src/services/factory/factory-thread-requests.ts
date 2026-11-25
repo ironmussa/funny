@@ -234,14 +234,17 @@ export async function sendFactoryFollowUp(
  * removes a worktree only when nothing would be lost with it, and the ones it
  * kept are returned. A runner that cannot answer (offline, or from before that
  * route) leaves the worktree in place, never deleting on a guess, and it is
- * returned too (with zero counts): unchecked is not clean.
+ * returned too (with zero counts): unchecked is not clean. So is a thread
+ * still running: its checkout is left alone and, with `keepUnsaved`, returned
+ * as kept, since its agent may still commit (#449: a run ended as "no change"
+ * while its agent, still running, held 10 unpushed commits).
  */
 export async function cleanupFactoryWorktrees(
   ports: RunnerPorts,
   userId: string,
   threadIds: string[],
   browserEvents?: BrowserEventsPort,
-  options: { keepUnsaved?: boolean } = {},
+  options: { keepUnsaved?: boolean; reason?: WorkspaceCleanupReason } = {},
 ): Promise<KeptWorktree[]> {
   const kept: KeptWorktree[] = [];
   if (threadIds.length === 0) return kept;
@@ -253,6 +256,7 @@ export async function cleanupFactoryWorktrees(
       projectId: threads.projectId,
       worktreePath: threads.worktreePath,
       branch: threads.branch,
+      status: threads.status,
     })
     .from(threads)
     .where(
@@ -262,69 +266,96 @@ export async function cleanupFactoryWorktrees(
         eq(threads.mode, 'worktree'),
         ne(threads.runtime, 'sandbox'),
         isNotNull(threads.worktreePath),
-        notInArray(threads.status, ACTIVE_STATUSES),
       ),
     );
   for (const thread of rows) {
     if (!thread.projectId || !thread.worktreePath) continue;
-    const workspace = {
-      id: thread.id,
-      projectId: thread.projectId,
-      worktreePath: thread.worktreePath,
-      branch: thread.branch,
-    };
-    const removed = options.keepUnsaved
-      ? await removeUnchangedWorktree(ports, userId, workspace)
-      : (
-          await requestThreadWorkspaceCleanup(ports, {
-            userId,
-            thread: workspace,
-            deleteBranch: !!thread.branch,
-            reason: 'factory-merged',
-            origin: 'system',
-          })
-        ).map(() => null);
-    if (removed.isErr()) {
-      log.warn('Failed to remove a factory run worktree', {
-        namespace: 'factory',
-        threadId: thread.id,
-        reason,
-        error: removed.error,
-      });
-      // Not checked is not clean: the caller must not take the run for "nothing left behind".
-      if (options.keepUnsaved) {
-        kept.push({
-          threadId: thread.id,
-          worktreePath: thread.worktreePath,
-          dirtyFileCount: 0,
-          unpushedCommitCount: 0,
-        });
-      }
-      continue;
-    }
-    if (removed.value) {
-      kept.push({ threadId: thread.id, worktreePath: thread.worktreePath, ...removed.value });
-      log.info('Kept a factory run worktree with unsaved work', {
-        namespace: 'factory',
-        threadId: thread.id,
-        ...removed.value,
-      });
-      continue;
-    }
-    await clearThreadWorkspace(thread.id);
-    browserEvents?.toUser(userId, {
-      type: 'thread:updated',
-      threadId: thread.id,
-      data: { worktreePath: null, branch: null },
-    });
-    log.info('Removed a factory run worktree', {
-      namespace: 'factory',
-      threadId: thread.id,
-      reason,
-      branch: thread.branch,
-    });
+    const { id, projectId, worktreePath, branch, status } = thread;
+    const left = await cleanupFactoryWorktree(
+      ports,
+      userId,
+      { id, projectId, worktreePath, branch, status },
+      { ...options, logReason: reason },
+      browserEvents,
+    );
+    if (left) kept.push(left);
   }
   return kept;
+}
+
+/** A worktree left in place whose state was not read: unchecked is not clean. */
+const keptUnchecked = (thread: { id: string; worktreePath: string }): KeptWorktree => ({
+  threadId: thread.id,
+  worktreePath: thread.worktreePath,
+  dirtyFileCount: 0,
+  unpushedCommitCount: 0,
+});
+
+/** One thread of `cleanupFactoryWorktrees`: the worktree it left in place, or null. */
+async function cleanupFactoryWorktree(
+  ports: RunnerPorts,
+  userId: string,
+  thread: {
+    id: string;
+    projectId: string;
+    worktreePath: string;
+    branch: string | null;
+    status: string;
+  },
+  options: { keepUnsaved?: boolean; reason?: WorkspaceCleanupReason; logReason: string },
+  browserEvents?: BrowserEventsPort,
+): Promise<KeptWorktree | null> {
+  if (ACTIVE_STATUSES.includes(thread.status)) {
+    return options.keepUnsaved ? keptUnchecked(thread) : null;
+  }
+  const workspace = {
+    id: thread.id,
+    projectId: thread.projectId,
+    worktreePath: thread.worktreePath,
+    branch: thread.branch,
+  };
+  const removed = options.keepUnsaved
+    ? await removeUnchangedWorktree(ports, userId, workspace, { reason: options.reason })
+    : (
+        await requestThreadWorkspaceCleanup(ports, {
+          userId,
+          thread: workspace,
+          deleteBranch: !!thread.branch,
+          reason: 'factory-merged',
+          origin: 'system',
+        })
+      ).map(() => null);
+  if (removed.isErr()) {
+    log.warn('Failed to remove a factory run worktree', {
+      namespace: 'factory',
+      threadId: thread.id,
+      reason: options.logReason,
+      error: removed.error,
+    });
+    // Not checked is not clean: the caller must not take the run for "nothing left behind".
+    return options.keepUnsaved ? keptUnchecked(thread) : null;
+  }
+  if (removed.value) {
+    log.info('Kept a factory run worktree with unsaved work', {
+      namespace: 'factory',
+      threadId: thread.id,
+      ...removed.value,
+    });
+    return { threadId: thread.id, worktreePath: thread.worktreePath, ...removed.value };
+  }
+  await clearThreadWorkspace(thread.id);
+  browserEvents?.toUser(userId, {
+    type: 'thread:updated',
+    threadId: thread.id,
+    data: { worktreePath: null, branch: null },
+  });
+  log.info('Removed a factory run worktree', {
+    namespace: 'factory',
+    threadId: thread.id,
+    reason: options.logReason,
+    branch: thread.branch,
+  });
+  return null;
 }
 
 /**
@@ -507,11 +538,9 @@ async function removeUnchangedWorktree(
   ports: RunnerPorts,
   userId: string,
   thread: { id: string; projectId: string; worktreePath: string; branch: string | null },
-  options: { deleteBranch: boolean; reason: WorkspaceCleanupReason } = {
-    deleteBranch: !!thread.branch,
-    reason: 'factory-no-change',
-  },
+  options: { deleteBranch?: boolean; reason?: WorkspaceCleanupReason } = {},
 ): Promise<Result<UnsavedWork | null, string>> {
+  const { deleteBranch = true, reason = 'factory-no-change' } = options;
   const sent = await sendToThreadRunner(ports, userId, {
     method: 'POST',
     path: '/api/worktrees/remove-unchanged',
@@ -520,8 +549,8 @@ async function removeUnchangedWorktree(
       projectId: thread.projectId,
       worktreePath: thread.worktreePath,
       branchName: thread.branch ?? undefined,
-      deleteBranch: options.deleteBranch && !!thread.branch,
-      reason: options.reason,
+      deleteBranch: deleteBranch && !!thread.branch,
+      reason,
       threadId: thread.id,
     },
   });

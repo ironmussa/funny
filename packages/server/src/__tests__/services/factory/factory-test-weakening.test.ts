@@ -147,6 +147,53 @@ describe('checkTestWeakening', () => {
     expect(findings[0]?.detail).toBe("test.skip('adds', () => {});");
   });
 
+  // Found on #479 and #490: a new lint test that skips where the linter is
+  // not installed made the whole change high risk.
+  test('a conditional skip on a test the change adds is not a finding', () => {
+    const lines = [
+      "+describe('the linter', () => {",
+      '+  test.skipIf(!HAS_BUN_LINT)(',
+      "+    'reports no warning',",
+      '+    () => {},',
+      '+  );',
+      '+});',
+    ];
+    expect(check(file('src/lint.test.ts', lines, { status: 'added' }))).toEqual([]);
+    // A new test in a file that existed.
+    expect(check(file('src/lint.test.ts', lines))).toEqual([]);
+  });
+
+  test('a conditional skip put on a test that existed is a finding', () => {
+    const findings = check(
+      file('src/a.test.ts', ["-test('adds', () => {", "+test.skipIf(CI)('adds', () => {"]),
+    );
+    expect(findings).toEqual([
+      { kind: 'skip-marker', path: 'src/a.test.ts', detail: "test.skipIf(CI)('adds', () => {" },
+    ]);
+  });
+
+  test('a suite-wide conditional skip in a file that existed is a finding', () => {
+    const findings = check(file('src/a.test.ts', ["+describe.skipIf(CI)('suite', () => {"]));
+    expect(findings.map((finding) => finding.kind)).toEqual(['skip-marker']);
+  });
+
+  test('an unconditional skip in a new file is still a finding', () => {
+    const findings = check(
+      file('src/a.test.ts', ["+test.skip('adds', () => {});", "+it.todo('later');"], {
+        status: 'added',
+      }),
+    );
+    expect(findings.map((finding) => finding.kind)).toEqual(['skip-marker', 'skip-marker']);
+  });
+
+  test('a conditional skip in Python counts only in a file that existed', () => {
+    const lines = ['+@pytest.mark.skipif(sys.platform == "win32", reason="posix")'];
+    expect(check(file('tests/test_api.py', lines, { status: 'added' }))).toEqual([]);
+    expect(check(file('tests/test_api.py', lines)).map((finding) => finding.kind)).toEqual([
+      'skip-marker',
+    ]);
+  });
+
   test('a focus marker', () => {
     expect(check(file('src/a.test.ts', ["+test.only('adds', () => {});"]))).toEqual([
       { kind: 'focus-marker', path: 'src/a.test.ts', detail: "test.only('adds', () => {});" },
@@ -379,6 +426,12 @@ describe('classifyRisk', () => {
       level: 'high',
       reasons: ['the contract names a risk: changes the retry policy'],
     });
+  });
+
+  test('a long contract risk ends with an ellipsis, not mid-word', () => {
+    const long = `${'replacing an as T with a parse can reshape input '.repeat(5)}so check each`;
+    const [reason] = risk([file('src/a.ts', ['+x'])], { riskHints: [long] }).reasons;
+    expect(reason?.endsWith('…')).toBe(true);
   });
 
   // A member marked the run as a lint cleanup: large changes that only clear

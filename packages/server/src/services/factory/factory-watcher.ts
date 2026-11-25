@@ -176,6 +176,12 @@ export async function startFactoryWatcher(d: FactoryWatcherDeps): Promise<void> 
           : cleanupFactoryWorktrees(d.ports, userId, threadIds, d.browserEvents, {
               keepUnsaved: true,
             }),
+      cleanupRoleThread: async (userId, threadId) => {
+        await cleanupFactoryWorktrees(d.ports, userId, [threadId], d.browserEvents, {
+          keepUnsaved: true,
+          reason: 'review-finished',
+        });
+      },
       followUp:
         d.followUp ??
         ((userId, threadId, content, expectedBranch, options) =>

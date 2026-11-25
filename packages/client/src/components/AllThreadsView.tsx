@@ -1,4 +1,4 @@
-import type { GitSyncState, ThreadStatus } from '@funny/shared';
+import type { GitSyncState, Thread, ThreadStatus } from '@funny/shared';
 import { ChevronLeft, Columns3, Search } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -6,6 +6,12 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
 import { AllThreadsContent } from '@/components/all-threads/AllThreadsContent';
 import { AllThreadsToolbar } from '@/components/all-threads/AllThreadsToolbar';
+import {
+  parseListFilters,
+  writeListFilters,
+  type SortDir,
+  type SortField,
+} from '@/components/all-threads/list-filter-params';
 import { normalize } from '@/components/ui/highlight-text';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { useGitStatusMaps } from '@/data/git-status/hooks';
@@ -16,15 +22,12 @@ import { readThreadRow } from '@/data/threads/read';
 import { useGitStatusScope } from '@/hooks/use-git-status-scope';
 import { useThreadContentSearch } from '@/hooks/use-thread-content-search';
 import { useThreadsByProject } from '@/lib/thread-selectors';
-import { isScratch } from '@/lib/thread-variant';
+import { isFactoryThread, isScratch } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 import { whilePending } from '@/lib/while-pending';
 import { buildThreadPath } from '@/navigation/thread-paths';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
-
-type SortField = 'updated' | 'created';
-type SortDir = 'desc' | 'asc';
 
 const THREAD_STATUSES: ThreadStatus[] = [
   'running',
@@ -67,53 +70,38 @@ export function AllThreadsView() {
 
   const [search, setSearch] = useState(() => searchParams.get('search') || '');
   const [caseSensitive, setCaseSensitive] = useState(() => searchParams.get('cs') === '1');
-  const [statusFilter, setStatusFilter] = useState<Set<string>>(() => {
-    const paramStatus = searchParams.get('status');
-    if (paramStatus) return new Set(paramStatus.split(',').filter(Boolean));
-    return new Set();
-  });
-  const [gitFilter, setGitFilter] = useState<Set<string>>(new Set());
-  const [modeFilter, setModeFilter] = useState<Set<string>>(new Set());
-  const [typeFilter, setTypeFilter] = useState<Set<string>>(() =>
-    searchParams.get('scratch') === '1' ? new Set(['scratch']) : new Set(),
-  );
-  const [showArchived, setShowArchived] = useState(false);
-  const [sortField, setSortField] = useState<SortField>(() => {
-    const paramSort = searchParams.get('sort');
-    if (paramSort === 'created' || paramSort === 'updated') return paramSort;
-    return 'updated';
-  });
-  const [sortDir, setSortDir] = useState<SortDir>(() => {
-    const paramDir = searchParams.get('dir');
-    if (paramDir === 'asc' || paramDir === 'desc') return paramDir;
-    return 'desc';
-  });
+  // Every filter lives in the URL too (`list-filter-params.ts`), so opening a
+  // thread and coming back (header back button, browser back) restores them.
+  const [initialFilters] = useState(() => parseListFilters(searchParams));
+  const [statusFilter, setStatusFilter] = useState<Set<string>>(initialFilters.status);
+  const [gitFilter, setGitFilter] = useState<Set<string>>(initialFilters.git);
+  const [modeFilter, setModeFilter] = useState<Set<string>>(initialFilters.mode);
+  const [typeFilter, setTypeFilter] = useState<Set<string>>(initialFilters.type);
+  const [originFilter, setOriginFilter] = useState<Set<string>>(initialFilters.origin);
+  const [showArchived, setShowArchived] = useState(initialFilters.showArchived);
+  const [sortField, setSortField] = useState<SortField>(initialFilters.sortField);
+  const [sortDir, setSortDir] = useState<SortDir>(initialFilters.sortDir);
 
-  // Build search params from current filter state (preserves status/sort params if present)
+  // The current params with project / search / case overridden; every other
+  // param (the filters, returnThread, highlight) is kept.
   const buildSearchParams = (overrides?: {
     project?: string | null;
     search?: string;
     cs?: boolean;
   }) => {
-    const params: Record<string, string> = {};
+    const params = new URLSearchParams(searchParams);
     const proj = overrides?.project !== undefined ? overrides.project : projectFilter;
-    if (proj) params.project = proj;
+    if (proj) params.set('project', proj);
+    else params.delete('project');
     // Text search lives in the URL so back-navigation from a thread (and
     // browser back/forward) restores the query.
     const q = overrides?.search !== undefined ? overrides.search : search;
-    if (q.trim()) params.search = q;
+    if (q.trim()) params.set('search', q);
+    else params.delete('search');
     const cs = overrides?.cs !== undefined ? overrides.cs : caseSensitive;
-    if (cs) params.cs = '1';
-    const statusParam = searchParams.get('status');
-    if (statusParam) params.status = statusParam;
-    const sortParam = searchParams.get('sort');
-    if (sortParam) params.sort = sortParam;
-    const dirParam = searchParams.get('dir');
-    if (dirParam) params.dir = dirParam;
-    const scratchParam = searchParams.get('scratch');
-    if (scratchParam) params.scratch = scratchParam;
-    const returnThreadParam = searchParams.get('returnThread');
-    if (returnThreadParam && proj === projectFilter) params.returnThread = returnThreadParam;
+    if (cs) params.set('cs', '1');
+    else params.delete('cs');
+    if (proj !== projectFilter) params.delete('returnThread');
     return params;
   };
 
@@ -123,39 +111,56 @@ export function AllThreadsView() {
   const [syncedSearchParams, setSyncedSearchParams] = useState(searchParams);
   if (syncedSearchParams !== searchParams) {
     setSyncedSearchParams(searchParams);
-    const paramProject = searchParams.get('project') || null;
-    const paramStatus = searchParams.get('status');
-
     // Setting the value a state already holds is a no-op, so no comparison is needed.
-    setProjectFilter(paramProject);
-
+    setProjectFilter(searchParams.get('project') || null);
     // Restore the text search from the URL (back button from a thread,
     // browser back/forward, deep links).
-    const paramSearch = searchParams.get('search') ?? '';
-    setSearch(paramSearch);
-    const paramCs = searchParams.get('cs') === '1';
-    setCaseSensitive(paramCs);
-
-    // When ?status= param is present, force list view and pre-set status filter
-    if (paramStatus) {
-      const statuses = paramStatus.split(',').filter(Boolean);
-      setStatusFilter(new Set(statuses));
-    }
-
-    // Sync ?scratch=1 → typeFilter
-    const paramScratch = searchParams.get('scratch') === '1';
-    setTypeFilter((prev) => syncScratchFilter(prev, paramScratch));
-
-    // Sync sort params from URL
-    const paramSort = searchParams.get('sort');
-    if (paramSort === 'created' || paramSort === 'updated') {
-      setSortField(paramSort);
-    }
-    const paramDir = searchParams.get('dir');
-    if (paramDir === 'asc' || paramDir === 'desc') {
-      setSortDir(paramDir);
-    }
+    setSearch(searchParams.get('search') ?? '');
+    setCaseSensitive(searchParams.get('cs') === '1');
+    const filters = parseListFilters(searchParams);
+    setStatusFilter((prev) => sameSet(prev, filters.status));
+    setGitFilter((prev) => sameSet(prev, filters.git));
+    setModeFilter((prev) => sameSet(prev, filters.mode));
+    setTypeFilter((prev) => sameSet(prev, filters.type));
+    setOriginFilter((prev) => sameSet(prev, filters.origin));
+    setShowArchived(filters.showArchived);
+    setSortField(filters.sortField);
+    setSortDir(filters.sortDir);
   }
+
+  // Local filter state → URL. Reads the params through a ref so a URL change
+  // (handled above) never writes the previous filters back.
+  const searchParamsRef = useRef(searchParams);
+  useEffect(() => {
+    searchParamsRef.current = searchParams;
+  }, [searchParams]);
+  useEffect(() => {
+    // `?status=` turns the board into the list: leave the board's URL alone.
+    if (viewMode !== 'list') return;
+    const current = searchParamsRef.current;
+    const next = writeListFilters(current, {
+      status: statusFilter,
+      git: gitFilter,
+      mode: modeFilter,
+      type: typeFilter,
+      origin: originFilter,
+      showArchived,
+      sortField,
+      sortDir,
+    });
+    if (next.toString() !== current.toString()) setSearchParams(next, { replace: true });
+  }, [
+    viewMode,
+    statusFilter,
+    gitFilter,
+    modeFilter,
+    typeFilter,
+    originFilter,
+    showArchived,
+    sortField,
+    sortDir,
+    setSearchParams,
+  ]);
 
   const filteredProject = projectFilter ? projects.find((p) => p.id === projectFilter) : null;
 
@@ -166,21 +171,13 @@ export function AllThreadsView() {
     });
   };
 
-  const handleTypeToggle = useCallback(
-    (value: string) => {
-      setTypeFilter((prev) => {
-        const next = new Set(prev);
-        if (next.has(value)) next.delete(value);
-        else next.add(value);
-        const params = new URLSearchParams(searchParams);
-        if (next.size === 1 && next.has('scratch')) params.set('scratch', '1');
-        else params.delete('scratch');
-        setSearchParams(params, { replace: true });
-        return next;
-      });
-    },
-    [searchParams, setSearchParams],
-  );
+  const handleTypeToggle = useCallback((value: string) => {
+    setTypeFilter((prev) => toggled(prev, value));
+  }, []);
+
+  const handleOriginToggle = useCallback((value: string) => {
+    setOriginFilter((prev) => toggled(prev, value));
+  }, []);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchKeyDownRef = useRef<((e: React.KeyboardEvent) => void) | null>(null);
@@ -334,6 +331,11 @@ export function AllThreadsView() {
       result = result.filter((t) => typeFilter.has(isScratch(t) ? 'scratch' : 'normal'));
     }
 
+    // Origin filter (started by the issue factory vs by a person)
+    if (originFilter.size > 0) {
+      result = result.filter((t) => originFilter.has(threadOrigin(t)));
+    }
+
     // Sort by selected field and direction
     result = result.toSorted((a, b) => {
       const dateA = sortField === 'updated' ? (a.completedAt ?? a.createdAt) : a.createdAt;
@@ -351,6 +353,7 @@ export function AllThreadsView() {
     gitFilter,
     modeFilter,
     typeFilter,
+    originFilter,
     statusByBranch,
     threadToBranchKey,
     projectFilter,
@@ -366,13 +369,14 @@ export function AllThreadsView() {
     setGitFilter(new Set());
     setModeFilter(new Set());
     setTypeFilter(new Set());
+    setOriginFilter(new Set());
     setShowArchived(false);
     if (projectFilter) {
       setProjectFilter(null);
     }
-    const next = buildSearchParams({ project: null, search: '', cs: false });
-    delete next.scratch;
-    setSearchParams(next, { replace: true });
+    setSearchParams(buildSearchParams({ project: null, search: '', cs: false }), {
+      replace: true,
+    });
   };
 
   const handleSearchChange = (value: string) => {
@@ -410,6 +414,7 @@ export function AllThreadsView() {
     gitFilter.size > 0 ||
     modeFilter.size > 0 ||
     typeFilter.size > 0 ||
+    originFilter.size > 0 ||
     showArchived ||
     !!projectFilter;
 
@@ -419,6 +424,13 @@ export function AllThreadsView() {
     for (const t of allThreads) {
       counts[isScratch(t) ? 'scratch' : 'normal']++;
     }
+    return counts;
+  }, [allThreads]);
+
+  // Counts for the origin filter (factory vs user)
+  const originCounts = useMemo(() => {
+    const counts = { factory: 0, user: 0 };
+    for (const t of allThreads) counts[threadOrigin(t)]++;
     return counts;
   }, [allThreads]);
 
@@ -512,6 +524,9 @@ export function AllThreadsView() {
         typeFilter={typeFilter}
         onTypeToggle={handleTypeToggle}
         typeCounts={typeCounts}
+        originFilter={originFilter}
+        onOriginToggle={handleOriginToggle}
+        originCounts={originCounts}
         statusCounts={statusCounts}
         gitCounts={gitCounts}
         threadStatuses={THREAD_STATUSES}
@@ -546,9 +561,20 @@ export function AllThreadsView() {
   );
 }
 
-function syncScratchFilter(previous: Set<string>, scratch: boolean): Set<string> {
-  const hasScratch = previous.has('scratch');
-  if (scratch && !hasScratch) return new Set(['scratch']);
-  if (!scratch && previous.size === 1 && hasScratch) return new Set();
-  return previous;
+/** Who started a thread, as the origin filter names it. */
+function threadOrigin(thread: Thread): 'factory' | 'user' {
+  return isFactoryThread(thread) ? 'factory' : 'user';
+}
+
+/** `next` when it holds other values than `prev`, else `prev` (no re-render). */
+function sameSet(prev: Set<string>, next: Set<string>): Set<string> {
+  return prev.size === next.size && [...prev].every((v) => next.has(v)) ? prev : next;
+}
+
+/** `set` with `value` added, or removed when it was there. */
+function toggled(set: Set<string>, value: string): Set<string> {
+  const next = new Set(set);
+  if (next.has(value)) next.delete(value);
+  else next.add(value);
+  return next;
 }

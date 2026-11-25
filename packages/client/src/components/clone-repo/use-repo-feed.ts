@@ -78,12 +78,12 @@ export function useRepoFeed(
   } = state;
 
   // Load repos with optional server-side search. `append` keeps existing
-  // results when paginating; stale responses are dropped via fetchIdRef.
+  // results when paginating; stale responses are dropped via fetchIdRef. The
+  // caller sets `loadingRepos`.
   const fetchRepos = useCallback(
     async (pageNum: number, searchQuery: string, append: boolean) => {
       const fetchId = ++fetchIdRef.current;
       loadingRef.current = true;
-      setLoadingRepos(true);
       log.debug('github repo search', { page: pageNum, query: searchQuery, append });
       return withCleanup(
         async () => {
@@ -142,6 +142,15 @@ export function useRepoFeed(
     items[highlightedIndex]?.scrollIntoView({ block: 'nearest' });
   }, [highlightedIndex, listRef]);
 
+  // Show the loading state in the same render that enters the repo view or
+  // changes the debounced search; the effect below fetches the first page.
+  const reposFetchKey = view === 'repos' ? debouncedSearch : null;
+  const [prevReposFetchKey, setPrevReposFetchKey] = useState(reposFetchKey);
+  if (prevReposFetchKey !== reposFetchKey) {
+    setPrevReposFetchKey(reposFetchKey);
+    if (reposFetchKey !== null) setLoadingRepos(true);
+  }
+
   // Load repos when entering repo view or the debounced search changes.
   // Always reset pagination to page 1 for a fresh result set.
   useEffect(() => {
@@ -164,13 +173,24 @@ export function useRepoFeed(
         if (loadingRef.current || !hasMore) return;
         const next = pageRef.current + 1;
         pageRef.current = next;
+        setLoadingRepos(true);
         fetchRepos(next, debouncedSearch, true);
       },
       { root, rootMargin: '0px 0px 200px 0px', threshold: 0 },
     );
     io.observe(sentinel);
     return () => io.disconnect();
-  }, [view, hasMore, debouncedSearch, fetchRepos, listRef, sentinelRef, loadingRef, pageRef]);
+  }, [
+    view,
+    hasMore,
+    debouncedSearch,
+    fetchRepos,
+    listRef,
+    sentinelRef,
+    loadingRef,
+    pageRef,
+    setLoadingRepos,
+  ]);
 
   return { handleSearchKeyDown };
 }

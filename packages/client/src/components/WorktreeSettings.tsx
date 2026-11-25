@@ -32,13 +32,13 @@ import { api } from '@/lib/api';
 import {
   listRowActionBusyClassName,
   listRowActionClassName,
-  listRowDestructiveActionClassName,
   listRowClassName,
+  listRowDestructiveActionClassName,
 } from '@/lib/list-row-styles';
 import { useThreadsForProject } from '@/lib/thread-selectors';
 import { toastError } from '@/lib/toast-error';
 import { cn } from '@/lib/utils';
-import { whilePending } from '@/lib/while-pending';
+import { withCleanup } from '@/lib/while-pending';
 import { goToThread } from '@/navigation/go-to-thread';
 import { buildThreadPath } from '@/navigation/thread-paths';
 import { useProjectStore } from '@/stores/project-store';
@@ -509,36 +509,57 @@ export function WorktreeSettings({
 
   // The project object is derived on every render; its id is what the loaders follow.
   const activeProjectId = project?.id;
+  /** Reads the worktrees and lowers `loading`; whoever calls it raised the flag. */
+  const fetchWorktrees = useCallback(async () => {
+    if (activeProjectId === undefined) return;
+    await withCleanup(
+      async () => {
+        const result = await api.listWorktrees(activeProjectId);
+        if (result.isOk()) setWorktrees(result.value);
+        else setLoadError(result.error.message);
+      },
+      () => setLoading(false),
+    );
+  }, [activeProjectId]);
+
   const loadWorktrees = useCallback(async () => {
     if (activeProjectId === undefined) return;
     setLoadError(null);
-    await whilePending(setLoading, async () => {
-      const result = await api.listWorktrees(activeProjectId);
-      if (result.isOk()) setWorktrees(result.value);
-      else setLoadError(result.error.message);
-    });
-  }, [activeProjectId]);
+    setLoading(true);
+    await fetchWorktrees();
+  }, [activeProjectId, fetchWorktrees]);
+
+  // Clear the last error and show the loader each time the project changes; the effect below loads it.
+  const [loadingForProjectId, setLoadingForProjectId] = useState<string | undefined>(undefined);
+  if (loadingForProjectId !== activeProjectId) {
+    setLoadingForProjectId(activeProjectId);
+    if (activeProjectId !== undefined) {
+      setLoadError(null);
+      setLoading(true);
+    }
+  }
 
   const loadBranches = useCallback(async () => {
     if (activeProjectId === undefined) return;
-    const result = await api.listBranches(activeProjectId);
-    if (result.isOk()) {
-      const data = result.value;
-      setBranches(data.branches);
-      if (data.branches.length > 0) {
-        setBaseBranch((prev) => prev || data.defaultBranch || data.branches[0]);
+    await api.listBranches(activeProjectId).then((result) => {
+      if (result.isOk()) {
+        const data = result.value;
+        setBranches(data.branches);
+        if (data.branches.length > 0) {
+          setBaseBranch((prev) => prev || data.defaultBranch || data.branches[0]);
+        }
+      } else {
+        // Only the create form uses the branches; the list's own load error
+        // already says when the runner cannot be reached.
+        console.error('Failed to load branches:', result.error);
       }
-    } else {
-      // Only the create form uses the branches; the list's own load error
-      // already says when the runner cannot be reached.
-      console.error('Failed to load branches:', result.error);
-    }
+    });
   }, [activeProjectId]);
 
   useEffect(() => {
-    loadWorktrees();
-    loadBranches();
-  }, [loadWorktrees, loadBranches]);
+    void fetchWorktrees();
+    void loadBranches();
+  }, [fetchWorktrees, loadBranches]);
 
   /** Re-read worktrees and branches, e.g. after one was added or removed outside funny. */
   const handleRefresh = () => {

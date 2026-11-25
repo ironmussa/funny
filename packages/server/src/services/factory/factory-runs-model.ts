@@ -5,6 +5,7 @@ import {
   factoryMergeApprovalSchema,
   factoryRiskWaiverSchema,
   factoryRiskSchema,
+  factoryRoleThreadSchema,
   factoryStackedOnSchema,
   factoryStepOptionsRecordSchema,
   factoryTriageSchema,
@@ -15,6 +16,7 @@ import {
   type FactoryRegressionProof,
   type FactoryReviewVerdict,
   type FactoryRisk,
+  type FactoryRoleThread,
   type FactoryRunMetrics,
   type FactoryStackedOn,
   type FactoryStepOptionsRecord,
@@ -363,6 +365,8 @@ export interface FactoryRunView {
   riskWaiver: FactoryRiskWaiver | null;
   /** The options each agent step ran with, in the order the steps started. */
   stepOptions: FactoryStepOptionsRecord[];
+  /** The role threads (triage, review) it started, as each one started. */
+  roleThreads: FactoryRoleThread[];
   /** Each flow node execution, in start order; only the run lists read it (openspec factory-step-timings). */
   stepTimings?: FactoryStepTiming[];
 }
@@ -377,13 +381,17 @@ const sourceOf = (stored: string): FactoryRunSource =>
 /**
  * Every thread a run started: its implementing agent's (`threadIds`, the
  * steps a retry replays), its triage agent's, then its reviewers' (kept with
- * their verdicts).
+ * their verdicts), and the role threads still without an answer.
  * What stopping the run stops and what a merge cleans up.
  */
-export function threadsOf(run: Pick<FactoryRunView, 'threadIds' | 'reviews' | 'triage'>): string[] {
+export function threadsOf(
+  run: Pick<FactoryRunView, 'threadIds' | 'reviews' | 'triage'> &
+    Partial<Pick<FactoryRunView, 'roleThreads'>>,
+): string[] {
   const reviewers = run.reviews.flatMap((review) => (review.threadId ? [review.threadId] : []));
   const triage = run.triage?.threadId ? [run.triage.threadId] : [];
-  return [...new Set([...run.threadIds, ...triage, ...reviewers])];
+  const roles = (run.roleThreads ?? []).map((role) => role.threadId);
+  return [...new Set([...run.threadIds, ...triage, ...reviewers, ...roles])];
 }
 
 export type FactoryRunsError =
@@ -466,6 +474,7 @@ const jsonFieldsOf = (row: Row) => ({
   risk: parseRisk(row.risk ?? null),
   triage: parseTriage(row.triage ?? null),
   stepOptions: parseStepOptions(row.stepOptions ?? null),
+  roleThreads: parseRoleThreads(row.roleThreads ?? null),
 });
 
 export const toView = (row: Row): FactoryRunView => ({
@@ -482,6 +491,14 @@ const STEP_OPTIONS_SCHEMA = z.array(factoryStepOptionsRecordSchema);
 function parseStepOptions(raw: string | null): FactoryStepOptionsRecord[] {
   if (!raw) return [];
   const parsed = parseStoredJson(STEP_OPTIONS_SCHEMA, raw, 'factory_runs.step_options');
+  return parsed.ok ? parsed.value : [];
+}
+
+const ROLE_THREADS_SCHEMA = z.array(factoryRoleThreadSchema);
+
+function parseRoleThreads(raw: string | null): FactoryRoleThread[] {
+  if (!raw) return [];
+  const parsed = parseStoredJson(ROLE_THREADS_SCHEMA, raw, 'factory_runs.role_threads');
   return parsed.ok ? parsed.value : [];
 }
 
@@ -601,6 +618,8 @@ export interface UpdateRunInput {
   flowCommit?: string | null;
   /** Every step's options so far (the run appends and writes the whole list). */
   stepOptions?: FactoryStepOptionsRecord[];
+  /** Every role thread so far (the run appends and writes the whole list). */
+  roleThreads?: FactoryRoleThread[];
   /** The node its `merge` regenerates the change with (D9), or null. */
   regenerateNode?: string | null;
   /** When an early integration started waiting for the step holding the checkout (D8), or null. */
@@ -630,6 +649,7 @@ const JSON_FIELDS = [
   'risk',
   'triage',
   'stepOptions',
+  'roleThreads',
   'stackedOn',
 ] as const;
 
@@ -681,6 +701,7 @@ export function newRunRow(
     stackedOn: null,
     mergeApproval: null,
     riskWaiver: null,
+    roleThreads: null,
     issueTitle: null,
     triggerId: null,
     triggerName: null,

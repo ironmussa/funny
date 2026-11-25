@@ -221,7 +221,9 @@ function useMermaidPanZoom(): PanZoom {
 export function MermaidBlock({ chart }: { chart: string }) {
   const { svg, error } = useMermaidSvg(chart);
   const [expanded, setExpanded] = useState(false);
-  const pz = useMermaidPanZoom();
+  // The container ref is kept apart so reading the zoom state in render is not
+  // taken for a ref read.
+  const { containerRef: zoomContainerRef, ...pz } = useMermaidPanZoom();
   const { fit } = pz;
   // Memoize the fit-on-mount ref so React only re-attaches when the SVG
   // actually changes — otherwise every render (pan/zoom state change) would
@@ -252,7 +254,7 @@ export function MermaidBlock({ chart }: { chart: string }) {
         data-testid="mermaid-diagram"
       >
         <div
-          ref={pz.containerRef}
+          ref={zoomContainerRef}
           className={cn(
             'absolute inset-0 flex items-center justify-center select-none',
             pz.isDragging ? 'cursor-grabbing' : 'cursor-grab',
@@ -522,7 +524,9 @@ export function MermaidExpandedDialog({
 }) {
   const { svg, error } = useMermaidSvg(chart, open);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const pz = useMermaidPanZoom();
+  // The container ref is kept apart so reading the zoom state in render is not
+  // taken for a ref read.
+  const { containerRef: zoomContainerRef, ...pz } = useMermaidPanZoom();
   const [copiedCode, copyCode] = useCopyToClipboard();
   const { copiedImage, copyImage, downloadSvg } = useDiagramExport(chart, svg);
   const { fit } = pz;
@@ -613,7 +617,7 @@ export function MermaidExpandedDialog({
         </DialogHeader>
 
         <div
-          ref={pz.containerRef}
+          ref={zoomContainerRef}
           className={cn(
             'bg-background flex min-h-0 flex-1 items-center justify-center overflow-hidden select-none',
             pz.isDragging ? 'cursor-grabbing' : 'cursor-grab',

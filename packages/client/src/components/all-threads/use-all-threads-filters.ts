@@ -33,8 +33,12 @@ export function useAllThreadsFilters(
   const { setStatusFilter, setGitFilter, setModeFilter, setTypeFilter, setOriginFilter } = list;
   const { setShowArchived, setSortField, setSortDir } = list;
 
-  // Sync URL query params → local state when URL changes (e.g. browser back/forward)
-  useEffect(() => {
+  // Sync URL query params → local state when URL changes (e.g. browser back/forward).
+  // Adjusted during render (react.dev "you might not need an effect"): the state
+  // initializers above already read the first URL, so only a change is applied.
+  const [syncedSearchParams, setSyncedSearchParams] = useState(searchParams);
+  if (syncedSearchParams !== searchParams) {
+    setSyncedSearchParams(searchParams);
     // Setting the value a state already holds is a no-op, so no comparison is needed.
     const fromUrl = urlSearchState(searchParams);
     setProjectFilter(fromUrl.project);
@@ -51,17 +55,7 @@ export function useAllThreadsFilters(
     setShowArchived(filters.showArchived);
     setSortField(filters.sortField);
     setSortDir(filters.sortDir);
-  }, [
-    searchParams,
-    setStatusFilter,
-    setGitFilter,
-    setModeFilter,
-    setTypeFilter,
-    setOriginFilter,
-    setShowArchived,
-    setSortField,
-    setSortDir,
-  ]);
+  }
 
   useFiltersToUrl(searchParams, setSearchParams, viewMode, {
     status: list.statusFilter,

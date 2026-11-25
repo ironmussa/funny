@@ -128,6 +128,63 @@ describe('PromptEditor', () => {
     });
   });
 
+  test('rebuilds the open slash menu when the skills arrive', async () => {
+    const ref = createRef<PromptEditorHandle>();
+    const { rerender } = render(<PromptEditor ref={ref} slashSkills={[]} slashSkillsLoading />);
+    await waitFor(() => expect(ref.current).not.toBeNull());
+
+    act(() => {
+      ref.current?.insertText('/');
+    });
+    expect(await screen.findByText('Loading commands...')).toBeInTheDocument();
+
+    rerender(
+      <PromptEditor
+        ref={ref}
+        slashSkills={[{ name: 'fix-linear', description: 'Fix a Linear issue', kind: 'skill' }]}
+        slashSkillsLoading={false}
+      />,
+    );
+
+    expect(await screen.findByTestId('slash-item-fix-linear')).toBeInTheDocument();
+    expect(screen.queryByText('Loading commands...')).toBeNull();
+  });
+
+  test('matches the suggestion popup to the container', async () => {
+    const ref = createRef<PromptEditorHandle>();
+    const container = document.createElement('div');
+    container.getBoundingClientRect = () =>
+      ({ left: 12, width: 345, top: 100, bottom: 140, right: 357, height: 40 }) as DOMRect;
+    document.body.appendChild(container);
+    try {
+      render(
+        <PromptEditor
+          ref={ref}
+          sdkSlashCommands={['compact']}
+          containerRef={{ current: container }}
+        />,
+      );
+      await waitFor(() => expect(ref.current).not.toBeNull());
+
+      act(() => {
+        ref.current?.insertText('/');
+      });
+
+      const item = await screen.findByTestId('slash-item-compact');
+      const popup = item.closest('[data-suggestion-popup]') as HTMLElement;
+      // The popup's classes read its place and width from these variables.
+      expect(popup.style.getPropertyValue('--suggestion-popup-left')).toBe('12px');
+      expect(popup.style.getPropertyValue('--suggestion-popup-width')).toBe('345px');
+      // Bottom edge sits 4px above the container's top.
+      expect(popup.style.getPropertyValue('--suggestion-popup-bottom')).toBe(
+        `${window.innerHeight - 100 + 4}px`,
+      );
+      expect(popup.style.visibility).not.toBe('hidden');
+    } finally {
+      container.remove();
+    }
+  });
+
   test('navigates forward through message history when the caret is at the end', async () => {
     const ref = createRef<PromptEditorHandle>();
     const onHistoryNavigate = vi.fn(() => true);

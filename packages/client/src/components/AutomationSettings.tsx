@@ -39,16 +39,23 @@ export function AutomationSettings() {
   // Auto-open the create dialog when navigated here from the project menu's
   // "Create automation" entry. Clear the history state so a refresh/back won't
   // re-trigger it.
+  // The dialog opens during render (once per history entry); only the history
+  // rewrite, a side effect, runs in the effect.
+  // react-router types `location.state` as `any`; ProjectActionsMenu sets this shape.
+  const navState: { openCreateAutomation?: boolean } | null = location.state;
+  const openCreateRequested = Boolean(navState?.openCreateAutomation);
+  const [openedForLocationKey, setOpenedForLocationKey] = useState<string | null>(null);
+  if (openCreateRequested && openedForLocationKey !== location.key) {
+    setOpenedForLocationKey(location.key);
+    setEditingId(null);
+    setForm(defaultForm);
+    setDialogOpen(true);
+  }
   useEffect(() => {
-    // react-router types `location.state` as `any`; ProjectActionsMenu sets this shape.
-    const navState: { openCreateAutomation?: boolean } | null = location.state;
-    if (navState?.openCreateAutomation) {
-      setEditingId(null);
-      setForm(defaultForm);
-      setDialogOpen(true);
+    if (openCreateRequested) {
       navigate(location.pathname + location.search, { replace: true, state: null });
     }
-  }, [location, navigate]);
+  }, [openCreateRequested, location.pathname, location.search, navigate]);
 
   const openCreateDialog = () => {
     setEditingId(null);

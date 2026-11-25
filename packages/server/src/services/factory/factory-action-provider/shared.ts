@@ -15,6 +15,7 @@ import {
   type FactoryMergeApproval,
   type FactoryReviewVerdict,
   type FactoryRisk,
+  type FactoryRoleThread,
   type FactoryRunMetrics,
   type FactoryStackedOn,
   type FactoryTriage,
@@ -297,6 +298,11 @@ export interface FactoryActionProviderDeps {
   projectDefaults?: ProjectAgentDefaults;
   /** Record the options a step ran with, once it has its thread. */
   recordStepOptions?: (entry: StepOptionsEntry) => Promise<void>;
+  /**
+   * Record a role thread (triage, review) as soon as it starts or is adopted,
+   * before it answers; a thread already recorded is not added twice.
+   */
+  recordRoleThread?: (role: FactoryRoleThread['role'], threadId: string) => Promise<void>;
   github: Pick<
     FactoryGithubPort,
     'findPullRequest' | 'pullRequests' | 'branchAhead' | 'commentOnIssue'

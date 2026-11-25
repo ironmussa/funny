@@ -36,21 +36,20 @@ export function ProjectRunnerSettings() {
   const [settings, setSettings] = useState<ProjectRunnerSettingsResponse | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const load = useCallback(async () => {
-    if (!projectId) return;
-    const result = await api.getProjectRunnerSettings(projectId);
-    if (result.isErr()) {
-      toast.error(t('projectRunner.loadError', 'Failed to load runner settings'), {
-        description: result.error.message,
-      });
-      return;
-    }
-    setSettings(result.value);
-  }, [projectId, t]);
-
+  // The settings are set from the request's promise callback, so the effect
+  // only starts the request.
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (!projectId) return;
+    void api.getProjectRunnerSettings(projectId).then((result) => {
+      if (result.isErr()) {
+        toast.error(t('projectRunner.loadError', 'Failed to load runner settings'), {
+          description: result.error.message,
+        });
+        return;
+      }
+      setSettings(result.value);
+    });
+  }, [projectId, t]);
 
   const apply = useCallback(
     async (

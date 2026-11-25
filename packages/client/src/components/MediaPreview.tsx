@@ -198,17 +198,15 @@ function PdfPreview({ src, name }: { src: string; name?: string }) {
 }
 
 function useTextResource(src: string, inline?: string, onError?: (e: Error) => void) {
-  const [content, setContent] = useState<string | null>(inline ?? null);
-  const [loading, setLoading] = useState(inline === undefined);
+  // The last fetch that settled. Inline text needs no fetch, and a source is
+  // loading until its own fetch settles; the previous text stays until then.
+  const [fetched, setFetched] = useState<{ src: string; content: string | null } | null>(null);
+  const content = inline ?? fetched?.content ?? null;
+  const loading = inline === undefined && fetched?.src !== src;
 
   useEffect(() => {
-    if (inline !== undefined) {
-      setContent(inline);
-      setLoading(false);
-      return;
-    }
+    if (inline !== undefined) return;
     let cancelled = false;
-    setLoading(true);
     fetch(src)
       .then((r) => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -216,14 +214,13 @@ function useTextResource(src: string, inline?: string, onError?: (e: Error) => v
       })
       .then((body) => {
         if (cancelled) return;
-        setContent(body);
-        setLoading(false);
+        setFetched({ src, content: body });
       })
       .catch((cause: unknown) => {
         if (cancelled) return;
         const err = cause instanceof Error ? cause : new Error(String(cause));
         log.error('Failed to fetch text resource', { src, error: err.message });
-        setLoading(false);
+        setFetched((prev) => ({ src, content: prev?.content ?? null }));
         onError?.(err);
       });
     return () => {

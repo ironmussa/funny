@@ -80,6 +80,8 @@ export function useEditorBlame({
     setEditorNonce((n) => n + 1);
   }, []);
 
+  useClearHistoryOnOpen(open, filePath, setFileHistoryState);
+
   // Fetch blame + file history whenever the open file changes. Failures
   // (untracked file, no repo, native module unavailable) are non-fatal.
   useEffect(() => {
@@ -94,7 +96,6 @@ export function useEditorBlame({
     }
     blameLog.info('blame fetch effect', { open, filePath });
     let cancelled = false;
-    setFileHistoryState({ filePath, entries: [] });
     void api.getFileBlame(filePath).then((res) => {
       if (cancelled) return;
       if (res.isOk()) {
@@ -214,4 +215,21 @@ function buildCurrentLineBlameDecoration(
       },
     },
   ];
+}
+
+/**
+ * Each fetch starts from an empty history, cleared in the render that opens
+ * the file (or reopens it) rather than in the fetch effect.
+ */
+function useClearHistoryOnOpen(
+  open: boolean,
+  filePath: string,
+  setFileHistoryState: (state: { filePath: string; entries: FileHistoryEntry[] }) => void,
+) {
+  const historyFetchKey = open && filePath ? filePath : null;
+  const [prevHistoryFetchKey, setPrevHistoryFetchKey] = useState(historyFetchKey);
+  if (prevHistoryFetchKey !== historyFetchKey) {
+    setPrevHistoryFetchKey(historyFetchKey);
+    if (historyFetchKey) setFileHistoryState({ filePath: historyFetchKey, entries: [] });
+  }
 }

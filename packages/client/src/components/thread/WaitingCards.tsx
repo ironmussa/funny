@@ -14,7 +14,7 @@ import { useTranslation } from 'react-i18next';
 
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { ensureHighlight, highlightCode } from '@/hooks/use-highlight';
+import { useAsyncHighlight } from '@/hooks/use-async-highlight';
 import { cn } from '@/lib/utils';
 import { CODE_FONT_SIZE_PX, CODE_LINE_HEIGHT_PX, useSettingsStore } from '@/stores/settings-store';
 
@@ -190,6 +190,14 @@ function isString(value: unknown): value is string {
   return typeof value === 'string';
 }
 
+/** The Bash command to highlight, when the request is a Bash command with input. */
+function bashToHighlight(
+  displayedInput: string | undefined,
+  bashCommand: string | null,
+): string | null {
+  return displayedInput && bashCommand ? displayedInput : null;
+}
+
 export function PermissionApprovalCard({
   toolName,
   toolInput,
@@ -227,20 +235,7 @@ export function PermissionApprovalCard({
       : rawInput.slice(0, TRUNCATE_LIMIT) + '…'
     : undefined;
 
-  const [highlightedBash, setHighlightedBash] = useState<string | null>(null);
-  useEffect(() => {
-    if (!displayedInput || !bashCommand) {
-      setHighlightedBash(null);
-      return;
-    }
-    let cancelled = false;
-    ensureHighlight(displayedInput, 'bash').then(() => {
-      if (!cancelled) setHighlightedBash(highlightCode(displayedInput, 'bash'));
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [displayedInput, bashCommand]);
+  const highlightedBash = useAsyncHighlight(bashToHighlight(displayedInput, bashCommand), 'bash');
 
   const handleApprove = async () => {
     setLoading('approve');

@@ -126,23 +126,26 @@ export function CloneRepoView({ onCloningChange, initialValues }: CloneRepoViewP
     }
   }, []);
 
+  // The state updates run when the status request settles, never synchronously
+  // in the effects that call this.
   const checkConnection = useCallback(async () => {
-    const result = await api.githubStatus();
-    if (result.isOk()) {
-      if (result.value.connected) {
-        setTokenSource(result.value.source ?? 'profile');
-        await loadGhUser();
-        // A retried clone goes straight to its filled form.
-        setView(retryingRef.current ? 'clone-config' : 'repos');
-        retryingRef.current = false;
+    return api.githubStatus().then(async (result) => {
+      if (result.isOk()) {
+        if (result.value.connected) {
+          setTokenSource(result.value.source ?? 'profile');
+          await loadGhUser();
+          // A retried clone goes straight to its filled form.
+          setView(retryingRef.current ? 'clone-config' : 'repos');
+          retryingRef.current = false;
+        } else {
+          setTokenSource(null);
+          setView('connect');
+        }
       } else {
-        setTokenSource(null);
-        setView('connect');
+        // API call itself failed (network error, server down, etc.)
+        setView('error');
       }
-    } else {
-      // API call itself failed (network error, server down, etc.)
-      setView('error');
-    }
+    });
   }, [loadGhUser]);
 
   // Check initial connection status

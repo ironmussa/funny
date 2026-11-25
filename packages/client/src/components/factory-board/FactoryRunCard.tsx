@@ -32,6 +32,7 @@ import { useGitStatusForThread } from '@/data/git-status/hooks';
 import type { FactoryQueueRun } from '@/lib/api/factory';
 import {
   factoryRunFallbackTitle,
+  factoryRunTitle,
   isFactoryRunAwaitingMergeApproval,
 } from '@/lib/factory-run-labels';
 import { useThreadById } from '@/lib/thread-selectors';
@@ -320,6 +321,7 @@ export const FactoryRunCard = memo(function FactoryRunCard({
   onSelect,
   dependencies = NO_FACTORY_RUN_DEPENDENCIES,
 }: Props) {
+  const { t } = useTranslation();
   const threadId = factoryRunCardThread(run);
   const thread = useThreadById(threadId);
   const gitStatus = useGitStatusForThread(thread?.id);
@@ -371,6 +373,7 @@ export const FactoryRunCard = memo(function FactoryRunCard({
       testId={testId}
       menuItems={menuItems}
       time={stepTime}
+      title={factoryRunTitle(t, run, thread.title)}
     >
       {body}
     </KanbanCard>

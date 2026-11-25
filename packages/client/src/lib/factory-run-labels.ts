@@ -47,6 +47,20 @@ export function factoryRunFallbackTitle(
   return run.flowName ? `${ref} · ${run.flowName}` : ref;
 }
 
+/**
+ * A run's title: its issue's (the ticket's) when the run read it, else its
+ * thread's, else the fallback. Not the thread's title first: that one carries
+ * the factory's `[Factory] #N` prefix and keeps the issue title it was created with.
+ */
+export function factoryRunTitle(
+  t: TFunction,
+  run: Pick<FactoryRun, 'issueNumber' | 'issueTitle' | 'triggerName' | 'flowName'>,
+  threadTitle: string | undefined,
+): string {
+  if (run.issueNumber !== null && run.issueTitle) return factoryRunFallbackTitle(t, run);
+  return threadTitle || factoryRunFallbackTitle(t, run);
+}
+
 /** "Factory · #225", or "Factory · Nightly audit" for a run without an issue. */
 export function factoryRunBanner(
   t: TFunction,

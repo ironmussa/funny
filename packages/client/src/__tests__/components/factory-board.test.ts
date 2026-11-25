@@ -22,7 +22,11 @@ import {
 } from '@/components/factory-board/run-state-chip';
 import { factoryRunWaitingText } from '@/components/factory-board/run-waiting';
 import { buildFactoryRun } from '@/data/factory/testing';
-import { factoryRunFallbackTitle, filterFactoryRuns } from '@/lib/factory-run-labels';
+import {
+  factoryRunFallbackTitle,
+  factoryRunTitle,
+  filterFactoryRuns,
+} from '@/lib/factory-run-labels';
 
 /** An i18next with no resources: every text is its fallback, with its values filled in. */
 const i18n = i18next.createInstance();
@@ -547,5 +551,20 @@ describe('filterFactoryRuns activeOnly', () => {
       activeOnly: true,
     });
     expect(kept.map((run) => run.id)).toEqual(['waiting_human', 'working', 'failed']);
+  });
+});
+
+describe('factoryRunTitle', () => {
+  const threadTitle = '[Factory] #490 Client stores (old name)';
+
+  test("a run is named by its ticket's title, not its thread's", () => {
+    const run = buildFactoryRun({ issueNumber: 490, issueTitle: 'Client stores' });
+    expect(factoryRunTitle(t, run, threadTitle)).toBe('#490 Client stores');
+  });
+
+  test("without the ticket's title it falls back to the thread's, then the issue number", () => {
+    const run = buildFactoryRun({ issueNumber: 490, issueTitle: null });
+    expect(factoryRunTitle(t, run, threadTitle)).toBe(threadTitle);
+    expect(factoryRunTitle(t, run, undefined)).toBe('Issue #490');
   });
 });

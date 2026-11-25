@@ -517,9 +517,14 @@ function useBackgroundLists(open: boolean): number {
   useEffect(() => {
     if (!open) return;
     loadBackgroundLists();
-    setNow(Date.now());
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
+    const tick = () => setNow(Date.now());
+    // The first tick, right after the open renders, catches the clock up.
+    const catchUp = setTimeout(tick, 0);
+    const timer = setInterval(tick, 1000);
+    return () => {
+      clearTimeout(catchUp);
+      clearInterval(timer);
+    };
   }, [open]);
   return now;
 }

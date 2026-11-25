@@ -53,11 +53,15 @@ export function useRebaseEvents({
 /** The GitHub browse base URL of the project's remote, so commit hashes can deep-link. */
 export function useGithubBrowseBaseUrl(projectId: string | null | undefined): string | null {
   const [githubBrowseBaseUrl, setGithubBrowseBaseUrl] = useState<string | null>(null);
+  // Losing the project drops the URL at once; a project switch keeps the old
+  // one until the new remote answers.
+  const [prevProjectId, setPrevProjectId] = useState(projectId);
+  if (prevProjectId !== projectId) {
+    setPrevProjectId(projectId);
+    if (!projectId) setGithubBrowseBaseUrl(null);
+  }
   useEffect(() => {
-    if (!projectId) {
-      setGithubBrowseBaseUrl(null);
-      return;
-    }
+    if (!projectId) return;
     const controller = new AbortController();
     api.projectGetRemoteUrl(projectId, controller.signal).then((r) => {
       if (controller.signal.aborted || !r.isOk()) return;
@@ -80,8 +84,13 @@ export function useGithubCommitAvatars(
 ): Map<string, string> {
   const [githubAvatarBySha, setGithubAvatarBySha] = useState<Map<string, string>>(new Map());
   const anchoredShasRef = useRef<Set<string>>(new Set());
-  useEffect(() => {
+  const [prevGitContextKey, setPrevGitContextKey] = useState(gitContextKey);
+  if (prevGitContextKey !== gitContextKey) {
+    setPrevGitContextKey(gitContextKey);
     setGithubAvatarBySha(new Map());
+  }
+  // Runs before the fetch effect below, so a new git context anchors afresh.
+  useEffect(() => {
     anchoredShasRef.current = new Set();
   }, [gitContextKey]);
 

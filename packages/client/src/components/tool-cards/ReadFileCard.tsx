@@ -63,11 +63,11 @@ function HighlightedFileContent({ content, filePath }: { content: string; filePa
   const [lang, setLang] = useState<string>(() =>
     filePath ? filePathToHljsLang(filePath) : 'plaintext',
   );
-  const [langReady, setLangReady] = useState(false);
+  // New content (or path) is not highlighted until its language is loaded.
+  const [langReady, setLangReady] = useResettableState(false, [filePath, content]);
 
   useEffect(() => {
     let cancelled = false;
-    setLangReady(false);
     const resolveLangFor = filePath
       ? Promise.resolve(filePathToHljsLang(filePath))
       : Promise.resolve('plaintext');
@@ -85,7 +85,7 @@ function HighlightedFileContent({ content, filePath }: { content: string; filePa
     return () => {
       cancelled = true;
     };
-  }, [filePath, content]);
+  }, [filePath, content, setLangReady]);
 
   const lines = useMemo(() => parseLines(content), [content]);
   const numWidth = useMemo(() => {

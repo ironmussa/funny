@@ -1,5 +1,5 @@
 import { useMachine } from '@xstate/react';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { TerminalPhaseOverlay } from '@/components/terminal/TerminalPhaseOverlay';
 import { mountWebXterm } from '@/components/terminal/web-xterm-session';
@@ -94,51 +94,44 @@ export function WebTerminalTabContent({
   const codeFontSizePx = EDITOR_FONT_SIZE_PX[useSettingsStore((s) => s.fontSize)];
   useThemeSync(termRef);
 
-  // Live-callback refs let the machine's pure actions reach into the latest
+  // Stable callbacks let the machine's pure actions reach into the latest
   // closure values (id/cwd/label/etc.) without re-instantiating the actor on
   // every render. The machine only knows the action *name*; the body is wired
   // here once via .provide() inside useMemo.
-  const emitSpawnRef = useRef<() => void>(() => {});
-  const emitRestoreRef = useRef<() => void>(() => {});
-  useLayoutEffect(() => {
-    emitSpawnRef.current = () => {
-      if (!termRef.current) return;
-      const { fitAddon } = termRef.current;
-      fitAddon.fit();
-      const dims = fitAddon.proposeDimensions();
-      const cols = Math.max(dims?.cols ?? 80, 20);
-      const rows = Math.max(dims?.rows ?? 24, 4);
-      sendTerminalRealtime(id, {
-        case: 'spawn',
-        cwd,
-        // For scratch tabs we route through the server's "any runner owned by
-        // this user" branch — sending the synthetic '__scratch__' as projectId
-        // would fail the server's project ownership lookup.
-        projectId: scratchThreadId ? undefined : projectId,
-        label,
-        rows,
-        cols,
-        ...(shell !== 'default' && { shell }),
-        ...(scratchThreadId && { scratchThreadId }),
-        // A sandbox thread's terminal opens on its sandbox runner.
-        sandboxThreadId: tabSandboxThreadId(id),
-      });
-    };
-    emitRestoreRef.current = () => {
-      sendTerminalRealtime(id, { case: 'restore' });
-    };
-  }, [cwd, id, label, projectId, scratchThreadId, shell]);
+  const emitSpawn = useStableCallback(() => {
+    if (!termRef.current) return;
+    const { fitAddon } = termRef.current;
+    fitAddon.fit();
+    const dims = fitAddon.proposeDimensions();
+    const cols = Math.max(dims?.cols ?? 80, 20);
+    const rows = Math.max(dims?.rows ?? 24, 4);
+    sendTerminalRealtime(id, {
+      case: 'spawn',
+      cwd,
+      // For scratch tabs we route through the server's "any runner owned by
+      // this user" branch — sending the synthetic '__scratch__' as projectId
+      // would fail the server's project ownership lookup.
+      projectId: scratchThreadId ? undefined : projectId,
+      label,
+      rows,
+      cols,
+      ...(shell !== 'default' && { shell }),
+      ...(scratchThreadId && { scratchThreadId }),
+      // A sandbox thread's terminal opens on its sandbox runner.
+      sandboxThreadId: tabSandboxThreadId(id),
+    });
+  });
+  const emitRestore = useStableCallback(() => {
+    sendTerminalRealtime(id, { case: 'restore' });
+  });
+  const emitReattach = useStableCallback(() => reattachTerminal(termRef.current, emitSpawn));
 
   const machineWithActions = useMemo(
     () =>
       terminalSpawnMachine.provide({
-        actions: {
-          emitSpawn: () => emitSpawnRef.current(),
-          emitRestore: () => emitRestoreRef.current(),
-          emitReattach: () => reattachTerminal(termRef.current, emitSpawnRef.current),
-        },
+        actions: { emitSpawn, emitRestore, emitReattach },
       }),
-    [],
+    [emitSpawn, emitRestore, emitReattach],
   );
 
   const [snapshot, send] = useMachine(machineWithActions, {

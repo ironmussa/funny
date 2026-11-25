@@ -271,23 +271,20 @@ function SourceTab({
   const [code, setCode] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const loadedFile = useRef<string | null>(null);
+  const fullPath = activeFile && projectPath ? `${projectPath}/${activeFile}` : null;
+
+  // A new file starts loading; no file clears the view. Starts from null so a
+  // file present on mount loads too.
+  const [shownPath, setShownPath] = useState<string | null>(null);
+  if (shownPath !== fullPath) {
+    setShownPath(fullPath);
+    setError(null);
+    if (fullPath) setLoading(true);
+    else setCode(null);
+  }
 
   useEffect(() => {
-    if (!activeFile || !projectPath) {
-      setCode(null);
-      setError(null);
-      loadedFile.current = null;
-      return;
-    }
-
-    const fullPath = `${projectPath}/${activeFile}`;
-    if (loadedFile.current === fullPath) return;
-
-    loadedFile.current = fullPath;
-    setLoading(true);
-    setError(null);
-
+    if (!fullPath) return;
     api.readFile(fullPath).then((result) => {
       if (result.isOk()) {
         setCode(result.value.content);
@@ -296,7 +293,7 @@ function SourceTab({
       }
       setLoading(false);
     });
-  }, [activeFile, projectPath]);
+  }, [fullPath]);
 
   const language = useMemo(() => {
     if (!activeFile) return 'typescript';

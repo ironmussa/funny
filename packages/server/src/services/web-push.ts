@@ -66,6 +66,8 @@ export async function sendPush(
           );
           sent++;
         } catch (error) {
+          // SAFETY: webpush.sendNotification rejects only with an Error object (a WebPushError
+          // carries statusCode), so reading the field cannot throw.
           const status = (error as { statusCode?: number }).statusCode;
           if (status === 404 || status === 410)
             await removeSubscription(userId, subscription.endpoint);
@@ -78,6 +80,8 @@ export async function sendPush(
 
 export async function pushAgentResult(userId: string, event: Record<string, unknown>) {
   if (!pushConfig() || event.type !== 'agent:result' || typeof event.threadId !== 'string') return;
+  // SAFETY: data is read only as `data?.status` and compared by includes() with string
+  // literals below, which accepts any value.
   const data = event.data as { status?: string } | undefined;
   if (!['completed', 'failed', 'error'].includes(data?.status ?? '')) return;
   const thread = await dbGet<typeof threads.$inferSelect>(

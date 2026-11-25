@@ -187,5 +187,6 @@ export function recordingSandboxControl<C extends Partial<Control>>(
         },
       );
   }
+  // SAFETY: decorated sets only the methods control has (each under `if (control.x)`), with Control's signatures.
   return { ...control, ...decorated } as C;
 }

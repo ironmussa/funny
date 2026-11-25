@@ -50,40 +50,40 @@ function likeEscaped(
 async function relatedUserIds(callerId: string): Promise<string[]> {
   const ids = new Set<string>([callerId]);
 
-  const orgRows = (await dbAll(
+  const orgRows = await dbAll<{ orgId: string }>(
     db.select({ orgId: member.organizationId }).from(member).where(eq(member.userId, callerId)),
-  )) as Array<{ orgId: string }>;
+  );
   const orgIds = orgRows.map((r) => r.orgId);
   if (orgIds.length > 0) {
-    const orgMembers = (await dbAll(
+    const orgMembers = await dbAll<{ userId: string }>(
       db
         .select({ userId: member.userId })
         .from(member)
         .where(inArray(member.organizationId, orgIds)),
-    )) as Array<{ userId: string }>;
+    );
     for (const r of orgMembers) ids.add(r.userId);
   }
 
-  const owned = (await dbAll(
+  const owned = await dbAll<{ id: string }>(
     db.select({ id: projects.id }).from(projects).where(eq(projects.userId, callerId)),
-  )) as Array<{ id: string }>;
-  const joined = (await dbAll(
+  );
+  const joined = await dbAll<{ id: string }>(
     db
       .select({ id: projectMembers.projectId })
       .from(projectMembers)
       .where(eq(projectMembers.userId, callerId)),
-  )) as Array<{ id: string }>;
+  );
   const projectIds = [...new Set([...owned, ...joined].map((r) => r.id))];
   if (projectIds.length > 0) {
-    const coMembers = (await dbAll(
+    const coMembers = await dbAll<{ userId: string }>(
       db
         .select({ userId: projectMembers.userId })
         .from(projectMembers)
         .where(inArray(projectMembers.projectId, projectIds)),
-    )) as Array<{ userId: string }>;
-    const owners = (await dbAll(
+    );
+    const owners = await dbAll<{ userId: string }>(
       db.select({ userId: projects.userId }).from(projects).where(inArray(projects.id, projectIds)),
-    )) as Array<{ userId: string }>;
+    );
     for (const r of [...coMembers, ...owners]) ids.add(r.userId);
   }
 
@@ -111,7 +111,7 @@ userRoutes.get('/search', async (c) => {
   );
   const where = isAdmin ? match : and(match, inArray(user.id, await relatedUserIds(callerId)));
 
-  const rows = await dbAll(
+  const rows = await dbAll<UserSearchResult>(
     db
       .select({
         id: user.id,
@@ -125,5 +125,5 @@ userRoutes.get('/search', async (c) => {
       .limit(20),
   );
 
-  return c.json(rows as UserSearchResult[]);
+  return c.json(rows);
 });

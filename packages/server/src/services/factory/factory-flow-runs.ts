@@ -366,6 +366,7 @@ const flowOf = (job: FactoryRunJob): string => job.run.flowName ?? job.factory.f
  */
 const journalCodec = (live: YamlPipelineContext): JournalCodec<YamlPipelineContext> => ({
   encode: (ctx) => ctx.outputs,
+  // SAFETY: the journal stores only what encode() wrote, the context's outputs (NodeOutput by node id).
   decode: (stored) => ({ ...live, outputs: stored as Record<string, NodeOutput> }),
 });
 

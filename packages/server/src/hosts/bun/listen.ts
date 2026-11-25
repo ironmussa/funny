@@ -16,8 +16,12 @@ type ServeOptions = Parameters<typeof Bun.serve>[0];
 
 export function serveExclusive<T>(options: ServeOptions & { port: number }): Bun.Server<T> {
   try {
+    // SAFETY: options is the caller's Bun.serve argument; only its generic
+    // WebSocket data type (default vs T) differs from Bun.serve<T>'s parameter.
     return Bun.serve<T>({ ...(options as any), reusePort: false });
   } catch (error) {
+    // SAFETY: only reads `code` with optional chaining; Bun's listen error is an
+    // Error carrying `code`, and any other thrown value yields a non-match.
     if ((error as { code?: string } | null)?.code === 'EADDRINUSE') {
       log.error(
         `Port ${options.port} is already in use. Another funny-server may be running; the server runs as a single instance (the issue factory watcher assumes one).`,

@@ -357,6 +357,7 @@ const plainFieldsOf = (row: Row) => ({
   triggerName: row.triggerName ?? null,
   inputs: parseStoredInputs(row.inputs ?? null, 'factory_runs.inputs'),
   prUrl: row.prUrl,
+  // SAFETY: factory_runs.state is written only in this module, always from a FactoryRunState value.
   state: row.state as FactoryRunState,
   currentStep: row.currentStep,
   launchStartedAt: row.launchStartedAt ?? null,
@@ -1281,13 +1282,14 @@ export function createFactoryRunsRepository(
       runId: string,
       outcome: 'merged' | 'closed',
     ): ResultAsync<boolean, FactoryRunsError> {
+      const state: FactoryRunState = outcome === 'merged' ? 'merged' : 'stopped';
       const changes = changesFor(
         outcome === 'merged'
-          ? { state: 'merged', currentStep: null, failureReason: null }
-          : { state: 'stopped', failureReason: 'Its pull request was closed without a merge.' },
+          ? { state, currentStep: null, failureReason: null }
+          : { state, failureReason: 'Its pull request was closed without a merge.' },
       )!;
       return updateFromParked(runId, changes).andThen((closed) =>
-        afterStateWrite(runId, { state: changes.state as FactoryRunState }, closed),
+        afterStateWrite(runId, { state }, closed),
       );
     },
 

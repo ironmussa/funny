@@ -38,7 +38,7 @@ export function createSocketIOServer(
   });
 
   const io = new SocketIOServer();
-  io.bind(engine as any);
+  io.bind(engine);
 
   bindSocketIOServer(io, engine, auth, corsOrigins);
   const browserEvents = new SocketIoBrowserEventSink(io);

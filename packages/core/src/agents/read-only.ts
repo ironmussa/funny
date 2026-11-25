@@ -203,6 +203,12 @@ function isObject<T>(value: T): value is T & object {
   return typeof value === 'object' && value !== null;
 }
 
+/** Flag settings with every settings-file and plugin hook off. */
+export interface HooksOffSettings {
+  [setting: string]: unknown;
+  disableAllHooks: true;
+}
+
 /**
  * The flag settings of a read-only agent: the ones it already has, with the
  * hooks of the settings files and plugins off. Those run on the host, outside
@@ -210,7 +216,7 @@ function isObject<T>(value: T): value is T & object {
  * into a command that prints nothing in the sandbox. funny's own pre-tool hook
  * is an SDK callback, not a settings hook, and keeps running.
  */
-export function withSettingsHooksOff(settings: Options['settings']): Record<string, unknown> {
+export function withSettingsHooksOff(settings: Options['settings']): HooksOffSettings {
   const current = isObject(settings) ? settings : {};
   return { ...current, disableAllHooks: true };
 }
@@ -238,12 +244,12 @@ function patternRoot(pattern: string | null): string[] {
 }
 
 /** The pattern field of each searching tool. */
-const PATTERN_FIELD: Record<string, string> = { Glob: 'pattern', Grep: 'glob' };
+const PATTERN_FIELD = new Map(Object.entries({ Glob: 'pattern', Grep: 'glob' }));
 
 /** Where a reading tool looks: its file or folder, or where an absolute pattern starts. */
 function targetsOf(toolName: string, input: ToolInput, cwd: string): string[] {
   if (toolName === 'Read') return [text(input, 'file_path') ?? ''];
-  const field = PATTERN_FIELD[toolName];
+  const field = PATTERN_FIELD.get(toolName);
   if (!field) return [];
   return [text(input, 'path') ?? cwd, ...patternRoot(text(input, field))];
 }

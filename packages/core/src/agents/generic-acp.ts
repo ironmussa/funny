@@ -20,7 +20,7 @@ import { spawn, type ChildProcess } from 'child_process';
 import { randomUUID } from 'crypto';
 
 import type { ProviderManifest } from '@funny/shared/provider-manifest';
-import { resolveSpawnCommand } from '@funny/shared/provider-manifest';
+import { resolveSpawnCommand, type SpawnCommand } from '@funny/shared/provider-manifest';
 
 import { createDebugLogger, type DebugLogger } from '../debug.js';
 import { toACPImageBlocks, type ACPImageBlock } from './acp-image.js';
@@ -36,6 +36,7 @@ import {
   inferACPToolName,
   parseACPPreambleTitle,
   type ACPToolResultData,
+  type ToolInput,
 } from './acp-tool-input.js';
 import { BaseAgentProcess, killProcessTree, type ResultSubtype } from './base-process.js';
 import { buildAgentChildEnv } from './reap-orphaned-agents.js';
@@ -389,7 +390,7 @@ export class GenericACPProcess extends BaseAgentProcess {
   }
 
   /** Resolve the spawn command + args from the manifest (env override → npx → default). */
-  private resolveCommand(): { command: string; args: string[] } {
+  private resolveCommand(): SpawnCommand {
     const { command, args: baseArgs } = resolveSpawnCommand(this.manifest.spawn);
     const args = [...baseArgs];
     // gemini selects its model via the `--model` CLI arg (modelVia: 'cli-arg').
@@ -1221,10 +1222,7 @@ function isRenderableToolInput(toolName: string, input: Record<string, unknown>)
  * Merge a buffered tool input with a freshly built one, preferring non-empty
  * values from `next` (e.g. a file_path the initial deferred event was missing).
  */
-function mergeToolInput(
-  prev: Record<string, unknown>,
-  next: Record<string, unknown>,
-): Record<string, unknown> {
+function mergeToolInput(prev: Record<string, unknown>, next: Record<string, unknown>): ToolInput {
   const merged = { ...prev };
   for (const [key, value] of Object.entries(next)) {
     if (value !== undefined && value !== null && value !== '') {

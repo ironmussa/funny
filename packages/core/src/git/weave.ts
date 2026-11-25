@@ -5,7 +5,7 @@ import type { WeaveStatus } from '@funny/shared';
 import { internal, type DomainError } from '@funny/shared/errors';
 import { ResultAsync } from 'neverthrow';
 
-import { execute, gitRead, gitWrite } from './process.js';
+import { execute, gitRead, gitWrite, type EnvOverrides } from './process.js';
 
 const WEAVE_DRIVER_NAME = 'weave';
 const WEAVE_DRIVER_CMD = 'weave-driver %O %A %B %L %P';
@@ -193,7 +193,7 @@ export function factoryGitConfigEnv(
           ['core.attributesFile', attributesFile],
         );
       }
-      const env: Record<string, string> = { GIT_CONFIG_COUNT: String(entries.length) };
+      const env: EnvOverrides = { GIT_CONFIG_COUNT: String(entries.length) };
       entries.forEach(([key, value], index) => {
         env[`GIT_CONFIG_KEY_${index}`] = key;
         env[`GIT_CONFIG_VALUE_${index}`] = value;

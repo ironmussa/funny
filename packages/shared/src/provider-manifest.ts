@@ -183,6 +183,12 @@ export interface ProviderManifest {
 
 // ─── Spawn resolver ──────────────────────────────────────────────────────────
 
+/** A concrete command line to spawn: the binary and its arguments. */
+export interface SpawnCommand {
+  command: string;
+  args: string[];
+}
+
 /**
  * Resolve a manifest's {@link SpawnConfig} against the current environment into
  * a concrete `{ command, args }`.
@@ -190,7 +196,7 @@ export interface ProviderManifest {
 export function resolveSpawnCommand(
   spawn: SpawnConfig,
   env: Record<string, string | undefined> = process.env,
-): { command: string; args: string[] } {
+): SpawnCommand {
   for (const name of spawn.binEnvVars) {
     const override = env[name];
     if (override) return { command: override, args: spawn.args };

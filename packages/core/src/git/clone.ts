@@ -9,7 +9,7 @@ import { dirname } from 'path';
 import { internal, processError, type DomainError } from '@funny/shared/errors';
 import { ResultAsync } from 'neverthrow';
 
-import { gitNetwork, ProcessExecutionError } from './process.js';
+import { gitNetwork, ProcessExecutionError, type EnvOverrides } from './process.js';
 
 const GITHUB_HTTPS = 'https://github.com/';
 
@@ -38,11 +38,8 @@ export interface CloneOptions {
  * GitHub HTTPS URL, nothing otherwise. Prompts are always off, so a missing
  * credential fails instead of hanging.
  */
-export function cloneAuthEnv(
-  url: string,
-  token: string | null | undefined,
-): Record<string, string> {
-  const env: Record<string, string> = { GIT_TERMINAL_PROMPT: '0' };
+export function cloneAuthEnv(url: string, token: string | null | undefined): EnvOverrides {
+  const env: EnvOverrides = { GIT_TERMINAL_PROMPT: '0' };
   if (!token || !url.startsWith(GITHUB_HTTPS)) return env;
   const basic = Buffer.from(`x-access-token:${token}`).toString('base64');
   env.GIT_CONFIG_COUNT = '1';

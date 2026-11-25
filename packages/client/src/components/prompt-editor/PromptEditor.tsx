@@ -156,7 +156,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(
       if (!editor || editor.isDestroyed) return;
       editor.extensionManager.extensions.forEach((ext) => {
         if (ext.name === 'placeholder') {
-          (ext.options as any).placeholder = placeholder ?? '';
+          ext.options.placeholder = placeholder ?? '';
           editor.view.dispatch(editor.state.tr);
         }
       });

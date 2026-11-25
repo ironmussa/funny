@@ -22,6 +22,8 @@
  * - Anything else, and anything that could not be compared, is not covered.
  */
 
+import { MAX_APPROVAL_GAP_FILES, type FactoryApprovalGap } from '@funny/shared/contracts/factory';
+
 import type { ChangeDelta } from './factory-step-runner.js';
 
 export type ApprovalCoverage =
@@ -75,6 +77,37 @@ export function approvalCovers(input: ApprovalCoverageInput): ApprovalCoverage {
     kind: 'adjustment',
     lines: delta.lines,
     files: delta.files.map((file) => file.path),
+  };
+}
+
+/**
+ * What a hold says changed since the approved commit, when the approval does
+ * not cover `to` (openspec factory-merge-fewer-bounces, D2): the same facts
+ * `approvalCovers` decided from, kept for the member instead of dropped.
+ */
+export function approvalGapOf(
+  input: ApprovalCoverageInput,
+  to: string,
+  reason: string,
+  at: string,
+): FactoryApprovalGap {
+  const { delta } = input;
+  const paths = delta?.files.map((file) => file.path) ?? [];
+  const files = paths.slice(0, MAX_APPROVAL_GAP_FILES);
+  const outside = new Set(delta?.outsideFrom ?? []);
+  const approved = new Set(input.approvedRiskKeys ?? []);
+  return {
+    to,
+    at,
+    // A branch that lost the approved commit was compared with nothing a member read.
+    lines: delta?.ancestor ? delta.lines : null,
+    files,
+    moreFiles: paths.length - files.length,
+    newFiles: files.filter((path) => outside.has(path)),
+    newRiskKeys: input.approvedRiskKeys
+      ? (input.riskKeys ?? []).filter((key) => !approved.has(key))
+      : [],
+    reason,
   };
 }
 

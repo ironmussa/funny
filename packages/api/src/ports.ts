@@ -466,6 +466,22 @@ export interface FactoryPort {
     expectedSha: string,
   ): PortResult<FactoryRun>;
   /**
+   * Mark a run of the caller's factory that ended with no change as done: the
+   * member agrees nothing needs changing. Refused (409) for any other run. Audited.
+   */
+  markRunDone(userId: string, projectId: string, runId: string): PortResult<FactoryRun>;
+  /**
+   * Say a run of the caller's factory that triage classed as a lint cleanup is
+   * not one (`false`), or take that back (`true`), which changes how its risk
+   * is classed; a run held for its risk is retried. Audited.
+   */
+  setLintCleanup(
+    userId: string,
+    projectId: string,
+    runId: string,
+    lintCleanup: boolean,
+  ): PortResult<FactoryRun>;
+  /**
    * The requests agents made that the caller approve a held merge, newest
    * first, each brought in line with its run. Empty without a factory.
    */

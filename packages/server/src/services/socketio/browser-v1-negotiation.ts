@@ -47,6 +47,12 @@ export interface BrowserV1ConnectionState {
   assignments: Record<'operations' | 'events' | 'terminal' | 'browserSession', Representation>;
 }
 
+/** The outcome sent to the browser, and the connection state when negotiation succeeded. */
+interface BrowserV1Negotiation {
+  outcome: NegotiationOutcome;
+  state?: BrowserV1ConnectionState;
+}
+
 function negotiationStatus(code: StatusCode, message: string): NegotiationOutcome {
   return create(NegotiationOutcomeSchema, {
     outcome: { case: 'status', value: create(StatusSchema, { code, message }) },
@@ -61,7 +67,7 @@ export function negotiateBrowserV1(
     events: 'legacy',
     terminal: 'legacy',
   }),
-): { outcome: NegotiationOutcome; state?: BrowserV1ConnectionState } {
+): BrowserV1Negotiation {
   if (!principalUserId) {
     return {
       outcome: negotiationStatus(StatusCode.UNAUTHENTICATED, 'Authenticated session required'),

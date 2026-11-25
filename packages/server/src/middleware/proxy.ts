@@ -103,12 +103,17 @@ interface ProxySendContext {
   isOAuthStart: boolean;
 }
 
+/** Header name → value, as sent to the runner. */
+interface ForwardedHeaders {
+  [header: string]: string;
+}
+
 /**
  * Non-identity headers forwarded to the runner. Identity headers are set by
  * the authorized sink and anything the client sent for them is dropped.
  */
-function buildForwardedHeaders(c: Context<ServerEnv>, url: URL): Record<string, string> {
-  const forwardedHeaders: Record<string, string> = {
+function buildForwardedHeaders(c: Context<ServerEnv>, url: URL): ForwardedHeaders {
+  const forwardedHeaders: ForwardedHeaders = {
     'content-type': c.req.header('content-type') || 'application/json',
   };
 
@@ -137,13 +142,18 @@ function buildForwardedHeaders(c: Context<ServerEnv>, url: URL): Record<string, 
   return forwardedHeaders;
 }
 
+/** Query parameter → value, as read by the runner resolver. */
+interface RoutingQuery {
+  [param: string]: string;
+}
+
 /**
  * The query the runner is resolved from. The client's thread context header
  * names the thread a request is made for, so it runs where that thread runs
  * (`extractThreadId`). It only steers routing: the runner still sees the
  * original path and query.
  */
-function routingQuery(c: Context<ServerEnv>, url: URL): Record<string, string> {
+function routingQuery(c: Context<ServerEnv>, url: URL): RoutingQuery {
   return { ...threadContextQuery(c), ...Object.fromEntries(url.searchParams.entries()) };
 }
 

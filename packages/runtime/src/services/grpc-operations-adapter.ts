@@ -85,6 +85,14 @@ export const RUNNER_OPERATION_EVENT_TYPES = [
 
 export type RunnerOperationEventType = (typeof RUNNER_OPERATION_EVENT_TYPES)[number];
 
+/**
+ * What a runner operation resolves with: the JSON form of the server's answer
+ * (a field the answer lacks is left `undefined`).
+ */
+export type RunnerOperationOutcome =
+  | JsonValue
+  | { readonly [field: string]: RunnerOperationOutcome | undefined };
+
 /** proto3 JSON of `runner.v2.OperationSuccess` (int64 fields are decimal strings). */
 export interface OperationSuccessJson {
   acknowledgement?: JsonObject;
@@ -107,7 +115,7 @@ type PendingOperation = {
   eventType: RunnerOperationEventType;
   kind: string;
   value: JsonObject;
-  resolve(value: unknown): void;
+  resolve(value: RunnerOperationOutcome): void;
   reject(error: Error): void;
   timer: ReturnType<typeof setTimeout>;
   idempotencyKey?: string;
@@ -426,7 +434,10 @@ function operationPayload(input: JsonObject): JsonObject {
   return isJsonObject(payload) ? payload : {};
 }
 
-export function mapRunnerOperationOutcome(kind: string, success: OperationSuccessJson): unknown {
+export function mapRunnerOperationOutcome(
+  kind: string,
+  success: OperationSuccessJson,
+): RunnerOperationOutcome {
   if (success.operationResponse !== undefined) return success.operationResponse;
   if (success.threadMessages)
     return { type: 'data:get_thread_messages_response', ...success.threadMessages };
@@ -441,7 +452,7 @@ export function mapRunnerOperationOutcome(kind: string, success: OperationSucces
   return { success: true };
 }
 
-function missingOperationResult(kind: string): unknown | undefined {
+function missingOperationResult(kind: string): RunnerOperationOutcome | undefined {
   if (
     kind === 'getThread' ||
     kind === 'getThreadByExternalRequestId' ||

@@ -105,7 +105,13 @@ const PORT = parseInt(process.env.PORT || '3001', 10);
  * If `.env` sets BETTER_AUTH_BASE_URL to https://… (e.g. production) but you still open the UI on
  * http://localhost, browsers drop Secure cookies — login looks OK (JSON user) then /api/* returns 401.
  */
-function resolveSessionCookieSecure(): { secure: boolean; useSecureCookies?: boolean } {
+/** The session cookie's Secure flag, and whether Better Auth adds the `__Secure-` prefix. */
+interface SessionCookieSecurity {
+  secure: boolean;
+  useSecureCookies?: boolean;
+}
+
+function resolveSessionCookieSecure(): SessionCookieSecurity {
   const o = process.env.BETTER_AUTH_COOKIE_SECURE;
   const forceInsecure = o === 'false' || o === '0';
   const forceSecure = o === 'true' || o === '1';

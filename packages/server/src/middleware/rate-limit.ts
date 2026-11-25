@@ -25,10 +25,16 @@ import type { Context, Next } from 'hono';
 import { clientIp, TRUSTED_PROXY_HOPS } from '../lib/client-ip.js';
 import { log } from '../lib/logger.js';
 
-/** A sliding-window counter per key; `hit` records one request and says if it is over the limit. */
-export function createSlidingWindowLimiter(opts: { windowMs: number; max: number }): {
+/** A per-key request counter: `hit` records one request and says if it is over the limit. */
+interface SlidingWindowLimiter {
   hit(key: string, now?: number): boolean;
-} {
+}
+
+/** A sliding-window counter per key; `hit` records one request and says if it is over the limit. */
+export function createSlidingWindowLimiter(opts: {
+  windowMs: number;
+  max: number;
+}): SlidingWindowLimiter {
   const { windowMs, max } = opts;
   const hits: SlidingWindowHits = new Map();
   startSlidingWindowPrune(hits, windowMs);

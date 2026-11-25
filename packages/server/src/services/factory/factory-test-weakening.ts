@@ -68,8 +68,14 @@ const PY_SKIP =
   /@pytest\.mark\.(?:skip|skipif|xfail)\b|@unittest\.(?:skip|skipIf|skipUnless|expectedFailure)\b|\bpytest\.skip\s*\(|\bself\.skipTest\s*\(/;
 const GO_SKIP = /\bt\.Skip(?:f|Now)?\s*\(/;
 
+/** The lines a diff adds and removes. */
+interface ChangedLines {
+  added: string[];
+  removed: string[];
+}
+
 /** The added (`+`) and removed (`-`) lines of a unified diff, without their marker. */
-function changedLines(patch: string): { added: string[]; removed: string[] } {
+function changedLines(patch: string): ChangedLines {
   const added: string[] = [];
   const removed: string[] = [];
   for (const line of patch.split('\n')) {

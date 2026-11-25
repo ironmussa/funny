@@ -31,6 +31,7 @@ import {
   type ActivityKind,
   recordsOnlyFailures,
 } from '@funny/shared/activities';
+import type { JsonValue } from '@funny/shared/json-validation';
 import { Effect, Schedule } from 'effect';
 import type { Result } from 'neverthrow';
 import type { z } from 'zod';
@@ -74,6 +75,9 @@ export interface ActivityHandle {
   fail(error: string): void;
 }
 
+/** The server's decoded answer to an activity report (none from a fire-and-forget reporter). */
+export type ActivityReportAnswer = JsonValue | undefined;
+
 /** `data:activity_start`: a new activity, or an instant one already finished. */
 type ActivityStartReport = {
   id: string;
@@ -110,7 +114,7 @@ type ActivityReport = ActivityStartReport | ActivityUpdateReport | ActivityRecon
 type ActivityProgressEvent = Extract<WSEvent, { type: 'activity:progress' }>;
 
 export interface ActivityReporter {
-  request(eventType: string, payload: ActivityReport): Promise<unknown>;
+  request(eventType: string, payload: ActivityReport): Promise<ActivityReportAnswer>;
 }
 
 export interface ActivityTrackerDeps {
@@ -125,20 +129,21 @@ export interface ActivityTrackerDeps {
 const PROGRESS_INTERVAL_MS = 500;
 
 /** A server answer that refuses the write (scope, ownership, unknown type). */
-function isRefusal(response: unknown): boolean {
+function isRefusal(response: ActivityReportAnswer): boolean {
   return (
     !!response &&
     typeof response === 'object' &&
-    (response as { success?: unknown }).success === false
+    !Array.isArray(response) &&
+    response.success === false
   );
 }
 
-function messageOf(error: unknown): string {
-  if (typeof error === 'string') return error;
-  if (error && typeof error === 'object' && 'message' in error) {
-    return String((error as { message: unknown }).message);
+function messageOf(cause: unknown): string {
+  if (typeof cause === 'string') return cause;
+  if (cause && typeof cause === 'object' && 'message' in cause) {
+    return String((cause as { message: unknown }).message);
   }
-  return String(error);
+  return String(cause);
 }
 
 export function createActivityTracker(deps: ActivityTrackerDeps = {}) {

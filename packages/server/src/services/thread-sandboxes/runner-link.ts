@@ -56,11 +56,16 @@ export function reverseLinkSecret(key: Buffer, threadId: string, generation: num
     .digest('base64url');
 }
 
+/** Environment variable name → value, for the sandbox runner. */
+interface RunnerLinkEnv {
+  [name: string]: string;
+}
+
 /** Env the sandbox runner needs for `link`, besides its enrollment credentials. */
 export function runnerLinkEnv(
   link: RunnerLink,
   sandbox: { threadId: string; generation: number },
-): Record<string, string> {
+): RunnerLinkEnv {
   if (link.kind === 'direct') return { TEAM_SERVER_URL: link.serverUrl };
   return {
     TEAM_SERVER_URL: `http://127.0.0.1:${REVERSE_LINK_LOOPBACK_PORT}`,

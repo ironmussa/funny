@@ -45,10 +45,15 @@ function serializeUtilityModel(setting: UtilityModelSetting | null): string | nu
   return setting ? JSON.stringify(setting) : null;
 }
 
+/** Provider key id → whether the user saved one. */
+interface ProviderKeyPresence {
+  [id: string]: boolean;
+}
+
 /** Build the providerKeys presence map (id → boolean) for the API response. */
-function buildPresenceMap(raw: string | null): Record<string, boolean> {
+function buildPresenceMap(raw: string | null): ProviderKeyPresence {
   const keys = parseProviderKeys(raw);
-  const map: Record<string, boolean> = {};
+  const map: ProviderKeyPresence = {};
   for (const k of Object.keys(keys)) {
     map[k] = true;
   }

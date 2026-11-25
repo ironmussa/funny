@@ -35,6 +35,8 @@ mock.module('@/data/projects/hooks', () => ({
 }));
 mock.module('@/data/factory/actions', () => ({
   approveFactoryMerge: () => okAsync(null),
+  setFactoryRunLintCleanup: () => ({ orTee: () => undefined }),
+  markFactoryRunDone: () => ({ orTee: () => undefined }),
   controlFactoryRun: () => okAsync(null),
 }));
 mock.module('@/hooks/use-stable-navigate', () => ({ useStableNavigate: () => vi.fn() }));

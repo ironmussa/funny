@@ -15,6 +15,7 @@ import type {
   ActionStep,
   CICheckConclusion,
 } from '@funny/shared';
+import type { JsonValue } from '@funny/shared/json-validation';
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 
@@ -43,22 +44,26 @@ const JOB_LOG_TAIL_LINES = 200;
 /** Lines kept after the last `##[error]`: GitHub prints the exit code there. */
 const LINES_AFTER_ERROR = 3;
 
+/** One field of GitHub's decoded JSON; absent when GitHub left it out. */
+type GithubField = JsonValue | undefined;
+
 /** GitHub's run / job statuses, folded into the three the UI draws. */
-function actionStatus(status: unknown): ActionStatus {
+function actionStatus(status: GithubField): ActionStatus {
   if (status === 'completed') return 'completed';
   if (status === 'in_progress') return 'in_progress';
   return 'queued';
 }
 
-function conclusion(value: unknown): CICheckConclusion {
+function conclusion(value: GithubField): CICheckConclusion {
   return typeof value === 'string' ? (value as CICheckConclusion) : null;
 }
 
 /** GitHub's JSON is unchecked: a field of the wrong type becomes the fallback. */
-const text = (value: unknown, fallback = ''): string =>
+const text = (value: GithubField, fallback = ''): string =>
   typeof value === 'string' ? value : fallback;
-const textOrNull = (value: unknown): string | null => (typeof value === 'string' ? value : null);
-const count = (value: unknown, fallback = 0): number =>
+const textOrNull = (value: GithubField): string | null =>
+  typeof value === 'string' ? value : null;
+const count = (value: GithubField, fallback = 0): number =>
   typeof value === 'number' ? value : fallback;
 
 /** The run's title; runs from before `display_title` existed fall back to the commit's subject. */

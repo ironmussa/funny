@@ -407,6 +407,52 @@ reads the role's prose as a decision:
   approval's `riskKeys`, and an approval without them follows only the same change. With the
   setting on the factory merges lines no person read: the review of the new commit is the
   remaining guard.
+  When the approval does **not** follow, the hold keeps what differs instead of only a sentence
+  (openspec `factory-merge-fewer-bounces`): `approvalGapOf` turns the same delta into the
+  approval's `gap` (the held commit, the lines that differ, at most 20 files, the ones the
+  approved change did not touch, the risk keys that are new, the reason), written by
+  `noteApprovalGap` with a compare-and-set on the stored approval. `approvalGapFor(approval,
+  heldSha)` (`@funny/shared/contracts/factory`) reads it only for the commit it is about. The
+  approval card in the thread, the run panel, the board card ("Asks again after N lines
+  changed") and `funny_factory_runs` show it (`ApprovalGapNote`), so a second approval costs the
+  reading of the difference. The approval is still given for the whole held commit; a new
+  approval replaces the record, so later adjustments are measured from the commit just approved.
+  **A merge GitHub refuses** is told apart by which branch moved (`movedSince` in
+  `factory-merge-lane.ts`): the head, the base (the head is behind it), or neither. With a branch
+  moved the run goes back through `upToDate` (base in, checks, proof, the approval re-decided)
+  and merges again, without parking; `MAX_STALE_MERGES` (3) such refusals in one visit to
+  `merge` park it as `base keeps moving`. With neither moved it parks with GitHub's own message,
+  which `pinnedMerge` now keeps next to the status. Seen on #450 (2026-11-25): a push to the base
+  two seconds before the merge got a 405 and a run waiting for a person.
+  **Lint cleanups.** Triage classes a run as a lint cleanup, never a member: its contract's
+  `lintCleanup` and `lintRules`, the rules the issue asks to clear as the linter names them. The
+  class holds only when every named rule is in `BEHAVIOR_NEUTRAL_LINT_RULES`
+  (`@funny/shared/contracts/factory`: `max-lines`, `max-lines-per-function`, `max-statements`,
+  `max-depth`, `max-nested-callbacks`, `sort-imports`), rules whose fix moves code without
+  changing what it does. A cleanup of a type, validation, effect or style rule is classed like any
+  change: #484 (`no-unknown-parameters`) narrowed a request schema, which its review caught. With
+  the class, `classifyRisk` sets aside the size reason and the contract's risk hints (kept in the
+  risk's `waived`), provided `lintCleanupRefusals` finds, in the diff alone, no added suppression
+  (`eslint-disable`, `oxlint-disable`, `@ts-expect-error`, …; one removed with the same text, a
+  suppression moved by a file split, pays for one added), no change to a lint or type-check
+  configuration file, and no code file GitHub gave no patch for. Otherwise nothing is waived and
+  the reason says why. Weakened tests and sensitive paths hold whatever the class. The check shows
+  the warnings were not hidden, not that the change does nothing else: tests, review and proof
+  answer that. Triage is an agent that read the issue's text, so its class can be wrong or
+  steered by that text; the rule list bounds what it can waive. A member can only veto it ("Not a
+  lint cleanup", `factory.setLintCleanup` with `false`, stored as `risk_waiver.kind`
+  `not-lint-cleanup`, migration 129) and take the veto back, which puts a run held for its risk
+  back in flight. `lintCleanupSource` decides. A run triaged before `lintRules` existed has none,
+  so it is not a lint cleanup.
+  **No change.** A run that ended as `no_change` stays on the board for a person: the member can
+  retry it, or agree with the agent through "Mark as done" (`factory.markRunDone`, a
+  compare-and-set from `no_change` to `done`). The issue on GitHub is left as it is.
+  **Paths.** A run that already has a pull request waits for no paths (`pathsHeld` in
+  `factory-watcher.ts`, triage's `busyPaths`): it has no implementer to start, and queueing it
+  behind later runs let them merge first. With the factory's `holdPathsAwaitingApproval` setting
+  (off by default) a run parked for a member's approval keeps its likely paths for
+  `APPROVAL_PATH_HOLD_MS` (12 hours); a run that waits only for such runs has the wait reason
+  `paths-awaiting-approval`.
   Every move is announced (`announceApprovalMove`): a comment on the pull request that says it is
   automated and that no person approved the new commit, the activity `factory.approval-moved` of
   the member who approved, and the run detail's "Merge approved at … moved to …". A comment that

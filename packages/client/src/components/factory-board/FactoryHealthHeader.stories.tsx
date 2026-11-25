@@ -81,6 +81,7 @@ export const WithIncident: Story = {
       batch: { size: 5, waitSeconds: 60 },
       dependencies: 'wait',
       tooBig: 'ask',
+      holdPathsAwaitingApproval: false,
       blockedReason: null,
       updatedAt: ago(1),
       incident: {

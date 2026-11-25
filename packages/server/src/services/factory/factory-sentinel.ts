@@ -188,6 +188,29 @@ function sentinelPrompt(input: {
   ].join('\n');
 }
 
+/**
+ * The merges that may have broken the branch, newest first: back to the
+ * newest one whose merge commit passed its checks (empty when that is the
+ * newest merge). Merges past the read limit stay suspects.
+ */
+async function suspectsOf(
+  deps: Pick<SentinelDeps, 'mergeState'>,
+  merges: readonly FactoryIncidentCandidate[],
+): Promise<FactoryIncidentCandidate[]> {
+  const suspects: FactoryIncidentCandidate[] = [];
+  for (const [index, candidate] of merges.entries()) {
+    const number = prNumberOf(candidate.prUrl);
+    if (index >= MAX_MERGE_READS || number === null) {
+      suspects.push(candidate);
+      continue;
+    }
+    const merged = await deps.mergeState(number);
+    if (merged?.ci.kind === 'green') break;
+    suspects.push(merged ? { ...candidate, mergeSha: merged.sha } : candidate);
+  }
+  return suspects;
+}
+
 export function createFactorySentinel(deps: SentinelDeps, factory: SentinelFactory, repo: string) {
   const now = deps.now ?? Date.now;
   const count = (event: string) =>
@@ -358,28 +381,6 @@ export function createFactorySentinel(deps: SentinelDeps, factory: SentinelFacto
     return merges.filter((candidate) => candidate.mergedAt > clearedAt);
   }
 
-  /**
-   * The merges that may have broken the branch, newest first: back to the
-   * newest one whose merge commit passed its checks (empty when that is the
-   * newest merge). Merges past the read limit stay suspects.
-   */
-  async function suspectsOf(
-    merges: readonly FactoryIncidentCandidate[],
-  ): Promise<FactoryIncidentCandidate[]> {
-    const suspects: FactoryIncidentCandidate[] = [];
-    for (const [index, candidate] of merges.entries()) {
-      const number = prNumberOf(candidate.prUrl);
-      if (index >= MAX_MERGE_READS || number === null) {
-        suspects.push(candidate);
-        continue;
-      }
-      const merged = await deps.mergeState(number);
-      if (merged?.ci.kind === 'green') break;
-      suspects.push(merged ? { ...candidate, mergeSha: merged.sha } : candidate);
-    }
-    return suspects;
-  }
-
   /** An incident already open: close it on green, else keep collecting. */
   async function follow(
     incident: FactoryIncidentRecord,
@@ -405,7 +406,7 @@ export function createFactorySentinel(deps: SentinelDeps, factory: SentinelFacto
   ): Promise<FactoryIncidentRecord | null> {
     const clearedKey = `${repo}#${baseBranch}#${state.sha}#${merges[0]?.prUrl ?? ''}`;
     if (deps.cleared?.has(clearedKey)) return null;
-    const suspects = await suspectsOf(merges);
+    const suspects = await suspectsOf(deps, merges);
     if (suspects.length === 0) {
       // Green after the factory's last merge: whatever broke it came later.
       deps.cleared?.add(clearedKey);

@@ -24,6 +24,9 @@ import { getServices } from './service-registry.js';
 import { threadEventBus, type AgentCompletedEvent } from './thread-event-bus.js';
 import { transitionStatus } from './thread-status-machine.js';
 
+/** The `data` of the realtime event of type `T`. */
+export type WSEventData<T extends WSEvent['type']> = Extract<WSEvent, { type: T }>['data'];
+
 export class AgentEventRouter {
   /** Per-thread message queue to serialize async message handling. */
   private messageQueues = new Map<string, Promise<void>>();
@@ -215,11 +218,11 @@ export class AgentEventRouter {
 
   // ── Helpers ────────────────────────────────────────────────────
 
-  emitWSToUser(
+  emitWSToUser<T extends WSEvent['type']>(
     threadId: string,
     userId: string | undefined,
-    type: WSEvent['type'],
-    data: unknown,
+    type: T,
+    data: WSEventData<T>,
   ): void {
     const event = { type, threadId, data } as WSEvent;
     if (userId) {

@@ -3,6 +3,7 @@ import {
   factoryFlowInput,
   factoryApprovalRequestInput,
   factoryApproveMergeInput,
+  factoryLintCleanupInput,
   factoryProjectInput,
   factoryRunInput,
   factoryTriggerInput,
@@ -73,6 +74,26 @@ export const factoryRouter = router({
           input.projectId,
           input.runId,
           input.expectedSha,
+        ),
+      ),
+    ),
+  // A member agrees with the agent that the issue needs no change.
+  markRunDone: projectProcedure('steer', CONTROL_FORBIDDEN)
+    .input(factoryRunInput)
+    .mutation(async ({ ctx, input }) =>
+      unwrap(await ctx.ports.factory.markRunDone(ctx.userId, input.projectId, input.runId)),
+    ),
+  // A member's statement that a run only clears lint warnings: its size then
+  // does not hold it. Like an approval, it comes from a member's session only.
+  setLintCleanup: projectProcedure('steer', CONTROL_FORBIDDEN)
+    .input(factoryLintCleanupInput)
+    .mutation(async ({ ctx, input }) =>
+      unwrap(
+        await ctx.ports.factory.setLintCleanup(
+          ctx.userId,
+          input.projectId,
+          input.runId,
+          input.lintCleanup,
         ),
       ),
     ),

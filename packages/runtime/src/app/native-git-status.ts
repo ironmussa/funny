@@ -8,8 +8,8 @@ export interface NativeGitStatusMeta {
 }
 
 interface StatusLogger {
-  info(message: string, meta: NativeGitStatusMeta): unknown;
-  warn(message: string, meta: NativeGitStatusMeta): unknown;
+  info(message: string, meta: NativeGitStatusMeta): void;
+  warn(message: string, meta: NativeGitStatusMeta): void;
 }
 
 /**

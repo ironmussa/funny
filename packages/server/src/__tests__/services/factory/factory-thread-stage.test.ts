@@ -87,7 +87,8 @@ describe('syncRunThreadStages through the run writes', () => {
 
   test('a run back at work moves the thread the runtime set to review back in progress', async () => {
     const { runs, run } = await runWithThread('review');
-    await runs.advance(run.id, 'working', { state: 'pr_open' });
+    await runs.updateInFlight(run.id, { state: 'working' });
+    await runs.updateInFlight(run.id, { state: 'pr_open' });
     expect(stageOf('t1')).toBe('in_progress');
   });
 
@@ -118,7 +119,8 @@ describe('syncRunThreadStages through the run writes', () => {
 
   test('a write refused by its compare-and-set moves nothing', async () => {
     const { runs, run } = await runWithThread('review');
-    await runs.advance(run.id, 'pr_open', { state: 'merged' });
+    await runs.updateInFlight(run.id, { state: 'stopped' });
+    await runs.updateInFlight(run.id, { state: 'merged' });
     expect(stageOf('t1')).toBe('review');
   });
 });

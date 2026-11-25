@@ -115,29 +115,29 @@ function isString(value: unknown): value is string {
   return typeof value === 'string';
 }
 
-const FIRE_AND_FORGET_FRAMES: Record<string, (extra: Record<string, unknown>) => RealtimeFrame> = {
-  'browser-session:open': (extra) => ({ case: 'open', targetUrl: String(extra.url ?? '') }),
-  'browser-session:navigate': (extra) => ({
-    case: 'navigate',
-    targetUrl: String(extra.url ?? ''),
-  }),
-  'browser-session:input': (extra) => ({ case: 'input', action: extra as JsonObject }),
-  'browser-session:heartbeat': () => ({ case: 'heartbeat' }),
-  'browser-session:close': (extra) => ({
-    case: 'close',
-    reason: String(extra.reason ?? 'user'),
-    closeId: isString(extra.closeId) ? extra.closeId : undefined,
-  }),
-};
+const FIRE_AND_FORGET_FRAMES = new Map<string, (extra: Record<string, unknown>) => RealtimeFrame>(
+  Object.entries({
+    'browser-session:open': (extra) => ({ case: 'open', targetUrl: String(extra.url ?? '') }),
+    'browser-session:navigate': (extra) => ({
+      case: 'navigate',
+      targetUrl: String(extra.url ?? ''),
+    }),
+    'browser-session:input': (extra) => ({ case: 'input', action: extra as JsonObject }),
+    'browser-session:heartbeat': () => ({ case: 'heartbeat' }),
+    'browser-session:close': (extra) => ({
+      case: 'close',
+      reason: String(extra.reason ?? 'user'),
+      closeId: isString(extra.closeId) ? extra.closeId : undefined,
+    }),
+  } satisfies Record<string, (extra: Record<string, unknown>) => RealtimeFrame>),
+);
 
 function sendFireAndForget(
   type: string,
   sessionId: string,
   extra: Record<string, unknown> = {},
 ): void {
-  const frame = Object.hasOwn(FIRE_AND_FORGET_FRAMES, type)
-    ? FIRE_AND_FORGET_FRAMES[type](extra)
-    : null;
+  const frame = FIRE_AND_FORGET_FRAMES.get(type)?.(extra) ?? null;
   if (!frame) return;
   const sent = sendBrowserSessionRealtime(sessionId, frame);
   // Only `open` reports a lost connection: the others are best-effort.

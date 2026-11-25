@@ -47,7 +47,7 @@ import type { FactoryLaunchBody, IssueRunScope } from './factory-action-provider
 import { issueInstruction, type FactoryIssueText } from './factory-issue-text.js';
 import { contractText, launchedThread, readOnlyRoleLaunch } from './factory-review.js';
 import { readRoleResult } from './factory-role-results.js';
-import type { UpdateRunInput } from './factory-runs.js';
+import { HIGH_RISK_HOLD, type UpdateRunInput } from './factory-runs.js';
 import type { ThreadOutcome, WaitAfter } from './factory-thread-waits.js';
 
 /** Why a run parked on its issue waits (shown in the run row). */
@@ -154,12 +154,18 @@ const isSplitPart = (issue: FactoryIssueText | null): boolean =>
 /** Mentions turned into plain text, so copying a description pings nobody again. */
 const withoutMentions = (text: string): string => text.replace(/@(?=[\w-])/g, '');
 
+/** The title and body of an issue to open. */
+interface SplitPartIssue {
+  title: string;
+  body: string;
+}
+
 /** The issue opened for part `index` (from 0) of `parts`, already sanitized by `publicItems`. */
 export function splitPartIssue(input: {
   parent: { number: number; title: string; body: string | null };
   parts: readonly string[];
   index: number;
-}): { title: string; body: string } {
+}): SplitPartIssue {
   const { parent, parts, index } = input;
   const part = parts[index];
   const position = `${index + 1}/${parts.length}`;
@@ -207,7 +213,7 @@ export function splitComment(parts: readonly string[], opened: readonly number[]
 const RESULT_FORMAT = [
   'One of these three, as a fenced json block:',
   '```json',
-  '{ "decision": "ready", "contract": { "acceptanceCriteria": ["<what must be true when it is done>"], "likelyPaths": ["<glob of files the change will probably touch>"], "riskHints": ["<why it may be risky, if it is>"] } }',
+  '{ "decision": "ready", "contract": { "acceptanceCriteria": ["<what must be true when it is done>"], "likelyPaths": ["<glob of files the change will probably touch>"], "riskHints": ["<why it may be risky, if it is>"], "lintCleanup": false, "lintRules": [] } }',
   '```',
   '```json',
   '{ "decision": "needs_info", "questions": ["<one question the issue must answer>"] }',
@@ -244,6 +250,7 @@ function triagePrompt(input: {
     '',
     'Decide one of:',
     '- `ready`: an agent can do it without asking anyone. Write its contract: acceptance criteria someone could check against the code, the files it will probably touch (globs, at most 50), and risk hints only when the change is risky (it changes a migration, authentication, a public API, CI, or deletes data).',
+    'Set `lintCleanup` to true only when the issue asks for nothing but clearing lint or type-check warnings and must not change what the code does (for example "clear rule X in package Y"). A feature, a bug fix or a refactor that also changes behavior is false, whatever it is called. When true, list in `lintRules` every rule the issue asks to clear, as the linter names it (`eslint/max-lines`, `anti-slop/no-unknown-returns`); when the issue does not name its rules, list the ones its warnings come from. The factory does not hold a lint cleanup for its size only when every rule is one whose fix cannot change behavior (splitting long functions or files, sorting imports), so name them all and add a risk hint about the size only when one of them can change behavior.',
     '- `needs_info`: something the issue must say is missing or ambiguous, and a wrong guess would waste the work. Ask at most five short questions. Do not ask what the code already answers.',
     '- `too_big`: it is several independent changes. Propose the parts.',
     'Prefer `ready` when a reasonable decision can be made and stated.',
@@ -294,7 +301,7 @@ export interface FactoryTriageDeps {
   /** The issue's text: the triage agent has no network to read it. Null when unreadable. */
   issueText?(): Promise<FactoryIssueText | null>;
   /** The likely paths of the factory's other runs in progress, by issue. */
-  busyPaths?(): Promise<Array<{ issue: number; paths: string[] }>>;
+  busyPaths?(): Promise<BusyPaths[]>;
   /** Leave the slot and wait in the queue behind `blockers` (a compare-and-set from `triaging`). */
   hold?(blockers: number[]): Promise<boolean>;
   /**
@@ -517,14 +524,17 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
   async function heldForPaths(triage: FactoryTriage): Promise<ActionResult | null> {
     const paths = triage.contract?.likelyPaths ?? [];
     if (paths.length === 0 || !deps.busyPaths || !deps.hold) return null;
-    const blockers = overlappingIssues(paths, await deps.busyPaths());
+    const busy = await deps.busyPaths();
+    const blockers = overlappingIssues(paths, busy);
     if (blockers.length === 0) return null;
     if (!(await deps.hold(blockers))) return null;
     await deps.count('triage_path_hold');
     const named = blockers.map((issue) => `#${issue}`).join(', ');
     return {
       ok: false,
-      error: `Waiting for ${named}: it works on the same files.`,
+      error: allAwaitApproval(blockers, busy)
+        ? `Waiting for ${named}: it waits for a member's approval and holds the same files.`
+        : `Waiting for ${named}: it works on the same files.`,
       metadata: { outcome: 'path_hold', blockers },
     };
   }
@@ -626,31 +636,91 @@ const WORKING_ON_PATHS: ReadonlySet<string> = new Set([
   'merging',
 ]);
 
+/**
+ * How long a run parked for a member's approval keeps its paths (openspec
+ * factory-merge-fewer-bounces, D6): an approval nobody gives must not block
+ * its files for good.
+ */
+const APPROVAL_PATH_HOLD_MS = 12 * 60 * 60 * 1000;
+
+/** A run as `busyPathsOf` reads it. */
+export interface PathHolder {
+  id: string;
+  issueNumber: number | null;
+  state: string;
+  triage: FactoryTriage | null;
+  stackedOn?: { runId: string } | null;
+  failureReason?: string | null;
+  prUrl?: string | null;
+  completedAt?: string | null;
+}
+
+/** Likely paths taken by a run, by its issue; `awaitingApproval` when it is parked for one. */
+export interface BusyPaths {
+  issue: number;
+  paths: string[];
+  awaitingApproval?: true;
+}
+
+/** Parked for a member's approval of its high-risk pull request, for less than the hold. */
+function awaitsApprovalAt(run: PathHolder, now: number): boolean {
+  if (run.state !== 'waiting_human' || run.failureReason !== HIGH_RISK_HOLD || !run.prUrl) {
+    return false;
+  }
+  const parked = run.completedAt ? Date.parse(run.completedAt) : Number.NaN;
+  return Number.isFinite(parked) && now - parked < APPROVAL_PATH_HOLD_MS;
+}
+
 /** The likely paths of the runs in progress other than `exceptRunId`, by issue. */
 export function busyPathsOf(
-  runs: ReadonlyArray<{
-    id: string;
-    issueNumber: number | null;
-    state: string;
-    triage: FactoryTriage | null;
-    stackedOn?: { runId: string } | null;
-  }>,
+  runs: ReadonlyArray<PathHolder>,
   exceptRunId: string,
   /**
    * The run `exceptRunId` is stacked on (D10): it builds on that run's branch
    * on purpose, so sharing its files is the point and its paths do not count.
    */
   stackedOnRunId: string | null = null,
-): Array<{ issue: number; paths: string[] }> {
-  return runs.flatMap((run) => {
+  /**
+   * Present when the factory keeps the paths of a run parked for a member's
+   * approval (its `holdPathsAwaitingApproval` setting): the time to measure
+   * the hold from.
+   */
+  approvalHold: { now: number } | null = null,
+): BusyPaths[] {
+  return runs.flatMap((run): BusyPaths[] => {
     // Neither way round: a blocker is not held by the runs stacked on it
     // either, since they wait for it to merge (holding it would deadlock).
     if (run.id === stackedOnRunId || run.stackedOn?.runId === exceptRunId) return [];
     // A run without an issue has no triage contract, so no likely paths.
-    if (run.issueNumber === null || run.id === exceptRunId || !takesPaths(run.state)) return [];
-    const paths = readyPathsOf(run.triage);
-    return paths.length > 0 ? [{ issue: run.issueNumber, paths }] : [];
+    if (run.issueNumber === null || run.id === exceptRunId) return [];
+    const held = pathsTakenBy(run, approvalHold);
+    return held ? [{ issue: run.issueNumber, ...held }] : [];
   });
+}
+
+/** The paths `run` takes: while it changes files, or while it waits for an approval the factory holds them for. */
+function pathsTakenBy(
+  run: PathHolder,
+  approvalHold: { now: number } | null,
+): Omit<BusyPaths, 'issue'> | null {
+  const awaitingApproval = approvalHold !== null && awaitsApprovalAt(run, approvalHold.now);
+  if (!takesPaths(run.state) && !awaitingApproval) return null;
+  const paths = readyPathsOf(run.triage);
+  if (paths.length === 0) return null;
+  return awaitingApproval ? { paths, awaitingApproval } : { paths };
+}
+
+/**
+ * Whether every one of `blockers` holds its paths only because it waits for a
+ * member's approval: what the run waiting for them is told.
+ */
+export function allAwaitApproval(blockers: readonly number[], busy: readonly BusyPaths[]): boolean {
+  return (
+    blockers.length > 0 &&
+    blockers.every((issue) =>
+      busy.some((other) => other.issue === issue && other.awaitingApproval === true),
+    )
+  );
 }
 
 /**

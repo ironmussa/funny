@@ -88,7 +88,7 @@ function seedStores(projects: Project[] = [makeProject()]) {
 
 function makeThreadsForStages(stages: Partial<Record<ThreadStage, number>>): Thread[] {
   const threads: Thread[] = [];
-  const titles: Record<string, string[]> = {
+  const titles: Record<ThreadStage, string[]> = {
     backlog: ['Investigate slow queries', 'Add CSV export', 'Upgrade to React 19'],
     planning: ['Design new onboarding flow', 'Plan API v2 migration'],
     in_progress: ['Add dark mode support', 'Fix WebSocket reconnection', 'Implement file upload'],
@@ -261,7 +261,7 @@ export const WithGitStatus: Story = {
   decorators: [
     (Story) => {
       counter = 0;
-      const statusByBranch: Record<string, GitStatusInfo> = {
+      const statusByBranch = {
         'proj-1:feat/review-0': {
           threadId: 'id-1',
           branchKey: 'proj-1:feat/review-0',
@@ -286,7 +286,7 @@ export const WithGitStatus: Story = {
           linesAdded: 120,
           linesDeleted: 15,
         },
-      };
+      } satisfies Record<string, GitStatusInfo>;
       seedStores();
       seedGitStatus({ statusByBranch });
       return <Story />;

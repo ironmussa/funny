@@ -24,7 +24,7 @@ import { nanoid } from 'nanoid';
 import { z } from 'zod';
 
 import { log } from '../../lib/logger.js';
-import type { AgentToolDefinition, AgentToolResult } from '../agent-mcp-http.js';
+import type { AgentToolDefinition, AgentToolExtra, AgentToolResult } from '../agent-mcp-http.js';
 import { getServices } from '../service-registry.js';
 import { resolveThreadCwd, tmpAssetsPathFor } from '../thread-context.js';
 import { wsBroker } from '../ws-broker.js';
@@ -205,7 +205,7 @@ export function checkToolDefinition(threadId: string, userId: string): AgentTool
     name: 'funny_run_checks',
     description,
     schema,
-    run: (args: Args, extra: unknown) =>
-      runChecks(threadId, userId, args, (extra as { signal?: AbortSignal } | undefined)?.signal),
+    run: (args: Args, extra: AgentToolExtra | undefined) =>
+      runChecks(threadId, userId, args, extra?.signal),
   };
 }

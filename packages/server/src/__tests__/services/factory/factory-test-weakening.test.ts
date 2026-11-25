@@ -240,6 +240,7 @@ describe('classifyRisk', () => {
       riskHints?: string[];
       maxLowRiskLines?: number;
       sizeIgnoredPaths?: string[];
+      lintCleanup?: boolean;
     } = {},
   ) => {
     const change = { files, truncated: false };
@@ -370,6 +371,113 @@ describe('classifyRisk', () => {
     expect(risk(change, { riskHints: ['changes the retry policy'] })).toMatchObject({
       level: 'high',
       reasons: ['the contract names a risk: changes the retry policy'],
+    });
+  });
+
+  // A member marked the run as a lint cleanup: large changes that only clear
+  // warnings pass, as long as the diff shows the warnings were not hidden.
+  describe('a run a member marked as a lint cleanup', () => {
+    const big = Array.from({ length: 900 }, (_, index) => `+const v${index} = ${index};`);
+    const hints = { riskHints: ['Large mechanical change: expect conflicts'] };
+    // Built in two parts: this file's own audit reads a literal skip as a weakened test.
+    const SKIPPED_TEST = ['+test', ".skip('adds', () => {"].join('');
+
+    test('its size and the contract hints do not make it high risk, and are kept as waived', () => {
+      const marked = risk([file('src/long.ts', big)], { ...hints, lintCleanup: true });
+      expect(marked).toMatchObject({ level: 'low', reasons: [], keys: [] });
+      expect(marked.waived).toEqual([
+        '900 changed lines outside tests and docs (more than 400)',
+        'the contract names a risk: Large mechanical change: expect conflicts',
+      ]);
+      // Unmarked, the same change waits for a person.
+      expect(risk([file('src/long.ts', big)], hints).level).toBe('high');
+    });
+
+    test('a sensitive path and a weakened test still make it high risk', () => {
+      const sensitive = risk([file('src/long.ts', big), file('src/db/migrate.ts', ['+x'])], {
+        lintCleanup: true,
+      });
+      expect(sensitive.level).toBe('high');
+      expect(sensitive.reasons).toEqual([
+        'touches a sensitive path: src/db/migrate.ts (**/migrate.ts)',
+      ]);
+      const skipped = risk([file('src/long.ts', big), file('src/sum.test.ts', [SKIPPED_TEST])], {
+        lintCleanup: true,
+      });
+      expect(skipped.level).toBe('high');
+      expect(skipped.keys?.some((key) => key.startsWith('finding:'))).toBe(true);
+    });
+
+    test('a suppression added to clear a warning is not a cleanup: the size counts again', () => {
+      const silenced = risk(
+        [file('src/long.ts', [...big, '+// eslint-disable-next-line max-lines'])],
+        { lintCleanup: true },
+      );
+      expect(silenced.level).toBe('high');
+      expect(silenced.waived).toBeUndefined();
+      expect(silenced.reasons).toEqual([
+        '901 changed lines outside tests and docs (more than 400)',
+        'marked as a lint cleanup, but it adds a lint or type-check suppression (src/long.ts)',
+      ]);
+      expect(silenced.keys).toContain('lint-cleanup:suppression');
+    });
+
+    // #489: splitting a long file moves its suppressions to the new files.
+    test('a suppression moved from one file to another is not an added one', () => {
+      const disable = '// oxlint-disable-next-line anti-slop/no-chained-type-assertions -- why';
+      const moved = risk(
+        [
+          file('src/long.ts', [...big, `-    ${disable}`, `-  ${disable}`]),
+          file('src/part-a.ts', [`+      ${disable}`]),
+          file('src/part-b.ts', [`+${disable}`]),
+        ],
+        { lintCleanup: true },
+      );
+      expect(moved.level).toBe('low');
+      expect(moved.keys).not.toContain('lint-cleanup:suppression');
+
+      // One more than was removed, or a different rule, is still added.
+      const extra = risk(
+        [
+          file('src/long.ts', [...big, `-${disable}`]),
+          file('src/part-a.ts', [`+${disable}`, `+${disable}`]),
+          file('src/part-b.ts', ['+// eslint-disable-next-line max-lines']),
+        ],
+        { lintCleanup: true },
+      );
+      expect(extra.level).toBe('high');
+      expect(extra.reasons.at(-1)).toBe(
+        'marked as a lint cleanup, but it adds a lint or type-check suppression (src/part-a.ts, src/part-b.ts)',
+      );
+    });
+
+    test('a change to the lint configuration is not a cleanup', () => {
+      const loosened = risk([file('src/long.ts', big), file('oxlint.config.ts', ['+x'])], {
+        lintCleanup: true,
+      });
+      expect(loosened.level).toBe('high');
+      expect(loosened.reasons.at(-1)).toBe(
+        'marked as a lint cleanup, but it changes the lint or type-check configuration (oxlint.config.ts)',
+      );
+    });
+
+    test('a file GitHub gave no diff for cannot be checked, so nothing is waived', () => {
+      const unread = classifyRisk({
+        headSha: SHA,
+        change: {
+          files: [{ path: 'src/huge.ts', status: 'modified', additions: 900, deletions: 0 }],
+          truncated: false,
+        },
+        findings: [],
+        lintCleanup: true,
+      });
+      expect(unread.level).toBe('high');
+      expect(unread.keys).toEqual(['size', 'lint-cleanup:unread']);
+    });
+
+    test('a small marked change with nothing to waive reads as any low-risk change', () => {
+      const small = risk([file('src/a.ts', ['+const a = 1;'])], { lintCleanup: true });
+      expect(small).toEqual({ headSha: SHA, level: 'low', reasons: [], keys: [] });
     });
   });
 

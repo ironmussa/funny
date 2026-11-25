@@ -110,6 +110,12 @@ export function factoryWaitReasonText(t: TFunction, reason: FactoryWaitReason): 
         'Waiting for {{blockers}}: it works on the same files',
         { blockers },
       );
+    case 'paths-awaiting-approval':
+      return t(
+        'factory.wait.pathsAwaitingApproval',
+        'Waiting for {{blockers}}: it holds the same files while it waits for an approval',
+        { blockers },
+      );
     case 'no-free-slot':
       return t(
         'factory.wait.noFreeSlot',
@@ -373,6 +379,11 @@ export function factoryRunReasonDetail(
       return t(
         'factory.reasonDetail.mergeRounds',
         "The agent's rounds of fixes did not get the change to merge with its base branch. Look at the pull request and resolve it yourself.",
+      );
+    case 'base keeps moving':
+      return t(
+        'factory.reasonDetail.baseMoving',
+        'GitHub refused the merge several times because the base branch or the pull request kept changing. Retry the run when the branch is quiet.',
       );
     default:
       return run.failureReason;

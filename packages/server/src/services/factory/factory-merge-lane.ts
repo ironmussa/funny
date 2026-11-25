@@ -66,8 +66,13 @@ const QUEUE_INTERVAL_MS = 30 * 1000;
 const QUEUE_READ_RETRIES = 5;
 const QUEUE_TIMEOUT_MS = 2 * 60 * 60 * 1000;
 
+/** Merge queue state → where it leaves the pull request, for the final states only. */
+interface QueueEnds {
+  [state: string]: QueueEnd | undefined;
+}
+
 /** Where each final queue state leaves the pull request (`queued` is not final). */
-const QUEUE_ENDS: Partial<Record<string, QueueEnd>> = {
+const QUEUE_ENDS: QueueEnds = {
   merged: { kind: 'merged' },
   'not-queued': { kind: 'removed' },
   closed: { kind: 'failed', error: 'The pull request was closed while in the merge queue.' },
@@ -397,6 +402,20 @@ export function createMergeLane(deps: MergeLaneDeps) {
         };
       }
       return followQueue(pr);
+    },
+
+    /**
+     * Which branch moved since `sha` was the head to merge: the pull request's
+     * head, the base (the head is behind it), or neither. What tells a merge
+     * GitHub refused in the moment a branch moved from one a rule refuses
+     * (openspec factory-merge-fewer-bounces, D1). Null when it cannot say.
+     */
+    async movedSince(sha: string): Promise<'head' | 'base' | 'neither' | null> {
+      const pr = deps.pullRequest();
+      const position = pr ? await positionOf(pr) : null;
+      if (!position || 'error' in position) return null;
+      if (position.sha !== sha) return 'head';
+      return position.behindBy > 0 ? 'base' : 'neither';
     },
 
     /**

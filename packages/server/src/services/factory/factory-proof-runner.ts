@@ -18,7 +18,6 @@ import type { Result } from 'neverthrow';
 import { z } from 'zod';
 
 import type { FactoryProofCheck } from './factory-pull-requests.js';
-import type { RegressionProofJobBody } from './factory-runner-jobs.js';
 import type { RegressionProofRecord } from './factory-runs.js';
 
 /** Start, poll and stop a proof job on the runner of a run's thread. */
@@ -50,7 +49,7 @@ const PROOF_POLL_MS = 5_000;
 const PROOF_OFFLINE_GRACE_MS = 180_000;
 
 /** The prefix of a request error that never reached the runner. */
-import { RUNNER_UNAVAILABLE_PREFIX } from './factory-runner-jobs.js';
+import { RUNNER_UNAVAILABLE_PREFIX, type RegressionProofJobBody } from './factory-runner-jobs.js';
 
 /** The runner's proof result (`ProofResult` of the runtime). */
 const PROOF_RESULT = z.object({

@@ -188,4 +188,39 @@ describe('describeRun', () => {
     expect(described).toContain('merge approved by a member at c2b585c');
     expect(described).toContain('approval request approved for c2b585c');
   });
+
+  test('a run held again lists what changed since the approved commit', () => {
+    const described = describeRun({
+      ...held,
+      approvedSha: 'c2b585c51b2e99',
+      sinceApproval: {
+        approvedSha: 'c2b585c51b2e99',
+        lines: 8,
+        files: ['src/new.ts', 'src/a.ts'],
+        moreFiles: 2,
+        newFiles: ['src/new.ts'],
+        newRiskKeys: ['ci'],
+      },
+    });
+    expect(described).toContain('since the approval of c2b585c: 8 lines of the change differ');
+    expect(described).toContain('- src/new.ts (not in the approved change)');
+    expect(described).toContain('- src/a.ts\n');
+    expect(described).toContain('… and 2 more');
+    expect(described).toContain('new risk reason: ci');
+  });
+
+  test('a difference that could not be computed says so', () => {
+    const described = describeRun({
+      ...held,
+      sinceApproval: {
+        approvedSha: 'c2b585c51b2e99',
+        lines: null,
+        files: [],
+        moreFiles: 0,
+        newFiles: [],
+        newRiskKeys: [],
+      },
+    });
+    expect(described).toContain('the difference could not be computed');
+  });
 });

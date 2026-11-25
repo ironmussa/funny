@@ -7,7 +7,11 @@ import { describe, expect, test } from 'bun:test';
 
 import type { PullRequestFile } from '@funny/core/github-app';
 import type { CiState } from '@funny/core/github-app';
-import type { FactoryMergeApproval, FactoryRisk } from '@funny/shared/contracts/factory';
+import type {
+  FactoryApprovalGap,
+  FactoryMergeApproval,
+  FactoryRisk,
+} from '@funny/shared/contracts/factory';
 import { err, errAsync, ok, okAsync } from 'neverthrow';
 
 import { createFactoryActionProvider } from '../../../services/factory/factory-action-provider.js';
@@ -1184,6 +1188,7 @@ describe('merge brings the branch up to date with its base first', () => {
       const asked: Array<Record<string, unknown>> = [];
       const moves: unknown[] = [];
       const announced: unknown[] = [];
+      const gaps: Array<{ approved: string; gap: FactoryApprovalGap }> = [];
       posted.length = 0;
       commentError = null;
       const run = lane({
@@ -1197,6 +1202,9 @@ describe('merge brings the branch up to date with its base first', () => {
             announced.push(move);
           },
           approvalAdjustMaxLines: over.maxLines,
+          noteApprovalGap: async (approved, gap) => {
+            gaps.push({ approved, gap });
+          },
           carryMergeApproval: async (from, to, move) => {
             if (approval.sha !== from) return false;
             approval = { ...approval, sha: to, carriedFrom: approval.carriedFrom ?? from };
@@ -1215,7 +1223,7 @@ describe('merge brings the branch up to date with its base first', () => {
           },
         },
       });
-      return { ...run, asked, moves, announced, approval: () => approval };
+      return { ...run, asked, moves, announced, gaps, approval: () => approval };
     }
 
     const compared = (over: Record<string, unknown>) => ({
@@ -1345,7 +1353,7 @@ describe('merge brings the branch up to date with its base first', () => {
       });
 
       test('a file the approved change did not touch waits for a person', async () => {
-        const { merge, merges } = approvedAtA(
+        const { merge, merges, gaps } = approvedAtA(
           compared({
             lines: 5,
             files: [{ path: 'src/new.ts', lines: 5 }],
@@ -1355,6 +1363,28 @@ describe('merge brings the branch up to date with its base first', () => {
         );
         expect((await merge()).error).toContain('src/new.ts');
         expect(merges).toEqual([]);
+        // openspec factory-merge-fewer-bounces, D2: the hold keeps what differs.
+        expect(gaps).toHaveLength(1);
+        expect(gaps[0]).toMatchObject({
+          approved: SHA_A,
+          gap: {
+            to: SHA_NEW,
+            lines: 5,
+            files: ['src/new.ts'],
+            newFiles: ['src/new.ts'],
+            newRiskKeys: [],
+          },
+        });
+        expect(gaps[0]!.gap.reason).toContain('src/new.ts');
+      });
+
+      test('an approval that follows records no gap', async () => {
+        const { merge, gaps } = approvedAtA(sevenLines, {
+          approval: { riskKeys: await riskKeysOfHead() },
+          maxLines: 50,
+        });
+        expect(await merge()).toMatchObject({ ok: true, output: 'merged' });
+        expect(gaps).toEqual([]);
       });
 
       test('a risk reason the approved commit did not have waits for a person', async () => {

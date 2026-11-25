@@ -110,3 +110,17 @@ describe('updateBase', () => {
     expect(checksWaited()).toBe(1);
   });
 });
+
+describe('movedSince (openspec factory-merge-fewer-bounces, D1)', () => {
+  test('the base moved: the head is the same commit and is behind', async () => {
+    expect(await laneOn({ behind: 1 }).lane.movedSince(A)).toBe('base');
+  });
+
+  test('the head moved: the pull request is at another commit', async () => {
+    expect(await laneOn({ behind: 0 }).lane.movedSince('b'.repeat(40))).toBe('head');
+  });
+
+  test('neither moved: what refused the merge is something else', async () => {
+    expect(await laneOn({ behind: 0 }).lane.movedSince(A)).toBe('neither');
+  });
+});

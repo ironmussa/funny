@@ -41,6 +41,7 @@ const run = (over: Partial<FactoryRun>): FactoryRun => ({
   flowCommit: null,
   stepOptions: [],
   mergeApproval: null,
+  riskWaiver: null,
   ...over,
 });
 
@@ -61,6 +62,7 @@ const settings = (over: Partial<FactorySettings> = {}): FactorySettings => ({
   batch: { size: 5, waitSeconds: 60 },
   dependencies: 'wait',
   tooBig: 'ask',
+  holdPathsAwaitingApproval: false,
   blockedReason: null,
   updatedAt: '2026-11-16T00:00:00.000Z',
   ...over,

@@ -33,6 +33,7 @@ const settings: FactorySettings = {
   batch: { size: 5, waitSeconds: 60 },
   dependencies: 'wait',
   tooBig: 'ask',
+  holdPathsAwaitingApproval: false,
   blockedReason: null,
   updatedAt: '2026-11-21T00:00:00.000Z',
 };

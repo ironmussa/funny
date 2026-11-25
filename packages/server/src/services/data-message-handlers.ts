@@ -91,6 +91,11 @@ interface DataMessageContext {
 
 type DataMessageHandler = (ctx: DataMessageContext) => Promise<any>;
 
+/** `data:*` message type → the executor that answers it. */
+interface DataMessageHandlers {
+  readonly [type: string]: DataMessageHandler;
+}
+
 // Statuses that end a run. Only these are re-broadcast from the persistence
 // path: 'waiting' must NOT be, because the client's status handler would apply
 // it without the waitingReason/permissionRequest payload that only the live
@@ -192,9 +197,8 @@ async function findAgentTemplateForRunner(ownerId: string, templateId: unknown):
 /** A runner-sent patch's own fields (the decoded `Struct` of a watcher / job update). */
 type PatchFields = ReadonlyMap<string, unknown>;
 
-function ownFields(raw: unknown): PatchFields {
-  return new Map(raw && typeof raw === 'object' ? Object.entries(raw) : []);
-}
+const ownFields = (raw: unknown): PatchFields =>
+  new Map(raw && typeof raw === 'object' ? Object.entries(raw) : []);
 
 /** Keep `patch[key]` when it passes `ok`; drop it otherwise. */
 function copyIf<K extends string, T>(
@@ -253,7 +257,7 @@ function pickJobPatch(raw: unknown): JobPatch {
 const OWNER_SCOPED_LIST_FALLBACK = [] as const;
 
 /** Dispatch table: one executor per `data:*` message type. */
-const DATA_MESSAGE_HANDLERS: Readonly<Record<string, DataMessageHandler>> = {
+const DATA_MESSAGE_HANDLERS: DataMessageHandlers = {
   'data:insert_message': async ({ data }) => {
     const messageRepo = repos.messages();
     const messageId = await messageRepo.insertMessage(data.payload);

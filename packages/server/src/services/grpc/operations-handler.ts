@@ -44,7 +44,10 @@ type DataRequestValue =
   | { [key: string]: DataRequestValue };
 
 /** The `data:*` message an operation becomes, handed to `handleDataMessageWithAck`. */
-type DataRequest = { type: string; [field: string]: DataRequestValue };
+interface DataRequest {
+  type: string;
+  [field: string]: DataRequestValue;
+}
 
 /** `OperationSuccess`, one case of its `result` oneof. */
 type OperationSuccessWire =

@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import { proposeQueueCi } from '@/data/factory/actions';
 import { useFactoryFlowDefinition, useFactoryReadiness } from '@/data/factory/hooks';
 import type { FactorySettings, SaveFactorySettingsInput } from '@/lib/api/factory';
@@ -33,6 +34,7 @@ type MergeSettings = Pick<
   | 'batch'
   | 'dependencies'
   | 'tooBig'
+  | 'holdPathsAwaitingApproval'
 >;
 
 const { min: LOW_RISK_LINES_MIN, max: LOW_RISK_LINES_MAX } = LOW_RISK_LINES_RANGE;
@@ -289,6 +291,7 @@ export function ProjectFactoryMergeRows({
   const { definition } = useFactoryFlowDefinition(projectId, flowName);
   const { autoMerge, sensitivePaths, stageLimits, batch, dependencies } = settings;
   const { maxLowRiskLines, sizeIgnoredPaths, tooBig, approvalAdjustMaxLines } = settings;
+  const { holdPathsAwaitingApproval } = settings;
 
   return (
     <>
@@ -427,6 +430,21 @@ export function ProjectFactoryMergeRows({
               onSave({ approvalAdjustMaxLines: next });
             }
           }}
+        />
+      </ProjectSettingRow>
+
+      <ProjectSettingRow
+        settingId="factory.holdPathsAwaitingApproval"
+        title={t('settings.projectFactoryHoldPaths', 'Keep files while waiting for an approval')}
+        description={t(
+          'settings.projectFactoryHoldPathsDesc',
+          'While a high-risk change waits for your approval, no other run starts on the files it is expected to touch, for at most 12 hours. Later runs wait longer; approved changes meet fewer conflicts',
+        )}
+      >
+        <Switch
+          checked={holdPathsAwaitingApproval}
+          onCheckedChange={(checked) => onSave({ holdPathsAwaitingApproval: checked })}
+          data-testid="settings-factory-hold-paths-awaiting-approval"
         />
       </ProjectSettingRow>
 

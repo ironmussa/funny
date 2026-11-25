@@ -88,6 +88,7 @@ const configured = (over: Partial<FactorySettings> = {}): FactorySettings => ({
   batch: { size: 5, waitSeconds: 60 },
   dependencies: 'wait',
   tooBig: 'ask',
+  holdPathsAwaitingApproval: false,
   blockedReason: null,
   updatedAt: '2026-11-16T00:00:00.000Z',
   ...over,

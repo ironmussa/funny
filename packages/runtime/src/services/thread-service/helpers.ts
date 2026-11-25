@@ -26,6 +26,11 @@ export class ThreadServiceError extends Error {
   }
 }
 
+/** Keep a ThreadServiceError as is; wrap any other failure as a 500. */
+export function toThreadServiceError(cause: unknown): ThreadServiceError {
+  return cause instanceof ThreadServiceError ? cause : new ThreadServiceError(String(cause), 500);
+}
+
 // ── Helpers ─────────────────────────────────────────────────────
 
 /**

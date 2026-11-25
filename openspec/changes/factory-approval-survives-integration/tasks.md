@@ -35,9 +35,7 @@
 
 ## 6. Paths of a run waiting for its approval (D8)
 
-- [ ] 6.1 Add `hold_paths_awaiting_approval` to `factory_settings` (same migration as 4.2 when both land together), the contract and `factory-settings.ts`; verify with a settings test for the default `false`
-- [ ] 6.2 Extend `busyPathsOf` for a run parked for a high-risk approval within `APPROVAL_PATH_HOLD_MS`, and the queue reason for a run that waits for it; verify with `factory-triage` tests for each new scenario of "Runs with overlapping paths do not work at the same time" (holds within 12 hours, lapses after, parked for another reason holds none, setting off holds none)
-- [ ] 6.3 Add the setting row (`SettingRow`, `data-testid`, `settings-index.ts`) and a line in `openwiki/architecture/issue-factory.md`; verify `bun run lint` passes
+Moved to the change `factory-merge-fewer-bounces` (its D6 and tasks 4.2, 4.3), built there.
 
 ## 7. Integration
 

@@ -738,6 +738,8 @@
     "projectFactoryMaxLowRiskLinesDesc": "A change with more changed lines than this is high risk. Tests, Markdown, translations, stories, snapshots and lockfiles do not count",
     "projectFactoryApprovalAdjust": "Adjustment an approval follows",
     "projectFactoryApprovalAdjustDesc": "After you approve a high-risk change, the factory may merge a later commit that differs from it by at most this many lines, only in files you approved and with no new risk reason. It then merges lines no person read; the review still has to pass. 0: only the same change",
+    "projectFactoryHoldPaths": "Keep files while waiting for an approval",
+    "projectFactoryHoldPathsDesc": "While a high-risk change waits for your approval, no other run starts on the files it is expected to touch, for at most 12 hours. Later runs wait longer; approved changes meet fewer conflicts",
     "projectFactorySizeIgnoredPaths": "Not counted in size",
     "projectFactorySizeIgnoredPathsDesc": "Globs, separated by commas. Their lines do not count toward the size of a change. Sensitive paths still apply to them",
     "projectFactoryStageLimits": "Runs per step",
@@ -1827,6 +1829,7 @@
       "tooBig": "Too big"
     },
     "wait": {
+      "pathsAwaitingApproval": "Waiting for {{blockers}}: it holds the same files while it waits for an approval",
       "notSent": "Blocked by {{blockers}}, which is not in the factory",
       "inProgress": "Waiting for {{blockers}} to finish",
       "waitingMerge": "Waiting for the pull request of {{blockers}}",
@@ -1914,11 +1917,33 @@
       "noReview": "The commit it would merge has no verdict from the flow's review step, so nothing checked it. Review the pull request and merge it yourself.",
       "reviewFailed": "The review of the commit it would merge did not pass. Read its findings on the pull request, then follow up on this thread to fix them or merge it yourself.",
       "rewritten": "The branch no longer contains the commit that was reviewed (a rebase or a force push), so what would be merged was not checked. Look at the new head on the pull request before merging it yourself.",
-      "mergeRounds": "The agent's rounds of fixes did not get the change to merge with its base branch. Look at the pull request and resolve it yourself."
+      "mergeRounds": "The agent's rounds of fixes did not get the change to merge with its base branch. Look at the pull request and resolve it yourself.",
+      "baseMoving": "GitHub refused the merge several times because the base branch or the pull request kept changing. Retry the run when the branch is quiet."
     },
     "approveMerge": "Approve and merge",
+    "markDone": "Mark as done",
+    "lintCleanup": "Lint cleanup",
+    "lintCleanupOff": "Not a lint cleanup",
+    "lintCleanupTitle": "Treat this run as a lint cleanup again?",
+    "lintCleanupBody": "Triage classed it as a lint cleanup of rules that cannot change behavior. Its size and the risks its contract names will no longer hold it: the factory merges it by itself once its checks, review and regression proof pass, whatever commits follow. It still waits for you if it touches a sensitive path, weakens a test, adds a lint suppression or changes the lint configuration.",
+    "lintCleanupConfirm": "Treat as a lint cleanup",
     "approveMergeTitle": "Merge this high-risk change?",
     "approveMergeBody": "The factory will merge commit {{sha}} of issue #{{issue}} once its checks, review and regression proof still pass. A new commit on the branch needs a new approval.",
+    "approvalGap": {
+      "title": "You approved",
+      "unknown": "What changed since then could not be computed: read the whole change.",
+      "lines_one": "Since then, {{count}} line of the change differs:",
+      "lines_other": "Since then, {{count}} lines of the change differ:",
+      "newFile": "not in the approved change",
+      "moreFiles_one": "and {{count}} more file",
+      "moreFiles_other": "and {{count}} more files",
+      "newRisks": "New risk reasons:",
+      "why": "The approval did not follow because {{reason}}.",
+      "compare": "Commits since the approval",
+      "board_one": "Asks again after {{count}} line changed",
+      "board_other": "Asks again after {{count}} lines changed",
+      "boardUnknown": "Asks again: the change differs from what you approved"
+    },
     "approvalRequest": {
       "title": "Approval needed to merge #{{issue}}",
       "titleNoIssue": "Approval needed to merge this run",
@@ -2119,6 +2144,7 @@
     }
   },
   "factoryRunDetail": {
+    "lintCleanupTriage": "Triage classed it as a lint cleanup of rules that cannot change behavior: its size and its contract risks do not hold it. You can say it is not one.",
     "approvalAdjustment": "{{lines}} lines differ in {{files}} files",
     "approvalMovedTo": "moved to",
     "approvalSameChange": "same change",

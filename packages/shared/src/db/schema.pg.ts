@@ -327,6 +327,8 @@ export const factorySettings = pgTable(
     dependencies: text('dependencies'),
     /** `split` (open a too-large issue's parts as issues) or `ask` (null): comment the split. */
     tooBig: text('too_big'),
+    /** 1: a run parked for a member's approval keeps its likely paths (null / 0: it holds none). */
+    holdPathsAwaitingApproval: integer('hold_paths_awaiting_approval'),
     /** JSON object of the factory's per-step overrides (`FactoryStepOverrides`), or null. */
     stepOverrides: text('step_overrides'),
     createdAt: text('created_at').notNull(),
@@ -398,6 +400,8 @@ export const factoryRuns = pgTable('factory_runs', {
   /** JSON: the run this one is stacked on (D10: run id, issue, branch, retargeted), or null. */
   stackedOn: text('stacked_on'),
   mergeApproval: text('merge_approval'),
+  /** JSON `FactoryRiskWaiver`: a member marked the run as a lint cleanup; null otherwise. */
+  riskWaiver: text('risk_waiver'),
   /** The schedule trigger that started the run (change flow-triggers); null otherwise. */
   triggerId: text('trigger_id'),
   /** The trigger's name when the run started, kept for display after an edit or a delete. */

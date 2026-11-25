@@ -22,18 +22,24 @@ interface ResolveAgentTemplateInput {
   mcpServers?: AgentMcpServers;
 }
 
+/** A template's list column: JSON text from the database, or a list already parsed. */
+type StoredListColumn = string | readonly unknown[] | null | undefined;
+
+/** A thread's template variables: JSON text from the database, or an object already parsed. */
+type StoredTemplateVariables = string | Readonly<Record<string, string>> | null | undefined;
+
 /** Parse JSON text columns that may already be parsed. */
-function parseJsonCol<T>(val: unknown): T[] {
+function parseJsonCol<T>(val: StoredListColumn): T[] {
   return val ? ((typeof val === 'string' ? JSON.parse(val) : val) as T[]) : [];
 }
 
-function parseTemplateVariables(rawVars: unknown): Record<string, string> {
+function parseTemplateVariables(rawVars: StoredTemplateVariables): Record<string, string> {
   if (typeof rawVars === 'string') return JSON.parse(rawVars);
   return rawVars && typeof rawVars === 'object' ? (rawVars as Record<string, string>) : {};
 }
 
 /** Replace `{{VAR_NAME}}` placeholders with the thread's template variables. */
-function interpolateTemplatePrompt(prompt: string, rawVars: unknown): string {
+function interpolateTemplatePrompt(prompt: string, rawVars: StoredTemplateVariables): string {
   const varValues = parseTemplateVariables(rawVars);
   if (Object.keys(varValues).length === 0) return prompt;
   return prompt.replace(
@@ -59,7 +65,7 @@ function applyTemplate(
   out: AgentTemplateResolution,
   tpl: any,
   threadId: string,
-  templateVariables: unknown,
+  templateVariables: StoredTemplateVariables,
 ): void {
   const tplDisallowed = parseJsonCol<string>(tpl.disallowedTools);
   const tplMcpServers = parseJsonCol<McpServer>(tpl.mcpServers);

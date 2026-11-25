@@ -587,6 +587,15 @@ const ENTRIES = [
     keywords: ['approval', 'approve', 'high risk', 'merge', 'adjustment', 'carry'],
   },
   {
+    id: 'factory.holdPathsAwaitingApproval',
+    scope: 'project',
+    page: 'factory',
+    kind: 'row',
+    title: 'settings.projectFactoryHoldPaths',
+    description: 'settings.projectFactoryHoldPathsDesc',
+    keywords: ['approval', 'approve', 'high risk', 'paths', 'files', 'conflict', 'wait'],
+  },
+  {
     id: 'factory.sizeIgnoredPaths',
     scope: 'project',
     page: 'factory',

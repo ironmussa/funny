@@ -70,10 +70,16 @@ async function advertisedProviderState(): Promise<{
 }
 import { wsBroker } from './ws-broker.js';
 
+/** A terminal command the server forwarded for the browser-WS handler. */
+export interface BrowserWSMessage {
+  type: GrpcTerminalCommand['type'];
+  data: GrpcTerminalCommand['data'];
+}
+
 export type BrowserWSHandler = (
   userId: string,
-  data: unknown,
-  respond: (responseData: unknown) => void,
+  data: BrowserWSMessage,
+  respond: (responseData: WSEvent) => void,
 ) => void;
 
 /** A Hono-like app that can handle fetch requests */
@@ -170,11 +176,11 @@ export async function assignProjectToRunner(project: Project): Promise<void> {
 
 function handleBrowserWSMessage(
   userId: string,
-  data: unknown,
-  grpcRespond?: (responseData: unknown) => void,
+  data: BrowserWSMessage,
+  grpcRespond?: (responseData: WSEvent) => void,
 ): void {
   if (!state.browserWSHandler) {
-    const type = (data as { type?: string } | null)?.type ?? 'unknown';
+    const type = data.type;
     log.warn('No browser WS handler registered — dropping message', {
       namespace: 'runner',
       type,
@@ -183,7 +189,7 @@ function handleBrowserWSMessage(
     return;
   }
 
-  const respond = (responseData: unknown) => {
+  const respond = (responseData: WSEvent) => {
     grpcRespond?.(responseData);
   };
 

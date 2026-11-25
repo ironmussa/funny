@@ -40,15 +40,27 @@ export function useActionRuns(
   };
 }
 
+/** A GitHub query's data, whether it is fetching, and its error message. */
+interface ActionQueryRead {
+  loading: boolean;
+  error: string | null;
+}
+
+/** What `useActionJobs` returns. */
+interface ActionJobsRead extends ActionQueryRead {
+  jobs: ActionJob[] | undefined;
+}
+
+/** What `useActionJobLog` returns. */
+interface ActionJobLogRead extends ActionQueryRead {
+  log: ActionJobLog | undefined;
+}
+
 /**
  * A run's jobs, fetched while the run is expanded, polled while it runs and
  * the tab is visible, never while GitHub's rate limit pauses polling.
  */
-export function useActionJobs(
-  projectId: string,
-  run: ActionRun,
-  visible: boolean,
-): { jobs: ActionJob[] | undefined; loading: boolean; error: string | null } {
+export function useActionJobs(projectId: string, run: ActionRun, visible: boolean): ActionJobsRead {
   const rateLimited = useDataQuery(githubRateLimitQuery).data ?? false;
   const polling = visible && !rateLimited && run.status !== 'completed';
   const query = useDataQuery({
@@ -64,10 +76,7 @@ export function useActionJobs(
 }
 
 /** The end of a finished job's log, fetched once when asked for. */
-export function useActionJobLog(
-  projectId: string,
-  jobId: number,
-): { log: ActionJobLog | undefined; loading: boolean; error: string | null } {
+export function useActionJobLog(projectId: string, jobId: number): ActionJobLogRead {
   const query = useDataQuery(actionJobLogQuery(projectId, jobId));
   return {
     log: query.data,

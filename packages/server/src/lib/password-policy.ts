@@ -46,6 +46,11 @@ interface PasswordRequestBody {
   newPassword?: unknown;
 }
 
+/** Auth path → the body field carrying its password. */
+interface PasswordFieldByAuthPath {
+  [path: string]: keyof PasswordRequestBody;
+}
+
 /**
  * Better Auth endpoints that set a password, and the body field carrying it.
  * Better Auth itself checks only its own minimum length on some of these, and
@@ -53,7 +58,7 @@ interface PasswordRequestBody {
  * above on every one of them in a `before` hook. Add an endpoint here when a
  * new plugin or route can set a password.
  */
-const PASSWORD_FIELD_BY_AUTH_PATH: Record<string, keyof PasswordRequestBody> = {
+const PASSWORD_FIELD_BY_AUTH_PATH: PasswordFieldByAuthPath = {
   '/sign-up/email': 'password',
   '/change-password': 'newPassword',
   '/reset-password': 'newPassword',

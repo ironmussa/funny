@@ -66,6 +66,9 @@ const changeDeltaResultSchema = z.object({
   files: z.array(z.object({ path: z.string(), lines: z.number().int().min(0) })),
   filesTruncated: z.boolean(),
   outsideFrom: z.array(z.string()),
+  // openspec factory-approval-follows-base-code: absent from a runner without it (D3).
+  baseBrought: z.array(z.string()).optional(),
+  linesAcrossMoves: z.number().int().min(0).optional(),
   message: z.string(),
 });
 
@@ -171,6 +174,6 @@ export async function changeDeltaOnRunner(
   if (run.kind === 'unavailable') return err(run.why);
   if (run.result.kind !== 'change-delta') return err('the runner answered another step.');
   if (run.result.outcome !== 'compared') return err(run.result.message);
-  const { ancestor, lines, files, filesTruncated, outsideFrom } = run.result;
-  return ok({ ancestor, lines, files, filesTruncated, outsideFrom });
+  const { kind: _kind, outcome: _outcome, message: _message, ...delta } = run.result;
+  return ok(delta);
 }

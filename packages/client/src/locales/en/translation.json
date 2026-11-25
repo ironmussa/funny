@@ -1891,6 +1891,8 @@
     },
     "proof": {
       "title": "Regression proof",
+      "laterRun": "This run ended. Issue #{{issue}} was sent again as a later run: {{state}}",
+      "laterRunPr": "pull request",
       "pass": "Passed",
       "fail": "Failed",
       "skipped": "Skipped",
@@ -1938,6 +1940,7 @@
       "lines_one": "Since then, {{count}} line of the change differs:",
       "lines_other": "Since then, {{count}} lines of the change differ:",
       "newFile": "not in the approved change",
+      "baseFile": "code the base brought",
       "moreFiles_one": "and {{count}} more file",
       "moreFiles_other": "and {{count}} more files",
       "newRisks": "New risk reasons:",
@@ -1966,7 +1969,11 @@
       "runNow": "The run now:",
       "boardChip": "Approval asked",
       "boardMarker": "An agent asked for your approval"
-    }
+    },
+    "split_one": "Split into {{count}} issue",
+    "split_other": "Split into {{count}} issues",
+    "splitTitle": "Split issue #{{issue}}?",
+    "splitBody": "The factory opens one issue per part, with the description of #{{issue}} for context, and queues them. #{{issue}} gets the list and leaves the factory. No agent runs for this."
   },
   "projectSecrets": {
     "title": "Secrets",
@@ -2040,6 +2047,7 @@
       "sandbox-stopped": "Sandbox stopped",
       "sandbox-destroyed": "Sandbox destroyed",
       "pr-merged": "Pull request merged",
+      "pr-closed": "Pull request closed",
       "remote-branch-deleted": "Remote branch deleted",
       "agent-stopped": "Agent stopped",
       "factory-disabled": "Factory turned off",

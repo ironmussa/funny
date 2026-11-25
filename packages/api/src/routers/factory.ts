@@ -63,6 +63,13 @@ export const factoryRouter = router({
     .mutation(async ({ ctx, input }) =>
       unwrap(await ctx.ports.factory.retryRun(ctx.userId, input.projectId, input.runId)),
     ),
+  // Splitting a run parked as too large opens its parts as issues in the
+  // caller's name and queues them: the same `steer` as retrying it.
+  splitRun: projectProcedure('steer', CONTROL_FORBIDDEN)
+    .input(factoryRunInput)
+    .mutation(async ({ ctx, input }) =>
+      unwrap(await ctx.ports.factory.splitRun(ctx.userId, input.projectId, input.runId)),
+    ),
   // A member's approval of a high-risk change the factory held: the factory
   // then merges that commit in their name, like everything else it does.
   approveMerge: projectProcedure('steer', CONTROL_FORBIDDEN)
@@ -82,6 +89,13 @@ export const factoryRouter = router({
     .input(factoryRunInput)
     .mutation(async ({ ctx, input }) =>
       unwrap(await ctx.ports.factory.markRunDone(ctx.userId, input.projectId, input.runId)),
+    ),
+  // A member closes the pull request a replaced run left open. The server
+  // decides again that the run was replaced; the board only offers it.
+  closeReplacedPr: projectProcedure('steer', CONTROL_FORBIDDEN)
+    .input(factoryRunInput)
+    .mutation(async ({ ctx, input }) =>
+      unwrap(await ctx.ports.factory.closeReplacedPr(ctx.userId, input.projectId, input.runId)),
     ),
   // A member's statement that a run only clears lint warnings: its size then
   // does not hold it. Like an approval, it comes from a member's session only.

@@ -46,7 +46,7 @@ import type { StartedThread, StartThreadError } from '../runner-thread-launcher.
 import type { FactoryLaunchBody, IssueRunScope } from './factory-action-provider.js';
 import { issueInstruction, type FactoryIssueText } from './factory-issue-text.js';
 import { contractText, launchedThread, readOnlyRoleLaunch } from './factory-review.js';
-import { readRoleResult } from './factory-role-results.js';
+import { READ_ONLY_SHELL_RULE, readRoleResult } from './factory-role-results.js';
 import { HIGH_RISK_HOLD, type UpdateRunInput } from './factory-runs.js';
 import type { ThreadOutcome, WaitAfter } from './factory-thread-waits.js';
 
@@ -148,7 +148,7 @@ export function triageComment(
 }
 
 /** Whether the issue is a part the factory opened in a split. */
-const isSplitPart = (issue: FactoryIssueText | null): boolean =>
+export const isSplitPart = (issue: FactoryIssueText | null): boolean =>
   issue !== null && issue.body.includes(SPLIT_MARKER);
 
 /** Mentions turned into plain text, so copying a description pings nobody again. */
@@ -244,6 +244,7 @@ function triagePrompt(input: {
     `The issue is #${input.issueNumber} of ${input.repo}${input.issueUrl ? ` (${input.issueUrl})` : ''}.`,
     issueInstruction(input.issueNumber, input.issue),
     'Then read the code it is about in the checkout.',
+    READ_ONLY_SHELL_RULE,
     // Seen in a real run: a contract without the changelog line the repository's
     // CI requires cost the implementer a CI round to find it out.
     'Also read what the repository requires of every change before it merges: its CI workflows (`.github/workflows/`), the scripts they run, and its contributing notes (`CONTRIBUTING.md`, `AGENTS.md`, `CLAUDE.md`). Each requirement this change must meet (a changelog line, a test next to the code, a lint or format step) is an acceptance criterion of the contract, naming the file or script that enforces it.',
@@ -330,6 +331,73 @@ function splitParent(scope: IssueRunScope, issue: FactoryIssueText | null) {
 }
 
 const STOPPED: ActionResult = { ok: false, error: 'The run was stopped.' };
+
+/** A split to open: the parent issue, its sanitized parts and the issues already opened. */
+export interface SplitWork {
+  runId: string;
+  parent: { number: number; title: string; body: string | null };
+  /** The parts as posted (`publicItems`). */
+  parts: string[];
+  /** Issues opened for the first parts by an earlier attempt, in order. */
+  opened: readonly number[];
+}
+
+/**
+ * Open the parts not opened yet, calling `progress` with the list after each
+ * one so an interrupted split resumes without opening a part twice; stops at
+ * the first that cannot be opened. The issues opened, the earlier ones first.
+ * Shared by triage's automatic split and a member's split of a parked run.
+ */
+export async function openSplitParts(
+  split: Pick<FactorySplitDeps, 'openIssue'>,
+  work: SplitWork,
+  progress: (opened: number[]) => Promise<void>,
+): Promise<number[]> {
+  const opened = [...work.opened];
+  while (opened.length < work.parts.length) {
+    const index = opened.length;
+    const created = await split.openIssue(
+      splitPartIssue({ parent: work.parent, parts: work.parts, index }),
+    );
+    if (created.isErr()) {
+      log.warn('Issue factory could not open a part of a split issue', {
+        namespace: 'factory',
+        runId: work.runId,
+        issue: work.parent.number,
+        part: index + 1,
+        error: created.error,
+      });
+      break;
+    }
+    opened.push(created.value);
+    await progress([...opened]);
+  }
+  return opened;
+}
+
+/**
+ * After the parts are open: queue the new ones, list them on the parent, and
+ * take the factory's label off it (handing it to a person when a part is
+ * missing). The comment is best effort and logged.
+ */
+export async function announceSplit(
+  split: FactorySplitDeps,
+  comment: (body: string) => Promise<Result<void, string>>,
+  work: SplitWork,
+  opened: readonly number[],
+): Promise<void> {
+  await split.queue(opened.slice(work.opened.length));
+  const commented = await comment(splitComment(work.parts, opened));
+  if (commented.isErr()) {
+    log.warn('Issue factory could not comment the split on the issue', {
+      namespace: 'factory',
+      runId: work.runId,
+      issue: work.parent.number,
+      error: commented.error,
+    });
+  }
+  await split.release(opened.length === work.parts.length);
+}
 
 /** The run goes on: with its contract as text, or without one. */
 function proceed(triage: FactoryTriage): ActionResult {
@@ -453,39 +521,6 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
   }
 
   /**
-   * Open the parts not opened yet, recording the list after each one; stops at
-   * the first that cannot be opened. The parts opened, the earlier ones first.
-   */
-  async function openParts(
-    split: FactorySplitDeps,
-    shown: string[],
-    threadId: string,
-    issue: FactoryIssueText | null,
-    at: string,
-  ): Promise<number[]> {
-    const opened = [...resumedParts(deps.stored, threadId)];
-    const parent = splitParent(scope, issue);
-    while (opened.length < shown.length) {
-      const index = opened.length;
-      const created = await split.openIssue(splitPartIssue({ parent, parts: shown, index }));
-      if (created.isErr()) {
-        log.warn('Issue factory could not open a part of a split issue', {
-          namespace: 'factory',
-          runId: scope.runId,
-          issue: scope.issueNumber,
-          part: index + 1,
-          error: created.error,
-        });
-        break;
-      }
-      opened.push(created.value);
-      current = { decision: 'too_big', at, threadId, items: shown, splitInto: [...opened] };
-      await deps.record({ triage: current });
-    }
-    return opened;
-  }
-
-  /**
    * Open the parts as issues and end the run (the factory's `split` setting).
    * The issues opened so far are recorded after each one, so a resumed run
    * answering from the same thread does not open them again. Nothing opened:
@@ -499,16 +534,19 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
   ): Promise<ActionResult> {
     const shown = publicItems(parts);
     const at = new Date().toISOString();
-    const resumedCount = resumedParts(deps.stored, threadId).length;
-    const opened = await openParts(split, shown, threadId, issue, at);
+    const work: SplitWork = {
+      runId: scope.runId,
+      parent: splitParent(scope, issue),
+      parts: shown,
+      opened: resumedParts(deps.stored, threadId),
+    };
+    const opened = await openSplitParts(split, work, async (splitInto) => {
+      current = { decision: 'too_big', at, threadId, items: shown, splitInto };
+      await deps.record({ triage: current });
+    });
     if (opened.length === 0) return askOnIssue('too_big', parts, threadId);
 
-    await split.queue(opened.slice(resumedCount));
-    warnIfFailed(
-      await deps.comment(splitComment(shown, opened)),
-      'Issue factory could not comment the split on the issue',
-    );
-    await split.release(opened.length === shown.length);
+    await announceSplit(split, deps.comment, work, opened);
     current = { decision: 'too_big', at, threadId, items: shown, splitInto: opened };
     await deps.record({ state: 'done', failureReason: null, triage: current });
     await deps.count('triage_too_big');

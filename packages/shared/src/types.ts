@@ -1057,6 +1057,7 @@ export type ActivityEffectType =
   | 'sandbox-stopped'
   | 'sandbox-destroyed'
   | 'pr-merged'
+  | 'pr-closed'
   | 'remote-branch-deleted'
   | 'agent-stopped'
   | 'factory-disabled'

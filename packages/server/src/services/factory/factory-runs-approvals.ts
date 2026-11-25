@@ -101,7 +101,7 @@ export function mergeApprovalOperations() {
       runId: string,
       from: string,
       to: string,
-      move: Pick<FactoryApprovalMove, 'kind' | 'lines' | 'files'> = SAME_CHANGE,
+      move: Pick<FactoryApprovalMove, 'kind' | 'lines' | 'files' | 'baseFiles'> = SAME_CHANGE,
     ): ResultAsync<boolean, FactoryRunsError> {
       // The gap was about a commit the approval did not cover: it covers this one.
       return rewriteMergeApproval(runId, from, ({ gap: _covered, ...approval }) => ({
@@ -116,6 +116,7 @@ export function mergeApprovalOperations() {
             kind: move.kind,
             lines: move.lines,
             files: move.files.slice(0, MAX_MOVE_FILES),
+            ...(move.baseFiles?.length && { baseFiles: move.baseFiles.slice(0, MAX_MOVE_FILES) }),
           },
         ],
       }));

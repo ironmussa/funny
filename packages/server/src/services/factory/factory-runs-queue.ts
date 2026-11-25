@@ -7,7 +7,7 @@
  * The factory runs queue (change factory-manual-queue), split out of
  * `factory-runs.ts`.
  */
-import { type FactoryWaitReason } from '@funny/shared/contracts/factory';
+import { type FactoryTriage, type FactoryWaitReason } from '@funny/shared/contracts/factory';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { ResultAsync } from 'neverthrow';
 
@@ -182,6 +182,32 @@ export function queueOperations(newId: () => string) {
         failureReason: null,
         triage: run.triage ? JSON.stringify({ ...run.triage, superseded: true }) : null,
       }),
+
+    /**
+     * A member split a run parked as too large: it ends `done`, with the
+     * issues its parts were opened as. A compare-and-set from `needs_info`:
+     * false when the run moved meanwhile (its issue changed and it went back
+     * to triage, say).
+     */
+    markSplit: (runId: string, triage: FactoryTriage) =>
+      moveRun(runId, 'split', {
+        currentStep: null,
+        failureReason: null,
+        waitReason: null,
+        completedAt: new Date().toISOString(),
+        triage: JSON.stringify(triage),
+      }),
+
+    /** Record the parts opened so far, while the run is still parked (resumable). */
+    recordSplitProgress: (runId: string, triage: FactoryTriage) =>
+      ResultAsync.fromPromise(
+        db
+          .update(factoryRuns)
+          .set({ triage: JSON.stringify(triage) })
+          .where(and(eq(factoryRuns.id, runId), eq(factoryRuns.state, 'needs_info')))
+          .returning({ id: factoryRuns.id }),
+        storage,
+      ).map((rows) => rows.length > 0),
 
     /** The factory's runs waiting on their issue (`needs_info`). */
     needingInfo(factoryId: string): ResultAsync<FactoryRunView[], FactoryRunsError> {

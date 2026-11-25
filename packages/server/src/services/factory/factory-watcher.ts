@@ -25,7 +25,7 @@
 import type { FactoryTrigger } from '@funny/shared/contracts/factory';
 import { contractOf } from '@funny/shared/contracts/factory';
 import { and, eq } from 'drizzle-orm';
-import { err, ok } from 'neverthrow';
+import { err, ok, type Result } from 'neverthrow';
 
 import { db } from '../../db/index.js';
 import { projectSandboxSettings, threads } from '../../db/schema.js';
@@ -43,7 +43,12 @@ import { type FactoryGithubPort } from './factory-github.js';
 import { createFactoryIncidentsRepository } from './factory-incidents.js';
 import { prNumberOf } from './factory-pull-requests.js';
 import type { FactoryStepJobBody } from './factory-runner-jobs.js';
-import { createFactoryRunsRepository, IN_FLIGHT_STATES, threadsOf } from './factory-runs.js';
+import {
+  createFactoryRunsRepository,
+  IN_FLIGHT_STATES,
+  threadsOf,
+  type FactoryRunView,
+} from './factory-runs.js';
 import { createFactorySentinel } from './factory-sentinel.js';
 import {
   disableFactory,
@@ -226,6 +231,34 @@ export async function pokeFactory(id: string): Promise<void> {
 /** Stop driving a run's flow in this process (the run was stopped). */
 export function stopFactoryFlow(runId: string): void {
   flows?.stop(runId);
+}
+
+/**
+ * A member splits `run`, parked because its issue is too large: open the
+ * parts triage proposed as issues of the factory's repository, as the
+ * enabler (see `splitParked`). The issues opened, or why nothing was.
+ */
+export async function splitParkedFactoryRun(
+  run: FactoryRunView,
+): Promise<Result<number[], string>> {
+  if (!deps || !flows) return err('The issue factory is not running on this server.');
+  if (run.issueNumber === null) return err('The run has no issue to split.');
+  const factory = await getWatchedFactory(run.factoryId);
+  if (!factory) return err('The factory is not enabled.');
+  const target = await targetOf(factory);
+  if ('reason' in target) return err(target.reason);
+  const issue = await deps.github.getIssue(
+    { repo: target.repo, ownerId: factory.userId, projectId: factory.projectId },
+    run.issueNumber,
+  );
+  if (issue.isErr()) return err(`The issue could not be read: ${issue.error.message}`);
+  return flows.splitParked({
+    factory,
+    repo: target.repo,
+    mode: target.mode,
+    issue: issue.value,
+    run,
+  });
 }
 
 /** The runner ports the watcher acts through, while it runs. */

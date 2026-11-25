@@ -16,16 +16,19 @@ import type { FactoryQueueRun, FactoryRegressionProof, FactoryRun } from '@/lib/
 
 const mocks = ((): {
   run: FactoryRun | null;
+  laterRun: FactoryRun | null;
   queue: FactoryQueueRun[];
   thread: Pick<Thread, 'id' | 'projectId' | 'source'> | undefined;
 } => ({
   run: null,
+  laterRun: null,
   queue: [],
   thread: { id: 't1', projectId: 'p1', source: 'factory' },
 }))();
 
 mock.module('@/data/factory/hooks', () => ({
   useFactoryRunForThread: () => mocks.run,
+  useLaterRunOfIssue: () => mocks.laterRun,
   useFactoryQueueRuns: () => mocks.queue,
 }));
 mock.module('@/lib/thread-selectors', () => ({ useThreadById: () => mocks.thread }));
@@ -84,6 +87,7 @@ const runOf = (over: Partial<FactoryRun> = {}): FactoryRun =>
 
 beforeEach(() => {
   mocks.run = runOf();
+  mocks.laterRun = null;
   mocks.queue = [];
   mocks.thread = { id: 't1', projectId: 'p1', source: 'factory' };
 });
@@ -125,6 +129,37 @@ describe('FactoryRunProofCard', () => {
     expect(screen.queryByTestId('factory-run-proof-summary')).toBeNull();
     fireEvent.click(screen.getByTestId('factory-run-proof-details-toggle'));
     expect(screen.getByTestId('factory-run-proof-output')).toHaveTextContent('28 pass');
+  });
+
+  test('a failed proof of a stopped run says the issue was sent again, and what came of it', () => {
+    const failed = proofOf({ verdict: 'fail', finding: 'Tests fail on the head commit' });
+    mocks.run = runOf({ issueNumber: 434, state: 'stopped', regressionProof: failed });
+    mocks.laterRun = runOf({
+      id: 'r2',
+      issueNumber: 434,
+      state: 'merged',
+      prUrl: 'https://github.com/ironmussa/funny/pull/443',
+    });
+    render(<FactoryRunProofCard threadId="t1" />);
+    expect(screen.getByTestId('factory-run-proof-later-run')).toHaveTextContent(
+      'Issue #434 was sent again as a later run: Merged',
+    );
+    const pr = screen.getByTestId('factory-run-proof-later-run-pr');
+    expect(pr).toHaveTextContent('#443');
+    expect(pr).toHaveAttribute('href', 'https://github.com/ironmussa/funny/pull/443');
+  });
+
+  test('no later-run note while the run is still going, or when none came after it', () => {
+    mocks.run = runOf({ state: 'waiting_ci', regressionProof: proofOf({ verdict: 'fail' }) });
+    mocks.laterRun = runOf({ id: 'r2', state: 'merged' });
+    const { rerender } = render(<FactoryRunProofCard threadId="t1" />);
+    expect(screen.queryByTestId('factory-run-proof-later-run')).toBeNull();
+
+    mocks.run = runOf({ state: 'stopped', regressionProof: proofOf({ verdict: 'fail' }) });
+    mocks.laterRun = null;
+    rerender(<FactoryRunProofCard threadId="t1" />);
+    expect(screen.getByTestId('factory-run-proof-card')).toBeInTheDocument();
+    expect(screen.queryByTestId('factory-run-proof-later-run')).toBeNull();
   });
 
   test('a skipped proof says why, with no tests or output to show', () => {

@@ -20,6 +20,7 @@ import {
   NO_VERDICT_REASON,
   REVIEWER_DISALLOWED_TOOLS,
 } from '../../../services/factory/factory-review.js';
+import { READ_ONLY_SHELL_RULE } from '../../../services/factory/factory-role-results.js';
 import type { UpdateRunInput } from '../../../services/factory/factory-runs.js';
 
 type ProviderDeps = Parameters<typeof createFactoryActionProvider>[0];
@@ -363,6 +364,27 @@ describe('the review step', () => {
       metadata: { verdict: 'pass', allowsMerge: true, sha: SHA_A, threadId: 'rev-1' },
     });
     expect(stored()).toMatchObject([{ sha: SHA_A, verdict: 'pass', threadId: 'rev-1' }]);
+  });
+
+  test('an answer left in a turn that never ended is the verdict, and its thread is stopped', async () => {
+    // Seen in run 51eb478c: the verdict was written, but the CLI kept the turn
+    // open for a background shell job that never ended.
+    const { provider, stored, abandoned } = reviewing({
+      says: [[passOf(SHA_A)]],
+      extra: {
+        waitRoleThread: async () => ({ status: 'idle' as const, output: '', reason: 'quiet' }),
+      },
+    });
+    const result = await provider.review!({});
+    expect(result).toMatchObject({ ok: true, output: 'pass' });
+    expect(stored()).toMatchObject([{ sha: SHA_A, verdict: 'pass', threadId: 'rev-1' }]);
+    expect(abandoned).toEqual(['rev-1']);
+  });
+
+  test('the prompt warns the reviewer off a bare `wait` in its sandboxed shell', async () => {
+    const { provider, bodies } = reviewing({ says: [[passOf(SHA_A)]] });
+    await provider.review!({});
+    expect(String(bodies[0]?.prompt)).toContain(READ_ONLY_SHELL_RULE);
   });
 
   test('a fail with a high finding does not, and its findings are the feedback', async () => {
@@ -1055,7 +1077,7 @@ describe('merge brings the branch up to date with its base first', () => {
     });
     expect(await merge()).toMatchObject({ ok: true, output: 'merged' });
     expect(announced).toEqual([
-      { userId: 'alice', from: SHA_A, to: SHA_M, kind: 'same', lines: 0, files: [] },
+      { userId: 'alice', from: SHA_A, to: SHA_M, kind: 'same', lines: 0, files: [], baseFiles: [] },
     ]);
     expect(posted).toHaveLength(1);
     expect(posted[0]!.body).toContain(SHA_A.slice(0, 7));
@@ -1245,7 +1267,7 @@ describe('merge brings the branch up to date with its base first', () => {
       expect(await merge()).toMatchObject({ ok: true, output: 'merged' });
       expect(merges).toMatchObject([{ sha: SHA_NEW }]);
       expect(asked).toMatchObject([{ kind: 'change-delta', from: SHA_A, to: SHA_NEW }]);
-      expect(moves).toEqual([{ kind: 'same', lines: 0, files: [] }]);
+      expect(moves).toEqual([{ kind: 'same', lines: 0, files: [], baseFiles: [] }]);
       expect(approval()).toMatchObject({ sha: SHA_NEW, carriedFrom: SHA_A });
     });
 
@@ -1254,7 +1276,15 @@ describe('merge brings the branch up to date with its base first', () => {
       const { merge, announced } = approvedAtA(compared({}));
       expect(await merge()).toMatchObject({ ok: true, output: 'merged' });
       expect(announced).toEqual([
-        { userId: 'alice', from: SHA_A, to: SHA_NEW, kind: 'same', lines: 0, files: [] },
+        {
+          userId: 'alice',
+          from: SHA_A,
+          to: SHA_NEW,
+          kind: 'same',
+          lines: 0,
+          files: [],
+          baseFiles: [],
+        },
       ]);
       expect(posted).toHaveLength(1);
       expect(posted[0]).toMatchObject({ number: 12 });
@@ -1331,7 +1361,9 @@ describe('merge brings the branch up to date with its base first', () => {
         });
         expect(await merge()).toMatchObject({ ok: true, output: 'merged' });
         expect(merges).toMatchObject([{ sha: SHA_NEW }]);
-        expect(moves).toEqual([{ kind: 'adjustment', lines: 7, files: ['src/a.ts'] }]);
+        expect(moves).toEqual([
+          { kind: 'adjustment', lines: 7, files: ['src/a.ts'], baseFiles: [] },
+        ]);
       });
 
       test('the setting off: 7 lines wait for a person', async () => {

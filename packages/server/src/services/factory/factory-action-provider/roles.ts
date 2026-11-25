@@ -13,6 +13,7 @@ import { err, ok } from 'neverthrow';
 
 import { createFactoryReviewer, type FactoryReviewerDeps } from '../factory-review.js';
 import type { FactoryRunStage } from '../factory-runs.js';
+import { roleThreadWait } from '../factory-thread-waits.js';
 import { createFactoryTriage } from '../factory-triage.js';
 import type { ActionCore } from './core.js';
 import { reviewCounted, type ClassifiedHead, type IssueRunScope } from './shared.js';
@@ -44,6 +45,8 @@ export function createRunRoles(core: ActionCore, links: RoleLinks) {
   // (`validateFlowForSubject`), and the step entries below refuse again. The
   // roles are still built, on a scope whose issue number is never used.
   const roleScope: IssueRunScope = { ...scope, issueNumber: scope.issueNumber ?? 0 };
+  // A role's answer left in a turn that never ended is taken, and its thread stopped.
+  const waitRole = roleThreadWait(deps.waitRoleThread ?? deps.waitThread, deps.abandon, scope);
 
   const triager = createFactoryTriage({
     scope: roleScope,
@@ -53,7 +56,7 @@ export function createRunRoles(core: ActionCore, links: RoleLinks) {
     signal: deps.signal,
     launch: deps.launch,
     findLaunched: async (prefix, since) => (await deps.findTriageThread?.(prefix, since)) ?? null,
-    waitThread: deps.waitThread,
+    waitThread: waitRole,
     finalMessage: async (threadId) => (await deps.lastThreadMessage?.(threadId)) ?? null,
     followUp: askAgain,
     worktreeBase,
@@ -92,7 +95,7 @@ export function createRunRoles(core: ActionCore, links: RoleLinks) {
     classify: classifyHead,
     launch: deps.launch,
     findLaunched: async (prefix, since) => (await deps.findReviewThread?.(prefix, since)) ?? null,
-    waitThread: deps.waitThread,
+    waitThread: waitRole,
     finalMessage: async (threadId) => (await deps.lastThreadMessage?.(threadId)) ?? null,
     followUp: askAgain,
     contract: () => contractOf({ triage: triager.current() }),

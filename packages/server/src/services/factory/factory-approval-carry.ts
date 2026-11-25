@@ -17,8 +17,15 @@
  * - `same`: the new commit descends from the approved one and the change is
  *   the same. Always covered.
  * - `adjustment`: the change differs by at most the factory's limit of lines,
- *   only in files the approved change touched, with no risk reason the approved
- *   commit did not have. Covered only when the factory sets a limit.
+ *   only in files the approved change touched or files the base brought, with
+ *   no risk reason the approved commit did not have. Covered only when the
+ *   factory sets a limit.
+ *
+ * A file the base brought (openspec factory-approval-follows-base-code): the
+ * base changed it after the approved commit split from it, and the change only
+ * fixes the base's new lines there. The limit counts an edit that moved with
+ * its code into such a file once (`linesAcrossMoves`). A runner that does not
+ * report them leaves the file-by-file rule: no file outside the approved change.
  * - Anything else, and anything that could not be compared, is not covered.
  */
 
@@ -27,7 +34,14 @@ import { MAX_APPROVAL_GAP_FILES, type FactoryApprovalGap } from '@funny/shared/c
 import type { ChangeDelta } from './factory-step-runner.js';
 
 export type ApprovalCoverage =
-  | { covers: true; kind: 'same' | 'adjustment'; lines: number; files: string[] }
+  | {
+      covers: true;
+      kind: 'same' | 'adjustment';
+      lines: number;
+      files: string[];
+      /** Of `files`, the ones the approved change did not touch and the base brought. */
+      baseFiles: string[];
+    }
   | { covers: false; reason: string };
 
 export interface ApprovalCoverageInput {
@@ -45,17 +59,28 @@ const refused = (reason: string): ApprovalCoverage => ({ covers: false, reason }
 
 const linesOf = (count: number) => `${count} line${count === 1 ? '' : 's'}`;
 
+/** The lines the limit counts: without the edits that moved with their code, when the runner says. */
+const adjustmentLines = (delta: ChangeDelta) => delta.linesAcrossMoves ?? delta.lines;
+
+/** The files outside the approved change that the base did not bring. */
+const notBrought = (delta: ChangeDelta) => {
+  const brought = new Set(delta.baseBrought ?? []);
+  return delta.outsideFrom.filter((path) => !brought.has(path));
+};
+
 /** The adjustment's own conditions, once its size is known to be over zero. */
 function adjustmentRefusal(input: ApprovalCoverageInput, delta: ChangeDelta): string | null {
+  const lines = adjustmentLines(delta);
   if (input.maxAdjustLines <= 0) {
-    return `the change differs from the approved commit by ${linesOf(delta.lines)}`;
+    return `the change differs from the approved commit by ${linesOf(lines)}`;
   }
-  if (delta.lines > input.maxAdjustLines) {
-    return `the change differs from the approved commit by ${linesOf(delta.lines)}; this factory follows ${input.maxAdjustLines}`;
+  if (lines > input.maxAdjustLines) {
+    return `the change differs from the approved commit by ${linesOf(lines)}; this factory follows ${input.maxAdjustLines}`;
   }
   if (delta.filesTruncated) return 'the change differs from the approved commit in too many files';
-  if (delta.outsideFrom.length > 0) {
-    return `the change now touches ${delta.outsideFrom[0]}, which the approved commit did not`;
+  const outside = notBrought(delta);
+  if (outside.length > 0) {
+    return `the change now touches ${outside[0]}, which the approved commit did not and the base did not bring`;
   }
   if (!input.approvedRiskKeys || !input.riskKeys) {
     return 'the risk reasons of the approved commit were not recorded';
@@ -69,14 +94,15 @@ export function approvalCovers(input: ApprovalCoverageInput): ApprovalCoverage {
   const { delta } = input;
   if (!delta) return refused('the change could not be compared with the approved commit');
   if (!delta.ancestor) return refused('the branch no longer contains the approved commit');
-  if (delta.lines === 0) return { covers: true, kind: 'same', lines: 0, files: [] };
+  if (delta.lines === 0) return { covers: true, kind: 'same', lines: 0, files: [], baseFiles: [] };
   const reason = adjustmentRefusal(input, delta);
   if (reason) return refused(reason);
   return {
     covers: true,
     kind: 'adjustment',
-    lines: delta.lines,
+    lines: adjustmentLines(delta),
     files: delta.files.map((file) => file.path),
+    baseFiles: delta.outsideFrom.filter((path) => (delta.baseBrought ?? []).includes(path)),
   };
 }
 
@@ -95,15 +121,18 @@ export function approvalGapOf(
   const paths = delta?.files.map((file) => file.path) ?? [];
   const files = paths.slice(0, MAX_APPROVAL_GAP_FILES);
   const outside = new Set(delta?.outsideFrom ?? []);
+  const brought = new Set(delta?.baseBrought ?? []);
   const approved = new Set(input.approvedRiskKeys ?? []);
+  const newFiles = files.filter((path) => outside.has(path));
   return {
     to,
     at,
     // A branch that lost the approved commit was compared with nothing a member read.
-    lines: delta?.ancestor ? delta.lines : null,
+    lines: delta?.ancestor ? adjustmentLines(delta) : null,
     files,
     moreFiles: paths.length - files.length,
-    newFiles: files.filter((path) => outside.has(path)),
+    newFiles,
+    baseFiles: newFiles.filter((path) => brought.has(path)),
     newRiskKeys: input.approvedRiskKeys
       ? (input.riskKeys ?? []).filter((key) => !approved.has(key))
       : [],
@@ -122,6 +151,8 @@ export interface ApprovalMove {
   kind: 'same' | 'adjustment';
   lines: number;
   files: string[];
+  /** Of `files`, the ones the approved change did not touch and the base brought. */
+  baseFiles: string[];
 }
 
 const short = (sha: string) => sha.slice(0, 7);
@@ -154,12 +185,24 @@ export function approvalMoveComment(move: ApprovalMove): string {
       automated,
     ].join('\n\n');
   }
-  const shown = move.files.slice(0, SHOWN_FILES).map((file) => `- \`${file}\``);
-  if (move.files.length > SHOWN_FILES)
-    shown.push(`- … and ${move.files.length - SHOWN_FILES} more`);
-  return [
+  const brought = new Set(move.baseFiles);
+  const listed = (files: string[]) => {
+    const shown = files.slice(0, SHOWN_FILES).map((file) => `- \`${file}\``);
+    if (files.length > SHOWN_FILES) shown.push(`- … and ${files.length - SHOWN_FILES} more`);
+    return shown.join('\n');
+  };
+  const touched = move.files.filter((file) => !brought.has(file));
+  const parts = [
     head,
-    `The change differs from the approved one by ${linesOf(move.lines)}, in files the approved change already touched and with no new risk reason:\n${shown.join('\n')}`,
-    automated,
-  ].join('\n\n');
+    `The change differs from the approved one by ${linesOf(move.lines)}, with no new risk reason.`,
+  ];
+  if (touched.length > 0) {
+    parts.push(`In files the approved change already touched:\n${listed(touched)}`);
+  }
+  if (move.baseFiles.length > 0) {
+    parts.push(
+      `In code the base branch brought after the approval, which the change now also fixes:\n${listed(move.baseFiles)}`,
+    );
+  }
+  return [...parts, automated].join('\n\n');
 }

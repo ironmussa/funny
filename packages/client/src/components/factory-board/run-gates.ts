@@ -84,16 +84,16 @@ function problemChip(t: TFunction, run: GateRun): FactoryGateChip | null {
   const reason = run.failureReason;
   if (!isFactoryRunReasonOnChip(run) || !reason) return null;
   if (reason === 'high risk' || reason === 'review failed') return null;
-  const labels: Record<string, string> = {
-    'no review': t('factoryBoard.problem.noReview', 'No review'),
-    'branch history rewritten': t('factoryBoard.problem.rewritten', 'Branch rewritten'),
-    'review gave no verdict': t('factoryBoard.problem.noVerdict', 'No verdict'),
-  };
+  const labels = new Map([
+    ['no review', t('factoryBoard.problem.noReview', 'No review')],
+    ['branch history rewritten', t('factoryBoard.problem.rewritten', 'Branch rewritten')],
+    ['review gave no verdict', t('factoryBoard.problem.noVerdict', 'No verdict')],
+  ]);
   // A step's failure is recorded as `<step>[<action>] failed: …`.
   const step = run.currentStep ?? /^([\w-]+)\[[^\]]*\] failed/.exec(reason)?.[1] ?? null;
   const label = isFactoryRunUnsavedWork(run)
     ? t('factoryBoard.problem.noCommit', 'No commit')
-    : (labels[reason] ??
+    : (labels.get(reason) ??
       (step
         ? t('factoryBoard.problem.stepFailed', '{{step}} failed', { step })
         : t('factoryBoard.problem.other', 'Problem')));

@@ -10,6 +10,7 @@ import {
   isWaitingOn,
   signalThreadTerminal,
   WAKE_GRACE_MS,
+  type ThreadActivity,
   type ThreadRecord,
   type WakeSource,
 } from '../../../services/factory/factory-thread-waits.js';
@@ -213,5 +214,80 @@ describe('factory thread waits', () => {
     await Bun.sleep(1);
     controller.abort();
     expect((await wait).status).toBe('cancelled');
+  });
+
+  describe('an answer left in a turn that never ended', () => {
+    const QUIET_MS = 10 * 60 * 1000;
+    const answeredAt = new Date(60_000).toISOString();
+
+    /** A waiter that reports quiet answers, over a running thread and its newest message. */
+    function quietWaits(activity: { current: ThreadActivity | null }, clock: { now: number }) {
+      return createThreadWaits({
+        readThread: async () => ({ status: 'running', createdAt: created }),
+        readWakeSources: async () => [],
+        readOutput: async () => 'the verdict',
+        readActivity: async () => activity.current,
+        quietAnswerMs: QUIET_MS,
+        sleep: (_ms, signal) =>
+          new Promise((_resolve, reject) =>
+            signal?.addEventListener('abort', () => reject(new Error())),
+          ),
+        now: () => clock.now,
+      });
+    }
+
+    test('is reported idle with the answer once it stayed quiet past the limit', async () => {
+      // Seen in run 51eb478c: the reviewer wrote its verdict, but a bare
+      // `wait` in its sandboxed shell kept the CLI's turn open, and the
+      // thread stayed running until someone killed the shell.
+      const activity = { current: { messageId: 'm1', at: answeredAt, answered: true } };
+      const clock = { now: Date.parse(answeredAt) + 60_000 };
+      const wait = quietWaits(activity, clock)('t-quiet', new AbortController().signal);
+      await Bun.sleep(1);
+      expect(isWaitingOn('t-quiet')).toBe(true);
+
+      clock.now = Date.parse(answeredAt) + QUIET_MS + 1;
+      signalThreadTerminal('t-quiet');
+      expect(await wait).toMatchObject({ status: 'idle', output: 'the verdict' });
+    });
+
+    test('a step still in progress is not an answer, however long it takes', async () => {
+      // A long tool call: the newest message is the one that called it.
+      const activity = { current: { messageId: 'm1', at: answeredAt, answered: false } };
+      const clock = { now: Date.parse(answeredAt) + 2 * QUIET_MS };
+      const controller = new AbortController();
+      const wait = quietWaits(activity, clock)('t-tool', controller.signal);
+      await Bun.sleep(1);
+      expect(isWaitingOn('t-tool')).toBe(true);
+      controller.abort();
+      expect((await wait).status).toBe('cancelled');
+    });
+
+    test("on a follow-up, the previous answer is not the follow-up's", async () => {
+      const activity = { current: { messageId: 'old', at: answeredAt, answered: true } };
+      const clock = { now: Date.parse(answeredAt) + 2 * QUIET_MS };
+      const wait = quietWaits(activity, clock)('t-again', new AbortController().signal, {
+        completedAt: created,
+        sentAt: new Date(clock.now).toISOString(),
+      });
+      await Bun.sleep(1);
+      expect(isWaitingOn('t-again')).toBe(true);
+
+      const newAt = new Date(clock.now).toISOString();
+      activity.current = { messageId: 'new', at: newAt, answered: true };
+      clock.now += QUIET_MS + 1;
+      signalThreadTerminal('t-again');
+      expect((await wait).status).toBe('idle');
+    });
+
+    test('a waiter without the limit keeps waiting', async () => {
+      const record: RecordSlot = { current: { status: 'running', createdAt: created } };
+      const controller = new AbortController();
+      const wait = waitsOver(record, () => 2 * QUIET_MS)('t-off', controller.signal);
+      await Bun.sleep(1);
+      expect(isWaitingOn('t-off')).toBe(true);
+      controller.abort();
+      expect((await wait).status).toBe('cancelled');
+    });
   });
 });

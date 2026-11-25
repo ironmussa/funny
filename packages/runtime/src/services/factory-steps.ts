@@ -496,6 +496,8 @@ const NO_DELTA = {
   files: [],
   filesTruncated: false,
   outsideFrom: [],
+  baseBrought: [],
+  linesAcrossMoves: 0,
 } satisfies Partial<ChangeDeltaResult>;
 
 /** `change-delta`: how the pull request's change differs at two commits; reads only. */

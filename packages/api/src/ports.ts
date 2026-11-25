@@ -64,6 +64,7 @@ import type {
   FactoryQueueClearResult,
   FactoryQueueRun,
   FactoryApprovalRequest,
+  FactoryReplacedPrClose,
   FactoryRun,
   FactorySettings,
   FactorySubmitResult,
@@ -455,6 +456,8 @@ export interface FactoryPort {
   stopRun(userId: string, projectId: string, runId: string): PortResult<FactoryRun>;
   /** Put a failed (or waiting) run of the caller's factory back in flight; audited. */
   retryRun(userId: string, projectId: string, runId: string): PortResult<FactoryRun>;
+  /** Open a parked too-large run's proposed parts as issues; the run ends `done`. */
+  splitRun(userId: string, projectId: string, runId: string): PortResult<FactoryRun>;
   /**
    * Approve merging a run's held high-risk commit, then retry the run. Refused
    * (409) unless `expectedSha`, the commit the member was shown, is the held one.
@@ -470,6 +473,17 @@ export interface FactoryPort {
    * member agrees nothing needs changing. Refused (409) for any other run. Audited.
    */
   markRunDone(userId: string, projectId: string, runId: string): PortResult<FactoryRun>;
+  /**
+   * Close the pull request of a run of the caller's factory that a newer run
+   * of its issue replaced, and delete its branch. Refused (409) for a run that
+   * was not replaced, has not ended or has no pull request of its own; 502
+   * when GitHub refuses. A merged pull request is left as it is. Audited.
+   */
+  closeReplacedPr(
+    userId: string,
+    projectId: string,
+    runId: string,
+  ): PortResult<FactoryReplacedPrClose>;
   /**
    * Say a run of the caller's factory that triage classed as a lint cleanup is
    * not one (`false`), or take that back (`true`), which changes how its risk

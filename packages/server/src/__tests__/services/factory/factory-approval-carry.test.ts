@@ -128,7 +128,87 @@ describe('approvalCovers', () => {
       kind: 'adjustment',
       lines: 7,
       files: ['src/a.ts'],
+      baseFiles: [],
     });
+  });
+});
+
+// openspec factory-approval-follows-base-code: what lost #450, #458 and #478 on 2026-11-25.
+describe('approvalCovers and the code the base brought', () => {
+  const fixedBase = delta({
+    lines: 9,
+    files: [
+      { path: 'src/a.ts', lines: 7 },
+      { path: 'src/new.ts', lines: 2 },
+    ],
+    outsideFrom: ['src/new.ts'],
+    baseBrought: ['src/new.ts'],
+    linesAcrossMoves: 9,
+  });
+
+  test('a fix of a file the base brought is an adjustment that names the file', () => {
+    expect(approvalCovers({ delta: fixedBase, maxAdjustLines: 50, ...keys })).toEqual({
+      covers: true,
+      kind: 'adjustment',
+      lines: 9,
+      files: ['src/a.ts', 'src/new.ts'],
+      baseFiles: ['src/new.ts'],
+    });
+  });
+
+  test('a file outside the approved change that the base did not bring is still refused', () => {
+    const coverage = approvalCovers({
+      delta: { ...fixedBase, outsideFrom: ['src/new.ts', 'src/elsewhere.ts'] },
+      maxAdjustLines: 50,
+      ...keys,
+    });
+    expect(coverage.covers ? '' : coverage.reason).toMatch(/src\/elsewhere\.ts.*did not bring/);
+  });
+
+  test('the limit counts the edits that moved with their code once', () => {
+    // #478: 175 lines file by file, 99 without the edits a split moved.
+    const moved = { ...fixedBase, lines: 175, linesAcrossMoves: 99 };
+    expect(approvalCovers({ delta: moved, maxAdjustLines: 100, ...keys })).toMatchObject({
+      covers: true,
+      lines: 99,
+    });
+    const refused = approvalCovers({ delta: moved, maxAdjustLines: 90, ...keys });
+    expect(refused.covers ? '' : refused.reason).toMatch(/99 lines; this factory follows 90/);
+  });
+
+  test('a change that is the same only across moves is an adjustment, not the same change', () => {
+    const coverage = approvalCovers({
+      delta: { ...fixedBase, lines: 4, linesAcrossMoves: 0 },
+      maxAdjustLines: 50,
+      ...keys,
+    });
+    expect(coverage).toMatchObject({ covers: true, kind: 'adjustment', lines: 0 });
+  });
+
+  test('a sensitive path the base brought is a new risk reason', () => {
+    const coverage = approvalCovers({
+      delta: fixedBase,
+      maxAdjustLines: 50,
+      approvedRiskKeys: ['size'],
+      riskKeys: ['size', 'sensitive:src/new.ts'],
+    });
+    expect(coverage.covers ? '' : coverage.reason).toMatch(/sensitive:src\/new\.ts/);
+  });
+
+  test('a runner that does not say what the base brought leaves the file-by-file rule', () => {
+    const { baseBrought: _b, linesAcrossMoves: _l, ...old } = fixedBase;
+    const coverage = approvalCovers({ delta: old, maxAdjustLines: 50, ...keys });
+    expect(coverage.covers ? '' : coverage.reason).toMatch(/src\/new\.ts/);
+  });
+
+  test('the gap tells the files the base brought from the others', () => {
+    const gap = approvalGapOf(
+      { delta: { ...fixedBase, outsideFrom: ['src/new.ts', 'src/x.ts'] }, maxAdjustLines: 5 },
+      'b'.repeat(40),
+      'over the limit',
+      '2026-11-25T00:00:00.000Z',
+    );
+    expect(gap).toMatchObject({ lines: 9, newFiles: ['src/new.ts'], baseFiles: ['src/new.ts'] });
   });
 });
 
@@ -136,7 +216,7 @@ describe('what a moved approval says', () => {
   const move = { userId: 'alice', from: 'a'.repeat(40), to: 'b'.repeat(40) };
 
   test('the same change: both commits, and that nobody approved the new one', () => {
-    const body = approvalMoveComment({ ...move, kind: 'same', lines: 0, files: [] });
+    const body = approvalMoveComment({ ...move, kind: 'same', lines: 0, files: [], baseFiles: [] });
     expect(body).toContain('aaaaaaa');
     expect(body).toContain('bbbbbbb');
     expect(body).toContain('the same lines at both commits');
@@ -145,7 +225,13 @@ describe('what a moved approval says', () => {
 
   test('an adjustment: its lines and its files, the list cut after twenty', () => {
     const files = Array.from({ length: 23 }, (_, i) => `src/f${i}.ts`);
-    const body = approvalMoveComment({ ...move, kind: 'adjustment', lines: 7, files });
+    const body = approvalMoveComment({
+      ...move,
+      kind: 'adjustment',
+      lines: 7,
+      files,
+      baseFiles: [],
+    });
     expect(body).toContain('differs from the approved one by 7 lines');
     expect(body).toContain('- `src/f0.ts`');
     expect(body).toContain('- … and 3 more');
@@ -153,13 +239,28 @@ describe('what a moved approval says', () => {
     expect(body).toContain('no person approved the new commit');
   });
 
+  test('an adjustment into code the base brought lists those files apart', () => {
+    const body = approvalMoveComment({
+      ...move,
+      kind: 'adjustment',
+      lines: 9,
+      files: ['src/a.ts', 'src/new.ts'],
+      baseFiles: ['src/new.ts'],
+    });
+    expect(body).toContain('In files the approved change already touched:\n- `src/a.ts`');
+    expect(body).toContain('which the change now also fixes:\n- `src/new.ts`');
+  });
+
   test('the activity title names the issue and what differs', () => {
-    expect(approvalMoveTitle({ ...move, kind: 'same', lines: 0, files: [] }, 451)).toBe(
-      'Merge approval of #451 moved from aaaaaaa to bbbbbbb (same change)',
-    );
-    expect(approvalMoveTitle({ ...move, kind: 'adjustment', lines: 1, files: ['a'] }, null)).toBe(
-      'Merge approval moved from aaaaaaa to bbbbbbb (1 line differs)',
-    );
+    expect(
+      approvalMoveTitle({ ...move, kind: 'same', lines: 0, files: [], baseFiles: [] }, 451),
+    ).toBe('Merge approval of #451 moved from aaaaaaa to bbbbbbb (same change)');
+    expect(
+      approvalMoveTitle(
+        { ...move, kind: 'adjustment', lines: 1, files: ['a'], baseFiles: [] },
+        null,
+      ),
+    ).toBe('Merge approval moved from aaaaaaa to bbbbbbb (1 line differs)');
   });
 });
 
@@ -278,6 +379,7 @@ describe('approvalGapOf', () => {
       files: ['src/ports/factory.ts'],
       moreFiles: 0,
       newFiles: ['src/ports/factory.ts'],
+      baseFiles: [],
       newRiskKeys: [],
       reason: 'the change now touches it',
     });

@@ -51,17 +51,21 @@ export function saveFactorySettings(
 }
 
 /**
- * Stop or retry one run of the caller's factory. Not optimistic: the server
- * decides whether the run can still be controlled, and its answer is recorded.
- * The caller shows the error.
+ * Stop, retry or split one run of the caller's factory. Not optimistic: the
+ * server decides whether the run can still be controlled, and its answer is
+ * recorded. The caller shows the error.
  */
 export function controlFactoryRun(
-  action: 'stop' | 'retry',
+  action: 'stop' | 'retry' | 'split',
   projectId: string,
   runId: string,
   layer: DataLayer = getDataLayer(),
 ): ResultAsync<FactoryRun, DomainError> {
-  const call = { stop: factoryApi.stopRun, retry: factoryApi.retryRun }[action];
+  const call = {
+    stop: factoryApi.stopRun,
+    retry: factoryApi.retryRun,
+    split: factoryApi.splitRun,
+  }[action];
   return call(projectId, runId).map((run) => {
     writeFactoryRun(projectId, run, layer);
     return run;

@@ -33,6 +33,7 @@
 
 import { nullReporter, runPipeline } from '@funny/pipelines';
 import type { YamlPipelineContext } from '@funny/workflows/compiler';
+import { err, type Result } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
 import {
@@ -48,6 +49,7 @@ import {
   type MergeOrder,
 } from './factory-flow-runs-provider.js';
 import { createRunSettlement } from './factory-flow-runs-settle.js';
+import { createParkedSplit } from './factory-flow-runs-split.js';
 import {
   admissionPriority,
   flowGate,
@@ -71,7 +73,7 @@ import {
 } from './factory-flow.js';
 import type { UpdateRunInput } from './factory-runs.js';
 import { projectAgentDefaults, type WatchedFactory } from './factory-settings.js';
-import { createThreadWaits } from './factory-thread-waits.js';
+import { createThreadWaits, ROLE_QUIET_ANSWER_MS } from './factory-thread-waits.js';
 
 export {
   admissionPriority,
@@ -88,6 +90,10 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
   /** Each running flow's early integration (D8), for the watcher to ask when the base moves. */
   const earlyOf = new Map<string, EarlyIntegration>();
   const waitThread = deps.waitThread ?? createThreadWaits();
+  const waitRoleThread =
+    deps.waitRoleThread ??
+    deps.waitThread ??
+    createThreadWaits({ quietAnswerMs: ROLE_QUIET_ANSWER_MS });
   const journalRows = createWorkflowJournalRepository();
   /** Each run's place in a group's queue, by its id (the holder is `<runId>/<node>/<visit>`). */
   const priorities = new Map<string, number>();
@@ -145,7 +151,15 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
   const settlement = createRunSettlement(deps);
   const { updateInFlight, flowUnavailable, cleanUpMerged, settle, refusedWithoutIssue } =
     settlement;
-  const ctx: FlowRunsContext = { deps, updateInFlight, earlyOf, mergeOrder, gate, waitThread };
+  const ctx: FlowRunsContext = {
+    deps,
+    updateInFlight,
+    earlyOf,
+    mergeOrder,
+    gate,
+    waitThread,
+    waitRoleThread,
+  };
 
   async function execute(
     job: FactoryRunJob,
@@ -270,6 +284,8 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
     return trace.agentsRan ? 'started' : 'not-started';
   }
 
+  const parkedSplit = createParkedSplit(deps);
+
   return {
     /**
      * Run (or resume) a run's flow. Resolves once its first agent thread is
@@ -301,6 +317,15 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
     },
 
     isActive: (runId: string) => active.has(runId),
+
+    /**
+     * A member splits a run parked because triage found its issue too large
+     * (`factory-flow-runs-split.ts`). The issues opened, or why nothing was.
+     */
+    async splitParked(job: FactoryRunJob): Promise<Result<number[], string>> {
+      if (active.has(job.run.id)) return err('The run is already being worked on.');
+      return parkedSplit.split(job);
+    },
 
     /**
      * Integrate a running flow's branch early (D8): the base moved and its pull

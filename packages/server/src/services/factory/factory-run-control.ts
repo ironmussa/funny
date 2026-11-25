@@ -18,6 +18,8 @@
  *   back. A "no change" run keeps nothing: a new agent implements the issue.
  *   The threads a retry does not keep are archived, so the list does not
  *   show the old failed thread next to the new one with the same title.
+ * - **Split** a run parked because its issue is too large: the parts triage
+ *   proposed are opened as issues and queued, and the run ends `done`.
  * - **Approve the merge** of a run held because its change is high risk: the
  *   member's approval of that head commit is recorded, and the run is retried.
  *   The merge gate lets only the approved commit through, or a merge of it
@@ -47,6 +49,8 @@ import { threads } from '../../db/schema.js';
 import { log } from '../../lib/logger.js';
 import { NO_CHANGE_REASON } from './factory-action-provider.js';
 import { forgetOwnerFollowUp, ownerFollowUpAt } from './factory-follow-ups.js';
+import type { FactoryCloseOutcome, FactoryPullRequestRef } from './factory-pull-requests.js';
+import { replacedPullRequest, type ReplacedPullRequest } from './factory-replaced-pr.js';
 import {
   createFactoryRunsRepository,
   HIGH_RISK_HOLD,
@@ -62,11 +66,13 @@ import {
   factoryGithubPort,
   factoryRunnerPorts,
   pokeFactory,
+  splitParkedFactoryRun,
   stopFactoryFlow,
 } from './factory-watcher.js';
 
 export type FactoryRunControlError = {
-  kind: 'not-found' | 'conflict' | 'storage';
+  /** `github`: GitHub refused or could not be reached; nothing of the run changed. */
+  kind: 'not-found' | 'conflict' | 'storage' | 'github';
   message: string;
 };
 
@@ -115,6 +121,27 @@ export async function releaseStoppedIssue(run: FactoryRunView): Promise<void> {
       error: removed.error.message,
     });
   }
+}
+
+/**
+ * A run's pull request as its factory's enabler reaches it, or null when the
+ * factory, its repository or the GitHub side cannot be resolved now.
+ */
+async function replacedPullRequestRef(
+  run: FactoryRunView,
+  replaced: ReplacedPullRequest,
+): Promise<FactoryPullRequestRef | null> {
+  const factory = await getWatchedFactory(run.factoryId);
+  if (!factory || !factoryGithubPort()) return null;
+  const target = await checkFactoryTarget(factory);
+  if (!target || 'reason' in target) return null;
+  return {
+    repo: target.repo,
+    number: replaced.number,
+    branch: replaced.branch,
+    userId: factory.userId,
+    projectId: factory.projectId,
+  };
 }
 
 /** A reopen the unique index refused: another run of the issue is in flight. */
@@ -276,6 +303,43 @@ export function createFactoryRunControl(runs = createFactoryRunsRepository()) {
     },
 
     /**
+     * Close the pull request of a run that a newer run of its issue replaced,
+     * and delete its branch, as the factory's enabler. Refused for a run that
+     * was not replaced, has not ended, or has no pull request of its own. The
+     * run itself does not change.
+     */
+    closeReplacedPr(
+      factoryId: string,
+      runId: string,
+    ): ResultAsync<{ run: FactoryRunView; outcome: FactoryCloseOutcome }, FactoryRunControlError> {
+      const refuse = (message: string) =>
+        errAsync<never, FactoryRunControlError>({ kind: 'conflict', message });
+      return runOf(factoryId, runId).andThen((run) =>
+        runs
+          .list(factoryId)
+          .mapErr(storage)
+          .andThen((all) => {
+            const replaced = replacedPullRequest(run, all);
+            if (replaced.isErr()) return refuse(replaced.error);
+            return ResultAsync.fromSafePromise(replacedPullRequestRef(run, replaced.value)).andThen(
+              (ref) => {
+                const close = factoryGithubPort()?.pullRequests.closeReplaced;
+                if (!ref || !close) {
+                  return refuse("The factory cannot reach the run's repository on GitHub now.");
+                }
+                return close(ref, replaced.value.by)
+                  .mapErr((error): FactoryRunControlError => ({
+                    kind: 'github',
+                    message: error.message,
+                  }))
+                  .map((outcome) => ({ run, outcome }));
+              },
+            );
+          }),
+      );
+    },
+
+    /**
      * Say, as `userId`, that a run triage classed as a lint cleanup is not one
      * (`on: false`), or take that back (`on: true`): then its size and its
      * contract's risk hints do not make it high risk again, when the
@@ -311,6 +375,35 @@ export function createFactoryRunControl(runs = createFactoryRunsRepository()) {
             return reread(runId);
           }),
       );
+    },
+
+    /**
+     * Split a run parked because triage found its issue too large: its
+     * proposed parts are opened as issues and queued in this factory, and the
+     * run ends `done` (no agent runs). Refused unless it is parked that way.
+     */
+    split(factoryId: string, runId: string): ResultAsync<FactoryRunView, FactoryRunControlError> {
+      return runOf(factoryId, runId)
+        .andThen((run) =>
+          run.state === 'needs_info' && run.triage?.decision === 'too_big'
+            ? ResultAsync.fromSafePromise(splitParkedFactoryRun(run))
+            : errAsync<never, FactoryRunControlError>({
+                kind: 'conflict',
+                message: 'Only a run parked because its issue is too large can be split.',
+              }),
+        )
+        .andThen((opened) =>
+          opened.isOk()
+            ? okAsync(undefined)
+            : errAsync<undefined, FactoryRunControlError>({
+                kind: 'conflict',
+                message: opened.error,
+              }),
+        )
+        .andThen(() => {
+          wake(factoryId);
+          return reread(runId);
+        });
     },
 
     /**

@@ -72,6 +72,12 @@ export interface FlowRunsContext {
   mergeOrder: Map<string, MergeOrder>;
   gate: ConcurrencyGate;
   waitThread: (threadId: string, signal: AbortSignal, after?: WaitAfter) => Promise<ThreadOutcome>;
+  /** The triage and review threads' wait (`waitRoleThread` of the deps). */
+  waitRoleThread: (
+    threadId: string,
+    signal: AbortSignal,
+    after?: WaitAfter,
+  ) => Promise<ThreadOutcome>;
 }
 
 /** What a run's steps are bound to; a run without an issue is titled by its trigger or flow. */
@@ -263,9 +269,18 @@ function splitDepsOf(
   job: FactoryRunJob,
   scope: FactoryRunScope,
 ): FactorySplitDeps | undefined {
+  return job.factory.tooBig === 'split' ? splitDepsFor(deps, job, scope) : undefined;
+}
+
+/** Open, queue and release a split's parts, whatever the factory's `split` setting says. */
+export function splitDepsFor(
+  deps: FactoryFlowRunsDeps,
+  job: FactoryRunJob,
+  scope: FactoryRunScope,
+): FactorySplitDeps | undefined {
   const open = deps.github.createIssue;
   const parent = scope.issueNumber;
-  if (job.factory.tooBig !== 'split' || !open || parent === null) return undefined;
+  if (!open || parent === null) return undefined;
   const reader = { repo: scope.repo, ownerId: scope.userId, projectId: scope.projectId };
   return {
     openIssue: async (issue) => {
@@ -459,6 +474,7 @@ export function createRunProvider(ctx: FlowRunsContext, attempt: RunAttempt) {
     abandon: async (threadId) => deps.stopThreads?.(scope.userId, [threadId]),
     launch: (body) => deps.launch({ userId: scope.userId, body }),
     waitThread: ctx.waitThread,
+    waitRoleThread: ctx.waitRoleThread,
     continuation: continuationFor(deps, scope),
     github: deps.github,
     ...integrationDepsFor(ctx, job, scope, controller.signal),

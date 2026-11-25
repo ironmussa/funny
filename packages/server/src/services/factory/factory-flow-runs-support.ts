@@ -74,6 +74,7 @@ export function recordApprovalMove(
         change: move.kind,
         lines: move.lines,
         files: move.files.slice(0, 20),
+        ...(move.baseFiles.length > 0 && { baseFiles: move.baseFiles.slice(0, 20) }),
       },
       origin: 'system',
     },
@@ -86,6 +87,16 @@ export interface FactoryFlowRunsDeps {
   github: FactoryGithubPort;
   launch(input: StartThreadInput): Promise<Result<StartedThread, StartThreadError>>;
   waitThread?: (threadId: string, signal: AbortSignal, after?: WaitAfter) => Promise<ThreadOutcome>;
+  /**
+   * The wait of a read-only role (triage, review), which also reports an answer
+   * left in a turn that never ended as `idle`. Defaults to `waitThread` when a
+   * test gives one, else to the stored threads with `ROLE_QUIET_ANSWER_MS`.
+   */
+  waitRoleThread?: (
+    threadId: string,
+    signal: AbortSignal,
+    after?: WaitAfter,
+  ) => Promise<ThreadOutcome>;
   /** A thread's last assistant message (tests); defaults to the stored one. */
   lastThreadMessage?: (threadId: string) => Promise<string | null>;
   /**

@@ -391,15 +391,10 @@ describe('board chips carry what the card used to say in lines', () => {
 
 describe('factoryRunFallbackTitle', () => {
   test("a run with no thread is named by its issue's title once the run read it", () => {
-    expect(
-      factoryRunFallbackTitle(
-        t,
-        buildFactoryRun({ issueNumber: 490, issueTitle: 'Client stores' }),
-      ),
-    ).toBe('#490 Client stores');
-    expect(
-      factoryRunFallbackTitle(t, buildFactoryRun({ issueNumber: 490, issueTitle: null })),
-    ).toBe('Issue #490');
+    const named = buildFactoryRun({ issueNumber: 490, issueTitle: 'Client stores' });
+    expect(factoryRunFallbackTitle(t, named)).toBe('#490 Client stores');
+    const unnamed = buildFactoryRun({ issueNumber: 490, issueTitle: null });
+    expect(factoryRunFallbackTitle(t, unnamed)).toBe('Issue #490');
   });
 });
 

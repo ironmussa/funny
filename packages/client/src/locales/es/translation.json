@@ -1884,6 +1884,8 @@
     },
     "proof": {
       "title": "Prueba de regresión",
+      "laterRun": "Este run terminó. El issue #{{issue}} se envió de nuevo como otro run: {{state}}",
+      "laterRunPr": "pull request",
       "pass": "Aprobada",
       "fail": "Fallida",
       "skipped": "Omitida",
@@ -1931,6 +1933,7 @@
       "lines_one": "Desde entonces difiere {{count}} línea del cambio:",
       "lines_other": "Desde entonces difieren {{count}} líneas del cambio:",
       "newFile": "no estaba en el cambio aprobado",
+      "baseFile": "código que trajo la base",
       "moreFiles_one": "y {{count}} archivo más",
       "moreFiles_other": "y {{count}} archivos más",
       "newRisks": "Razones de riesgo nuevas:",
@@ -1959,7 +1962,11 @@
       "runNow": "La ejecución ahora:",
       "boardChip": "Aprobación pedida",
       "boardMarker": "Un agente pidió tu aprobación"
-    }
+    },
+    "split_one": "Dividir en {{count}} issue",
+    "split_other": "Dividir en {{count}} issues",
+    "splitTitle": "¿Dividir el issue #{{issue}}?",
+    "splitBody": "La factory abre un issue por cada parte, con la descripción de #{{issue}} como contexto, y los pone en la cola. #{{issue}} recibe la lista y sale de la factory. No corre ningún agente para esto."
   },
   "projectSecrets": {
     "title": "Secretos",
@@ -2033,6 +2040,7 @@
       "sandbox-stopped": "Sandbox detenido",
       "sandbox-destroyed": "Sandbox destruido",
       "pr-merged": "Pull request fusionado",
+      "pr-closed": "Pull request cerrado",
       "remote-branch-deleted": "Rama remota borrada",
       "agent-stopped": "Agente detenido",
       "factory-disabled": "Factory desactivada",

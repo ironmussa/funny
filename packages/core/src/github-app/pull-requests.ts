@@ -117,6 +117,8 @@ export interface PullRequestCi {
   findOpen(repo: string, branch: string): ResultAsync<string | null, GithubCallError>;
   /** Comment on the pull request. */
   comment(repo: string, number: number, body: string): ResultAsync<void, GithubCallError>;
+  /** Close the pull request without merging it; one already closed stays closed. */
+  close(repo: string, number: number): ResultAsync<void, GithubCallError>;
   /**
    * Delete a branch on GitHub; a branch already gone is not an error. With
    * `retargetTo`, the open pull requests based on it move there first (the
@@ -477,6 +479,12 @@ export function createPullRequestCi(github: RepoGithub): PullRequestCi {
       // GitHub takes a pull request's comments through the issues API.
       return github
         .json(repo, 'POST', `/repos/${repo}/issues/${number}/comments`, { body })
+        .map(() => undefined);
+    },
+
+    close(repo, number) {
+      return github
+        .json(repo, 'PATCH', `/repos/${repo}/pulls/${number}`, { state: 'closed' })
         .map(() => undefined);
     },
 

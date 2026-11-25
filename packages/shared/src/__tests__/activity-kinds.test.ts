@@ -104,6 +104,7 @@ describe('parseActivityInput for the new kinds', () => {
     'sandbox.wake': {},
     'sandbox.destroy': { reason: 'thread-deleted' },
     'factory.merge': { issueNumber: 3, prNumber: 9 },
+    'factory.close-pr': { issueNumber: 3, prNumber: 9, replacedBy: 11 },
     'factory.disabled': { reason: 'access-lost' },
     'factory.trigger_skipped': {
       triggerId: 't1',
@@ -112,6 +113,7 @@ describe('parseActivityInput for the new kinds', () => {
     },
     'factory.stop': { issueNumber: 3 },
     'factory.retry': { issueNumber: 3 },
+    'factory.split': { issueNumber: 3 },
     'factory.approve-merge': { issueNumber: 3, sha: 'abc1234' },
     'factory.approval-moved': {
       issueNumber: 3,

@@ -46,7 +46,7 @@ import type { FactoryLaunchBody } from './factory-action-provider.js';
 import type { FactoryIncidentRecord, FactoryIncidentsRepository } from './factory-incidents.js';
 import { prNumberOf } from './factory-pull-requests.js';
 import { REVIEWER_DISALLOWED_TOOLS } from './factory-review.js';
-import { parseRoleResult } from './factory-role-results.js';
+import { parseRoleResult, READ_ONLY_SHELL_RULE } from './factory-role-results.js';
 
 /** A red base branch is the factory's to explain for this long after one of its merges. */
 export const INCIDENT_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -178,6 +178,7 @@ function sentinelPrompt(input: {
     '',
     'How to investigate:',
     `- The repository is already fetched, and your commands have no network and cannot write to the checkout. Read what each pull request changed (\`git log origin/${input.baseBranch}\`, \`git show <merge commit>\`).`,
+    `- ${READ_ONLY_SHELL_RULE}`,
     '- Find which change makes these checks fail, and say how you know: a test it touched, a symbol it removed, an interaction between two of them.',
     '- Name a pull request only from the list above, and only when the failure follows from its change.',
     '- When you find the change that broke it and it is none of the listed merges (a direct push, another pull request), answer `unrelated` and name that change. A flaky test, a failing external service, or a cause you cannot find is `unknown`.',

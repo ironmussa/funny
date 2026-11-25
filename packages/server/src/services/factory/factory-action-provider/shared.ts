@@ -183,7 +183,7 @@ export interface FactoryActionProviderDeps {
   carryMergeApproval?: (
     from: string,
     to: string,
-    move?: Pick<FactoryApprovalMove, 'kind' | 'lines' | 'files'>,
+    move?: Pick<FactoryApprovalMove, 'kind' | 'lines' | 'files' | 'baseFiles'>,
   ) => Promise<boolean>;
   /**
    * Record on the merge approval of `approved` why it does not cover a later
@@ -280,6 +280,8 @@ export interface FactoryActionProviderDeps {
   launch(body: FactoryLaunchBody): Promise<Result<StartedThread, StartThreadError>>;
   /** Resolves with the thread's terminal status (or why it never will reach one). */
   waitThread(threadId: string, signal: AbortSignal, after?: WaitAfter): Promise<ThreadOutcome>;
+  /** The triage and review threads' wait, which may report `idle` (`waitRoleThread` of the flow runs). */
+  waitRoleThread?(threadId: string, signal: AbortSignal, after?: WaitAfter): Promise<ThreadOutcome>;
   /** Continue the first thread for later agent steps; without it each step starts a thread. */
   continuation?: FactoryContinuation;
   /**

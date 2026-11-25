@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { LoadingState } from '@/components/ui/loading-state';
 import { useProjects } from '@/data/projects/hooks';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
+import { useAdjustOnChange } from '@/hooks/use-resettable-state';
 import { api } from '@/lib/api';
 import type { ExternalClaudeTranscript } from '@/lib/api/system';
 import { timeAgo } from '@/lib/thread-utils';
@@ -45,11 +46,7 @@ export function ExternalClaudeSessionView({ sessionId }: { sessionId: string }) 
   );
 
   // A new session starts from the loading state, set in the render that sees it.
-  const [loadedSessionId, setLoadedSessionId] = useState(sessionId);
-  if (loadedSessionId !== sessionId) {
-    setLoadedSessionId(sessionId);
-    setState({ status: 'loading', transcript: null });
-  }
+  useAdjustOnChange([sessionId], () => setState({ status: 'loading', transcript: null }));
 
   useEffect(() => {
     void loadTranscript();

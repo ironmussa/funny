@@ -82,6 +82,62 @@ async function readCliStatus(): Promise<CliStatus> {
   };
 }
 
+/** The result of the CLI check: in progress, found, server down, or missing. */
+function CliStatusPanel({ checking, status }: { checking: boolean; status: CliStatus | null }) {
+  return checking ? (
+    <LoadingState
+      padding="sm"
+      fill={false}
+      layout="inline"
+      testId="setup-wizard-checking"
+      label="Checking…"
+    />
+  ) : status?.available ? (
+    <>
+      <div className="flex items-center gap-2">
+        <CheckCircle2 className="icon-lg text-status-success" />
+        <span className="text-foreground text-sm font-medium">Claude CLI found</span>
+      </div>
+      {status.version && (
+        <div className="text-muted-foreground font-mono text-xs">{status.version}</div>
+      )}
+      {status.path && (
+        <div className="text-muted-foreground truncate font-mono text-xs">{status.path}</div>
+      )}
+    </>
+  ) : status?.error === 'server_unreachable' ? (
+    <>
+      <div className="flex items-center gap-2">
+        <XCircle className="icon-lg text-status-error" />
+        <span className="text-foreground text-sm font-medium">Server not reachable</span>
+      </div>
+      <p className="text-muted-foreground text-xs">
+        Could not connect to the funny server. Make sure the server is running and try again.
+      </p>
+    </>
+  ) : (
+    <>
+      <div className="flex items-center gap-2">
+        <XCircle className="icon-lg text-status-error" />
+        <span className="text-foreground text-sm font-medium">Claude CLI not found</span>
+      </div>
+      <p className="text-muted-foreground text-xs">
+        Install the Claude Code CLI to continue. Visit the official documentation for installation
+        instructions.
+      </p>
+      <a
+        href="https://docs.anthropic.com/en/docs/claude-code/overview"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="text-primary inline-flex items-center gap-1.5 text-xs hover:underline"
+      >
+        Installation Guide
+        <ExternalLink className="icon-xs" />
+      </a>
+    </>
+  );
+}
+
 function ClaudeCheckSlide({ onNext }: { onNext: () => void }) {
   const [status, setStatus] = useState<CliStatus | null>(null);
   const [checking, setChecking] = useState(true);
@@ -111,58 +167,7 @@ function ClaudeCheckSlide({ onNext }: { onNext: () => void }) {
       </div>
 
       <div className="border-border bg-muted/30 space-y-3 rounded-lg border p-4">
-        {checking ? (
-          <LoadingState
-            padding="sm"
-            fill={false}
-            layout="inline"
-            testId="setup-wizard-checking"
-            label="Checking…"
-          />
-        ) : status?.available ? (
-          <>
-            <div className="flex items-center gap-2">
-              <CheckCircle2 className="icon-lg text-status-success" />
-              <span className="text-foreground text-sm font-medium">Claude CLI found</span>
-            </div>
-            {status.version && (
-              <div className="text-muted-foreground font-mono text-xs">{status.version}</div>
-            )}
-            {status.path && (
-              <div className="text-muted-foreground truncate font-mono text-xs">{status.path}</div>
-            )}
-          </>
-        ) : status?.error === 'server_unreachable' ? (
-          <>
-            <div className="flex items-center gap-2">
-              <XCircle className="icon-lg text-status-error" />
-              <span className="text-foreground text-sm font-medium">Server not reachable</span>
-            </div>
-            <p className="text-muted-foreground text-xs">
-              Could not connect to the funny server. Make sure the server is running and try again.
-            </p>
-          </>
-        ) : (
-          <>
-            <div className="flex items-center gap-2">
-              <XCircle className="icon-lg text-status-error" />
-              <span className="text-foreground text-sm font-medium">Claude CLI not found</span>
-            </div>
-            <p className="text-muted-foreground text-xs">
-              Install the Claude Code CLI to continue. Visit the official documentation for
-              installation instructions.
-            </p>
-            <a
-              href="https://docs.anthropic.com/en/docs/claude-code/overview"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-primary inline-flex items-center gap-1.5 text-xs hover:underline"
-            >
-              Installation Guide
-              <ExternalLink className="icon-xs" />
-            </a>
-          </>
-        )}
+        <CliStatusPanel checking={checking} status={status} />
       </div>
 
       <div className="flex gap-2">

@@ -46,6 +46,7 @@ import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
 import { serverActivities, type ServerActivities } from '../activities/server-activities.js';
 import type { AccessLevel, IssueError, RepoToken } from '../github-app/token-issuer.js';
+import { retryTransientGithub } from './factory-github-retry.js';
 
 /** The pull request of a run, and whose access caps the token. */
 export interface FactoryPullRequestRef {
@@ -88,6 +89,8 @@ export interface FactoryMergeOptions {
    * when the check was published for `sha`.
    */
   autoMergeWhenHeld?: boolean;
+  /** Stops the wait before a merge GitHub failed to answer is tried again (the run was stopped). */
+  signal?: AbortSignal;
 }
 
 /** The pull request's head now, what it merges into, and whether auto-merge is on. */
@@ -212,11 +215,13 @@ export interface FactoryPullRequests {
   ): ResultAsync<BaseDistance, FactoryPullRequestError>;
   /**
    * Have GitHub merge the base branch into the pull request's branch, only
-   * while its head is `headSha` (a merge commit, never a rebase).
+   * while its head is `headSha` (a merge commit, never a rebase). Tried again
+   * when GitHub itself fails (a 5xx, no answer); `signal` stops that wait.
    */
   updateBranch(
     pr: FactoryPullRequestRef,
     headSha: string,
+    signal?: AbortSignal,
   ): ResultAsync<UpdateBranchResult, FactoryPullRequestError>;
   /** The parents of a commit of the repository, first parent first. */
   commitParents(
@@ -282,6 +287,10 @@ export interface FactoryPullRequestsDeps {
   api?: string;
   /** Records each merge as a `factory.merge` activity of the enabler (default: the server's). */
   activities?: Pick<ServerActivities, 'recordServerActivity'>;
+  /** The waits before a write GitHub failed to answer is tried again (default: three, see `factory-github-retry.ts`). */
+  transientRetryDelaysMs?: readonly number[];
+  /** Injected wait between those attempts, for tests. */
+  retrySleep?: (ms: number) => PromiseLike<void>;
 }
 
 /** What to do about each way a token could not be minted. */
@@ -521,6 +530,10 @@ export function createFactoryPullRequests(deps: FactoryPullRequestsDeps): Factor
    * Merge `sha` directly. Refused because the head moved: not merged. Refused
    * for an unmet requirement: auto-merge when allowed and GitHub holds the
    * proof's check, else not merged with how to let the factory auto-merge.
+   *
+   * A merge GitHub failed to answer (a 5xx) is tried again, but only after
+   * reading the pull request: GitHub merges behind a 502 at times, and a
+   * second merge of a merged pull request is a refusal.
    */
   const mergePinned = (
     pr: FactoryPullRequestRef,
@@ -528,8 +541,22 @@ export function createFactoryPullRequests(deps: FactoryPullRequestsDeps): Factor
     method: MergeMethod,
     options: FactoryMergeOptions,
   ): ResultAsync<FactoryMergeOutcome, FactoryPullRequestError> =>
-    createRepoCheckOps(repoGithubFor(pr, 'write'))
-      .pinnedMerge(pr.repo, pr.number, sha, method)
+    retryTransientGithub(
+      () =>
+        createRepoCheckOps(repoGithubFor(pr, 'write')).pinnedMerge(pr.repo, pr.number, sha, method),
+      {
+        what: `merge of ${pr.repo}#${pr.number}`,
+        signal: options.signal,
+        delaysMs: deps.transientRetryDelaysMs,
+        sleep: deps.retrySleep,
+        alreadyDone: () =>
+          pullRequestsFor(pr, 'read')
+            .mergeState(pr.repo, pr.number)
+            .map((state) =>
+              state.state === 'merged' ? { kind: 'merged' as const, method } : null,
+            ),
+      },
+    )
       .mapErr(callError)
       .andThen((result): ResultAsync<FactoryMergeOutcome, FactoryPullRequestError> => {
         if (result.kind === 'merged') {
@@ -601,10 +628,18 @@ export function createFactoryPullRequests(deps: FactoryPullRequestsDeps): Factor
       return baseDistance(repoGithubFor(pr, 'read'), pr.repo, baseRef, headSha).mapErr(callError);
     },
 
-    updateBranch(pr, headSha) {
-      return updateBranch(repoGithubFor(pr, 'write'), pr.repo, pr.number, headSha).mapErr(
-        callError,
-      );
+    updateBranch(pr, headSha, signal) {
+      // Safe to repeat: the request names the head it expects, so one that did
+      // take effect behind an error is answered "head moved" the second time.
+      return retryTransientGithub(
+        () => updateBranch(repoGithubFor(pr, 'write'), pr.repo, pr.number, headSha),
+        {
+          what: `update-branch of ${pr.repo}#${pr.number}`,
+          signal,
+          delaysMs: deps.transientRetryDelaysMs,
+          sleep: deps.retrySleep,
+        },
+      ).mapErr(callError);
     },
 
     commitParents(pr, sha) {

@@ -116,6 +116,12 @@ export interface CryptoApi {
   __resetCryptoCacheForTests(): void;
 }
 
+/** The keyring's active key and its id. */
+interface ActiveKey {
+  id: string;
+  key: Buffer;
+}
+
 interface KeyStore {
   active: string;
   keys: Record<string, Buffer>;
@@ -273,7 +279,7 @@ export function createCrypto({
     return store;
   }
 
-  function getActiveKey(): { id: string; key: Buffer } {
+  function getActiveKey(): ActiveKey {
     const store = loadStore();
     return { id: store.active, key: store.keys[store.active] };
   }

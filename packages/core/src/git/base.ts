@@ -18,7 +18,14 @@ import { ResultAsync } from 'neverthrow';
 
 import { toDomainError } from './errors.js';
 import { validatePath, validatePathSync } from './path-validation.js';
-import { gitNetwork, gitRead, gitWrite, executeSync, ProcessExecutionError } from './process.js';
+import {
+  gitNetwork,
+  gitRead,
+  gitWrite,
+  executeSync,
+  ProcessExecutionError,
+  type EnvOverrides,
+} from './process.js';
 
 /** Per-user git identity for multi-user mode. */
 export interface GitIdentityOptions {
@@ -127,7 +134,7 @@ export function gitRemote(
   identity?: GitIdentityOptions,
   timeout = 120_000,
 ): ResultAsync<string, DomainError> {
-  const env: Record<string, string> = {
+  const env: EnvOverrides = {
     GIT_TERMINAL_PROMPT: '0',
   };
 

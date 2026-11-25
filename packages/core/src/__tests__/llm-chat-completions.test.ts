@@ -58,9 +58,9 @@ describe('external Chat Completions executor', () => {
     expect(result.metadata.tokens_used).toEqual({ input: 30, output: 5 });
     expect(fetchSpy).toHaveBeenCalledTimes(2);
     expect(fetchSpy.mock.calls[0][0]).toBe('http://127.0.0.1:8317/v1/chat/completions');
-    expect(fetchSpy.mock.calls[0][1]?.headers).toMatchObject({
-      Authorization: 'Bearer client-key',
-    });
+    expect(new Headers(fetchSpy.mock.calls[0][1]?.headers).get('authorization')).toBe(
+      'Bearer client-key',
+    );
     const body = JSON.parse(requestBodyText(fetchSpy.mock.calls[1][1]?.body));
     expect(body.messages.map((m: { role: string }) => m.role)).toEqual([
       'system',

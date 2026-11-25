@@ -36,10 +36,13 @@ export function StartupCommandsPopover({ projectId, threadId, worktreeBranch }: 
     if (tab.commandId && tab.alive) runningIds.add(tab.commandId);
   }
 
-  const loadCommands = useCallback(async () => {
-    const result = await api.listCommands(projectId);
-    if (result.isOk()) setCommands(result.value);
-  }, [projectId]);
+  const loadCommands = useCallback(
+    () =>
+      api.listCommands(projectId).then((result) => {
+        if (result.isOk()) setCommands(result.value);
+      }),
+    [projectId],
+  );
 
   useEffect(() => {
     if (open) loadCommands();

@@ -96,9 +96,11 @@ export function useListScrollMargin(
   }, [measureListScrollMargin]);
   const updateListScrollMarginEvent = useStableCallback(updateListScrollMargin);
 
+  // Measures the DOM before paint; the effect event keeps the measurement out
+  // of the effect body, and the ref objects never change, so it runs on mount.
   useLayoutEffect(() => {
-    updateListScrollMargin();
-  }, [updateListScrollMargin]);
+    updateListScrollMarginEvent();
+  }, [updateListScrollMarginEvent]);
 
   useEffect(() => {
     const viewport = scrollRef.current;

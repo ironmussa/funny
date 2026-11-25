@@ -14,7 +14,7 @@ import { gitRead, runHookCommand, invalidateStatusCache } from '@funny/core/git'
  * existing infrastructure without importing it directly.
  */
 import type { ProgressReporter, StepProgressData } from '@funny/pipelines';
-import type { AgentModel, PermissionMode, WSEvent, WorkflowNodeRunStatus } from '@funny/shared';
+import type { PermissionMode, WSEvent, WorkflowNodeRunStatus } from '@funny/shared';
 import { sleep as effectSleep } from '@funny/shared/async';
 import { ApprovalTimeoutError } from '@funny/workflows/compiler';
 import type {
@@ -88,10 +88,10 @@ const THREAD_STAGE_VALUES = [
 type ThreadStageValue = (typeof THREAD_STAGE_VALUES)[number];
 
 function isThreadStatus(v: string): v is ThreadStatusValue {
-  return (THREAD_STATUS_VALUES as readonly string[]).includes(v);
+  return THREAD_STATUS_VALUES.some((value) => value === v);
 }
 function isThreadStage(v: string): v is ThreadStageValue {
-  return (THREAD_STAGE_VALUES as readonly string[]).includes(v);
+  return THREAD_STAGE_VALUES.some((value) => value === v);
 }
 
 // ── RuntimeActionProvider ────────────────────────────────────
@@ -149,8 +149,8 @@ export class RuntimeActionProvider implements ActionProvider {
         userId,
         title: agentOpts.agent ? `Pipeline: ${agentOpts.agent.label}` : `Pipeline agent`,
         mode: 'local',
-        provider: (agentOpts.provider ?? agentOpts.agent?.provider ?? 'claude') as any,
-        model: (agentOpts.model ?? agentOpts.agent?.model ?? 'sonnet') as AgentModel,
+        provider: agentOpts.provider ?? agentOpts.agent?.provider ?? 'claude',
+        model: agentOpts.model ?? agentOpts.agent?.model ?? 'sonnet',
         permissionMode,
         source: 'automation',
         prompt,
@@ -368,7 +368,7 @@ export class RuntimeActionProvider implements ActionProvider {
         requestedAt,
         expiresAt,
       },
-    } as WSEvent);
+    });
 
     let payload;
     try {
@@ -390,7 +390,7 @@ export class RuntimeActionProvider implements ActionProvider {
           decision: 'timeout',
           payload: message,
         },
-      } as WSEvent);
+      });
 
       // Surface as ApprovalTimeoutError when the message matches; otherwise
       // re-throw the original error (cancellation, etc.).
@@ -412,7 +412,7 @@ export class RuntimeActionProvider implements ActionProvider {
         decision: payload.decision,
         payload: payload.text,
       },
-    } as WSEvent);
+    });
 
     if (payload.decision === 'approve') {
       return { decision: 'approve', comment: payload.text };
@@ -552,10 +552,13 @@ export class RuntimeProgressReporter implements ProgressReporter {
           message: data.error,
           metadata: data.metadata,
         },
-      } as WSEvent);
+      });
     }
 
     if (pipelineId && runId) {
+      // SAFETY: `stage` is the workflow step id, which is not always one of
+      // PipelineStageType. The client's pipeline store keeps this payload as
+      // received, keyed by `threadId`, and reads no stage-specific field.
       wsBroker.emitToUser(userId, {
         type: 'pipeline:stage_update',
         threadId,
@@ -585,6 +588,10 @@ export class RuntimeProgressReporter implements ProgressReporter {
     }
 
     if (pipelineId && runId) {
+      // SAFETY: the pipeline event data carries neither `status` /
+      // `totalIterations` nor `stage` / `iteration`, so it matches neither
+      // declared payload. The client's pipeline store keeps it as received,
+      // keyed by `threadId`, which is always set here.
       wsBroker.emitToUser(userId, {
         type: event === 'completed' ? 'pipeline:run_completed' : 'pipeline:stage_update',
         threadId,

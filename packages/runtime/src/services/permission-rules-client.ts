@@ -13,6 +13,7 @@
  */
 
 import { log } from '../lib/logger.js';
+import { isObject } from '../lib/value-guards.js';
 
 export type PermissionDecision = 'allow' | 'deny';
 
@@ -63,7 +64,7 @@ export async function createPermissionRule(
   } catch (err) {
     log.warn('createPermissionRule failed', {
       namespace: 'permission-rules-client',
-      error: (err as Error)?.message,
+      error: isObject(err) && 'message' in err ? err.message : undefined,
     });
     return null;
   }
@@ -83,7 +84,7 @@ export async function findPermissionRule(
   } catch (err) {
     log.warn('findPermissionRule failed', {
       namespace: 'permission-rules-client',
-      error: (err as Error)?.message,
+      error: isObject(err) && 'message' in err ? err.message : undefined,
     });
     return null;
   }
@@ -105,7 +106,7 @@ export async function listPermissionRules(query: {
   } catch (err) {
     log.warn('listPermissionRules failed', {
       namespace: 'permission-rules-client',
-      error: (err as Error)?.message,
+      error: isObject(err) && 'message' in err ? err.message : undefined,
     });
     return [];
   }

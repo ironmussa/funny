@@ -37,10 +37,13 @@ describe('stripUrlCredentials', () => {
 
 describe('parseActivityInput', () => {
   test('drops undeclared fields', () => {
-    const input = parseActivityInput('project.clone', {
-      cloneUrl: 'https://github.com/org/repo.git',
-      destinationPath: '/tmp/repo',
-      token: 'ghp_secret',
+    const input = parseActivityInput({
+      kind: 'project.clone',
+      input: {
+        cloneUrl: 'https://github.com/org/repo.git',
+        destinationPath: '/tmp/repo',
+        token: 'ghp_secret',
+      },
     });
     expect(input).toEqual({
       cloneUrl: 'https://github.com/org/repo.git',
@@ -49,20 +52,23 @@ describe('parseActivityInput', () => {
   });
 
   test('strips credentials from the clone URL', () => {
-    const input = parseActivityInput('project.clone', {
-      cloneUrl: URL_WITH_CREDENTIALS,
-      destinationPath: '/tmp/repo',
+    const input = parseActivityInput({
+      kind: 'project.clone',
+      input: {
+        cloneUrl: URL_WITH_CREDENTIALS,
+        destinationPath: '/tmp/repo',
+      },
     });
     expect(input?.cloneUrl).toBe('https://github.com/org/repo.git');
   });
 
   test('refuses an unknown kind', () => {
-    expect(parseActivityInput('project.delete', {})).toBeNull();
-    expect(parseActivityInput('toString', {})).toBeNull();
+    expect(parseActivityInput({ kind: 'project.delete', input: {} })).toBeNull();
+    expect(parseActivityInput({ kind: 'toString', input: {} })).toBeNull();
   });
 
   test('refuses an input that does not match its kind', () => {
-    expect(parseActivityInput('git.workflow', { action: 'rm -rf' })).toBeNull();
+    expect(parseActivityInput({ kind: 'git.workflow', input: { action: 'rm -rf' } })).toBeNull();
   });
 });
 
@@ -132,13 +138,16 @@ describe('parseActivityInput for the new kinds', () => {
 
   for (const [kind, input] of Object.entries(samples)) {
     test(`${kind} drops undeclared fields`, () => {
-      expect(parseActivityInput(kind, { ...input, token: 'ghp_secret' })).toEqual(input);
+      expect(parseActivityInput({ kind, input: { ...input, token: 'ghp_secret' } })).toEqual(input);
     });
   }
 
   test('refuses an unknown cleanup reason', () => {
     expect(
-      parseActivityInput('workspace.cleanup', { reason: 'because', deleteBranch: false }),
+      parseActivityInput({
+        kind: 'workspace.cleanup',
+        input: { reason: 'because', deleteBranch: false },
+      }),
     ).toBeNull();
   });
 });
@@ -146,23 +155,28 @@ describe('parseActivityInput for the new kinds', () => {
 describe('git.destructive input', () => {
   test('keeps at most 50 paths', () => {
     const paths = Array.from({ length: 80 }, (_, i) => `f${i}.ts`);
-    const input = parseActivityInput('git.destructive', { action: 'discard', paths });
+    const input = parseActivityInput({
+      kind: 'git.destructive',
+      input: { action: 'discard', paths },
+    });
     expect(input?.paths).toHaveLength(50);
   });
 
   test('refuses an unknown action', () => {
-    expect(parseActivityInput('git.destructive', { action: 'rm-rf' })).toBeNull();
+    expect(parseActivityInput({ kind: 'git.destructive', input: { action: 'rm-rf' } })).toBeNull();
   });
 });
 
 describe('parseActivityEffects', () => {
   test('drops unknown effects and extra fields', () => {
     expect(
-      parseActivityEffects([
-        { effect: 'worktree-removed', target: '/w', extra: 1 },
-        { effect: 'rm-rf', target: '/' },
-        'nope',
-      ]),
+      parseActivityEffects({
+        effects: [
+          { effect: 'worktree-removed', target: '/w', extra: 1 },
+          { effect: 'rm-rf', target: '/' },
+          'nope',
+        ],
+      }),
     ).toEqual([{ effect: 'worktree-removed', target: '/w' }]);
   });
 
@@ -171,7 +185,7 @@ describe('parseActivityEffects', () => {
       effect: 'branch-deleted',
       target: 'x'.repeat(1000),
     }));
-    const parsed = parseActivityEffects(many);
+    const parsed = parseActivityEffects({ effects: many });
     expect(parsed).toHaveLength(ACTIVITY_EFFECTS_MAX);
     expect(parsed?.[0]?.target).toHaveLength(ACTIVITY_EFFECT_TARGET_MAX);
   });
@@ -181,11 +195,11 @@ describe('parseActivityEffects', () => {
       effect,
       target: 'x',
     }));
-    expect(parseActivityEffects(effects)).toHaveLength(3);
+    expect(parseActivityEffects({ effects })).toHaveLength(3);
   });
 
   test('anything but a list is null', () => {
-    expect(parseActivityEffects(undefined)).toBeNull();
-    expect(parseActivityEffects({ effect: 'branch-deleted' })).toBeNull();
+    expect(parseActivityEffects({ effects: undefined })).toBeNull();
+    expect(parseActivityEffects({ effects: { effect: 'branch-deleted' } })).toBeNull();
   });
 });

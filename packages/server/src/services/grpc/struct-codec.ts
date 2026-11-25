@@ -9,6 +9,8 @@
 
 import type { JsonObject, JsonValue } from '@bufbuild/protobuf';
 
+import { isBoolean, isNumber, isObject, isString } from '../../lib/value-guards.js';
+
 /** `google.protobuf.Value` in the plain-object form proto-loader serializes. */
 export type WireStructValue =
   | { nullValue: 0 }
@@ -24,11 +26,11 @@ export interface WireStruct {
 }
 
 function isJsonObject(value: JsonValue | undefined): value is JsonObject {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
+  return isObject(value) && !Array.isArray(value);
 }
 
 function isKindedValue(value: JsonValue | undefined): value is JsonObject & { kind: string } {
-  return isJsonObject(value) && typeof value.kind === 'string';
+  return isJsonObject(value) && isString(value.kind);
 }
 
 function decodeValue(value: JsonValue): JsonValue {
@@ -92,16 +94,16 @@ interface ResponseRecord {
 /** Encode a value from a data handler's response as a `google.protobuf.Value`. */
 function encodeValue(value: ResponseValue): WireStructValue {
   if (value === null || value === undefined) return { nullValue: 0 };
-  if (typeof value === 'number') return { numberValue: value };
-  if (typeof value === 'string') return { stringValue: value };
-  if (typeof value === 'boolean') return { boolValue: value };
+  if (isNumber(value)) return { numberValue: value };
+  if (isString(value)) return { stringValue: value };
+  if (isBoolean(value)) return { boolValue: value };
   if (Array.isArray(value)) return { listValue: { values: value.map(encodeValue) } };
   return { structValue: encodeStruct(value) };
 }
 
 /** Encode an object's own enumerable fields as a `google.protobuf.Struct` (`{}` for a non-object). */
 export function encodeStruct(value: ResponseRecord | null | undefined): WireStruct {
-  const record: ResponseRecord = value && typeof value === 'object' ? value : {};
+  const record: ResponseRecord = isObject(value) ? value : {};
   return {
     fields: Object.fromEntries(
       Object.entries(record).map(([key, field]) => [key, encodeValue(field)]),

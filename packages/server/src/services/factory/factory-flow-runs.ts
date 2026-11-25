@@ -59,6 +59,7 @@ import {
   journalCodec,
   logFlowWarnings,
   mergePriority,
+  replaysRecordedThreads,
   traceRecorded,
   wasReopened,
   type FactoryFlowRunsDeps,
@@ -218,7 +219,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
     // What each agent step ran with, after the steps an earlier attempt recorded.
     const stepOptions = [...job.run.stepOptions];
 
-    // A run with journal rows resumes through them; one without replays `threadIds`.
+    // A run with journal rows resumes through them; an older one without replays `threadIds`.
     const journaled = await journalRows.load(job.run.id);
     if (journaled.isErr()) {
       log.warn('Issue factory run journal could not be read', {
@@ -239,7 +240,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       projectDefaults,
       stepOptions,
       record,
-      legacyReplay: journaled.value.length === 0,
+      legacyReplay: replaysRecordedThreads(journaled.value.length, job.run),
     });
 
     // The branch the pull request merges into names the merge lane. Unknown

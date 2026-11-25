@@ -349,6 +349,22 @@ export const journalCodec = (
   decode: (stored) => ({ ...live, outputs: STORED_OUTPUTS.parse(stored) }),
 });
 
+/**
+ * Whether a run resumes by replaying its recorded `threadIds` and launch
+ * marker (the legacy path) instead of through the journal: only a run that
+ * recorded a thread or a launch while its journal held nothing (one from
+ * before the journal, or reopened by a retry, which clears it). A run starting
+ * for the first time has neither, and must take the journaled path, or its
+ * agent steps write no checkpoint: a restart during its first step then finds
+ * a journal with no checkpoint and sends the step's prompt again as a
+ * follow-up on the running thread, whose current turn ending is then taken
+ * for the step's end (#449).
+ */
+export const replaysRecordedThreads = (
+  journalEntries: number,
+  run: Pick<FactoryRunView, 'threadIds' | 'launchStartedAt'>,
+) => journalEntries === 0 && (run.threadIds.length > 0 || run.launchStartedAt !== null);
+
 /** The gate a flow run waits on, and how to stop renewing its leases. */
 interface FlowGate {
   gate: ConcurrencyGate;

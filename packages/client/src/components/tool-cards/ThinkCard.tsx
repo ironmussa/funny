@@ -34,6 +34,7 @@ export function ThinkCard({
   displayTime?: string | null;
 }) {
   const { t } = useTranslation();
+  // SAFETY: Think inputs carry their text in content or description, both strings.
   const content = output || (parsed.content as string) || (parsed.description as string) || '';
 
   if (!content) return null;

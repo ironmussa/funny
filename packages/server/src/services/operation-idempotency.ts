@@ -7,6 +7,7 @@ import { z } from 'zod';
 
 import { db, dbAll, dbGet, dbRun, withDatabaseTransaction } from '../db/index.js';
 import { runnerOperationIdempotency } from '../db/schema.js';
+import { isString } from '../lib/value-guards.js';
 
 export type IdempotencyExecution<T> =
   | { kind: 'executed'; outcome: T }
@@ -195,7 +196,7 @@ export class SqlOperationIdempotencyStore implements OperationIdempotencyStore {
     // retaining `in_progress` is safer than allowing a committed mutation to
     // execute twice. PostgreSQL rolls the surrounding transaction back.
     const outcomeJson = canonicalJson(outcome);
-    if (typeof outcomeJson !== 'string') {
+    if (!isString(outcomeJson)) {
       throw new Error('runner operation idempotency outcome is not JSON serializable');
     }
     await dbRun(

@@ -24,6 +24,7 @@ import { audit } from '../lib/audit.js';
 import { clientIp } from '../lib/client-ip.js';
 import { log } from '../lib/logger.js';
 import type { ServerEnv } from '../lib/types.js';
+import { isString } from '../lib/value-guards.js';
 import * as enroll from '../services/runner-enrollment-service.js';
 import * as rm from '../services/runner-manager.js';
 import {
@@ -285,7 +286,7 @@ runnerRoutes.delete('/:runnerId', (c) => refuseUser(c));
  */
 function runnerSelfId(c: Context<ServerEnv>): string | null {
   const id = c.get('runnerId');
-  return typeof id === 'string' && id.length > 0 ? id : null;
+  return isString(id) && id.length > 0 ? id : null;
 }
 
 /** True when a runner-authenticated caller is acting on its OWN runner record. */

@@ -21,7 +21,7 @@ export function spawnAcpProbe(
   const child = spawn(command, args, {
     stdio: ['pipe', 'pipe', 'pipe'],
     cwd,
-    env: buildChildEnv(env) as NodeJS.ProcessEnv,
+    env: buildChildEnv(env),
     shell: process.platform === 'win32',
     detached: process.platform !== 'win32',
   });
@@ -33,6 +33,8 @@ export function spawnAcpProbe(
       child.once('spawn', () => resolve(child));
       child.once('error', reject);
     }),
+    // SAFETY: the ChildProcess 'error' event emits Error instances (e.g. ENOENT); a
+    // value without `message` falls back to `String(err)`.
     (err) => (err as Error)?.message ?? String(err),
   );
 }

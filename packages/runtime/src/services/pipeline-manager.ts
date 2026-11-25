@@ -29,6 +29,7 @@ import type {
 import type { YamlPipelineContext } from '@funny/workflows/compiler';
 
 import { log } from '../lib/logger.js';
+import { isString } from '../lib/value-guards.js';
 import { loadPipelines, type LoadedPipeline } from '../pipelines/yaml-loader.js';
 import { beginActivity, type ActivityHandle } from './activity-tracker.js';
 import { BUILTIN_AGENTS, resolveAgent, resolveBuiltinAgentByName } from './agent-registry.js';
@@ -112,11 +113,11 @@ function toPipelineConfig(row: any): PipelineConfig {
     userId: row.userId,
     name: row.name,
     enabled: !!row.enabled,
-    reviewModel: row.reviewModel as AgentModel,
-    fixModel: row.fixModel as AgentModel,
+    reviewModel: row.reviewModel,
+    fixModel: row.fixModel,
     maxIterations: row.maxIterations,
     precommitFixEnabled: !!row.precommitFixEnabled,
-    precommitFixModel: row.precommitFixModel as AgentModel,
+    precommitFixModel: row.precommitFixModel,
     precommitFixMaxIterations: row.precommitFixMaxIterations,
     reviewerPrompt: row.reviewerPrompt || undefined,
     correctorPrompt: row.correctorPrompt || undefined,
@@ -125,7 +126,7 @@ function toPipelineConfig(row: any): PipelineConfig {
     testEnabled: !!row.testEnabled,
     testCommand: row.testCommand ?? undefined,
     testFixEnabled: !!row.testFixEnabled,
-    testFixModel: (row.testFixModel as AgentModel) || 'sonnet',
+    testFixModel: row.testFixModel || 'sonnet',
     testFixMaxIterations: row.testFixMaxIterations ?? 3,
     testFixerPrompt: row.testFixerPrompt || undefined,
   };
@@ -229,7 +230,7 @@ function recordRunProgress(
     activity.step(stepLabel(nodeToStageType(change.nodeName), change.iteration));
   }
   const fixSha = change.ctx?.outputs?.['commit-fix']?.json?.sha;
-  if (typeof fixSha === 'string' && fixSha && !run.commits.has(fixSha)) {
+  if (isString(fixSha) && fixSha && !run.commits.has(fixSha)) {
     run.commits.add(fixSha);
     activity.effect('commit-created', fixSha.slice(0, 12));
   }
@@ -376,20 +377,20 @@ export async function startPipelineRun(opts: {
   // Helpers to project the YAML scope back onto the legacy DB column shape.
   const verdictOf = (ctx: YamlPipelineContext): PipelineVerdict | undefined => {
     const raw = ctx.outputs.review?.json?.verdict;
-    return raw === 'pass' || raw === 'fail' ? (raw as PipelineVerdict) : undefined;
+    return raw === 'pass' || raw === 'fail' ? raw : undefined;
   };
   const findingsOf = (ctx: YamlPipelineContext): string | undefined => {
     const raw = ctx.outputs.review?.json?.findings;
     if (raw === undefined || raw === null) return undefined;
-    return typeof raw === 'string' ? raw : JSON.stringify(raw);
+    return isString(raw) ? raw : JSON.stringify(raw);
   };
   // The current commit being reviewed: starts as the input `commit_sha`
   // and updates after each fix-loop iteration to the SHA produced by
   // the `commit-fix` node (captured in `ctx.outputs.commit-fix.json.sha`).
   const commitShaOf = (ctx: YamlPipelineContext): string | undefined => {
     const fixed = ctx.outputs['commit-fix']?.json?.sha;
-    if (typeof fixed === 'string' && fixed.length > 0) return fixed;
-    return typeof ctx.inputs.commit_sha === 'string' ? ctx.inputs.commit_sha : undefined;
+    if (isString(fixed) && fixed.length > 0) return fixed;
+    return isString(ctx.inputs.commit_sha) ? ctx.inputs.commit_sha : undefined;
   };
 
   // State change callback — persist to DB + emit WS

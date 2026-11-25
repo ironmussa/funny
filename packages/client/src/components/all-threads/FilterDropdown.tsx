@@ -34,8 +34,7 @@ export function FilterDropdown({ label, options, selected, onToggle, counts, tes
     if (!container) return;
 
     const items = Array.from(container.querySelectorAll<HTMLElement>('[role="menuitemcheckbox"]'));
-    const current = document.activeElement as HTMLElement;
-    const idx = items.indexOf(current);
+    const idx = items.findIndex((item) => item === document.activeElement);
 
     if (e.key === 'ArrowDown') {
       e.preventDefault();

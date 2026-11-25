@@ -302,6 +302,8 @@ const PROVIDER_DEFAULT_MODEL: ByProvider<AgentModel> = {
   deepagent: 'minimax-m2.7',
   pi: 'default',
   ...Object.fromEntries(
+    // SAFETY: each bundled manifest's defaultModel is a key of its provider's model
+    // table in MODEL_REGISTRY (a static entry, or the dynamic catalog's `default`).
     Object.values(ACP_MANIFESTS).map((m) => [m.id, m.models.defaultModel as AgentModel]),
   ),
 };
@@ -504,8 +506,8 @@ function getModelDefinition(
   model: AgentModel,
 ): ModelDefinition | undefined {
   if (!isRegistryProvider(provider)) return undefined;
-  const bucket = MODEL_REGISTRY[provider] as Record<string, ModelDefinition>;
-  return bucket[model as string];
+  const bucket: Record<string, ModelDefinition> = MODEL_REGISTRY[provider];
+  return bucket[model];
 }
 
 // ── Public API ────────────────────────────────────────────────
@@ -514,7 +516,7 @@ function getModelDefinition(
 export function resolveModelId(provider: AgentProvider, model: AgentModel): string {
   if (provider === 'llm-api') {
     // LLM API uses full model IDs directly — pass through
-    return model as string;
+    return model;
   }
   if (!isRegistryProvider(provider)) {
     throw new Error(`Unknown provider: ${provider}`);
@@ -532,7 +534,7 @@ export function resolveModelId(provider: AgentProvider, model: AgentModel): stri
       provider === 'opencode' ||
       provider === 'antigravity'
     ) {
-      return model as string;
+      return model;
     }
     const providerLabel = PROVIDER_LABELS[provider] ?? provider;
     throw new Error(`Unknown ${providerLabel} model: ${model}`);
@@ -551,6 +553,8 @@ export function getDefaultModel(provider: AgentProvider): AgentModel {
 export function getProviderModels(provider: AgentProvider): AgentModel[] {
   if (provider === 'llm-api') return [];
   if (isRegistryProvider(provider)) {
+    // SAFETY: the keys of a MODEL_REGISTRY bucket are exactly that provider's model
+    // names, each a member of the AgentModel union.
     return Object.keys(MODEL_REGISTRY[provider]) as AgentModel[];
   }
   throw new Error(`Unknown provider: ${provider}`);
@@ -559,8 +563,9 @@ export function getProviderModels(provider: AgentProvider): AgentModel[] {
 /** Get all available models for a provider with display labels. */
 export function getProviderModelsWithLabels(provider: AgentProvider): ModelInfo[] {
   if (!isRegistryProvider(provider)) return [];
-  const bucket = MODEL_REGISTRY[provider] as Record<string, ModelDefinition>;
+  const bucket: Record<string, ModelDefinition> = MODEL_REGISTRY[provider];
   return Object.entries(bucket).map(([value, def]) => ({
+    // SAFETY: `value` is a key of a MODEL_REGISTRY bucket, so a member of AgentModel.
     value: value as AgentModel,
     label: def.label,
   }));
@@ -647,6 +652,7 @@ export function providerModelProblem(
   if (provider === 'pi') return null;
   if (getManifest(provider)?.models.kind === 'dynamic') return null;
   if (!(provider in MODEL_REGISTRY)) return null;
+  // SAFETY: the `in` check above proved `provider` names a MODEL_REGISTRY entry.
   const bucket: object = MODEL_REGISTRY[provider as keyof typeof MODEL_REGISTRY];
   return model in bucket ? null : `Invalid model "${model}" for provider "${provider}"`;
 }
@@ -654,7 +660,7 @@ export function providerModelProblem(
 /** Check if a model belongs to the given provider. */
 export function isModelForProvider(provider: AgentProvider, model: AgentModel): boolean {
   if (!isRegistryProvider(provider)) return false;
-  return (model as string) in MODEL_REGISTRY[provider];
+  return model in MODEL_REGISTRY[provider];
 }
 
 // Suppress unused-type warning on ModelsOf for consumers that only want the value map.

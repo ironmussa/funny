@@ -54,6 +54,7 @@ export function HistoryFilters({
     <div className="flex flex-wrap items-center gap-1.5" data-testid="history-filter-bar">
       <Select
         value={branchScope}
+        // SAFETY: value comes from this Select, whose items are only 'unmerged', 'all' and 'current', the GraphBranchScope values.
         onValueChange={(value) => onBranchScopeChange(value as GraphBranchScope)}
       >
         <SelectTrigger size="xs" className="w-auto" data-testid="graph-toggle-all-branches">
@@ -73,7 +74,11 @@ export function HistoryFilters({
           ))}
         </SelectContent>
       </Select>
-      <Select value={syncFilter} onValueChange={(value) => setStatus(value as CommitSyncFilter)}>
+      <Select
+        value={syncFilter}
+        // SAFETY: value comes from this Select, whose items are only 'all', 'pull' and 'push', the CommitSyncFilter values.
+        onValueChange={(value) => setStatus(value as CommitSyncFilter)}
+      >
         <SelectTrigger size="xs" className="w-auto" data-testid="graph-filter-status">
           <ArrowUpDown className="icon-xs opacity-70" />
           <span>{statusLabels[syncFilter]}</span>

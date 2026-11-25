@@ -70,7 +70,7 @@ export function AnnotatableContent({
 
   const onOutsideMouseDown = useStableCallback((e: MouseEvent) => {
     const popover = document.querySelector('[data-testid="plan-selection-popover"]');
-    if (popover && popover.contains(e.target as Node)) return;
+    if (popover && popover.contains(e.target instanceof Node ? e.target : null)) return;
     clearSelection();
   });
 

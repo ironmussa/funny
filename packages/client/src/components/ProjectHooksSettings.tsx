@@ -247,8 +247,11 @@ export function ProjectHooksSettings() {
         if (!targets.length) return;
         if (source.data.type !== 'hook-item') return;
 
+        // SAFETY: type 'hook-item' was checked above; HookItem's getInitialData sets hookType from hook.hookType, a HookType.
         const sourceHookType = source.data.hookType as HookType;
+        // SAFETY: the same 'hook-item' data sets index from hook.index, a number.
         const sourceIndex = source.data.index as number;
+        // SAFETY: only HookItem drop targets accept a 'hook-item' source (canDrop), and their getData sets index from hook.index, a number.
         const targetIndex = targets[0].data.index as number;
         if (sourceIndex === targetIndex || sourceHookType !== targets[0].data.hookType) return;
 
@@ -438,7 +441,11 @@ export function ProjectHooksSettings() {
                     <span id="hooks-edit-type-label" className="settings-label">
                       {t('hooks.hookType')}
                     </span>
-                    <Select value={hookType} onValueChange={(v) => setHookType(v as HookType)}>
+                    <Select
+                      value={hookType}
+                      // SAFETY: the SelectItem values are the entries of HOOK_TYPES, each a HookType.
+                      onValueChange={(v) => setHookType(v as HookType)}
+                    >
                       <SelectTrigger
                         aria-labelledby="hooks-edit-type-label"
                         data-testid="hooks-type-select"
@@ -511,7 +518,11 @@ export function ProjectHooksSettings() {
             <span id="hooks-add-type-label" className="settings-label">
               {t('hooks.hookType')}
             </span>
-            <Select value={hookType} onValueChange={(v) => setHookType(v as HookType)}>
+            <Select
+              value={hookType}
+              // SAFETY: the SelectItem values are the entries of HOOK_TYPES, each a HookType.
+              onValueChange={(v) => setHookType(v as HookType)}
+            >
               <SelectTrigger aria-labelledby="hooks-add-type-label" data-testid="hooks-type-select">
                 <SelectValue />
               </SelectTrigger>

@@ -334,7 +334,7 @@ export function useDismissSuggestionsOnOutsideClick(
   useEffect(() => {
     if (!suggestionType) return;
     const handleMouseDown = (e: MouseEvent) => {
-      const target = e.target as Node;
+      const target = e.target instanceof Node ? e.target : null;
       // Check if click is inside the editor
       try {
         if (editor?.view.dom.contains(target)) return;

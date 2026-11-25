@@ -256,9 +256,9 @@ export async function initBetterAuth(): Promise<void> {
         role: 'admin',
         data: { username },
       },
-    } as any);
+    });
 
-    if ((result as any)?.user) {
+    if (result?.user) {
       if (isGenerated) {
         const passwordPath = resolve(DATA_DIR, 'admin-password.txt');
         const body =

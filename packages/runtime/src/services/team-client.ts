@@ -144,7 +144,7 @@ async function assignLocalProjects(): Promise<void> {
   } catch (err) {
     log.warn('Failed to assign local projects', {
       namespace: 'runner',
-      error: err as any,
+      error: err,
     });
   }
 }
@@ -271,7 +271,7 @@ async function handleGrpcControl(
   if (signal.aborted) throw new Error('runner command cancelled');
 
   if (command.startAgent) {
-    await startAgentForControl(command.startAgent as Record<string, any>, signal);
+    await startAgentForControl(command.startAgent, signal);
     return {};
   }
 
@@ -283,7 +283,7 @@ async function handleGrpcControl(
   }
 
   if (command.sendAgentMessage) {
-    const input = command.sendAgentMessage as Record<string, any>;
+    const input = command.sendAgentMessage;
     const { sendMessage } = await import('./thread-service/messaging.js');
     const result = await sendMessage({
       threadId: String(input.threadId ?? ''),
@@ -342,7 +342,7 @@ async function connectGrpc(endpoint: string): Promise<void> {
     handleTerminal: (command: GrpcTerminalCommand, respond) => {
       if (!command.userId) return;
       handleBrowserWSMessage(command.userId, { type: command.type, data: command.data }, (event) =>
-        respond(event as WSEvent),
+        respond(event),
       );
     },
     handleControl: handleGrpcControl,

@@ -89,6 +89,8 @@ function toActivity(row: StoredRow): Activity {
     projectId: row.projectId,
     threadId: row.threadId,
     title: row.title,
+    // SAFETY: the column is written only by this repository's insert (an ActivityStatus)
+    // and the activity machine's guarded transitions, so it holds an ActivityStatus.
     status: row.status as ActivityStatus,
     step: row.step,
     error: row.error,

@@ -75,6 +75,8 @@ const discard = buildActivity({
   endedAt: '2026-11-20T09:55:00.000Z',
 });
 
+const NO_ACTIVITIES: Activity[] = [];
+
 const meta = {
   title: 'Sidebar/ActivityList',
   component: ActivityList,
@@ -88,7 +90,7 @@ const meta = {
     ),
   ],
   args: {
-    activities: [] as Activity[],
+    activities: NO_ACTIVITIES,
     progress: {},
     runnerOffline: false,
     now: NOW,

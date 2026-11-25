@@ -75,7 +75,7 @@ function useRunningAgents(): RunningAgent[] {
       parentToolCallId?: string;
     }[] = [];
     for (const msg of messages) {
-      for (const tc of (msg.toolCalls ?? []) as any[]) {
+      for (const tc of msg.toolCalls ?? []) {
         allToolCalls.push(tc);
       }
     }
@@ -85,6 +85,8 @@ function useRunningAgents(): RunningAgent[] {
       // Task/Agent tool calls = sub-agents, still running (no output)
       if ((tc.name === 'Task' || tc.name === 'Agent') && !tc.output) {
         const parsed = formatInput(tc.input);
+        // SAFETY: Task/Agent tool inputs carry `description` and `prompt` as strings
+        // (the Agent SDK's Task tool schema), so either field, when present, is a string.
         const description =
           (parsed.description as string) ?? (parsed.prompt as string) ?? 'Sub-agent';
         const childCount = allToolCalls.filter((c) => c.parentToolCallId === tc.id).length;

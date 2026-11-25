@@ -27,6 +27,8 @@ export function pgTypeParsers(types: typeof import('pg').types) {
     getTypeParser(oid: number, format?: 'text' | 'binary') {
       if (oid === types.builtins.INT8 && format !== 'binary')
         return (value: string) => Number(value);
+      // SAFETY: pg's overloads take 'text' and 'binary' separately; `format` is one
+      // of them (or undefined, pg's 'text' default) and is passed through unchanged.
       return types.getTypeParser(oid, format as any);
     },
   };
@@ -36,7 +38,11 @@ export function pgTypeParsers(types: typeof import('pg').types) {
  * Create a PostgreSQL DatabaseProvider backed by a pg Pool.
  */
 export function createPgProvider(options: CreatePgOptions): DatabaseProvider {
+  // SAFETY: `require` returns any; these are the same modules the type imports name,
+  // loaded lazily so SQLite-only installs never load pg.
   const { Pool, types } = require('pg') as typeof import('pg');
+  // SAFETY: `require` returns any; this is the same module the type import names,
+  // loaded lazily with pg so SQLite-only installs never load it.
   const { drizzle } =
     require('drizzle-orm/node-postgres') as typeof import('drizzle-orm/node-postgres');
   const pgSchema = require('../schema.pg.js');

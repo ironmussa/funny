@@ -354,7 +354,7 @@ export const ACTIVITY_ORIGINS = [
 ] as const satisfies readonly ActivityOrigin[];
 
 export function isActivityOrigin(value: unknown): value is ActivityOrigin {
-  return typeof value === 'string' && (ACTIVITY_ORIGINS as readonly string[]).includes(value);
+  return typeof value === 'string' && ACTIVITY_ORIGINS.some((origin) => origin === value);
 }
 
 export const ACTIVITY_EFFECTS = [

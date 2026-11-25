@@ -70,7 +70,7 @@ export function createThreadShareRepository(deps: ThreadShareRepositoryDeps) {
    * `thread-sharing-steer` migration) reads as `view`.
    */
   async function getShareLevel(threadId: string, userId: string): Promise<ShareLevel | null> {
-    const rows = await dbAll(
+    const rows = await dbAll<{ level?: string }>(
       db
         .select({ level: schema.threadShares.level })
         .from(schema.threadShares)
@@ -82,7 +82,7 @@ export function createThreadShareRepository(deps: ThreadShareRepositoryDeps) {
         ),
     );
     if (rows.length === 0) return null;
-    const level = (rows[0] as { level?: string }).level;
+    const level = rows[0].level;
     // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
     return level === 'steer' ? 'steer' : level === 'comment' ? 'comment' : 'view';
   }

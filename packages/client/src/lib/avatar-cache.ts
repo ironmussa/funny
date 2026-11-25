@@ -36,7 +36,7 @@ function getFresh(url: string): string | null {
 
 function evictIfNeeded(): void {
   while (cache.size > MAX_ENTRIES) {
-    const oldestKey = cache.keys().next().value as string | undefined;
+    const oldestKey: string | undefined = cache.keys().next().value;
     if (oldestKey === undefined) break;
     const old = cache.get(oldestKey);
     if (old) URL.revokeObjectURL(old.objectUrl);

@@ -25,6 +25,8 @@ export const useNativeGitStore = create<NativeGitState>((set) => ({
   setBuildStatus: (status: string, exitCode?: number) => {
     log.info('native-git build status', { status, exitCode: String(exitCode ?? '') });
     set({
+      // SAFETY: the only caller forwards `native-git:build_status` events, which the runner
+      // (runtime app/system-routes.ts) emits only with 'building', 'completed' or 'failed'.
       buildStatus: status as NativeGitState['buildStatus'],
       buildExitCode: exitCode,
     });

@@ -257,6 +257,8 @@ function readDefaults(): BrowserPanelDefaults {
   try {
     const raw = localStorage.getItem(DEFAULTS_KEY);
     if (raw) {
+      // SAFETY: only `defaultModel` is read, and isString checks it below; a stored `null`
+      // throws on the property read and falls into the catch, which returns the default.
       const parsed = JSON.parse(raw) as Partial<BrowserPanelDefaults>;
       return {
         defaultModel: isString(parsed.defaultModel) ? parsed.defaultModel : 'sonnet',
@@ -317,24 +319,48 @@ const newId = (): string => {
   return `bp_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 };
 
-const FRESH = {
+type FreshFields = Pick<
+  BrowserPanelState,
+  | 'open'
+  | 'url'
+  | 'loadedUrl'
+  | 'loadError'
+  | 'tool'
+  | 'drawColor'
+  | 'annotations'
+  | 'drawCanvasRef'
+  | 'overlaysVisible'
+  | 'sessionId'
+  | 'sessionThreadId'
+  | 'viewport'
+  | 'controller'
+  | 'audioMuted'
+  | 'dialog'
+  | 'sessionStatus'
+  | 'sessionError'
+  | 'showTestIds'
+  | 'animationsPaused'
+  | 'inspectActive'
+>;
+
+const FRESH: FreshFields = {
   open: false,
   url: '',
   loadedUrl: null,
-  loadError: null as string | null,
-  tool: 'browse' as Tool,
-  drawColor: DRAW_COLORS[0] as string,
-  annotations: [] as Annotation[],
-  drawCanvasRef: null as HTMLCanvasElement | null,
+  loadError: null,
+  tool: 'browse',
+  drawColor: DRAW_COLORS[0],
+  annotations: [],
+  drawCanvasRef: null,
   overlaysVisible: true,
-  sessionId: null as string | null,
-  sessionThreadId: null as string | null,
+  sessionId: null,
+  sessionThreadId: null,
   viewport: { width: BROWSER_SESSION_VIEWPORT_WIDTH, height: BROWSER_SESSION_VIEWPORT_HEIGHT },
-  controller: 'agent' as BrowserSessionController,
+  controller: 'agent',
   audioMuted: true,
-  dialog: null as BrowserSessionDialog | null,
-  sessionStatus: 'idle' as SessionStatus,
-  sessionError: null as string | null,
+  dialog: null,
+  sessionStatus: 'idle',
+  sessionError: null,
   showTestIds: false,
   animationsPaused: false,
   inspectActive: false,
@@ -343,14 +369,25 @@ const FRESH = {
 const initialDefaults = readDefaults();
 
 /** Session fields reset when the panel lets go of a session. */
-const DETACHED = {
-  tool: 'browse' as Tool,
+const DETACHED: Pick<
+  BrowserPanelState,
+  | 'tool'
+  | 'inspectActive'
+  | 'showTestIds'
+  | 'sessionId'
+  | 'sessionThreadId'
+  | 'sessionStatus'
+  | 'sessionError'
+  | 'viewport'
+  | 'audioMuted'
+> = {
+  tool: 'browse',
   inspectActive: false,
   showTestIds: false,
-  sessionId: null as string | null,
-  sessionThreadId: null as string | null,
-  sessionStatus: 'idle' as SessionStatus,
-  sessionError: null as string | null,
+  sessionId: null,
+  sessionThreadId: null,
+  sessionStatus: 'idle',
+  sessionError: null,
   viewport: { width: BROWSER_SESSION_VIEWPORT_WIDTH, height: BROWSER_SESSION_VIEWPORT_HEIGHT },
   audioMuted: true,
 };
@@ -523,7 +560,7 @@ function panelActions(set: SetPanelState, get: GetPanelState) {
         attributes: { kind: a.kind },
       });
       set((state) => ({
-        annotations: [...state.annotations, { ...a, id } as Annotation],
+        annotations: [...state.annotations, { ...a, id }],
       }));
       return id;
     },

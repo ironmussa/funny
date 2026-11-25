@@ -62,7 +62,14 @@ export async function initRuntime(app: Hono<HonoEnv>): Promise<void> {
         threadId,
         prompt,
         cwd,
+        // SAFETY: the queue handler, the only caller, passes the queued
+        // message's model and permission mode (or the thread's, or the
+        // defaults), which were validated as AgentModel / PermissionMode when
+        // the message or thread was created; the handler context types them
+        // as plain strings.
         model as AgentModel | undefined,
+        // SAFETY: as for the model above, a permission mode stored from a
+        // validated request or the PermissionMode default.
         permissionMode as PermissionMode | undefined,
         images,
         disallowedTools,
@@ -126,6 +133,10 @@ export async function initRuntime(app: Hono<HonoEnv>): Promise<void> {
     await import('../services/team-client.js');
   setLocalApp(app);
   setBrowserWSHandler((userId, data, respond) => {
+    // SAFETY: widens the transport's typed terminal command to any `type`
+    // string and any payload: the server's frame is not checked against the
+    // `pty:*` union here, and each branch below reads only the fields of the
+    // command its `type` names, as the handlers did before.
     const parsed = data as { type: string; data: any };
     if (!parsed?.type) return;
     if (parsed.type.startsWith('browser-session:')) {

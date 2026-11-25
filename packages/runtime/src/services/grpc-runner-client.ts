@@ -15,7 +15,14 @@ import { nanoid } from 'nanoid';
 
 import { log } from '../lib/logger.js';
 import { metric, recordHistogram } from '../lib/telemetry.js';
+import { isString } from '../lib/value-guards.js';
 import { isWebSocketEndpoint, startGrpcWebSocketBridge } from './grpc-websocket-bridge.js';
+
+function isDuplexMethod(
+  value: ((metadata: grpc.Metadata) => RunnerGrpcDuplexStream) | undefined,
+): value is (metadata: grpc.Metadata) => RunnerGrpcDuplexStream {
+  return typeof value === 'function';
+}
 
 export type RunnerGrpcStreamName = 'operations' | 'events' | 'tunnel' | 'terminal';
 export type RunnerGrpcWireMessage = Record<string, any>;
@@ -73,6 +80,8 @@ export function grpcMethodDefinition(
     // In-memory events may contain undefined, which protobuf JSON cannot represent.
     Buffer.from(toBinary(schema, fromJsonString(schema, JSON.stringify(value))));
   const decode = (schema: DescMessage, value: Buffer): RunnerGrpcWireMessage =>
+    // SAFETY: `schema` is a message descriptor, and toJson of a message is
+    // always a JSON object (proto3 JSON mapping), never a scalar or an array.
     toJson(schema, fromBinary(schema, value), { enumAsInteger: true }) as RunnerGrpcWireMessage;
   return {
     path: `/${RunnerTransportService.typeName}/${method.name}`,
@@ -85,12 +94,14 @@ export function grpcMethodDefinition(
   };
 }
 
-const runnerTransportDefinition = Object.fromEntries(
+const runnerTransportDefinition: grpc.ServiceDefinition = Object.fromEntries(
   RunnerTransportService.methods.map((method) => [
     method.localName,
+    // SAFETY: every RunnerTransportService rpc is bidi-streaming
+    // (protocol/runner/v2/control.proto: `stream` request and response).
     grpcMethodDefinition(method as DescMethodStreaming),
   ]),
-) as grpc.ServiceDefinition;
+);
 
 export function runnerGrpcChannelOptions(): grpc.ChannelOptions {
   return {
@@ -114,6 +125,9 @@ function createGrpcTransport(endpoint: string, token: string): RunnerGrpcTranspo
   const { address, secure } = bridge
     ? { address: bridge.address, secure: false }
     : normalizeEndpoint(endpoint);
+  // SAFETY: makeGenericClientConstructor adds one method per definition key
+  // (the rpc local names); each bidi-streaming method takes metadata and
+  // returns a ClientDuplexStream, which RunnerGrpcDuplexStream describes.
   const client = new service(
     address,
     secure ? grpc.credentials.createSsl() : grpc.credentials.createInsecure(),
@@ -124,8 +138,7 @@ function createGrpcTransport(endpoint: string, token: string): RunnerGrpcTranspo
   return {
     open(name) {
       const method = client[name];
-      if (typeof method !== 'function')
-        throw new Error(`runner gRPC method ${name} is unavailable`);
+      if (!isDuplexMethod(method)) throw new Error(`runner gRPC method ${name} is unavailable`);
       const callMetadata = metadata.clone();
       callMetadata.set('x-correlation-id', nanoid());
       return method.call(client, callMetadata);
@@ -141,7 +154,7 @@ function createGrpcTransport(endpoint: string, token: string): RunnerGrpcTranspo
 type WireDuration = string | { seconds?: string | number; nanos?: number } | null | undefined;
 
 function durationMilliseconds(value: WireDuration, fallback: number): number {
-  if (typeof value === 'string') {
+  if (isString(value)) {
     const match = /^(-?(?:\d+(?:\.\d+)?|\.\d+))s$/.exec(value);
     if (match) {
       const milliseconds = Number(match[1]) * 1_000;
@@ -280,6 +293,9 @@ export class RunnerGrpcClient {
         },
       });
     } catch (error) {
+      // SAFETY: unchecked; opening the stream (grpc-js) and encoding the hello
+      // (protobuf) throw Error instances. disconnect only reads `name` with `?.`
+      // and passes the value on to onDisconnected.
       this.disconnect(generation, error as Error);
     }
   }

@@ -33,11 +33,11 @@ export function waitForAgentCompletion(
     };
 
     const cleanup = () => {
-      threadEventBus.removeListener('agent:completed', onCompleted as any);
+      threadEventBus.removeListener('agent:completed', onCompleted);
       signal.removeEventListener('abort', onAbort);
     };
 
-    threadEventBus.on('agent:completed', onCompleted as any);
+    threadEventBus.on('agent:completed', onCompleted);
     signal.addEventListener('abort', onAbort);
 
     if (signal.aborted) {

@@ -94,6 +94,10 @@ async function connectServer(
           // Tools carry their own bounds (browser actions ≤ 30 s).
           timeout: 5 * 60_000,
         });
+        // SAFETY: callTool's result is typed as a union with the legacy
+        // `toolResult` shape, so `content` is not typed. The SDK validated the
+        // reply against CallToolResultSchema, whose content parts all carry a
+        // string `type` (text parts a `text`, media parts a `mimeType`).
         return {
           text: mcpResultText(result.content as McpContentPart[] | undefined),
           isError: result.isError === true,
@@ -122,6 +126,9 @@ export async function connectMcpTools(
       );
     },
   );
+  // SAFETY: an http entry of the internal MCP map carries `headers` as a
+  // string-to-string map (the runtime builds it with the auth header); the
+  // `url` was checked to be a string above.
   const connected = await Promise.all(
     entries.map(([server, cfg]) =>
       connectServer(server, cfg.url, (cfg.headers ?? {}) as Record<string, string>).catch(

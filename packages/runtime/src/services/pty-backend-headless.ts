@@ -119,7 +119,7 @@ export class HeadlessPtyBackend implements PtyBackend {
         cwd: cwd || process.cwd(),
         // pty-manager already builds `env` from buildChildEnv(); scrub again as
         // defense in depth so no caller can reintroduce runner secrets (M8).
-        env: scrubSensitiveEnv(env) as Record<string, string>,
+        env: scrubSensitiveEnv(env),
         terminal: {
           cols: effectiveCols,
           rows: effectiveRows,
@@ -170,7 +170,7 @@ export class HeadlessPtyBackend implements PtyBackend {
     const session = this.sessions.get(id);
     if (session) {
       try {
-        (session.proc as any).terminal?.write(data);
+        session.proc.terminal?.write(data);
       } catch (err: any) {
         log.error('Failed to write to headless PTY', {
           namespace: 'pty-headless',
@@ -185,7 +185,7 @@ export class HeadlessPtyBackend implements PtyBackend {
     const session = this.sessions.get(id);
     if (session) {
       try {
-        (session.proc as any).terminal?.resize(cols, rows);
+        session.proc.terminal?.resize(cols, rows);
         session.headless.resize(cols, rows);
         session.dirty = true;
         session.cachedSerialization = null;
@@ -370,7 +370,7 @@ export class HeadlessPtyBackend implements PtyBackend {
       // Spawn a fresh PTY process
       const proc = Bun.spawn([exe, ...args], {
         cwd: cwd || process.cwd(),
-        env: buildChildEnv() as Record<string, string>,
+        env: buildChildEnv(),
         terminal: {
           cols: effectiveCols,
           rows: effectiveRows,

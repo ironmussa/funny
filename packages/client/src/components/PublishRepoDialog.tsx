@@ -108,7 +108,7 @@ export function PublishRepoDialog({
     setPublishing(false);
 
     if (result.isErr()) {
-      const msg = String((result.error as { message?: string })?.message ?? result.error);
+      const msg = String(result.error?.message ?? result.error);
       log.warn('publish.github.failed', { projectId, error: msg });
       if (msg.includes('already exists')) {
         setError(`Repository "${repoName}" already exists. Choose a different name.`);
@@ -135,7 +135,7 @@ export function PublishRepoDialog({
       setRemoteError(null);
       const result = await api.projectSetRemoteUrl(projectId, trimmed);
       if (result.isErr()) {
-        const msg = String((result.error as { message?: string })?.message ?? result.error);
+        const msg = String(result.error?.message ?? result.error);
         log.warn('publish.remote.failed', { projectId, error: msg });
         setRemoteError(msg);
         return;
@@ -158,7 +158,11 @@ export function PublishRepoDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <Tabs value={tab} onValueChange={(v) => setTab(v as 'github' | 'remote')}>
+        <Tabs
+          value={tab}
+          // SAFETY: the only TabsTrigger values below are 'github' and 'remote'.
+          onValueChange={(v) => setTab(v as 'github' | 'remote')}
+        >
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="github" data-testid="publish-tab-github">
               <SiGithub className="mr-1.5 size-3.5" />

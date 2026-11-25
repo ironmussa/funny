@@ -16,6 +16,7 @@
 import { z } from 'zod';
 
 import { log } from '../lib/logger.js';
+import { isString } from '../lib/value-guards.js';
 import type { AgentToolContext, AgentToolDefinition, AgentToolResult } from './agent-mcp-http.js';
 import { sendRemoteData } from './remote-data-channel.js';
 import type { RemoteDataRequest } from './remote-thread-data-client.js';
@@ -131,12 +132,22 @@ interface FactoryToolPayload {
   action?: 'retry' | 'stop';
 }
 
+/** The fields of a server answer that say whether it refused. */
+interface ServerAnswer {
+  error?: unknown;
+  success?: unknown;
+}
+
+function isServerAnswer(value: unknown): value is ServerAnswer {
+  return typeof value === 'object' && value !== null;
+}
+
 /** The server's refusal as a tool error, or null when it answered. */
 function refusal(response: any, fallback: string): AgentToolResult | null {
-  if (response && typeof response === 'object' && !response.error && response.success !== false) {
+  if (isServerAnswer(response) && !response.error && response.success !== false) {
     return null;
   }
-  const message = typeof response?.message === 'string' ? response.message : fallback;
+  const message = isString(response?.message) ? response.message : fallback;
   return text(message, true);
 }
 

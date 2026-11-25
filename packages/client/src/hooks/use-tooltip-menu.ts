@@ -21,7 +21,8 @@ export function useTooltipMenu() {
       if (blockTimer.current) clearTimeout(blockTimer.current);
       setTooltipBlocked(true);
     } else {
-      (document.activeElement as HTMLElement | null)?.blur();
+      const active = document.activeElement;
+      if (active instanceof HTMLElement || active instanceof SVGElement) active.blur();
       if (blockTimer.current) clearTimeout(blockTimer.current);
       blockTimer.current = setTimeout(() => setTooltipBlocked(false), 200);
     }

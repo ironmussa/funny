@@ -173,7 +173,7 @@ export async function ensureThreadCwd(
 
   const cwd = resolveThreadCwd(thread, project);
   if (cwd.isErr()) return err(badRequest(cwd.error.message));
-  if (hasLazyCwd(thread as { isScratch?: boolean })) {
+  if (hasLazyCwd(thread)) {
     try {
       mkdirSync(cwd.value, { recursive: true });
     } catch {

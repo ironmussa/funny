@@ -64,6 +64,8 @@ function getWorkflowStatus(events: ThreadEvent[]): WorkflowStatus {
       action: actionLabel,
       icon: XCircle,
       running: false,
+      // SAFETY: the runtime's git-workflow-service writes workflow:completed with
+      // `error` set from a string (result.error or String(err)) or left out.
       error: metadata.error as string | undefined,
     };
   }
@@ -183,6 +185,8 @@ export const WorkflowEventGroup = memo(function WorkflowEventGroup({
   // Extract workflowId from the started event
   const startedEvent = events.find((e) => e.type === 'workflow:started');
   const startData = startedEvent ? parseThreadEventData(startedEvent.data) : {};
+  // SAFETY: the runtime's git-workflow-service writes workflow:started with
+  // `workflowId` from crypto.randomUUID(); startData is {} without that event.
   const workflowId = startData.workflowId as string | undefined;
 
   const activeProgress = useActiveProgress(workflowId, status.running);

@@ -245,9 +245,7 @@ export async function requireProjectPath(path: string, userId: string): Promise<
   for (const project of projects) {
     // For owned projects this is the project's path; for shared (collaborator)
     // projects the caller works out of their OWN `localPath`, so authorize both.
-    const bases = [project.path, (project as { localPath?: string }).localPath].filter(
-      (b): b is string => !!b,
-    );
+    const bases = [project.path, project.localPath].filter((b): b is string => !!b);
     if (bases.some((base) => isInProjectScope(lexicalTarget, realTarget, base))) return null;
   }
 

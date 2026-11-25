@@ -83,6 +83,8 @@ export function request<T>(path: string, init?: RequestInit): ResultAsync<T, Dom
     body: isString(init?.body) ? init.body : undefined,
     cancellation: cancellationFromSignal(init?.signal),
   });
+  // SAFETY: apiClient.request only rejects with ApiClientError objects (every
+  // throw in client-core's api-client.ts builds one), which have DomainError's shape.
   return ResultAsync.fromPromise(promise, (error) => error as DomainError);
 }
 

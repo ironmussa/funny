@@ -11,13 +11,14 @@
  * Supports auto-restart with exponential backoff for managed processes.
  */
 import { execute } from '@funny/core/git';
-import type { WSCommandOutputData, WSCommandStatusData } from '@funny/shared';
+import type { WSCommandOutputData, WSCommandStatusData, WSEvent } from '@funny/shared';
 import { runAsync, scheduleRepeating } from '@funny/shared/async';
 import { internal, type DomainError } from '@funny/shared/errors';
 import { buildChildEnv } from '@funny/shared/lib/child-env';
 import { ResultAsync } from 'neverthrow';
 
 import { log } from '../lib/logger.js';
+import { isObject } from '../lib/value-guards.js';
 import { commandProcessLedger } from './command-process-ledger.js';
 import { getServices } from './service-registry.js';
 import { wsBroker } from './ws-broker.js';
@@ -115,7 +116,10 @@ type CommandEventType = 'command:status' | 'command:output' | 'command:metrics';
 type CommandEventPayload = CommandStatusPayload | CommandOutputPayload | CommandMetricsPayload;
 
 async function emitWS(type: CommandEventType, data: CommandEventPayload, projectId?: string) {
-  const event = { type, threadId: '', data } as any;
+  // SAFETY: the restart fields and `command:metrics` are not in the shared
+  // WSEvent union; the broker only serializes the event, and the client's
+  // dispatcher handles all three types and reads these fields.
+  const event = { type, threadId: '', data } as WSEvent;
   // Look up project userId for per-user filtering
   if (projectId) {
     const project = await getServices().projects.getProject(projectId);
@@ -140,7 +144,7 @@ export function startCommand(
 ): ResultAsync<void, DomainError> {
   return ResultAsync.fromPromise(
     startCommandImpl(commandId, command, cwd, projectId, label, options),
-    (err) => internal(String((err as Error)?.message ?? err)),
+    (err) => internal(String((isObject(err) && 'message' in err ? err.message : undefined) ?? err)),
   );
 }
 
@@ -207,9 +211,9 @@ async function startCommandImpl(
   );
 
   // Stream stdout
-  void readStream(proc.stdout as ReadableStream<Uint8Array>, commandId, 'stdout', projectId);
+  void readStream(proc.stdout, commandId, 'stdout', projectId);
   // Stream stderr
-  void readStream(proc.stderr as ReadableStream<Uint8Array>, commandId, 'stderr', projectId);
+  void readStream(proc.stderr, commandId, 'stderr', projectId);
 
   // Handle exit
   proc.exited

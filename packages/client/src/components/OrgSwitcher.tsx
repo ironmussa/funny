@@ -84,7 +84,7 @@ export function OrgSwitcher() {
     async (value: string) => {
       if (value === PERSONAL_VALUE) {
         try {
-          await authClient.organization.setActive({ organizationId: null as any });
+          await authClient.organization.setActive({ organizationId: null });
           setActiveOrg(null, null, null);
           await clearAndReload();
           navigate('/');

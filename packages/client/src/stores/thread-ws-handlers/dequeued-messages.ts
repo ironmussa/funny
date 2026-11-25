@@ -110,7 +110,7 @@ export function buildDequeuedUserMessage(
   return {
     id: `${DEQUEUED_MESSAGE_ID_PREFIX}${crypto.randomUUID()}`,
     threadId,
-    role: 'user' as MessageRole,
+    role: 'user',
     content: dequeuedMsg.content,
     images: dequeuedMsg.images,
     timestamp: new Date().toISOString(),

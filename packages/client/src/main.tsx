@@ -92,7 +92,7 @@ const SetupWizard = lazy(() =>
 );
 
 // The preview window sets this flag via Tauri's initialization_script
-const isPreviewWindow = !!(window as { __PREVIEW_MODE__?: unknown }).__PREVIEW_MODE__;
+const isPreviewWindow = !!('__PREVIEW_MODE__' in window && window.__PREVIEW_MODE__);
 
 // Matches Tailwind's `md` breakpoint (768px)
 const mobileQuery = window.matchMedia('(max-width: 767px)');
@@ -256,8 +256,8 @@ function AuthGate() {
 // has already been passed to createRoot" errors.
 // Store the root on import.meta.hot.data so Vite HMR preserves it across module re-executions.
 const rootEl = document.getElementById('root')!;
-const root: ReactDOM.Root =
-  (import.meta.hot?.data?.reactRoot as ReactDOM.Root | undefined) ?? ReactDOM.createRoot(rootEl);
+const savedRoot: ReactDOM.Root | undefined = import.meta.hot?.data?.reactRoot;
+const root: ReactDOM.Root = savedRoot ?? ReactDOM.createRoot(rootEl);
 if (import.meta.hot) {
   import.meta.hot.data.reactRoot = root;
 }

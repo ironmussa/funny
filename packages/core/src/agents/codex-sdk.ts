@@ -280,11 +280,7 @@ export class CodexSDKProcess extends BaseAgentProcess {
     }
     if (name === 'compact' && !this.activeSessionId)
       throw new Error('Send a message before compacting this conversation.');
-    const server = new CodexAppServer(
-      this.options.cwd,
-      buildChildEnv(this.options.env) as NodeJS.ProcessEnv,
-      signal,
-    );
+    const server = new CodexAppServer(this.options.cwd, buildChildEnv(this.options.env), signal);
     try {
       await server.initialize();
       if (method) {
@@ -447,7 +443,7 @@ export class CodexSDKProcess extends BaseAgentProcess {
               id: this.scopedId(item.id),
               content: [{ type: 'text', text: item.text }],
             },
-          } as CLIMessage);
+          } satisfies CLIMessage);
         }
         if (completed) this.agentMessageTextByItemId.delete(item.id);
         return completed ? item.text : null;
@@ -632,7 +628,7 @@ export class CodexSDKProcess extends BaseAgentProcess {
         id: randomUUID(),
         content: [{ type: 'tool_use', id: toolUseId, name, input }],
       },
-    } as CLIMessage);
+    } satisfies CLIMessage);
     this.emit('message', {
       type: 'user',
       message: {
@@ -645,7 +641,7 @@ export class CodexSDKProcess extends BaseAgentProcess {
           },
         ],
       },
-    } as CLIMessage);
+    } satisfies CLIMessage);
   }
 
   private async buildInput(
@@ -885,6 +881,14 @@ export async function resolveCodexSandboxWritableDirectories(cwd: string): Promi
   }
 }
 
+/** The fields `imagesToLocalFiles` reads from a prompt image, all unchecked. */
+interface PromptImageAttachment {
+  source?: { data?: unknown; media_type?: unknown };
+  data?: unknown;
+  mimeType?: unknown;
+  media_type?: unknown;
+}
+
 async function imagesToLocalFiles(
   images: unknown[] | undefined,
   cleanupDirs: string[],
@@ -893,9 +897,14 @@ async function imagesToLocalFiles(
   const paths: string[] = [];
   let dir: string | null = null;
   for (const image of images) {
-    const src = (image as any)?.source;
-    const data = src?.data ?? (image as any)?.data;
-    const mediaType = src?.media_type ?? (image as any)?.mimeType ?? (image as any)?.media_type;
+    // SAFETY: prompt images are unvalidated attachments, either Claude blocks
+    // (`{ source: { data, media_type } }`) or ACP-style (`{ data, mimeType }`). Every field is
+    // read optionally as `unknown`, and the `typeof` check below skips an entry without a string
+    // `data` and media type.
+    const attachment = image as PromptImageAttachment | null | undefined;
+    const src = attachment?.source;
+    const data = src?.data ?? attachment?.data;
+    const mediaType = src?.media_type ?? attachment?.mimeType ?? attachment?.media_type;
     if (!isString(data) || !isString(mediaType)) continue;
     dir ??= await mkdtemp(join(tmpdir(), 'funny-codex-images-'));
     const ext = extensionForMime(mediaType);

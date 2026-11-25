@@ -138,6 +138,7 @@ export function ReadFileCard({
 }) {
   const { t } = useTranslation();
   const defaultEditor = useSettingsStore((s) => s.defaultEditor);
+  // SAFETY: the Read tool declares file_path as a string in its input schema.
   const filePath = parsed.file_path as string | undefined;
   const projectPath = useCurrentProjectPath();
   const displayPath = filePath ? makeRelativePath(filePath, projectPath) : undefined;

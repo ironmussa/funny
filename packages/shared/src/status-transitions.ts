@@ -9,11 +9,15 @@ import { getNextSnapshot, type AnyStateMachine } from 'xstate';
 export function statusWriteGuards<S extends string>(
   machine: AnyStateMachine,
 ): Readonly<Record<S, readonly S[]>> {
+  // SAFETY: callers pass the machine whose state names are the values of S (the
+  // stored status column), so its top-level state keys are exactly S.
   const states = Object.keys(machine.states) as S[];
+  // SAFETY: built from `states` (all of S), so every S key is present with an empty list.
   const guards = Object.fromEntries(states.map((s) => [s, [] as S[]])) as Record<S, S[]>;
   for (const from of states) {
     const snapshot = machine.resolveState({ value: from, context: undefined });
     for (const type of Object.keys(machine.states[from].on)) {
+      // SAFETY: the machine is flat, so a snapshot value is one of its state names, an S.
       const to = getNextSnapshot(machine, snapshot, { type }).value as S;
       if (!guards[to].includes(from)) guards[to].push(from);
     }

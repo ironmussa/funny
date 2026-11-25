@@ -52,7 +52,8 @@ export function createOptimisticActions(set: Set, get: Get): OptimisticActions {
         (() => {
           const projectPath = getProjectPath(pid);
           const cwd = entry.worktreePath || projectPath || '';
-          return { model: model || entry.model, cwd, tools: [] as string[] };
+          const tools: string[] = [];
+          return { model: model || entry.model, cwd, tools };
         })();
 
       // Path-only entries so chips render in the optimistic message, merged
@@ -64,10 +65,11 @@ export function createOptimisticActions(set: Set, get: Get): OptimisticActions {
         ),
       );
 
+      const role: MessageRole = 'user';
       const newMessage = {
         id: `${OPTIMISTIC_MESSAGE_ID_PREFIX}${crypto.randomUUID()}`,
         threadId,
-        role: 'user' as MessageRole,
+        role,
         content: messageContent,
         images,
         timestamp: new Date().toISOString(),

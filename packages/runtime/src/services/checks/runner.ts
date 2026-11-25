@@ -341,12 +341,18 @@ function stepCommand(plan: CheckPlan, step: CheckStep): string {
 }
 
 /** Runs the plan's steps in order (stopping at none: every step reports). */
+/** How the plan's steps ended: the last exit code and the output tail. */
+interface StepsOutcome {
+  exitCode: number;
+  tail: string[];
+}
+
 async function runSteps(
   plan: CheckPlan,
   run: RunProgress,
   options: RunCheckOptions,
   signal: AbortSignal,
-): Promise<{ exitCode: number; tail: string[] }> {
+): Promise<StepsOutcome> {
   const now = options.now ?? Date.now;
   const env = plan.progressEnv ? { [plan.progressEnv]: options.progressPath } : {};
   let exitCode = 0;
@@ -377,7 +383,7 @@ export async function runCheck(plan: CheckPlan, options: RunCheckOptions): Promi
   const started = now();
   const run = new RunProgress(plan, options.progressPath, now);
   let stopped: CheckRunResult['stopped'];
-  let outcome = { exitCode: 1, tail: [] as string[] };
+  let outcome: StepsOutcome = { exitCode: 1, tail: [] };
   let inflight: Promise<unknown> = Promise.resolve();
   try {
     outcome = await runAsync(

@@ -78,7 +78,7 @@ function createSqliteMigrationContext(db: any): MigrationContext {
   function queryOne<T>(
     query: ReturnType<typeof sql> | ReturnType<typeof sql.raw>,
   ): Promise<T | undefined> {
-    return Promise.resolve(db.get(query) as T | undefined);
+    return Promise.resolve<T | undefined>(db.get(query));
   }
 
   async function addColumn(table: string, column: string, type: string, dflt?: string) {
@@ -97,9 +97,14 @@ function createSqliteMigrationContext(db: any): MigrationContext {
       // is just "Failed to run the query '…'", so we must walk the `cause`
       // chain to find the real "duplicate column name" text.
       let text = '';
-      for (let e: unknown = err; e != null; e = (e as { cause?: unknown }).cause) {
-        text += ` ${String((e as { message?: string }).message ?? e)}`;
-        if ((e as { cause?: unknown }).cause === e) break;
+      let e: unknown = err;
+      while (e != null) {
+        // SAFETY: both fields are read optionally: a thrown non-Error (or one
+        // without a cause) reads undefined, and `?? e` falls back to the value.
+        const link = e as { cause?: unknown; message?: string };
+        text += ` ${String(link.message ?? e)}`;
+        if (link.cause === e) break;
+        e = link.cause;
       }
       if (!/duplicate column name/i.test(text)) throw err;
     }
@@ -107,7 +112,7 @@ function createSqliteMigrationContext(db: any): MigrationContext {
 
   async function dropColumn(table: string, column: string) {
     // SQLite (3.35+) has DROP COLUMN but no `IF EXISTS` — check first.
-    const columns = db.all(sql.raw(`PRAGMA table_info(${table})`)) as { name: string }[];
+    const columns: { name: string }[] = db.all(sql.raw(`PRAGMA table_info(${table})`));
     if (!columns.some((c) => c.name === column)) return;
     await exec(sql.raw(`ALTER TABLE ${table} DROP COLUMN ${column}`));
   }
@@ -141,7 +146,8 @@ function createPgMigrationContext(db: any): MigrationContext {
     const result = await (currentTx() ?? db).execute(query);
     // db.execute() returns pg QueryResult — rows are in .rows
     const rows = result?.rows ?? result;
-    return rows?.[0] as T | undefined;
+    const first: T | undefined = rows?.[0];
+    return first;
   }
 
   async function addColumn(table: string, column: string, type: string, dflt?: string) {
@@ -273,7 +279,7 @@ async function appliedMigrationNames(db: any, dialect: DbDialect): Promise<Set<s
   const rows: { name: string }[] =
     dialect === 'pg'
       ? await db.execute(query).then((result: any) => result?.rows ?? result ?? [])
-      : (db.all(query) as { name: string }[]);
+      : db.all(query);
   return new Set(rows.map((row) => row.name));
 }
 

@@ -9,6 +9,8 @@ import type { CLIAssistantMessage, CLIMessage } from '@funny/core/agents';
 import type { FileDiffSummary, ThreadStage } from '@funny/shared';
 import { THREAD_STAGE_VALUES } from '@funny/shared/contracts/threads';
 
+import { isObject, isString } from '../../lib/value-guards.js';
+
 /**
  * Decode literal Unicode escape sequences (\uXXXX) that may appear
  * in CLI output when the text was double-encoded or the CLI emits
@@ -38,6 +40,16 @@ export function knownStage(stage: string | null | undefined): ThreadStage | unde
   return THREAD_STAGE_VALUES.find((value) => value === stage);
 }
 
+/** A tool_result content block, before its fields are checked. */
+interface ContentBlock {
+  type?: unknown;
+  text?: unknown;
+}
+
+function isContentBlock(value: unknown): value is ContentBlock {
+  return typeof value === 'object' && value !== null;
+}
+
 /**
  * Normalize a tool_result `content` field to a string. The Anthropic SDK may
  * deliver it as a plain string or as an array of content blocks
@@ -46,13 +58,13 @@ export function knownStage(stage: string | null | undefined): ThreadStage | unde
  * any payload at all.
  */
 export function normalizeToolResultContent(content: ToolResultContent): string {
-  if (typeof content === 'string') return content;
+  if (isString(content)) return content;
   if (Array.isArray(content)) {
     return content
       .map((b: any) => {
-        if (typeof b === 'string') return b;
-        if (b && typeof b === 'object') {
-          if (typeof b.text === 'string') return b.text;
+        if (isString(b)) return b;
+        if (isContentBlock(b)) {
+          if (isString(b.text)) return b.text;
           if (b.type === 'image') return '[image]';
         }
         return '';
@@ -68,9 +80,9 @@ export function normalizeToolResultContent(content: ToolResultContent): string {
  * a truncated JSON representation.
  */
 export function serializeToolInput(toolName: string, input: ToolInput): string | undefined {
-  if (!input || typeof input !== 'object') return undefined;
-  if (toolName === 'Bash' && 'command' in input && typeof (input as any).command === 'string') {
-    return (input as any).command as string;
+  if (!isObject(input)) return undefined;
+  if (toolName === 'Bash' && 'command' in input && isString(input.command)) {
+    return input.command;
   }
   try {
     const s = JSON.stringify(input);

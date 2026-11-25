@@ -3,9 +3,11 @@
 import type {
   PendingPermissionRequest,
   PermissionApprovalCapability,
+  PermissionMode,
   PermissionRecoveryReason,
   Thread,
   ThreadStage,
+  WaitingReason,
 } from '@funny/shared';
 
 import { settlePreSendState } from '../optimistic-run-state';
@@ -42,8 +44,8 @@ export function handleWSStatus(
     pendingPermissionRequest?: PendingPermissionRequest;
     permissionApprovalCapability?: PermissionApprovalCapability;
     permissionRecoveryReason?: PermissionRecoveryReason;
-    stage?: string;
-    permissionMode?: string;
+    stage?: ThreadStage;
+    permissionMode?: PermissionMode;
   },
 ): void {
   // The server has spoken about this thread's status: an optimistic
@@ -94,8 +96,8 @@ export function handleWSStatus(
       ...t,
       status: newStatus,
       ...statusTimestamps,
-      stage: data.stage ? (data.stage as any) : t.stage,
-      permissionMode: data.permissionMode ? (data.permissionMode as any) : t.permissionMode,
+      stage: data.stage ? data.stage : t.stage,
+      permissionMode: data.permissionMode ? data.permissionMode : t.permissionMode,
     };
   });
 
@@ -144,7 +146,9 @@ export function handleWSStatus(
       return {
         ...t,
         status: newStatus,
-        waitingReason: data.waitingReason as any,
+        // SAFETY: the server's agent:status payload (WSStatusData) types waitingReason as
+        // WaitingReason; this parameter is a plain string only so tests can pass other values.
+        waitingReason: data.waitingReason as WaitingReason | undefined,
         pendingPermission: data.permissionRequest,
         // A permission wait is the only state that may retain a live ACP
         // continuation. Clearing it for every other wait prevents a resolved
@@ -152,8 +156,8 @@ export function handleWSStatus(
         pendingPermissionRequest: data.pendingPermissionRequest,
         permissionApprovalCapability,
         permissionRecoveryReason: data.permissionRecoveryReason,
-        stage: data.stage ? (data.stage as any) : t.stage,
-        permissionMode: data.permissionMode ? (data.permissionMode as any) : t.permissionMode,
+        stage: data.stage ? data.stage : t.stage,
+        permissionMode: data.permissionMode ? data.permissionMode : t.permissionMode,
       };
     }
     return {
@@ -166,12 +170,12 @@ export function handleWSStatus(
       permissionRecoveryReason: undefined,
       permissionApprovalCapability,
       resultInfo: newStatus === 'stopped' || newStatus === 'interrupted' ? undefined : t.resultInfo,
-      stage: data.stage ? (data.stage as any) : t.stage,
-      permissionMode: data.permissionMode ? (data.permissionMode as any) : t.permissionMode,
+      stage: data.stage ? data.stage : t.stage,
+      permissionMode: data.permissionMode ? data.permissionMode : t.permissionMode,
     };
   });
 
-  if (Object.keys(payloadPatch).length > 0) set(payloadPatch as any);
+  if (Object.keys(payloadPatch).length > 0) set(payloadPatch);
 
   // A run that ends by status alone (a stop emits `agent:status: stopped` with
   // no `agent:result`) bumps `completedAt`. If the user is looking at the
@@ -229,7 +233,7 @@ export function handleWSStageChanged(
 
   const found = patchSidebarThread(threadId, apply);
   const payloadPatch = mutations.applyThreadDataPatch(get(), threadId, apply);
-  if (Object.keys(payloadPatch).length > 0) set(payloadPatch as any);
+  if (Object.keys(payloadPatch).length > 0) set(payloadPatch);
 
   if (!found) {
     scheduleProjectRefresh(get, data.projectId || undefined);

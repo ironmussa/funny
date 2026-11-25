@@ -87,9 +87,15 @@ if (existsSync(clientDistDir)) {
   log.info('Serving static files', { namespace: 'server', dir: clientDistDir });
 }
 
+// What a `bun --watch` restart leaves on the global object for the next run.
+declare global {
+  var __bunServer: { stop(closeActiveConnections?: boolean): void } | undefined;
+  var __bunCleanup: (() => Promise<void>) | undefined;
+}
+
 // Clean up previous instance on bun --watch restarts.
-const prev = (globalThis as any).__bunServer;
-const prevCleanup = (globalThis as any).__bunCleanup as (() => Promise<void>) | undefined;
+const prev = globalThis.__bunServer;
+const prevCleanup = globalThis.__bunCleanup;
 if (prev) {
   prev.stop(true);
   if (prevCleanup) await prevCleanup();
@@ -129,8 +135,8 @@ shutdownManager.register(
 );
 
 // Store for next --watch restart
-(globalThis as any).__bunServer = server;
-(globalThis as any).__bunCleanup = () => shutdownManager.run('hotReload');
+globalThis.__bunServer = server;
+globalThis.__bunCleanup = () => shutdownManager.run('hotReload');
 
 // Graceful shutdown
 let shuttingDown = false;

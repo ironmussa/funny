@@ -70,6 +70,8 @@ function getActiveFileBasePath(): string | null {
 }
 
 function scheduleIdle(work: () => void): () => void {
+  // SAFETY: lib.dom declares requestIdleCallback as always present, but Safari
+  // lacks it; making both optional only widens the type so the check below compiles.
   const idleWindow = window as Window & {
     cancelIdleCallback?: (id: number) => void;
     requestIdleCallback?: (callback: () => void, options?: { timeout: number }) => number;
@@ -384,7 +386,7 @@ function SatteriMessageContentInner({
 
   const onClick = useCallback(
     (event: MouseEvent<HTMLDivElement>) => {
-      const target = event.target as Element | null;
+      const target = event.target instanceof Element ? event.target : null;
       const copy = target?.closest<HTMLButtonElement>('[data-satteri-copy]');
       if (copy) {
         const code = copy.parentElement?.querySelector('pre > code')?.textContent ?? '';

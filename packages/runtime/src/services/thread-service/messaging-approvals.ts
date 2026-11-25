@@ -8,7 +8,7 @@
  * saved "always allow" rules they create. Split out of messaging.ts.
  */
 
-import type { AgentModel, AgentProvider, PermissionMode } from '@funny/shared';
+import type { AgentModel, PermissionMode } from '@funny/shared';
 import { DEFAULT_MODEL, DEFAULT_PERMISSION_MODE, DEFAULT_PROVIDER } from '@funny/shared/models';
 import { ResultAsync } from 'neverthrow';
 
@@ -134,12 +134,17 @@ async function approveToolCallImpl(params: ApproveToolParams): Promise<void> {
     params.threadId,
     run.message,
     cwd,
+    // SAFETY: threads.model holds a model id validated by agentModelSchema when the thread
+    // was created or updated; ids of dynamic-catalog providers (pi, cursor, ...) are not in
+    // the AgentModel union and are passed through unchanged by resolveModelId.
     (thread.model as AgentModel) || DEFAULT_MODEL,
+    // SAFETY: threads.permission_mode is only written from permissionModeSchema-validated
+    // input, whose values are exactly the PermissionMode union.
     (thread.permissionMode as PermissionMode) || DEFAULT_PERMISSION_MODE,
     undefined,
     run.disallowedTools,
     run.allowedTools,
-    (thread.provider || DEFAULT_PROVIDER) as AgentProvider,
+    thread.provider || DEFAULT_PROVIDER,
   );
   if (started.isErr()) throw new ThreadServiceError(started.error.message, 500);
 }
@@ -202,6 +207,8 @@ async function persistApprovalRule(params: ApproveToolParams, projectPath: strin
     log.warn('approveToolCall: failed to persist always-allow rule', {
       namespace: 'thread-service',
       threadId: params.threadId,
+      // SAFETY: only `.message` is read, optional-chained; it is undefined when the
+      // rule write rejects with something that is not Error-like.
       error: (err as Error)?.message,
     });
   }

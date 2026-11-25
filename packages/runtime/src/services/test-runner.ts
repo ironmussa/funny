@@ -13,6 +13,7 @@ import { runAsync } from '@funny/shared/async';
 import { buildChildEnv } from '@funny/shared/lib/child-env';
 
 import { log } from '../lib/logger.js';
+import { isObject, isString } from '../lib/value-guards.js';
 import { wsBroker } from './ws-broker.js';
 
 // ─── Types ──────────────────────────────────────────────
@@ -197,7 +198,7 @@ function validateTestFile(
   projectPath: string,
   file: string,
 ): { ok: true; relative: string } | { ok: false; error: string } {
-  if (typeof file !== 'string' || file.length === 0) {
+  if (!isString(file) || file.length === 0) {
     return { ok: false, error: 'file must be a non-empty string' };
   }
   if (file.startsWith('-')) {
@@ -402,7 +403,9 @@ async function resolveBoundingBox(
       `),
       { timeoutMs: 150, timeoutError: () => new Error('timeout') },
     );
-    if (box && typeof box === 'object' && 'x' in (box as any)) {
+    if (isObject(box) && 'x' in box) {
+      // SAFETY: the script above answers null or the element's
+      // getBoundingClientRect() as { x, y, width, height } numbers.
       return box as TestActionBoundingBox;
     }
   } catch {

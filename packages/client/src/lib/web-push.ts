@@ -39,6 +39,8 @@ export async function enableWebPush(): Promise<void> {
   }
   try {
     await unwrapPush(
+      // SAFETY: a PushSubscription's toJSON() always carries its endpoint and the
+      // p256dh / auth keys; the procedure's pushSubscriptionBody schema checks them.
       trpcCall(() => trpc.push.subscribe.mutate(subscription.toJSON() as PushSubscriptionBody)),
     );
   } catch (error) {

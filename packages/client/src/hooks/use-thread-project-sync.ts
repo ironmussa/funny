@@ -40,8 +40,9 @@ function syncPanelParam(search: string, ui: UIState) {
 const VALID_TABS: ReviewSubTab[] = ['changes', 'graph', 'stash', 'worktrees', 'prs', 'issues'];
 
 function syncTabParam(search: string, ui: UIState) {
-  const tabParam = new URLSearchParams(search).get('tab') as ReviewSubTab | null;
-  if (!tabParam || !VALID_TABS.includes(tabParam) || tabParam === ui.reviewSubTab) return;
+  const rawTab = new URLSearchParams(search).get('tab');
+  const tabParam = VALID_TABS.find((tab) => tab === rawTab);
+  if (!tabParam || tabParam === ui.reviewSubTab) return;
   ui.setReviewSubTab(tabParam);
   if (!ui.reviewPaneOpen || ui.rightPaneTab !== 'review') {
     ui.setReviewPaneOpen(true);

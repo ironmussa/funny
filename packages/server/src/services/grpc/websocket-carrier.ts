@@ -29,6 +29,7 @@ import {
 
 import { log } from '../../lib/logger.js';
 import { metric } from '../../lib/telemetry.js';
+import { isString } from '../../lib/value-guards.js';
 
 const RUNNER_GRPC_WS_KIND = 'runner-grpc-ws';
 
@@ -302,7 +303,7 @@ export function createRunnerGrpcWebSocketCarrier(options: RunnerGrpcWebSocketCar
       message(ws: CarrierWebSocket, message: string | Uint8Array) {
         const state = ws.data.state;
         if (!state || state.closed) return;
-        if (typeof message === 'string') return shut(ws, 1003, 'binary frames only');
+        if (isString(message)) return shut(ws, 1003, 'binary frames only');
         state.sawData = true;
         if (!state.toListener.push(message)) return shut(ws, 1013, 'listener too slow');
         if (state.socket && !state.toListener.flush(state.socket)) {

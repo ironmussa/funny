@@ -27,6 +27,7 @@ import type { Named } from '@gdp-ts/core';
 import { z } from 'zod';
 
 import { deriveServerKey } from '../../lib/server-secrets.js';
+import { isString } from '../../lib/value-guards.js';
 import type { RunnerActor, RunnerId } from './runner-actor.js';
 import type { RunnerFor } from './runner-for.js';
 
@@ -81,7 +82,7 @@ export function verifyOAuthCallbackState(
   state: string | undefined | null,
   now: number = Date.now(),
 ): OAuthCallbackBinding | null {
-  if (typeof state !== 'string' || state.length > 1024) return null;
+  if (!isString(state) || state.length > 1024) return null;
   const parts = state.split('.');
   if (parts.length !== 3 || parts[0] !== VERSION) return null;
   const [, body, sig] = parts;

@@ -11,7 +11,7 @@ export function loadAgentAccounts(): AgentAccountRow[] {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return [];
-    const parsed = JSON.parse(raw) as unknown;
+    const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
     const now = Date.now();
     return parsed.filter(

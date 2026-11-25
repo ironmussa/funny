@@ -41,7 +41,7 @@ export function rateLimit(opts: { windowMs: number; max: number }) {
   return async (c: Context, next: Next) => {
     // Use Bun's socket address when available; only fall back to proxy
     // headers if a trusted proxy is explicitly configured.
-    const socketAddr = (c.env as any)?.remoteAddress;
+    const socketAddr = c.env?.remoteAddress;
     const ip = socketAddr || 'unknown';
 
     const now = Date.now();

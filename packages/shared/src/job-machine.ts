@@ -22,6 +22,7 @@ interface JobMachineTypes {
  * overwritten by the scanner and a finished job cannot be cancelled.
  */
 const jobMachine = setup({
+  // SAFETY: xstate's `types` is a type-only carrier; the empty object is never read at runtime.
   types: {} as JobMachineTypes,
 }).createMachine({
   id: 'job',

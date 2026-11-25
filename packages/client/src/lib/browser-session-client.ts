@@ -125,6 +125,8 @@ const FIRE_AND_FORGET_FRAMES = new Map<string, (extra: MessageFields) => Realtim
       case: 'navigate',
       targetUrl: String(extra.url ?? ''),
     }),
+    // SAFETY: `extra` here is the object passed to browserSessionClient.input, and
+    // every caller builds it as a literal of strings, numbers and booleans.
     'browser-session:input': (extra) => ({ case: 'input', action: extra as JsonObject }),
     'browser-session:heartbeat': () => ({ case: 'heartbeat' }),
     'browser-session:close': (extra) => ({

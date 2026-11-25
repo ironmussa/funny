@@ -138,8 +138,10 @@ const BROWSER_SUMMARIES = new Map<string, Summarizer>(
     browser_open: (p) => str(p, 'url'),
     browser_navigate: (p) => str(p, 'url') ?? str(p, 'action'),
     browser_act: summarizeAct,
-    browser_evaluate: (p) =>
-      str(p, 'expression') ? firstLine(str(p, 'expression') as string, 120) : null,
+    browser_evaluate: (p) => {
+      const expression = str(p, 'expression');
+      return expression ? firstLine(expression, 120) : null;
+    },
     browser_wait_for: summarizeWait,
     browser_resize: (p) => {
       const w = num(p, 'width');
@@ -316,10 +318,10 @@ export function parseMcpResult(output: string | undefined): McpResult | null {
   if (!isJsonObject(envelope) || !Array.isArray(envelope.content)) return null;
   const parts = envelope.content.map(contentPart);
   // Not an MCP envelope if any block is unrecognized: show the raw output instead.
-  if (parts.some((p: McpResultPart | null) => p === null)) return null;
+  if (!parts.every((p: McpResultPart | null): p is McpResultPart => p !== null)) return null;
   const structured = envelope.structuredContent ?? envelope.structured_content ?? null;
   return {
-    parts: parts as McpResultPart[],
+    parts,
     isError: envelope.isError === true || envelope.is_error === true,
     structured,
     durationMs: durationFromMeta(envelope._meta),

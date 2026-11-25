@@ -18,6 +18,7 @@ import type { FactoryReadiness, FactoryRunMetrics } from '@funny/shared/contract
 import { parse as parseYaml } from 'yaml';
 import { z } from 'zod';
 
+import { isObject, isString } from '../../lib/value-guards.js';
 import type { FactoryGithubPort, FactoryRepoReader } from './factory-github.js';
 
 /** A branch a queue batch is tested on, to match a workflow's filters with. */
@@ -41,7 +42,7 @@ function matchesFilter(branch: string, pattern: string): boolean {
 const branchFilterList = z
   .array(z.unknown())
   .catch([])
-  .transform((items) => items.filter((item): item is string => typeof item === 'string'));
+  .transform((items) => items.filter((item): item is string => isString(item)));
 
 /** Whether a branch filter list lets `branch` through (`!pattern` excludes, the last match wins). */
 function passesBranches(branch: string, patterns: string[]): boolean {
@@ -81,17 +82,17 @@ export function workflowRunsOnQueueBranches(text: string): boolean {
   } catch {
     return false;
   }
-  if (!workflow || typeof workflow !== 'object') return false;
+  if (!isObject(workflow)) return false;
   // YAML 1.1 readers turn the key `on` into `true`.
   const on =
     ('on' in workflow ? workflow.on : undefined) ??
     ('true' in workflow ? workflow.true : undefined);
   if (on === 'push') return true;
   if (Array.isArray(on)) return on.includes('push');
-  if (!on || typeof on !== 'object') return false;
+  if (!isObject(on)) return false;
   if (!('push' in on)) return false;
   const filters = on.push;
-  if (!filters || typeof filters !== 'object') return true;
+  if (!isObject(filters)) return true;
   return pushFiltersRunOnQueueBranch(filters);
 }
 

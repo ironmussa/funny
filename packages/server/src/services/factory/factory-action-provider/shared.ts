@@ -183,7 +183,7 @@ export interface FactoryActionProviderDeps {
   carryMergeApproval?: (
     from: string,
     to: string,
-    move?: Pick<FactoryApprovalMove, 'kind' | 'lines' | 'files'>,
+    move?: Pick<FactoryApprovalMove, 'kind' | 'lines' | 'files' | 'baseFiles'>,
   ) => Promise<boolean>;
   /**
    * Record on the merge approval of `approved` why it does not cover a later

@@ -1928,6 +1928,7 @@
       "lines_one": "Desde entonces difiere {{count}} línea del cambio:",
       "lines_other": "Desde entonces difieren {{count}} líneas del cambio:",
       "newFile": "no estaba en el cambio aprobado",
+      "baseFile": "código que trajo la base",
       "moreFiles_one": "y {{count}} archivo más",
       "moreFiles_other": "y {{count}} archivos más",
       "newRisks": "Razones de riesgo nuevas:",

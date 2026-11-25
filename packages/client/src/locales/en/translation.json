@@ -1935,6 +1935,7 @@
       "lines_one": "Since then, {{count}} line of the change differs:",
       "lines_other": "Since then, {{count}} lines of the change differ:",
       "newFile": "not in the approved change",
+      "baseFile": "code the base brought",
       "moreFiles_one": "and {{count}} more file",
       "moreFiles_other": "and {{count}} more files",
       "newRisks": "New risk reasons:",

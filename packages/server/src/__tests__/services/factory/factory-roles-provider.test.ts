@@ -1077,7 +1077,7 @@ describe('merge brings the branch up to date with its base first', () => {
     });
     expect(await merge()).toMatchObject({ ok: true, output: 'merged' });
     expect(announced).toEqual([
-      { userId: 'alice', from: SHA_A, to: SHA_M, kind: 'same', lines: 0, files: [] },
+      { userId: 'alice', from: SHA_A, to: SHA_M, kind: 'same', lines: 0, files: [], baseFiles: [] },
     ]);
     expect(posted).toHaveLength(1);
     expect(posted[0]!.body).toContain(SHA_A.slice(0, 7));
@@ -1267,7 +1267,7 @@ describe('merge brings the branch up to date with its base first', () => {
       expect(await merge()).toMatchObject({ ok: true, output: 'merged' });
       expect(merges).toMatchObject([{ sha: SHA_NEW }]);
       expect(asked).toMatchObject([{ kind: 'change-delta', from: SHA_A, to: SHA_NEW }]);
-      expect(moves).toEqual([{ kind: 'same', lines: 0, files: [] }]);
+      expect(moves).toEqual([{ kind: 'same', lines: 0, files: [], baseFiles: [] }]);
       expect(approval()).toMatchObject({ sha: SHA_NEW, carriedFrom: SHA_A });
     });
 
@@ -1276,7 +1276,15 @@ describe('merge brings the branch up to date with its base first', () => {
       const { merge, announced } = approvedAtA(compared({}));
       expect(await merge()).toMatchObject({ ok: true, output: 'merged' });
       expect(announced).toEqual([
-        { userId: 'alice', from: SHA_A, to: SHA_NEW, kind: 'same', lines: 0, files: [] },
+        {
+          userId: 'alice',
+          from: SHA_A,
+          to: SHA_NEW,
+          kind: 'same',
+          lines: 0,
+          files: [],
+          baseFiles: [],
+        },
       ]);
       expect(posted).toHaveLength(1);
       expect(posted[0]).toMatchObject({ number: 12 });
@@ -1353,7 +1361,9 @@ describe('merge brings the branch up to date with its base first', () => {
         });
         expect(await merge()).toMatchObject({ ok: true, output: 'merged' });
         expect(merges).toMatchObject([{ sha: SHA_NEW }]);
-        expect(moves).toEqual([{ kind: 'adjustment', lines: 7, files: ['src/a.ts'] }]);
+        expect(moves).toEqual([
+          { kind: 'adjustment', lines: 7, files: ['src/a.ts'], baseFiles: [] },
+        ]);
       });
 
       test('the setting off: 7 lines wait for a person', async () => {

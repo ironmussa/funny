@@ -214,6 +214,36 @@ describe('the panel content', () => {
     expect(gap.compareDocumentPosition(risk) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
+  // openspec factory-approval-follows-base-code: a file the base brought is not flagged as new.
+  test('a file the base brought is told apart from one outside the approved change', () => {
+    renderBody(
+      queueRun({
+        state: 'waiting_human',
+        failureReason: 'high risk',
+        risk: { headSha: 'b'.repeat(40), level: 'high', reasons: ['size'], paths: [] },
+        mergeApproval: {
+          sha: 'a'.repeat(40),
+          userId: 'u1',
+          at: '2026-11-24T10:00:00.000Z',
+          gap: {
+            to: 'b'.repeat(40),
+            at: '2026-11-24T11:00:00.000Z',
+            lines: 120,
+            files: ['src/fixed.ts', 'src/new.ts'],
+            moreFiles: 0,
+            newFiles: ['src/fixed.ts', 'src/new.ts'],
+            baseFiles: ['src/fixed.ts'],
+            newRiskKeys: [],
+            reason: 'the change differs from the approved commit by 120 lines',
+          },
+        },
+      }),
+    );
+    const files = screen.getByTestId('factory-run-detail-approval-gap-files').textContent;
+    expect(files).toContain('src/fixed.tscode the base brought');
+    expect(files).toContain('src/new.tsnot in the approved change');
+  });
+
   test('a first hold shows its risk and no difference', () => {
     renderBody(
       queueRun({

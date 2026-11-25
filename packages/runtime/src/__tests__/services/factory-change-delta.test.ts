@@ -10,7 +10,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { deltaOf, parseChange } from '../../services/factory-change-delta.js';
+import { compareChanges, deltaOf, parseChange } from '../../services/factory-change-delta.js';
 import { getFactoryStep, startFactoryStep } from '../../services/factory-steps.js';
 
 let root: string;
@@ -198,6 +198,74 @@ describe('change-delta', () => {
   });
 });
 
+/** Push `files` to `main` from the seed clone. */
+function moveBase(seed: string, files: Record<string, string>, remove: string[] = []): void {
+  for (const [file, text] of Object.entries(files)) write(seed, file, text);
+  for (const file of remove) git(seed, 'rm', '-q', file);
+  commit(seed, 'base moves');
+  git(seed, 'push', '-q', 'origin', 'main');
+}
+
+/** Commit `files` on `feature` and push them. */
+function adjust(work: string, files: Record<string, string>): string {
+  for (const [file, text] of Object.entries(files)) write(work, file, text);
+  const sha = commit(work, 'fix: adjust');
+  git(work, 'push', '-q', 'origin', 'feature');
+  return sha;
+}
+
+// openspec factory-approval-follows-base-code
+describe('change-delta and the code the base brought', () => {
+  test('a fix of a file the base added is brought by the base', async () => {
+    const { seed, work, a } = repos();
+    moveBase(seed, { 'new.ts': 'let x: unknown\nkeep\n' });
+    mergeBaseIn(work);
+    const b = adjust(work, { 'new.ts': 'let x: string\nkeep\n' });
+
+    expect(await delta(work, a, b)).toMatchObject({
+      lines: 2,
+      outsideFrom: ['new.ts'],
+      baseBrought: ['new.ts'],
+      linesAcrossMoves: 2,
+    });
+  });
+
+  test('an edit of a line that was there before the approved commit is not', async () => {
+    const { seed, work, a } = repos();
+    // The base touches other.txt, but the change rewrites its old line `x`.
+    moveBase(seed, { 'other.txt': 'x\nfrom base\n' });
+    mergeBaseIn(work);
+    const b = adjust(work, { 'other.txt': 'X\nfrom base\n' });
+
+    expect(await delta(work, a, b)).toMatchObject({ outsideFrom: ['other.txt'], baseBrought: [] });
+  });
+
+  test('a file the base did not change is not', async () => {
+    const { work, a } = repos();
+    const b = adjust(work, { 'other.txt': 'y\n' });
+
+    expect(await delta(work, a, b)).toMatchObject({ outsideFrom: ['other.txt'], baseBrought: [] });
+  });
+
+  test('an edit that moved with its code when the base split a file does not count', async () => {
+    const { seed, work, a } = repos();
+    // The base moves `three` (where the change added `four`) out of a.txt into split.txt.
+    moveBase(seed, { 'a.txt': 'one\ntwo\n', 'split.txt': 'three\n' });
+    // The conflict is settled by carrying the change's edit along with its code.
+    const merged = mergeBaseIn(work, () => {
+      write(work, 'a.txt', 'one\ntwo\n');
+      write(work, 'split.txt', 'three\nfour\n');
+    });
+
+    expect(await delta(work, a, merged)).toMatchObject({
+      lines: 2,
+      outsideFrom: ['split.txt'],
+      baseBrought: ['split.txt'],
+      linesAcrossMoves: 0,
+    });
+  });
+});
+
 describe('the change a diff describes', () => {
   const diff = (file: string, body: string[]) =>
     [`diff --git a/${file} b/${file}`, 'index 111..222 100644', `--- a/${file}`, `+++ b/${file}`]
@@ -233,5 +301,37 @@ describe('the change a diff describes', () => {
     expect(deltaOf(parseChange(binary('abc')), parseChange(binary('def')))).toEqual([
       { path: 'i.png', lines: 2 },
     ]);
+  });
+});
+
+describe('moved edits', () => {
+  const change = (files: Record<string, { added?: string[]; removed?: string[] }>) =>
+    new Map(
+      Object.entries(files).map(([path, { added = [], removed = [] }]) => [
+        path,
+        {
+          added: new Map(added.map((line) => [line, 1])),
+          removed: new Map(removed.map((line) => [line, 1])),
+        },
+      ]),
+    );
+
+  test('a line that moves between two files of the approved change still counts', () => {
+    const from = change({ 'a.ts': { added: ['edit'] }, 'b.ts': { added: ['other'] } });
+    const to = change({ 'a.ts': {}, 'b.ts': { added: ['other', 'edit'] } });
+
+    expect(compareChanges(from, to, new Map())).toMatchObject({ lines: 2, linesAcrossMoves: 2 });
+  });
+
+  test('only the moved lines leave the count; a new edit in the same file still counts', () => {
+    const from = change({ 'a.ts': { added: ['edit'], removed: ['old'] } });
+    const to = change({ 'a.ts': {}, 'g.ts': { added: ['edit', 'extra'], removed: ['old'] } });
+    const base = change({ 'g.ts': { added: ['old'] } });
+
+    expect(compareChanges(from, to, base)).toMatchObject({
+      lines: 5,
+      baseBrought: ['g.ts'],
+      linesAcrossMoves: 1,
+    });
   });
 });

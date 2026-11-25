@@ -205,6 +205,8 @@ export const ACTIVITY_KINDS = {
       change: z.enum(['same', 'adjustment']),
       lines: z.number().int().min(0),
       files: z.array(z.string()).max(20),
+      /** Of `files`, the ones the base brought (openspec factory-approval-follows-base-code). */
+      baseFiles: z.array(z.string()).max(20).optional(),
     }),
   },
   // flow-triggers: a schedule occurrence that started no run.

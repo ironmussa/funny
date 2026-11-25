@@ -74,6 +74,7 @@ export function recordApprovalMove(
         change: move.kind,
         lines: move.lines,
         files: move.files.slice(0, 20),
+        ...(move.baseFiles.length > 0 && { baseFiles: move.baseFiles.slice(0, 20) }),
       },
       origin: 'system',
     },

@@ -48,6 +48,7 @@ export function createApprovalMoves(core: ActionCore, links: ApprovalLinks) {
       kind: 'same',
       lines: 0,
       files: [],
+      baseFiles: [],
     });
   }
 
@@ -113,13 +114,21 @@ export function createApprovalMoves(core: ActionCore, links: ApprovalLinks) {
   async function moveApproval(
     approval: FactoryMergeApproval,
     sha: string,
-    { kind, lines, files }: Extract<ApprovalCoverage, { covers: true }>,
+    { kind, lines, files, baseFiles }: Extract<ApprovalCoverage, { covers: true }>,
   ): Promise<string | null> {
-    await deps.carryMergeApproval?.(approval.sha, sha, { kind, lines, files });
+    await deps.carryMergeApproval?.(approval.sha, sha, { kind, lines, files, baseFiles });
     await count(state.metrics, { event: `merge_approval_moved_${kind}` });
     if (!(await deps.mergeApproved?.(sha))) return 'the approval changed meanwhile';
     const from = approval.carriedFrom ?? approval.sha;
-    await announceApprovalMove({ userId: approval.userId, from, to: sha, kind, lines, files });
+    await announceApprovalMove({
+      userId: approval.userId,
+      from,
+      to: sha,
+      kind,
+      lines,
+      files,
+      baseFiles,
+    });
     return null;
   }
 

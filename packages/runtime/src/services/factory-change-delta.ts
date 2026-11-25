@@ -12,6 +12,13 @@
  * It errs towards a difference: a line the pull request added that the base now
  * has too leaves the later change, and counts.
  *
+ * A file the earlier change did not touch is "brought by the base" when the
+ * base changed it between the two commits' fork points and the later change
+ * removes from it only lines the base added (openspec
+ * factory-approval-follows-base-code, D1): the implementer fixed the base's new
+ * code. An edit that left a file of the earlier change and turns up in such a
+ * file moved with its code, and `linesAcrossMoves` does not count it (D2).
+ *
  * Deterministic and read-only apart from the fetch: no agent, no checkout, no
  * write to the branch.
  */
@@ -46,6 +53,10 @@ export interface ChangeDeltaResult {
   filesTruncated: boolean;
   /** Of the files whose change differs, those the change at `from` did not touch. */
   outsideFrom: string[];
+  /** Of `outsideFrom`, the files the base brought: it changed them, and the change removes only its lines. */
+  baseBrought: string[];
+  /** `lines`, without the edits that moved into a file the base brought. */
+  linesAcrossMoves: number;
   message: string;
 }
 
@@ -187,19 +198,30 @@ export function deltaOf(from: Change, to: Change): Array<{ path: string; lines: 
 
 const SHA = /^[0-9a-f]{7,64}$/;
 
-/** The change of `commit` against `base`, from where they split. */
-async function changeAt(
+/** Where `commit` split from `base`. */
+async function forkOf(
   cwd: string,
   commit: string,
   base: string,
   env: Record<string, string>,
   signal: AbortSignal,
-): Promise<Result<Change, string>> {
+): Promise<Result<string, string>> {
   const fork = await gitRead(['merge-base', commit, base], { cwd, env, reject: false, signal });
   const forkSha = fork.stdout.trim().split('\n')[0] ?? '';
   if (fork.exitCode !== 0 || !forkSha) {
     return err(`${commit} and ${base} have no common commit here.`);
   }
+  return ok(forkSha);
+}
+
+/** The change from commit `from` to commit `to`. */
+async function changeBetween(
+  cwd: string,
+  from: string,
+  to: string,
+  env: Record<string, string>,
+  signal: AbortSignal,
+): Promise<Result<Change, string>> {
   const diff = await gitRead(
     [
       '-c',
@@ -210,13 +232,90 @@ async function changeAt(
       '--no-ext-diff',
       '--no-textconv',
       '-U0',
-      forkSha,
-      commit,
+      from,
+      to,
     ],
     { cwd, env, reject: false, signal },
   );
-  if (diff.exitCode !== 0) return err(`Could not read the change at ${commit}.`);
+  if (diff.exitCode !== 0) return err(`Could not read the change at ${to}.`);
   return ok(parseChange(diff.stdout));
+}
+
+/** Whether every entry of `a` is in `b`, counting repeats. */
+const within = (a: Map<string, number>, b: Map<string, number>) => lacking(a, b) === 0;
+
+/**
+ * Of the files only the later change touches, those the base brought (D1): the
+ * base changed them between the two fork points, and the later change removes
+ * from them only lines the base added there.
+ */
+function baseBroughtFiles(outside: readonly string[], to: Change, base: Change): string[] {
+  return outside.filter((path) => {
+    const brought = base.get(path);
+    const changed = to.get(path);
+    return brought !== undefined && changed !== undefined && within(changed.removed, brought.added);
+  });
+}
+
+/** Per line, how many times `pick` gives it over `paths`. */
+function pooled(
+  paths: Iterable<string>,
+  pick: (path: string) => Map<string, number>,
+): Map<string, number> {
+  const pool = new Map<string, number>();
+  for (const path of paths) {
+    for (const [line, count] of pick(path)) pool.set(line, (pool.get(line) ?? 0) + count);
+  }
+  return pool;
+}
+
+/** How many entries `a` and `b` share, counting repeats. */
+function shared(a: Map<string, number>, b: Map<string, number>): number {
+  let total = 0;
+  for (const [line, count] of a) total += Math.min(count, b.get(line) ?? 0);
+  return total;
+}
+
+/** Lines in `side` of `of` that `than` lacks, per line. */
+function surplus(of: FileChange, than: FileChange, side: keyof FileChange): Map<string, number> {
+  const left = new Map<string, number>();
+  for (const [line, count] of of[side]) {
+    const extra = count - (than[side].get(line) ?? 0);
+    if (extra > 0) left.set(line, extra);
+  }
+  return left;
+}
+
+/**
+ * How many edits moved (D2): a line the earlier change had in one of its files
+ * and the later change lacks there, that the later change has in a file the
+ * base brought. Each counts twice in the per-file delta (left one file, joined
+ * another). Only moves into files the base brought pair, never between two
+ * files of the earlier change.
+ */
+function movedLines(from: Change, to: Change, brought: readonly string[]): number {
+  const fileAt = (change: Change, path: string) => change.get(path) ?? EMPTY;
+  let moved = 0;
+  for (const side of ['added', 'removed'] as const) {
+    const lost = pooled(from.keys(), (path) => surplus(fileAt(from, path), fileAt(to, path), side));
+    const gained = pooled(brought, (path) => fileAt(to, path)[side]);
+    moved += shared(lost, gained);
+  }
+  return moved;
+}
+
+/** The change of `commit` against `base`, from where they split, and that fork point. */
+async function changeAt(
+  cwd: string,
+  commit: string,
+  base: string,
+  env: Record<string, string>,
+  signal: AbortSignal,
+): Promise<Result<{ fork: string; change: Change }, string>> {
+  const fork = await forkOf(cwd, commit, base, env, signal);
+  if (fork.isErr()) return err(fork.error);
+  const change = await changeBetween(cwd, fork.value, commit, env, signal);
+  return change.map((value) => ({ fork: fork.value, change: value }));
 }
 
 /** Compare the pull request's change at `request.from` and at `request.to` in the checkout `cwd`. */
@@ -252,21 +351,44 @@ export async function changeDelta(
     return err(`Could not compare ${request.from} and ${request.to}.`);
   }
   if (descends.exitCode === 1) {
-    return ok({ ancestor: false, lines: 0, files: [], filesTruncated: false, outsideFrom: [] });
+    return ok({ ...NOT_COMPARED });
   }
   const from = await changeAt(cwd, request.from, base, env, signal);
   if (from.isErr()) return err(from.error);
   const to = await changeAt(cwd, request.to, base, env, signal);
   if (to.isErr()) return err(to.error);
-  const delta = deltaOf(from.value, to.value);
-  return ok({
+  // What the base itself changed between the two fork points (D1).
+  const baseChange = await changeBetween(cwd, from.value.fork, to.value.fork, env, signal);
+  if (baseChange.isErr()) return err(baseChange.error);
+  return ok(compareChanges(from.value.change, to.value.change, baseChange.value));
+}
+
+/** The comparison of a descendant commit's change with an earlier one's. */
+type Comparison = Omit<ChangeDeltaResult, 'kind' | 'outcome' | 'message'>;
+
+const NOT_COMPARED: Comparison = {
+  ancestor: false,
+  lines: 0,
+  files: [],
+  filesTruncated: false,
+  outsideFrom: [],
+  baseBrought: [],
+  linesAcrossMoves: 0,
+};
+
+/** Compare the change at `from` with the one at `to`, given what the base changed between them. */
+export function compareChanges(from: Change, to: Change, base: Change): Comparison {
+  const delta = deltaOf(from, to);
+  const lines = delta.reduce((total, file) => total + file.lines, 0);
+  const outside = delta.filter((file) => !from.has(file.path)).map((file) => file.path);
+  const brought = baseBroughtFiles(outside, to, base);
+  return {
     ancestor: true,
-    lines: delta.reduce((total, file) => total + file.lines, 0),
+    lines,
     files: delta.slice(0, MAX_DELTA_FILES),
     filesTruncated: delta.length > MAX_DELTA_FILES,
-    outsideFrom: delta
-      .filter((file) => !from.value.has(file.path))
-      .slice(0, MAX_DELTA_FILES)
-      .map((file) => file.path),
-  });
+    outsideFrom: outside.slice(0, MAX_DELTA_FILES),
+    baseBrought: brought.slice(0, MAX_DELTA_FILES),
+    linesAcrossMoves: lines - 2 * movedLines(from, to, brought),
+  };
 }

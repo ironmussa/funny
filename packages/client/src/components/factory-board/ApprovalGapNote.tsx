@@ -36,6 +36,8 @@ export function ApprovalGapNote({
   const gap = approvalGapFor(approval, heldSha);
   if (!gap) return null;
   const fresh = new Set(gap.newFiles);
+  // openspec factory-approval-follows-base-code: new code from the base, which an adjustment may fix.
+  const fromBase = new Set(gap.baseFiles ?? []);
   const url = compareUrl(prUrl, gap.approvedSha, gap.to);
   return (
     <div className="bg-muted/40 space-y-1 rounded-md border px-2 py-1.5" data-testid={testId}>
@@ -57,10 +59,16 @@ export function ApprovalGapNote({
           {gap.files.map((file) => (
             <li key={file} className="flex flex-wrap items-center gap-1.5">
               <code className="text-foreground font-mono break-all">{file}</code>
-              {fresh.has(file) && (
-                <LabelBadge tone="warning">
-                  {t('factory.approvalGap.newFile', 'not in the approved change')}
+              {fromBase.has(file) ? (
+                <LabelBadge tone="neutral">
+                  {t('factory.approvalGap.baseFile', 'code the base brought')}
                 </LabelBadge>
+              ) : (
+                fresh.has(file) && (
+                  <LabelBadge tone="warning">
+                    {t('factory.approvalGap.newFile', 'not in the approved change')}
+                  </LabelBadge>
+                )
               )}
             </li>
           ))}

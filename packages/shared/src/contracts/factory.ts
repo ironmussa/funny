@@ -160,6 +160,8 @@ export const factoryMergeApprovalSchema = z.object({
         kind: z.enum(['same', 'adjustment']),
         lines: z.number().int().min(0),
         files: z.array(z.string()),
+        /** Of `files`, those the approved change did not touch and the base brought (factory-approval-follows-base-code). */
+        baseFiles: z.array(z.string()).optional(),
       }),
     )
     .optional(),
@@ -182,6 +184,8 @@ export const factoryMergeApprovalSchema = z.object({
       moreFiles: z.number().int().min(0),
       /** The ones of `files` the approved change did not touch. */
       newFiles: z.array(z.string()),
+      /** Of `newFiles`, those the base brought, which an adjustment may touch (factory-approval-follows-base-code). */
+      baseFiles: z.array(z.string()).optional(),
       /** The risk reasons (stable keys) the approved commit did not have. */
       newRiskKeys: z.array(z.string()),
       /** Why the approval did not follow, as the hold says it. */

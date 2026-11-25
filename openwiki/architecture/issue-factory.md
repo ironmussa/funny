@@ -416,6 +416,16 @@ reads the role's prose as a decision:
   approval's `riskKeys`, and an approval without them follows only the same change. With the
   setting on the factory merges lines no person read: the review of the new commit is the
   remaining guard.
+  An adjustment may also touch a file **the base brought** (openspec
+  `factory-approval-follows-base-code`): the runner's `change-delta` step also diffs the base
+  between the two commits' fork points, and reports in `baseBrought` the files outside the
+  approved change that the base changed there and from which the change removes only lines the
+  base added (the implementer fixing the base's new code, as a lint cleanup does after a base
+  merge). `linesAcrossMoves` is the delta without the edits that moved with their code into such a
+  file (a split by another pull request); the limit counts it. Moves between two files of the
+  approved change still count. A runner that sends neither field leaves the file-by-file rule.
+  The PR comment, the `factory.approval-moved` activity, the stored move and the gap list those
+  files apart (`baseFiles`).
   When the approval does **not** follow, the hold keeps what differs instead of only a sentence
   (openspec `factory-merge-fewer-bounces`): `approvalGapOf` turns the same delta into the
   approval's `gap` (the held commit, the lines that differ, at most 20 files, the ones the

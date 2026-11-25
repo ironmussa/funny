@@ -1894,6 +1894,7 @@
       "lines_one": "Desde então, {{count}} linha da mudança difere:",
       "lines_other": "Desde então, {{count}} linhas da mudança diferem:",
       "newFile": "não estava na mudança aprovada",
+      "baseFile": "código que a base trouxe",
       "moreFiles_one": "e mais {{count}} arquivo",
       "moreFiles_other": "e mais {{count}} arquivos",
       "newRisks": "Novas razões de risco:",

@@ -36,6 +36,39 @@ describe('failure toast', () => {
     expect(useActivityPanelStore.getState()).toMatchObject({ open: true, tab: 'activity' });
   });
 
+  test("a member's factory run control that failed raises none: its screen showed the refusal", () => {
+    // Retrying #479 from the board showed the same refusal twice: the board's
+    // toast and this one.
+    seedActivities([buildActivity({ id: 'a2', status: 'running', kind: 'factory.retry' })]);
+    const outcome = applyActivityUpdated({
+      activity: buildActivity({
+        id: 'a2',
+        status: 'failed',
+        kind: 'factory.retry',
+        threadId: null,
+        title: 'Retry the factory run for #479',
+        error: 'Not retried',
+      }),
+    });
+    if (outcome?.becameFailed) notifyActivityFailed(outcome.activity);
+    expect(sonner.error).not.toHaveBeenCalled();
+  });
+
+  test('a factory run control an agent asked for still raises the toast', () => {
+    seedActivities([buildActivity({ id: 'a3', status: 'running', kind: 'factory.retry' })]);
+    const outcome = applyActivityUpdated({
+      activity: buildActivity({
+        id: 'a3',
+        status: 'failed',
+        kind: 'factory.retry',
+        threadId: 't-agent',
+        error: 'Not retried',
+      }),
+    });
+    if (outcome?.becameFailed) notifyActivityFailed(outcome.activity);
+    expect(sonner.error).toHaveBeenCalledTimes(1);
+  });
+
   test('the initial list load raises none', async () => {
     const { okAsync } = await import('neverthrow');
     api.listActivities.mockReturnValue(okAsync([buildActivity({ id: 'a1', status: 'failed' })]));

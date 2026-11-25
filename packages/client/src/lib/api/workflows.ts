@@ -7,6 +7,8 @@ import type {
   WorkflowValidateResponse,
 } from '@funny/shared/types/workflows';
 
+import type { WorkflowRunInputs } from '@/lib/workflow-invocation';
+
 import { request } from './_core';
 
 export const workflowsApi = {
@@ -28,7 +30,7 @@ export const workflowsApi = {
     }),
   runWorkflow: (
     name: string,
-    body: { threadId: string; prompt?: string; inputs?: Record<string, unknown> },
+    body: { threadId: string; prompt?: string; inputs?: WorkflowRunInputs },
   ) =>
     request<WorkflowRunResponse>(`/workflows/${encodeURIComponent(name)}/run`, {
       method: 'POST',

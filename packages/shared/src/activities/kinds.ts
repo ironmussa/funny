@@ -21,7 +21,7 @@
  */
 import { z } from 'zod';
 
-import type { ActivityEffect, ActivityEffectType, ActivityOrigin } from '../types.js';
+import type { Activity, ActivityEffect, ActivityEffectType, ActivityOrigin } from '../types.js';
 
 /** Removes the user and password of a URL (`https://user:token@host/x` → `https://host/x`). */
 export function stripUrlCredentials(url: string): string {
@@ -327,10 +327,10 @@ export interface ReportedActivityInput {
 export function parseActivityInput({
   kind,
   input,
-}: ReportedActivityInput): Record<string, unknown> | null {
+}: ReportedActivityInput): Activity['input'] | null {
   if (!isActivityKind(kind)) return null;
   const parsed = ACTIVITY_KINDS[kind].input.safeParse(input ?? {});
-  return parsed.success ? (parsed.data as Record<string, unknown>) : null;
+  return parsed.success ? parsed.data : null;
 }
 
 /** True for a kind whose successful runs leave no activity (design D5). */

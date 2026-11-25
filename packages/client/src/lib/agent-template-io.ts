@@ -28,12 +28,7 @@ export function exportTemplate(template: AgentTemplate): void {
     },
   };
 
-  // Strip undefined values
-  for (const [k, v] of Object.entries(payload.template)) {
-    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- stripping undefined keys before serialization
-    if (v === undefined) delete (payload.template as unknown as Record<string, unknown>)[k];
-  }
-
+  // JSON.stringify leaves out the fields the template does not set (undefined values).
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -51,6 +46,12 @@ function isString(value: unknown): value is string {
   return typeof value === 'string';
 }
 
+/** The fields of an imported file that are checked before the template is handed on. */
+interface TemplateFileFields {
+  version?: unknown;
+  template?: unknown;
+}
+
 /** Parse and validate an imported JSON file. Returns the template data or an error string. */
 export function parseTemplateFromJson(json: string): CreateAgentTemplateRequest | string {
   let parsed: unknown;
@@ -62,11 +63,13 @@ export function parseTemplateFromJson(json: string): CreateAgentTemplateRequest 
 
   if (!parsed || !isObject(parsed)) return 'Invalid template file format';
 
-  const file = parsed as Record<string, unknown>;
+  // SAFETY: `parsed` is a non-null object, and each field read below is checked first.
+  const file = parsed as TemplateFileFields;
   if (file.version !== 1) return 'Unsupported template version';
   if (!file.template || !isObject(file.template)) return 'Missing template data';
 
-  const tpl = file.template as Record<string, unknown>;
+  // SAFETY: `file.template` is a non-null object; its name is checked next.
+  const tpl = file.template as { name?: unknown };
   if (!tpl.name || !isString(tpl.name)) return 'Template must have a name';
 
   // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- validated shape from parsed JSON

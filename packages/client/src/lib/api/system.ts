@@ -1,4 +1,4 @@
-import type { ExternalClaudeSession, ExternalClaudeTranscript } from '@funny/shared';
+import type { ExternalClaudeSession, ExternalClaudeTranscript, Thread } from '@funny/shared';
 import type { AdvertisedProvider } from '@funny/shared/runner-protocol';
 
 import { request, requestInThread } from './_core';
@@ -153,7 +153,8 @@ export const systemApi = {
       `/system/claude-code/external-sessions/${encodeURIComponent(sessionId)}`,
     ),
   importExternalClaudeSession: (sessionId: string, body: { projectId?: string | null } = {}) =>
-    request<{ imported: boolean; thread: Record<string, any> }>(
+    // The runner answers with the imported thread row; callers refetch the thread instead of reading it.
+    request<{ imported: boolean; thread: Pick<Thread, 'id'> }>(
       `/system/claude-code/external-sessions/${encodeURIComponent(sessionId)}/import`,
       { method: 'POST', body: JSON.stringify(body) },
     ),

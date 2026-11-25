@@ -50,7 +50,19 @@ export async function waitForStableRendererEvidence({
   }
 }
 
-export function unsupportedVisualCaptureEvidence(fixtureId: string, reason: string) {
+/** The evidence file written when a visual capture cannot run or does not complete. */
+export interface VisualCaptureEvidence {
+  fixtureId: string;
+  screenshot:
+    | { supported: false; reason: string }
+    | { supported: true; captured: false; error: string };
+  structuralEvidence: 'available' | 'not-ready';
+}
+
+export function unsupportedVisualCaptureEvidence(
+  fixtureId: string,
+  reason: string,
+): VisualCaptureEvidence {
   return {
     fixtureId,
     screenshot: { supported: false, reason },
@@ -58,7 +70,10 @@ export function unsupportedVisualCaptureEvidence(fixtureId: string, reason: stri
   };
 }
 
-export function failedVisualCaptureEvidence(fixtureId: string, error: unknown) {
+export function failedVisualCaptureEvidence(
+  fixtureId: string,
+  error: unknown,
+): VisualCaptureEvidence {
   return {
     fixtureId,
     screenshot: {

@@ -9,13 +9,13 @@ import { query } from '@anthropic-ai/claude-agent-sdk';
  * AgentRunner and AgentMessageHandler work unchanged.
  */
 import type {
-  EffortLevel,
+  SDKMessage,
+  SDKUserMessage,
   HookCallback,
+  EffortLevel,
   Options,
   PermissionMode,
   Query,
-  SDKMessage,
-  SDKUserMessage,
 } from '@anthropic-ai/claude-agent-sdk';
 import { consumeAsync } from '@funny/shared/async';
 import { scrubSensitiveEnv } from '@funny/shared/lib/child-env';
@@ -34,6 +34,14 @@ import {
 } from './read-only.js';
 import { resolveSDKCli } from './resolve-sdk-cli.js';
 import type { CLIMessage, ClaudeProcessOptions } from './types.js';
+
+/**
+ * SDKClaudeProcess — adapter that wraps @anthropic-ai/claude-agent-sdk query()
+ * behind the IAgentProcess EventEmitter interface.
+ *
+ * Drop-in replacement for the former ClaudeProcess (CLI subprocess).
+ * AgentRunner and AgentMessageHandler work unchanged.
+ */
 
 const dlog = createDebugLogger('sdk');
 
@@ -54,6 +62,19 @@ interface ToolPathFields {
 /** A tool call's input: any non-null object, read only for the fields below. */
 function isToolInput(value: unknown): value is ToolPathFields {
   return typeof value === 'object' && value !== null;
+}
+
+/** The effort levels the Claude SDK accepts. */
+const EFFORT_LEVELS: ReadonlySet<string> = new Set<EffortLevel>([
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+]);
+
+function isEffortLevel(value: string): value is EffortLevel {
+  return EFFORT_LEVELS.has(value);
 }
 
 /** Any object, null included (`Object.assign` skips a null source). */
@@ -200,19 +221,6 @@ function continuesSession(msg: any): boolean {
     msg.type === 'result' ||
     (msg.type === 'system' && msg.subtype === 'init')
   );
-}
-
-/** The effort levels the Claude SDK accepts. */
-const SDK_EFFORT_LEVELS = [
-  'low',
-  'medium',
-  'high',
-  'xhigh',
-  'max',
-] as const satisfies readonly EffortLevel[];
-
-function isSdkEffort(value: string): value is EffortLevel {
-  return SDK_EFFORT_LEVELS.some((level) => level === value);
 }
 
 export class SDKClaudeProcess extends BaseAgentProcess {
@@ -429,8 +437,9 @@ export class SDKClaudeProcess extends BaseAgentProcess {
     }
 
     if (this.options.permissionMode) {
-      // SAFETY: callers pass the SDK permission mode already mapped from funny's
-      // mode; the CLI refuses an unknown one when it starts, as before.
+      // SAFETY: `resolvePermissionMode` (orchestrator) maps funny's modes onto
+      // the Claude SDK's own; any other value is passed through for the SDK to
+      // refuse, as it always was.
       sdkOptions.permissionMode = this.options.permissionMode as PermissionMode;
       if (this.options.permissionMode === 'bypassPermissions') {
         sdkOptions.allowDangerouslySkipPermissions = true;
@@ -525,8 +534,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
     // rejects unsupported levels per model at runtime; coerce unknown values
     // to 'high' defensively for un-validated callers.
     if (this.options.effort) {
-      const effort = this.options.effort;
-      sdkOptions.effort = isSdkEffort(effort) ? effort : 'high';
+      sdkOptions.effort = isEffortLevel(this.options.effort) ? this.options.effort : 'high';
     }
 
     // Fast mode (speed): enabled via the inline `settings` layer, which sits

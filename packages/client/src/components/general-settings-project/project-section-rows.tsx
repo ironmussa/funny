@@ -219,7 +219,7 @@ export function DefaultTemplateSetting({
 }: {
   projectId: string;
   currentTemplateId?: string;
-  onSave: (id: string, data: Record<string, unknown>) => void;
+  onSave: (id: string, data: { defaultAgentTemplateId: string | null }) => void;
 }) {
   const templates = useAgentTemplates();
 

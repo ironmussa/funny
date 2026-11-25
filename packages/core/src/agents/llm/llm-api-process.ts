@@ -17,6 +17,7 @@ import { randomUUID } from 'crypto';
 import { z } from 'zod';
 
 import { BaseAgentProcess, type ResultSubtype } from '../base-process.js';
+import { isJsonPayloadObject } from '../json-payload.js';
 import { connectMcpTools, mcpInstructionsBlock, type McpToolBridge } from '../mcp-tool-bridge.js';
 import type { CLIMessage } from '../types.js';
 import type { AgentRole, AgentContext, AgentResult } from './agent-context.js';
@@ -34,7 +35,8 @@ function bridgedToolDefs(bridge: McpToolBridge, signal: AbortSignal): Record<str
         parameters: z.record(z.string(), z.unknown()),
         jsonSchema: tool.inputSchema,
         execute: async (args) => {
-          const result = await tool.call(args ?? {}, signal);
+          // `parameters` parsed the model's JSON arguments into an object.
+          const result = await tool.call(isJsonPayloadObject(args) ? args : {}, signal);
           return result.isError ? `Error: ${result.text}` : result.text;
         },
       }),

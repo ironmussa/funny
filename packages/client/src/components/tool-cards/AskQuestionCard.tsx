@@ -1,3 +1,4 @@
+import type { JsonObject } from '@funny/shared/json';
 import { MessageCircleQuestion } from 'lucide-react';
 import { AnimatePresence, m, useReducedMotion } from 'motion/react';
 import { useState, useRef, useEffect, useMemo, useCallback, useReducer, memo } from 'react';
@@ -193,7 +194,7 @@ export const AskQuestionCard = memo(function AskQuestionCard({
   hideLabel,
   displayTime,
 }: {
-  parsed: Record<string, unknown>;
+  parsed: JsonObject;
   onRespond?: (answer: string) => void;
   output?: string;
   hideLabel?: boolean;

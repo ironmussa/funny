@@ -39,13 +39,13 @@ function getPaisleyPark(config: StorageConfig): any {
 
 // ─── GC result ─────────────────────────────────────────
 
-export interface GCResult {
+export type GCResult = {
   archived: number;
   deduped: number;
   consolidated: number;
   orphaned: number;
   indexRebuilt: boolean;
-}
+};
 
 // ─── Main GC runner ────────────────────────────────────
 

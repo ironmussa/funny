@@ -1,3 +1,4 @@
+import type { JsonObject } from '@funny/shared/json';
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 
@@ -8,7 +9,7 @@ import en from '../locales/en/translation.json';
 export const SUPPORTED_LANGUAGES = ['en', 'es', 'pt'] as const;
 export type SupportedLanguage = (typeof SUPPORTED_LANGUAGES)[number];
 
-type TranslationModule = { default: Record<string, unknown> };
+type TranslationModule = { default: JsonObject };
 const LAZY_TRANSLATIONS: Record<
   Exclude<SupportedLanguage, 'en'>,
   () => Promise<TranslationModule>

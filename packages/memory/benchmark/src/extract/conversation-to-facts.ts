@@ -120,10 +120,18 @@ function parseFactsResponse(raw: string): ExtractedFact[] {
   }
 }
 
+/** The fields the extractor reads from an element of the LLM's JSON array, still unchecked. */
+interface RawFact {
+  content?: unknown;
+  type?: unknown;
+  tags?: unknown;
+  confidence?: unknown;
+  validFrom?: unknown;
+  supersedes?: unknown;
+}
+
 /** An element of the LLM's JSON array with a non-empty string content and a string type. */
-function isFactCandidate(
-  f: Record<string, unknown>,
-): f is Record<string, unknown> & { content: string; type: string } {
+function isFactCandidate(f: RawFact): f is RawFact & { content: string; type: string } {
   return typeof f.content === 'string' && f.content.length > 0 && typeof f.type === 'string';
 }
 

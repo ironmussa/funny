@@ -1,3 +1,4 @@
+import type { JsonObject } from '@funny/shared/json';
 import type { z, ZodTypeAny } from 'zod';
 
 /** A plain tool definition (no Vercel AI SDK dependency) */
@@ -5,7 +6,7 @@ export interface ToolDef<TParameters extends ZodTypeAny = ZodTypeAny> {
   description: string;
   parameters: TParameters;
   /** JSON Schema sent to the model instead of one derived from `parameters` (MCP tools). */
-  jsonSchema?: Record<string, unknown>;
+  jsonSchema?: JsonObject;
   execute: (args: z.infer<TParameters>) => Promise<string>;
 }
 

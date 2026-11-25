@@ -25,7 +25,6 @@ export interface HarnessWorkflowContext {
     agent: HarnessAgentDefinition | HarnessAgentOptions,
     options?: { sessionId?: string },
   ) => HarnessSession;
-  [key: string]: unknown;
 }
 
 export type HarnessWorkflowStepFn<TCtx extends HarnessWorkflowContext> = (

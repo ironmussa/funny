@@ -45,12 +45,9 @@ export interface EntityStore<T extends Entity> {
   remove(ids: readonly string[]): void;
 }
 
-function stripVirtualProps<T>(row: T): T {
-  const plain = {} as Record<string, unknown>;
-  for (const key of Object.keys(row as object)) {
-    if (!key.startsWith('$')) plain[key] = (row as Record<string, unknown>)[key];
-  }
-  return plain as T;
+function stripVirtualProps<T extends object>(row: T): T {
+  // SAFETY: the copy holds every own field of `row` except TanStack DB's `$…` virtual props.
+  return Object.fromEntries(Object.entries(row).filter(([key]) => !key.startsWith('$'))) as T;
 }
 
 export function createEntityStore<T extends Entity>(

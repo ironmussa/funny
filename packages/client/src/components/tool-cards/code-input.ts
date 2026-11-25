@@ -4,6 +4,8 @@
  * the generic card (every field of a built-in tool).
  */
 
+import type { JsonObject } from '@funny/shared/json';
+
 function isString(value: unknown): value is string {
   return typeof value === 'string';
 }
@@ -49,7 +51,7 @@ export interface CodeInput {
 }
 
 /** The input that is source code (shown highlighted), if the call has one. */
-export function getCodeInput(parsed: Record<string, unknown>, tool: string): CodeInput | null {
+export function getCodeInput(parsed: JsonObject, tool: string): CodeInput | null {
   for (const [key, keyLanguage] of CODE_KEYS) {
     const value = parsed[key];
     if (!isString(value) || !value.trim()) continue;
@@ -62,7 +64,7 @@ function toolLanguage(tool: string): string | null {
   return TOOL_LANGUAGES.get(tool.toLowerCase()) ?? null;
 }
 
-type FieldLanguage = (parsed: Record<string, unknown>) => string;
+type FieldLanguage = (parsed: JsonObject) => string;
 
 /** Code fields of built-in tools whose language the generic keys can't tell. */
 const PATCH_FIELDS = new Map<string, FieldLanguage>([['input', () => 'diff']]);
@@ -81,11 +83,7 @@ const TOOL_CODE_FIELDS = new Map<string, ReadonlyMap<string, FieldLanguage>>([
  * The language to highlight `parsed[key]` of a `tool` call in, or null when the
  * field is not code (or its language is unknown).
  */
-export function codeFieldLanguage(
-  tool: string,
-  key: string,
-  parsed: Record<string, unknown>,
-): string | null {
+export function codeFieldLanguage(tool: string, key: string, parsed: JsonObject): string | null {
   const fieldLanguage = TOOL_CODE_FIELDS.get(tool)?.get(key);
   if (fieldLanguage) return fieldLanguage(parsed);
   if (!CODE_KEYS.has(key)) return null;

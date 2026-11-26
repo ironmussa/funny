@@ -29,10 +29,10 @@ const FORBIDDEN = { type: 'data:ack', success: false, error: 'Forbidden' };
 
 describe('DATA_SCOPE_RULES coverage', () => {
   test('every data:* type handled by data-handler has a scope rule', () => {
-    const source = readFileSync(
-      join(import.meta.dir, '../../services/data-message-handlers.ts'),
-      'utf8',
-    );
+    // The dispatch table spans data-message-handlers.ts and its sibling modules.
+    const source = ['data-message-handlers.ts', 'data-message-handlers-watchers-jobs.ts']
+      .map((file) => readFileSync(join(import.meta.dir, '../../services', file), 'utf8'))
+      .join('\n');
     const handled = [...source.matchAll(/^ {2}'(data:[a-z_]+)': async /gm)].map((m) => m[1]);
     expect(handled.length).toBeGreaterThan(40);
     const missing = handled.filter((type) => !DATA_SCOPE_RULES[type]);

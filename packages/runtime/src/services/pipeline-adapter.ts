@@ -467,7 +467,7 @@ export class RuntimeActionProvider implements ActionProvider {
         status: opts.value,
         reason: opts.reason,
       });
-      return { ok: true, output: opts.value, metadata: definedJsonFields({ reason: opts.reason }) };
+      return lifecycleApplied(opts.value, opts.reason);
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
@@ -497,7 +497,7 @@ export class RuntimeActionProvider implements ActionProvider {
         stage: opts.value,
         reason: opts.reason,
       });
-      return { ok: true, output: opts.value, metadata: definedJsonFields({ reason: opts.reason }) };
+      return lifecycleApplied(opts.value, opts.reason);
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
@@ -614,6 +614,11 @@ function workflowStatusOf(data: StepProgressData): WorkflowNodeRunStatus {
 }
 
 // ── Helpers ──────────────────────────────────────────────────
+
+/** A `set_status` / `set_stage` that applied: the value set, with its reason when it had one. */
+function lifecycleApplied(value: string, reason: string | undefined): ActionResult {
+  return { ok: true, output: value, metadata: definedJsonFields({ reason }) };
+}
 
 /** Poll-based agent completion. */
 async function waitForAgentCompletionPoll(threadId: string, timeoutMs = 300_000): Promise<void> {

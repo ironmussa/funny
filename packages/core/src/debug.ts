@@ -33,7 +33,7 @@ function isEnabled(namespace: string): boolean {
  * Structured fields of a log line: plain JSON, printed with `JSON.stringify` and
  * forwarded to the server's log sink. An `undefined` field is left out.
  */
-export type LogContext = JsonFields;
+type LogContext = JsonFields;
 
 type LogFn = (message: string, data?: LogContext) => void;
 

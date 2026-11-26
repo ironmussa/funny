@@ -7,6 +7,7 @@
 import { MessageSquare } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import { Button } from '@/components/ui/button';
 import { DropdownMenuItem, DropdownMenuLabel } from '@/components/ui/dropdown-menu';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import type { FactoryQueueRun } from '@/lib/api/factory';
@@ -32,16 +33,62 @@ export function factoryRunCardThreadLinks(
   return links.filter((link) => links.findLast((other) => other.role === link.role) === link);
 }
 
-function ThreadMenuItem({ projectId, link }: { projectId: string; link: FactoryRunThreadLink }) {
+function useRoleLabels(): Record<FactoryRunThreadRole, string> {
   const { t } = useTranslation();
-  const navigate = useStableNavigate();
-  const thread = useThreadById(link.threadId);
-  const roles: Record<FactoryRunThreadRole, string> = {
+  return {
     triage: t('factoryRunDetail.role.triage', 'Triage'),
     implementer: t('factoryRunDetail.role.implementer', 'Implementer'),
     reviewer: t('factoryRunDetail.role.reviewer', 'Reviewer'),
     agent: t('factoryRunDetail.role.agent', 'Agent'),
   };
+}
+
+/**
+ * The thread a card links to on its face: the last one the run started (the
+ * triage that asked on the issue, the implementer, the latest reviewer), so a
+ * person deciding about the run reads what its agent said in one click.
+ */
+function factoryRunLastThread(
+  run: Pick<FactoryQueueRun, 'triage' | 'stepOptions' | 'reviews' | 'roleThreads'>,
+): FactoryRunThreadLink | undefined {
+  return factoryRunThreadLinks(run).at(-1);
+}
+
+/** The card's link to the run's last thread, named by its role; nothing without a thread. */
+export function FactoryRunLastThreadLink({ run }: { run: FactoryQueueRun }) {
+  const navigate = useStableNavigate();
+  const roles = useRoleLabels();
+  const link = factoryRunLastThread(run);
+  const thread = useThreadById(link?.threadId);
+  if (!link) return null;
+  return (
+    <Button
+      variant="muted"
+      size="2xs"
+      // `-my-0.5`: the button (`h-5`) must not make the footer line (`h-4`) taller.
+      className="-my-0.5 shrink-0"
+      title={thread?.title}
+      data-testid={`factory-board-last-thread-${run.id}`}
+      onClick={(event) => {
+        // The card itself opens the run's panel.
+        event.stopPropagation();
+        navigate(
+          buildPath(
+            getThreadRoute({ id: link.threadId, projectId: run.projectId, isScratch: false }),
+          ),
+        );
+      }}
+    >
+      <MessageSquare className="icon-xs" />
+      {roles[link.role]}
+    </Button>
+  );
+}
+
+function ThreadMenuItem({ projectId, link }: { projectId: string; link: FactoryRunThreadLink }) {
+  const navigate = useStableNavigate();
+  const thread = useThreadById(link.threadId);
+  const roles = useRoleLabels();
   return (
     <DropdownMenuItem
       data-testid={`factory-board-thread-link-${link.threadId}`}

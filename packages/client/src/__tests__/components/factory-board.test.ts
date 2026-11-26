@@ -496,6 +496,13 @@ describe('factoryBoardStateChip', () => {
     );
   });
 
+  test('a run waiting in the queue has no "In queue" chip: its column says it', () => {
+    expect(factoryBoardStateChip(t, buildFactoryRun({ state: 'requested' }), false)).toBeNull();
+    expect(factoryBoardStateChip(t, buildFactoryRun({ state: 'queued' }), false)?.label).toBe(
+      'Queued',
+    );
+  });
+
   test('a card with no thread has a clock for its icon, so it keeps the chip', () => {
     const run = buildFactoryRun({ state: 'stopped', threadIds: ['t1'] });
     expect(factoryBoardStateChip(t, run, false)?.label).toBe('Stopped');
@@ -513,6 +520,23 @@ describe('factoryBoardStateChip', () => {
       admittedAt: '2026-01-01T00:00:00.000Z',
     });
     expect(factoryBoardStateChip(t, admitted, false)?.detail).toContain('before its first step');
+  });
+
+  test('a run stopped after its triage ran is not "Not started"', () => {
+    // The triage's thread is named by its answer, not by `threadIds` (#532).
+    const answered = buildFactoryRun({
+      state: 'stopped',
+      threadIds: [],
+      admittedAt: '2026-01-01T00:00:00.000Z',
+      triage: { decision: 'needs_info', at: hoursAgo(1), items: ['a?'], threadId: 'triage-thread' },
+    });
+    expect(factoryBoardStateChip(t, answered, false)?.label).toBe('Stopped');
+    const working = buildFactoryRun({
+      state: 'stopped',
+      threadIds: [],
+      roleThreads: [{ role: 'triage', threadId: 'triage-thread', startedAt: hoursAgo(1) }],
+    });
+    expect(factoryBoardStateChip(t, working, false)?.label).toBe('Stopped');
   });
 
   test('waiting for you is the column itself, with or without a thread', () => {

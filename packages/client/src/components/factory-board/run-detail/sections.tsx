@@ -51,7 +51,7 @@ export function DetailSection({
 }
 
 /** A button that opens one of the run's threads. */
-export function ThreadLink({
+function ThreadLink({
   projectId,
   threadId,
   label,

@@ -13,6 +13,7 @@ import type {
   PipelineStateKind,
 } from './engine.js';
 import type { SlotGrant } from './gate.js';
+import type { NodeData } from './types.js';
 
 // Capture synchronous throws as well as rejected promises at the callback boundary.
 export const invoke = <A>(fn: (signal: AbortSignal) => A | Promise<A>) =>
@@ -108,7 +109,7 @@ export interface SingleNodeParams<T> {
    */
   acquireSlot?: (signal: AbortSignal, onWait: () => void) => Promise<SlotGrant>;
   /** A batch member's result context from the output its leader settled. */
-  adoptBatchOutput?: (input: T, output: unknown) => T;
+  adoptBatchOutput?: (input: T, output: NodeData) => T;
   /** The rest of what the node is told about its execution. */
   info?: Omit<NodeRunInfo, 'iteration'>;
 }

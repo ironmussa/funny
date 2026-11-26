@@ -1,8 +1,13 @@
-import type { JsonObject } from '@funny/shared/json';
+import type { JsonObject, JsonValue } from '@funny/shared/json';
 import type { z, ZodTypeAny } from 'zod';
 
 import type { HarnessEvent, HarnessEventSink } from './events.js';
-import type { SandboxExecutionHandle, SandboxExecutionRequest, SandboxIntent } from './sandbox.js';
+import type {
+  SandboxExecutionHandle,
+  SandboxExecutionRequest,
+  SandboxIntent,
+  SpawnClaudeCodeProcess,
+} from './sandbox.js';
 
 export type HarnessPermissionMode = 'plan' | 'autoEdit' | 'confirmEdit' | (string & {});
 
@@ -20,7 +25,13 @@ export interface HarnessToolDefinition<TSchema extends ZodTypeAny, TResult> {
   metadata?: JsonObject;
 }
 
-export interface HarnessTool<TSchema extends ZodTypeAny = ZodTypeAny, TResult = unknown> {
+/** What a tool takes: the JSON an agent sends, checked by the tool's `inputSchema`. */
+export type ToolInput = JsonValue;
+
+/** What a tool returns to its caller: JSON, or nothing. */
+export type ToolResult = JsonValue | undefined;
+
+export interface HarnessTool<TSchema extends ZodTypeAny = ZodTypeAny, TResult = ToolResult> {
   readonly name: string;
   readonly description: string;
   readonly inputSchema: TSchema;
@@ -166,17 +177,19 @@ export interface CoreAgentProcessOptions {
   effort?: string;
   images?: unknown[];
   env?: Record<string, string>;
-  spawnClaudeCodeProcess?: (options: {
-    command: string;
-    args: string[];
-    cwd?: string;
-    env: Record<string, string | undefined>;
-    signal: AbortSignal;
-  }) => unknown;
+  spawnClaudeCodeProcess?: SpawnClaudeCodeProcess;
+}
+
+/**
+ * A message an agent process emits (an SDK stream message, keyed by `type`).
+ * The harness reads the fields it knows and keeps the message as the event's `raw`.
+ */
+export interface CoreAgentMessage {
+  readonly type?: string;
 }
 
 export interface CoreAgentProcessLike {
-  on(event: 'message', listener: (msg: unknown) => void): this;
+  on(event: 'message', listener: (msg: CoreAgentMessage) => void): this;
   on(event: 'error', listener: (err: Error) => void): this;
   on(event: 'exit', listener: (code: number | null) => void): this;
   removeAllListeners(event?: string): this;

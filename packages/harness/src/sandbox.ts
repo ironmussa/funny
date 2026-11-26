@@ -34,18 +34,27 @@ export interface SandboxExecutionRequest {
   metadata?: JsonObject;
 }
 
+/**
+ * The process a spawn hook starts for the agent SDK. The harness hands it to
+ * the SDK as it is and never reads it.
+ */
+export type SpawnedAgentProcess = object;
+
+/** Starts the agent's process inside a sandbox (the SDK's `spawnClaudeCodeProcess` hook). */
+export type SpawnClaudeCodeProcess = (options: {
+  command: string;
+  args: string[];
+  cwd?: string;
+  env: Record<string, string | undefined>;
+  signal: AbortSignal;
+}) => SpawnedAgentProcess;
+
 export interface SandboxExecutionHandle {
   id?: string;
   kind: SandboxBackend;
   cwd?: string;
   metadata?: JsonObject;
-  spawnClaudeCodeProcess?: (options: {
-    command: string;
-    args: string[];
-    cwd?: string;
-    env: Record<string, string | undefined>;
-    signal: AbortSignal;
-  }) => unknown;
+  spawnClaudeCodeProcess?: SpawnClaudeCodeProcess;
   cleanup?: () => Promise<void> | void;
 }
 

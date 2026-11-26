@@ -28,7 +28,8 @@ const waiterOf = (group: string, holder: string) =>
   and(eq(waiters.groupKey, group), eq(waiters.holder, holder));
 
 const OUTCOME_SCHEMA = z.discriminatedUnion('status', [
-  z.object({ status: z.literal('succeeded'), output: z.unknown().optional() }),
+  // The whole outcome is already parsed as JSON (`storedJson`), so this accepts the same values.
+  z.object({ status: z.literal('succeeded'), output: z.json().optional() }),
   z.object({ status: z.literal('failed'), error: z.string() }),
 ]);
 

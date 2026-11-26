@@ -1,9 +1,21 @@
 import type { ZodTypeAny } from 'zod';
 
-import type { HarnessTool, HarnessToolDefinition, ToolExecutionContext } from './contracts.js';
+import type {
+  HarnessTool,
+  HarnessToolDefinition,
+  ToolExecutionContext,
+  ToolInput,
+  ToolResult,
+} from './contracts.js';
 import { HarnessError } from './errors.js';
 
-export type { HarnessTool, HarnessToolDefinition, ToolExecutionContext } from './contracts.js';
+export type {
+  HarnessTool,
+  HarnessToolDefinition,
+  ToolExecutionContext,
+  ToolInput,
+  ToolResult,
+} from './contracts.js';
 
 function isFunction(value: unknown): value is (...args: never[]) => void {
   return typeof value === 'function';
@@ -58,7 +70,11 @@ export class ToolRegistry {
     return [...this.tools.values()];
   }
 
-  async invoke(name: string, input: unknown, context: ToolExecutionContext = {}): Promise<unknown> {
+  async invoke(
+    name: string,
+    input: ToolInput,
+    context: ToolExecutionContext = {},
+  ): Promise<ToolResult> {
     const tool = this.tools.get(name);
     if (!tool) {
       throw new HarnessError('invalid_runtime_request', `Tool "${name}" is not registered`, {

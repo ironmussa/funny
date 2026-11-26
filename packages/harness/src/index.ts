@@ -12,6 +12,8 @@ export {
   type HarnessTool,
   type HarnessToolDefinition,
   type ToolExecutionContext,
+  type ToolInput,
+  type ToolResult,
 } from './tools.js';
 export {
   defineWorkflow,
@@ -32,8 +34,11 @@ export {
   type SandboxExecutionHandle,
   type SandboxExecutionRequest,
   type SandboxIntent,
+  type SpawnClaudeCodeProcess,
+  type SpawnedAgentProcess,
 } from './sandbox.js';
 export {
+  type CoreAgentMessage,
   type CoreAgentProcessLike,
   type CoreProcessFactoryLike,
   type HarnessAgentRequest,

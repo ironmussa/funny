@@ -90,10 +90,10 @@ export async function journaledNodeTask<T>(
     Object.assign(entry, patch);
     await journal?.record({ ...entry });
   };
-  const failed = (err: unknown): TaskResult<T> => ({
+  const failed = (cause: unknown): TaskResult<T> => ({
     kind: 'failed',
     ctx: input,
-    error: journalError(err),
+    error: journalError(cause),
   });
 
   const notStarted = await write({}).then(() => undefined, failed);
@@ -121,5 +121,5 @@ function finishedEntry<T>(result: TaskResult<T>): Partial<JournalEntry<T>> {
   return patch;
 }
 
-const journalError = (err: unknown) =>
-  `Could not record the execution in the journal: ${err instanceof Error ? err.message : String(err)}`;
+const journalError = (cause: unknown) =>
+  `Could not record the execution in the journal: ${cause instanceof Error ? cause.message : String(cause)}`;

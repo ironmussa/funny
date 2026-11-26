@@ -39,12 +39,12 @@ Phase 2 is groups 9–10. Phase 3 is group 11. Group 12 closes each phase.
 
 ## 6. Lane sync (D4)
 
-- [ ] 6.1 Add `factory-lane-sync.ts` with the transition table of D4 as a pure function and compare-and-set writes on `factory_lanes.sync_state`; verify pure tests of every transition and a test that two concurrent starts yield one sync
-- [ ] 6.2 Implement `merging` on the server: create `factory/sync/<name>` from the lane head, GitHub merge API with the base sha, open the pull request into the lane on 201, go to `resolving` on 409; verify tests with the fake GitHub for clean, conflict, and "already contains the base" (no pull request)
-- [ ] 6.3 Implement `checking`: read the head's checks with `createPullRequestCi`, merge with the `merge` method while holding the group `merge:<repo>:<lane branch>`, set `last_synced_base_sha`; go to `needs_human` with the reason when the repository refuses merge commits; verify tests for green, red, the refused method, and a sync and a lane run not merging at the same time
+- [x] 6.1 Add `factory-lane-sync.ts` with the transition table of D4 as a pure function and compare-and-set writes on `factory_lanes.sync_state`; verify pure tests of every transition and a test that two concurrent starts yield one sync
+- [x] 6.2 Implement `merging` on the server: create `factory/sync/<name>` from the lane head, GitHub merge API with the base sha, open the pull request into the lane on 201, go to `resolving` on 409 (until 6.4 a conflict goes to `needs_human`, and leaves it by itself once a person merged the base into the lane); verify tests with the fake GitHub for clean, conflict, and "already contains the base" (no pull request)
+- [x] 6.3 Implement `checking`: read the head's checks with `createPullRequestCi`, merge with the `merge` method while holding the group `merge:<repo>:<lane branch>`, set `last_synced_base_sha`; go to `needs_human` with the reason when the repository refuses merge commits; verify tests for green, red, the refused method, and a sync and a lane run not merging at the same time
 - [ ] 6.4 Implement `resolving`: one thread on the enabler's runtime through `startThreadOnRunner` (worktree on the sync branch, built-in prompt), follow-ups on the same thread for later attempts, the "sync branch contains `sync_base_sha`" check when the thread ends, and `needs_human` after three attempts; verify tests with the fake runner for resolved, not pushed, and attempts used up
-- [ ] 6.5 Start syncs from the watcher tick (state `idle`, base head moved, not contained, last start over an hour ago) and resume a sync in flight after a restart from the lane row; verify tests for the trigger, the hour, and a restart in each state
-- [ ] 6.6 Add `factory.lanes.syncNow` and `factory.lanes.retrySync` (need `steer`), show each lane's sync state, error and pull request in the lanes table, and record a `factory.lane_sync` activity per transition; verify port tests, a component test, and the activity rows
+- [x] 6.5 Start syncs from the watcher tick (state `idle`, base head moved, not contained, last start over an hour ago) and resume a sync in flight after a restart from the lane row; verify tests for the trigger, the hour, and a restart in each state
+- [ ] 6.6 Expose `requestLaneSync` (done in `factory-settings.ts`: sync now for an idle lane, retry for one that needs a person; needs `steer`) as `factory.lanes.sync`, show each lane's sync state, error and pull request in the lanes table, and record a `factory.lane_sync` activity per transition; verify port tests, a component test, and the activity rows
 - [ ] 6.7 Verify that a sync takes no slot of the factory's issue stages, with a watcher test that admits an issue while a sync is `resolving`
 
 ## 7. Closing a lane run's issue (D9)
@@ -62,7 +62,7 @@ Phase 2 is groups 9–10. Phase 3 is group 11. Group 12 closes each phase.
 
 - [ ] 9.1 Make the sentinel tick iterate the distinct base branches of the repository's factory merges in the last 24 hours; verify a sentinel test where `feature/a` turns red and opens an incident for `feature/a` only
 - [ ] 9.2 Make admission check only the incidents of the candidate's base, and make `blockedReason` per base; verify a watcher test where `feature:b` and unlaned issues are admitted during a `feature/a` incident
-- [ ] 9.3 Do not start a sync into a lane while the "Merge into" branch has an open incident; verify a sync test
+- [x] 9.3 Do not start a sync into a lane while the "Merge into" branch has an open incident; verify a sync test
 
 ## 10. Board
 

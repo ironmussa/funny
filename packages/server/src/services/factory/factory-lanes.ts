@@ -15,7 +15,7 @@
  */
 import { factoryBaseBranchSchema } from '@funny/shared/contracts/factory';
 import { errorMessage } from '@funny/shared/errors';
-import { and, asc, eq } from 'drizzle-orm';
+import { and, asc, eq, inArray } from 'drizzle-orm';
 import { ResultAsync } from 'neverthrow';
 
 import { db } from '../../db/index.js';
@@ -181,6 +181,37 @@ export function createFactoryLanesRepository(
         db.update(factoryLanes).set({ ciWarning: warning }).where(eq(factoryLanes.id, laneId)),
         storage,
       ).map(() => undefined);
+    },
+
+    /**
+     * Write `changes` and the new sync state only while the lane's stored sync
+     * state is one of `from`: a compare-and-set (`factory-lane-sync.ts` names
+     * the transitions). Resolves whether this call made the move.
+     */
+    moveSync(
+      laneId: string,
+      move: { from: readonly string[]; to: string },
+      changes: Partial<
+        Pick<
+          Row,
+          | 'syncBaseSha'
+          | 'syncPrNumber'
+          | 'syncThreadId'
+          | 'syncAttempts'
+          | 'syncStartedAt'
+          | 'syncError'
+          | 'lastSyncedBaseSha'
+        >
+      > = {},
+    ): ResultAsync<boolean, FactoryLanesError> {
+      return ResultAsync.fromPromise(
+        db
+          .update(factoryLanes)
+          .set({ ...changes, syncState: move.to })
+          .where(and(eq(factoryLanes.id, laneId), inArray(factoryLanes.syncState, [...move.from])))
+          .returning({ id: factoryLanes.id }),
+        storage,
+      ).map((rows) => rows.length > 0);
     },
 
     /** Delete the lane's row; its branch is left on GitHub. Resolves whether a row was deleted. */

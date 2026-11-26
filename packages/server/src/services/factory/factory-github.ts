@@ -32,6 +32,7 @@ import {
 } from '../github-app/token-issuer.js';
 import type { RunnerPorts } from '../runner-thread-launcher.js';
 import { createSandboxRunnerCalls } from '../thread-sandboxes/sandbox-runner-calls.js';
+import type { FactoryLaneBranches } from './factory-branch-reads.js';
 import type { FactoryIssueText } from './factory-issue-text.js';
 import { createFactoryPullRequests, type FactoryPullRequests } from './factory-pull-requests.js';
 import {
@@ -190,6 +191,11 @@ export interface FactoryGithubPort {
     branch: string,
     sha: string,
   ): ResultAsync<boolean, GithubCallError>;
+  /**
+   * The branch operations of a lane sync, as the enabler (change factory-lanes,
+   * D4). Absent: this factory syncs no lane.
+   */
+  laneBranches?(reader: FactoryRepoReader): FactoryLaneBranches;
   /** The commit merged pull request `number` made, or null when it is not merged. */
   mergeCommit?(
     reader: FactoryRepoReader,
@@ -344,6 +350,7 @@ export function createFactoryGithub(
     ensureBranch: (reader, branch) => reads(reader).ensureBranch(branch),
     branchContains: (reader, branch, sha) => reads(reader).branchContains(branch, sha),
     mergeCommit: (reader, number) => reads(reader).mergeCommit(number),
+    laneBranches: (reader) => reads(reader),
     branchState: (reader, branch) => reads(reader).branchState(branch),
     mergeCommitState: (reader, number) => reads(reader).mergeCommitState(number),
     issueText: (reader, issueNumber) => reads(reader).issueText(issueNumber),

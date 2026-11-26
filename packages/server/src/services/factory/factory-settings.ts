@@ -44,6 +44,7 @@ import { z } from 'zod';
 import { db } from '../../db/index.js';
 import { factoryLanes, factoryRuns, factorySettings, projects } from '../../db/schema.js';
 import { requireProjectAccess } from '../project-access.js';
+import { LANE_SYNC_TRANSITIONS } from './factory-lane-sync.js';
 import { createFactoryLanesRepository, type FactoryLaneView } from './factory-lanes.js';
 import { TERMINAL_STATES } from './factory-runs-model.js';
 import { awaitsPullRequest } from './factory-runs.js';
@@ -626,6 +627,55 @@ export function createFactorySettingsService(
 }
 
 const lanes = createFactoryLanesRepository();
+
+/** A lane of the caller's own factory by name, or `not-found`. */
+const ownLane = (
+  userId: string,
+  projectId: string,
+  name: string,
+): ResultAsync<FactoryLaneView, FactorySettingsError> =>
+  requireProjectAccess(userId, projectId, 'steer', accessErrors)
+    .andThen(() => ownFactoryId(userId, projectId))
+    .andThen((factoryId) =>
+      factoryId
+        ? lanes.find(factoryId, name.trim().toLowerCase()).mapErr(storageOf)
+        : okAsync<FactoryLaneView | null>(null),
+    )
+    .andThen((lane) =>
+      lane ? okAsync(lane) : errAsync<FactoryLaneView, FactorySettingsError>(NO_SUCH_LANE),
+    );
+
+/**
+ * A member asks for a lane's sync now (openspec factory-lanes, D4): a lane
+ * waiting for a person tries again, and an idle one forgets when it last
+ * synced, so the watcher's next tick starts one without waiting for the hour.
+ * A sync in flight is left alone.
+ */
+export function requestLaneSync(
+  userId: string,
+  projectId: string,
+  name: string,
+): ResultAsync<'retried' | 'requested' | 'in-flight', FactorySettingsError> {
+  return ownLane(userId, projectId, name).andThen((lane) => {
+    if (lane.state !== 'active') {
+      return errAsync<'retried', FactorySettingsError>({
+        kind: 'invalid',
+        message: `The lane ${lane.name} is finished: it is not synced any more`,
+      });
+    }
+    if (lane.syncState === 'needs_human') {
+      return lanes
+        .moveSync(lane.id, LANE_SYNC_TRANSITIONS.retry, { syncError: null, syncAttempts: 0 })
+        .mapErr(storageOf)
+        .map(() => 'retried' as const);
+    }
+    if (lane.syncState !== 'idle') return okAsync('in-flight' as const);
+    return lanes
+      .moveSync(lane.id, { from: ['idle'], to: 'idle' }, { syncStartedAt: null })
+      .mapErr(storageOf)
+      .map(() => 'requested' as const);
+  });
+}
 
 const NO_SUCH_LANE: FactorySettingsError = { kind: 'not-found', message: 'Lane not found' };
 

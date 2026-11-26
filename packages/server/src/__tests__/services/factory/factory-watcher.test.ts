@@ -46,6 +46,7 @@ import { createWorkflowJournalRepository } from '../../../services/workflow-engi
 import {
   launchedThread,
   passingProof,
+  present,
   passingReview,
   proofReadyFlowFiles,
   upToDateSteps,
@@ -151,6 +152,8 @@ interface GithubScript {
   mergeCommits?: Record<number, string>;
   /** The branches that contain each commit. */
   contains?: Record<string, string[]>;
+  /** The repository as a lane sync sees it: branch heads. With it, the factory syncs its lanes. */
+  laneSync?: { heads: Record<string, string> };
   /** GitHub refuses to make a branch. */
   branchesRefused?: boolean;
   /** Each issue's labels as GitHub reads the issue back. */
@@ -193,6 +196,8 @@ type FakeGithub = FactoryGithubPort & {
   ensuredBranches: string[];
   /** How many times a merged pull request's commit was read. */
   mergeCommitReads: number;
+  /** What a lane sync did to branches and pull requests, in order. */
+  syncCalls: string[];
 };
 
 function fakeGithub(
@@ -214,6 +219,7 @@ function fakeGithub(
     closedReplaced: [],
     baseBranches: [],
     ensuredBranches: [],
+    syncCalls: [],
     mergeCommitReads: 0,
     mergeCommit: (_reader: unknown, number: number) => {
       port.mergeCommitReads += 1;
@@ -341,6 +347,27 @@ function fakeGithub(
       },
     },
   };
+  const laneSync = script.laneSync;
+  if (laneSync) {
+    port.laneBranches = () => ({
+      branchHead: (branch: string) => okAsync(laneSync.heads[branch] ?? null),
+      branchContains: (_branch: string, sha: string) =>
+        okAsync(script.contains?.[sha]?.includes(_branch) ?? false),
+      resetBranch: (branch: string, sha: string) => {
+        port.syncCalls.push(`reset ${branch} ${sha}`);
+        return okAsync(undefined);
+      },
+      mergeInto: (branch: string, sha: string) => {
+        port.syncCalls.push(`merge ${sha} into ${branch}`);
+        return okAsync('merged' as const);
+      },
+      openPullRequest: (input: { head: string; base: string }) => {
+        port.syncCalls.push(`pr ${input.head} -> ${input.base}`);
+        return okAsync(77);
+      },
+      deleteBranch: () => okAsync(undefined),
+    });
+  }
   return port;
 }
 
@@ -897,6 +924,79 @@ describe('factory watcher', () => {
           stackedOn: null,
           waitReason: { kind: 'blocker-on-other-branch', blockers: [40] },
         });
+      });
+    });
+
+    // D4: the tick keeps each lane in sync with the branch the factory merges into.
+    describe('sync', () => {
+      async function factoryWithLane(script: GithubScript, merged = false) {
+        const factoryId = await enableFactory();
+        testDb.sqlite.run(
+          `INSERT INTO factory_lanes (id, factory_id, name, branch, created_at)
+           VALUES ('l1', '${factoryId}', 'a', 'feature/a', '2026-01-01')`,
+        );
+        if (merged) {
+          const runs = createFactoryRunsRepository();
+          const run = (await runs.start({ factoryId, issueNumber: 1 }))._unsafeUnwrap();
+          await runs.updateInFlight(run.id, {
+            state: 'merged',
+            prUrl: 'https://github.com/acme/repo/pull/9',
+          });
+        }
+        const poll = fakePoll();
+        const github = fakeGithub('acme/repo', [], {
+          mergeInto: { branch: 'dev' },
+          laneSync: { heads: { dev: 'dev-2', 'feature/a': 'a-1' } },
+          ...script,
+        });
+        await startWatcherWithProof({
+          ports,
+          github,
+          createPoll: poll.createPoll,
+          launch: fakeLauncher().launch,
+          resolveRuntime,
+          waitThread: pendingThreads,
+        });
+        const syncState = () =>
+          present(
+            testDb.sqlite
+              .query<{ sync_state: string; last_synced_base_sha: string | null }, []>(
+                'SELECT sync_state, last_synced_base_sha FROM factory_lanes',
+              )
+              .get(),
+            'the lane',
+          );
+        return { poll, github, syncState };
+      }
+
+      test('a tick brings the base into a lane that lacks it, and the next one merges it', async () => {
+        const { poll, github, syncState } = await factoryWithLane({});
+        await poll.ticks[0]!();
+        expect(github.syncCalls).toEqual([
+          'reset factory/sync/a a-1',
+          'merge dev-2 into factory/sync/a',
+          'pr factory/sync/a -> feature/a',
+        ]);
+        expect(syncState().sync_state).toBe('checking');
+
+        await poll.ticks[0]!();
+        expect(github.merges).toBe(1);
+        expect(syncState()).toEqual({ sync_state: 'idle', last_synced_base_sha: 'dev-2' });
+      });
+
+      test('no sync starts while the base branch has an incident', async () => {
+        const { poll, github, syncState } = await factoryWithLane(
+          {
+            baseCi: {
+              kind: 'failing',
+              checks: [{ name: 'test', conclusion: 'failure', excerpt: 'boom' }],
+            },
+          },
+          true,
+        );
+        await poll.ticks[0]!();
+        expect(github.syncCalls).toEqual([]);
+        expect(syncState().sync_state).toBe('idle');
       });
     });
 

@@ -38,10 +38,18 @@ import { serverActivities } from '../activities/server-activities.js';
 import { type RunnerPorts } from '../runner-thread-launcher.js';
 import type { ThreadRuntimeMode } from '../thread-sandboxes/project-sandbox-settings.js';
 import { sendPush } from '../web-push.js';
+import {
+  deleteLease,
+  dropExpired,
+  leaseHolders,
+  putLease,
+} from '../workflow-engine/lease-store.js';
 import { integrateEarly, integrateStacked } from './factory-early-watch.js';
 import { createFactoryFlowRuns } from './factory-flow-runs.js';
 import { type FactoryGithubPort } from './factory-github.js';
 import { createFactoryIncidentsRepository } from './factory-incidents.js';
+import { createLaneSync } from './factory-lane-sync.js';
+import { createFactoryLanesRepository } from './factory-lanes.js';
 import { closeFinishedParents } from './factory-parent-close.js';
 import { prNumberOf } from './factory-pull-requests.js';
 import type { FactoryStepJobBody } from './factory-runner-jobs.js';
@@ -332,12 +340,45 @@ async function fire(id: string): Promise<void> {
   await resumeRuns(factory, target.repo, target.mode);
   await watchEarlyIntegration(factory, target.repo);
   if (incident) return;
+  // After the incident check: a broken base is not carried into the lanes.
+  if (factory.enabled) await syncLanes(factory, target.repo);
   // A paused factory finishes its runs but admits nothing new; its queue waits,
   // and its schedules start nothing.
   if (!factory.enabled) return;
   await queueDueTriggers(factory);
   await admitWork(factory, target.repo, target.mode);
 }
+
+/**
+ * Advance the sync of each of the factory's lanes with the branch it merges
+ * into by one step (openspec factory-lanes, D4), as the enabler. The reader
+ * carries no run's base: "the base" here is the factory's own branch.
+ */
+async function syncLanes(factory: WatchedFactory, repo: string): Promise<void> {
+  if (!deps?.github.laneBranches) return;
+  const reader = { repo, ownerId: factory.userId, projectId: factory.projectId };
+  const github = deps.github;
+  await createLaneSync(
+    {
+      lanes: laneRows,
+      branches: github.laneBranches!(reader),
+      pullRequests: github.pullRequests,
+      baseBranch: async () => (await github.defaultBranch(reader)).unwrapOr(null),
+      mergeTurn: {
+        holders: async (group) => {
+          // A lease whose server stopped is not a holder.
+          await dropExpired(group, Date.now());
+          return leaseHolders(group);
+        },
+        take: (group, holder, until) => putLease(group, holder, Date.now(), until),
+        release: (group, holder) => deleteLease(group, holder),
+      },
+    },
+    { factoryId: factory.id, reader },
+  ).tick();
+}
+
+const laneRows = createFactoryLanesRepository();
 
 /**
  * Queue one run for each schedule trigger whose occurrence has come (change

@@ -75,5 +75,118 @@ export function createFactoryBranchReads(
         )
         .map((pull) => (pull.merged && pull.merge_commit_sha ? pull.merge_commit_sha : null));
     },
+
+    /** The commit `branch` is at, or null when GitHub has no such branch. */
+    branchHead(branch: string): ResultAsync<string | null, GithubCallError> {
+      return github
+        .json<{ object: { sha: string } }>(repo, 'GET', refPath(repo, branch))
+        .map((ref): string | null => ref.object.sha)
+        .orElse((error) =>
+          error.status === 404
+            ? okAsync<string | null, GithubCallError>(null)
+            : errAsync<string | null, GithubCallError>(error),
+        );
+    },
+
+    /**
+     * Put `branch` at `sha`, making it when it does not exist. Forced: the
+     * branch is the factory's own scratch branch of a lane sync, started
+     * again from the lane's head each time.
+     */
+    resetBranch(branch: string, sha: string): ResultAsync<void, GithubCallError> {
+      return github
+        .json(repo, 'PATCH', `/repos/${repo}/git/refs/heads/${encodeBranch(branch)}`, {
+          sha,
+          force: true,
+        })
+        .map(() => undefined)
+        .orElse((error) =>
+          error.status === 404 || error.status === 422
+            ? github
+                .json(repo, 'POST', `/repos/${repo}/git/refs`, { ref: `refs/heads/${branch}`, sha })
+                .map(() => undefined)
+            : errAsync<void, GithubCallError>(error),
+        );
+    },
+
+    /**
+     * Merge commit `sha` into `branch` on GitHub, as a merge commit: `merged`,
+     * `nothing` when the branch already has it, or `conflict` (nothing is
+     * written then).
+     */
+    mergeInto(
+      branch: string,
+      sha: string,
+      message: string,
+    ): ResultAsync<'merged' | 'nothing' | 'conflict', GithubCallError> {
+      type Outcome = 'merged' | 'nothing' | 'conflict';
+      return (
+        github
+          .json<{ sha?: string } | undefined>(repo, 'POST', `/repos/${repo}/merges`, {
+            base: branch,
+            head: sha,
+            commit_message: message,
+          })
+          // 204: already merged, no body.
+          .map((made): Outcome => (made?.sha ? 'merged' : 'nothing'))
+          .orElse((error) =>
+            error.status === 409
+              ? okAsync<Outcome, GithubCallError>('conflict')
+              : errAsync<Outcome, GithubCallError>(error),
+          )
+      );
+    },
+
+    /** Open a pull request from `head` into `base`, or answer the open one there is. */
+    openPullRequest(input: {
+      head: string;
+      base: string;
+      title: string;
+      body: string;
+    }): ResultAsync<number, GithubCallError> {
+      const [owner] = repo.split('/');
+      const existing = () =>
+        github
+          .json<Array<{ number: number }>>(
+            repo,
+            'GET',
+            `/repos/${repo}/pulls?head=${encodeURIComponent(`${owner}:${input.head}`)}&base=${encodeURIComponent(input.base)}&state=open`,
+          )
+          .map((pulls) => pulls[0]?.number ?? null);
+      return github
+        .json<{ number: number }>(repo, 'POST', `/repos/${repo}/pulls`, input)
+        .map((pull) => pull.number)
+        .orElse((error) =>
+          error.status !== 422
+            ? errAsync<number, GithubCallError>(error)
+            : existing().andThen((number) =>
+                number === null
+                  ? errAsync<number, GithubCallError>(error)
+                  : okAsync<number, GithubCallError>(number),
+              ),
+        );
+    },
+
+    /** Delete `branch`; one that is gone already is fine. */
+    deleteBranch(branch: string): ResultAsync<void, GithubCallError> {
+      return github
+        .json(repo, 'DELETE', `/repos/${repo}/git/refs/heads/${encodeBranch(branch)}`)
+        .map(() => undefined)
+        .orElse((error) =>
+          error.status === 404 || error.status === 422
+            ? okAsync<void, GithubCallError>(undefined)
+            : errAsync<void, GithubCallError>(error),
+        );
+    },
   };
 }
+
+const encodeBranch = (name: string) => name.split('/').map(encodeURIComponent).join('/');
+const refPath = (repo: string, branch: string) =>
+  `/repos/${repo}/git/ref/heads/${encodeBranch(branch)}`;
+
+/** What a lane sync does to branches and pull requests (`factory-lane-sync.ts`). */
+export type FactoryLaneBranches = Pick<
+  ReturnType<typeof createFactoryBranchReads>,
+  'branchHead' | 'resetBranch' | 'mergeInto' | 'openPullRequest' | 'deleteBranch' | 'branchContains'
+>;

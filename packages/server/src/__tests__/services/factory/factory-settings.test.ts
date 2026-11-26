@@ -278,4 +278,41 @@ describe('factory lanes in the settings', () => {
     const refused = (await settings().removeLane('vic', 'p1', 'payments'))._unsafeUnwrapErr();
     expect(refused.kind).toBe('forbidden');
   });
+
+  // D4: what a member's "sync now" does to the lane's sync.
+  test('sync now: an idle lane forgets its last sync, one waiting for a person tries again', async () => {
+    const { svc } = await factoryWithLane();
+    void svc;
+    const { requestLaneSync } = await import('../../../services/factory/factory-settings.js');
+    testDb.sqlite.run(`UPDATE factory_lanes SET sync_started_at = '2026-11-26T10:00:00Z'`);
+    const row = () =>
+      present(
+        testDb.sqlite
+          .query<
+            { sync_state: string; sync_started_at: string | null; sync_error: string | null },
+            []
+          >('SELECT sync_state, sync_started_at, sync_error FROM factory_lanes')
+          .get(),
+        'the lane',
+      );
+
+    expect((await requestLaneSync('alice', 'p1', 'payments'))._unsafeUnwrap()).toBe('requested');
+    expect(row()).toMatchObject({ sync_state: 'idle', sync_started_at: null });
+
+    testDb.sqlite.run(
+      `UPDATE factory_lanes SET sync_state = 'needs_human', sync_error = 'conflict'`,
+    );
+    expect((await requestLaneSync('alice', 'p1', 'payments'))._unsafeUnwrap()).toBe('retried');
+    expect(row()).toMatchObject({ sync_state: 'merging', sync_error: null });
+
+    // In flight: left alone.
+    expect((await requestLaneSync('alice', 'p1', 'payments'))._unsafeUnwrap()).toBe('in-flight');
+    expect((await requestLaneSync('alice', 'p1', 'nope'))._unsafeUnwrapErr().kind).toBe(
+      'not-found',
+    );
+    seedProjectMember(testDb.db, { projectId: 'p1', userId: 'vic', role: 'viewer' });
+    expect((await requestLaneSync('vic', 'p1', 'payments'))._unsafeUnwrapErr().kind).toBe(
+      'forbidden',
+    );
+  });
 });

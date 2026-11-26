@@ -28,5 +28,5 @@
 
 ## 5. Integration
 
-- [ ] 5.1 Run `bun run lint` and `bun run typecheck`, and the affected test suites; verify all pass
+- [x] 5.1 Run `bun run lint` and `bun run typecheck`, and the affected test suites; verify all pass
 - [ ] 5.2 Manual check on a dev stack: a Codex (or LLM API) thread left running shows a recap after 5+ minutes away, a steer sharee sees none, and switching the utility model to an OpenAI-compatible endpoint changes the recap's model

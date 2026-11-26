@@ -99,6 +99,7 @@ function PullRequestRow({
     <div className={listRowClassName} data-testid={`pr-item-${pr.number}`}>
       <PRCompactIdentity
         pr={compactPr}
+        projectId={projectId}
         onTitleClick={() => onOpen(pr)}
         showStateBadge
         numberTestId={`pr-number-link-${pr.number}`}

@@ -40,6 +40,8 @@ type MockDockviewGroup = {
   header: { hidden: boolean };
   element: HTMLElement;
   isCollapsed: ReturnType<typeof vi.fn>;
+  setSize: ReturnType<typeof vi.fn>;
+  onDidDimensionsChange: ReturnType<typeof vi.fn>;
   expand: ReturnType<typeof vi.fn>;
   collapse: ReturnType<typeof vi.fn>;
   api: {
@@ -74,7 +76,7 @@ type MockDockviewApi = {
 };
 
 function createGroup(id: string, height = 300): MockDockviewGroup {
-  return {
+  const group: MockDockviewGroup = {
     id,
     panels: [],
     width: 500,
@@ -82,6 +84,11 @@ function createGroup(id: string, height = 300): MockDockviewGroup {
     header: { hidden: false },
     element: document.createElement('div'),
     isCollapsed: vi.fn(() => false),
+    // Dockview resizes the group to what was asked.
+    setSize: vi.fn((size: { width?: number }) => {
+      if (typeof size.width === 'number') group.width = size.width;
+    }),
+    onDidDimensionsChange: vi.fn(() => ({ dispose: () => {} })),
     expand: vi.fn(),
     collapse: vi.fn(),
     api: {
@@ -89,6 +96,7 @@ function createGroup(id: string, height = 300): MockDockviewGroup {
       setConstraints: vi.fn(),
     },
   };
+  return group;
 }
 
 function createMockDockviewApi(): MockDockviewApi {
@@ -236,5 +244,57 @@ describe('DockviewLayout keeps dragged sizes across thread switches', () => {
     rerender(<DockviewLayout {...props} bottomTabs={tabs} />);
 
     expect(lastAddOptions(api, 'bottom:one').initialHeight).toBe(520);
+  });
+});
+
+describe('DockviewLayout keeps a left width per sidebar mode', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    dockviewMock.api = createMockDockviewApi();
+    dockviewMock.readyCalled = false;
+  });
+
+  const threads = { storageKey: 'dockview.left_width', defaultWidth: 240 };
+  const factory = { storageKey: 'dockview.left_width.factory', defaultWidth: 560 };
+  const props = { left: <div />, center: <div /> };
+
+  function leftEdge() {
+    return dockviewMock.api!.getEdgeGroup('left') as MockDockviewGroup;
+  }
+
+  /** The user drags the sidebar's sash: dockview reports the group's new width
+   *  through its dimension event only (no layout-change event). */
+  function drag(width: number) {
+    const group = leftEdge();
+    group.width = width;
+    for (const call of group.onDidDimensionsChange.mock.calls) {
+      (call[0] as (e: { width: number; height: number }) => void)({ width, height: 600 });
+    }
+  }
+
+  // Regression: a dragged width was lost when switching between the thread
+  // list and the factory, because the sash drag fires no layout change.
+  test('each mode comes back at the width it was dragged to', () => {
+    const { rerender } = render(<DockviewLayout {...props} leftWidthMode={threads} />);
+    drag(310);
+
+    rerender(<DockviewLayout {...props} leftWidthMode={factory} />);
+    expect(leftEdge().setSize).toHaveBeenLastCalledWith({ width: 560 });
+    drag(820);
+
+    rerender(<DockviewLayout {...props} leftWidthMode={threads} />);
+    expect(leftEdge().setSize).toHaveBeenLastCalledWith({ width: 310 });
+
+    rerender(<DockviewLayout {...props} leftWidthMode={factory} />);
+    expect(leftEdge().setSize).toHaveBeenLastCalledWith({ width: 820 });
+    expect(localStorage.getItem('dockview.left_width')).toBe('310');
+    expect(localStorage.getItem('dockview.left_width.factory')).toBe('820');
+  });
+
+  test('the collapsed strip is not saved as a width', () => {
+    render(<DockviewLayout {...props} leftWidthMode={threads} />);
+    leftEdge().isCollapsed.mockReturnValue(true);
+    drag(40);
+    expect(localStorage.getItem('dockview.left_width')).toBeNull();
   });
 });

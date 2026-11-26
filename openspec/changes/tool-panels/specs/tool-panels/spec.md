@@ -31,7 +31,7 @@ The thread panel SHALL show a header with the breadcrumb, the thread title, the 
 
 ### Requirement: A tool rail opens and closes panels
 
-A vertical rail of icons SHALL be shown at the right edge of the window whenever a thread or a project is open, with one icon per available panel, in registry order. Clicking the icon of a closed panel SHALL open it in its location and close any other panel open there; clicking the icon of the panel open in its location SHALL close it. The icon of an open panel SHALL be shown as active. Each icon SHALL show the panel title and shortcut in a tooltip and carry the test id `tool-rail-<id>`.
+A vertical rail of icons SHALL be shown at the right edge of the window, except under a view that takes the whole window, with one icon per registered panel, in registry order. The rail SHALL show the same icons for every thread and view, so it does not change shape when the user switches. Clicking the icon of a closed panel SHALL open it in its location and close any other panel open there; clicking the icon of the panel open in its location SHALL close it. The icon of an open panel SHALL be shown as active. Each icon SHALL show the panel title and shortcut in a tooltip and carry the test id `tool-rail-<id>`.
 
 #### Scenario: Open a panel
 
@@ -53,14 +53,14 @@ A vertical rail of icons SHALL be shown at the right edge of the window whenever
 - **WHEN** the review panel is open on the right and the user opens the terminal
 - **THEN** the terminal opens at the bottom and review stays open
 
-### Requirement: Unavailable panels are hidden
+### Requirement: Unavailable panels are disabled
 
-A panel whose availability rule fails for the open thread or project SHALL have no rail icon, SHALL NOT open from the URL or its shortcut, and SHALL close if it was open when the user moves to such a thread.
+A panel whose availability rule fails for the open thread or project SHALL keep its rail icon, disabled, SHALL NOT open from the URL or its shortcut, and SHALL close if it was open when the user moves to such a thread.
 
 #### Scenario: Scratch thread
 
 - **WHEN** the user opens a scratch thread
-- **THEN** the rail shows no review, files or terminal icon, and an open review panel closes
+- **THEN** the review, files and terminal icons are disabled, and an open review panel closes
 
 #### Scenario: URL asks for an unavailable panel
 
@@ -102,7 +102,7 @@ The open panel of each location and the size of each location SHALL be remembere
 
 ### Requirement: Panels act on the grid's selected thread
 
-While the grid view is open, the rail and the right panel SHALL act on the thread selected in the grid, and SHALL be hidden when no grid thread is selected.
+While the grid view is open, the rail and the right panel SHALL act on the thread selected in the grid, and the rail's tools SHALL be disabled when no grid thread is selected and no project is selected.
 
 #### Scenario: Grid selection
 

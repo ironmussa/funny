@@ -455,7 +455,7 @@ function IssueRow({
           className="flex flex-wrap items-center gap-1.5 empty:hidden"
           data-testid={`issue-links-${issue.number}`}
         >
-          <IssueLinkBadges issue={issue} />
+          <IssueLinkBadges issue={issue} projectId={projectId} />
         </div>
         {/* …the issue's state in the factory on its own line… */}
         {factoryRun && (

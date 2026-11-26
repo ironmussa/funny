@@ -10,11 +10,16 @@ import { toastError } from '@/lib/toast-error';
  * run behind a confirmation dialog (they mutate the working branch / history). */
 export type CommitActionKind = 'checkout' | 'revert' | 'reset' | 'cherry-pick';
 export type BranchCommitActionKind = 'merge-current-into' | 'rebase-current-onto';
-export type ConfirmedCommitActionKind = CommitActionKind | BranchCommitActionKind;
+/** Drop the newest stash entry (`refs/stash`, i.e. `stash@{0}`), offered on its graph row. */
+export type StashCommitActionKind = 'drop-stash';
+export type ConfirmedCommitActionKind =
+  | CommitActionKind
+  | BranchCommitActionKind
+  | StashCommitActionKind;
 
 export interface PendingCommitAction {
   kind: ConfirmedCommitActionKind;
-  /** Commit hash for commit actions; target branch for branch actions. */
+  /** Commit hash for commit and stash actions; target branch for branch actions. */
   hash: string;
 }
 
@@ -96,6 +101,11 @@ export function useCommitActions({
           return effectiveThreadId
             ? api.rebaseCurrentBranchOnto(effectiveThreadId, hash)
             : api.projectRebaseCurrentBranchOnto(projectModeId!, hash);
+        case 'drop-stash':
+          // `refs/stash` always names the newest entry, stash@{0}.
+          return effectiveThreadId
+            ? api.stashDrop(effectiveThreadId, '0')
+            : api.projectStashDrop(projectModeId!, '0');
       }
     };
     const result = await run();
@@ -113,6 +123,7 @@ export function useCommitActions({
           branch: hash,
           defaultValue: `Rebased current branch onto ${hash}`,
         }),
+        'drop-stash': t('history.dropStashSuccess', 'Stash discarded'),
       };
       toast.success(successMsg[kind]);
       onSuccess?.(kind);

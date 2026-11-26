@@ -97,7 +97,10 @@ function createMockDockviewApi(): MockDockviewApi {
     },
   };
 
-  const edgeGroups = new Map<string, { isCollapsed: () => boolean }>();
+  const edgeGroups = new Map<
+    string,
+    { isCollapsed: () => boolean; onDidDimensionsChange: () => { dispose: () => void } }
+  >();
   const api = {
     panels: new Array<MockDockviewPanel>(),
     addPanel: vi.fn(
@@ -143,7 +146,10 @@ function createMockDockviewApi(): MockDockviewApi {
     ),
     getPanel: vi.fn((id: string) => api.panels.find((panel) => panel.id === id)),
     addEdgeGroup: vi.fn((_side: string, options: { id: string }) => {
-      edgeGroups.set(options.id, { isCollapsed: () => false });
+      edgeGroups.set(options.id, {
+        isCollapsed: () => false,
+        onDidDimensionsChange: () => ({ dispose: () => {} }),
+      });
     }),
     getEdgeGroup: vi.fn((side: string) => edgeGroups.get(`${side}-edge`) ?? null),
     onDidActivePanelChange: vi.fn(),

@@ -166,6 +166,7 @@ export function VirtualThreadList({
                 <div className="flex min-w-0 items-center gap-1.5">
                   <ThreadTitle
                     title={thread.title}
+                    projectId={thread.projectId || undefined}
                     search={search}
                     className="block text-sm font-medium"
                     badgeTestId={`virtual-thread-item-attachments-${thread.id}`}

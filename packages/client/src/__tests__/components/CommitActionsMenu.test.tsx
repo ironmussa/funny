@@ -52,6 +52,40 @@ describe('CommitActionsMenu', () => {
     expect(screen.getByTestId('graph-commit-menu-github-1111111')).toBeInTheDocument();
   });
 
+  test('offers "Discard stash" only on the stash tip', () => {
+    const { unmount } = renderWithProviders(
+      <CommitActionsMenu
+        hash="1111111111111111111111111111111111111111"
+        shortHash="1111111"
+        githubUrl={null}
+        projectModeId="project-1"
+        isStashTip
+        onAfterAction={vi.fn()}
+      />,
+    );
+    fireEvent.pointerDown(screen.getByTestId('graph-commit-more-1111111'), {
+      button: 0,
+      ctrlKey: false,
+    });
+    expect(screen.getByTestId('graph-commit-menu-drop-stash-1111111')).toBeInTheDocument();
+    unmount();
+
+    renderWithProviders(
+      <CommitActionsMenu
+        hash="1111111111111111111111111111111111111111"
+        shortHash="1111111"
+        githubUrl={null}
+        projectModeId="project-1"
+        onAfterAction={vi.fn()}
+      />,
+    );
+    fireEvent.pointerDown(screen.getByTestId('graph-commit-more-1111111'), {
+      button: 0,
+      ctrlKey: false,
+    });
+    expect(screen.queryByTestId('graph-commit-menu-drop-stash-1111111')).not.toBeInTheDocument();
+  });
+
   test('hides GitHub action when the commit is local-only', () => {
     renderWithProviders(
       <CommitActionsMenu

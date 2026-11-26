@@ -1,4 +1,4 @@
-import { BarChart3, Columns3, Factory, LayoutGrid, PanelLeftClose, Search } from 'lucide-react';
+import { PanelLeftClose, Search } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { OrgSwitcher } from '@/components/OrgSwitcher';
@@ -16,8 +16,9 @@ const HOVER_REVEAL = 'shrink-0 opacity-0 transition-opacity group-hover/header:o
 
 /**
  * Top of AppSidebar: the collapse button on the left, the organization
- * switcher, then icon-button shortcuts (search/list, automation inbox, factory
- * queue, kanban, grid, analytics). Buttons are hidden until hover; the inbox
+ * switcher, then icon-button shortcuts (search/list, automation inbox). The
+ * kanban board, the factory queue, the grid and analytics open from the tool
+ * rail. Buttons are hidden until hover; the inbox
  * stays visible while it has pending items.
  *
  * Extracted from Sidebar.tsx as part of the god-file split.
@@ -72,68 +73,6 @@ export function SidebarTopBar() {
         </div>
         <div className={cn('flex shrink-0 transition-opacity', pendingCount === 0 && HOVER_REVEAL)}>
           <AutomationInboxButton />
-        </div>
-        <div className={cn('flex items-center gap-0.5', HOVER_REVEAL)}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="muted"
-                size="icon-sm"
-                tabIndex={-1}
-                data-testid="sidebar-factory"
-                aria-label={t('sidebar.factory', 'Factory queue')}
-                onClick={() => navigate(buildPath('/factory'))}
-              >
-                <Factory className="icon-base" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">{t('sidebar.factory', 'Factory queue')}</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="muted"
-                size="icon-sm"
-                tabIndex={-1}
-                data-testid="sidebar-kanban"
-                aria-label="Kanban"
-                onClick={() => navigate(buildPath('/kanban'))}
-              >
-                <Columns3 className="icon-base" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Kanban</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="muted"
-                size="icon-sm"
-                tabIndex={-1}
-                data-testid="sidebar-grid"
-                aria-label="Grid"
-                onClick={() => navigate(buildPath('/grid'))}
-              >
-                <LayoutGrid className="icon-base" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Grid</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="muted"
-                size="icon-sm"
-                tabIndex={-1}
-                data-testid="sidebar-analytics"
-                aria-label={t('sidebar.analytics')}
-                onClick={() => navigate(buildPath('/analytics'))}
-              >
-                <BarChart3 className="icon-base" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">{t('sidebar.analytics')}</TooltipContent>
-          </Tooltip>
         </div>
       </div>
     </SidebarHeader>

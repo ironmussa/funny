@@ -1,10 +1,21 @@
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, type ReactNode } from 'react';
 
+import { linkIssueReferences } from '@/lib/github-issue-refs';
 import {
   baseMarkdownComponents,
   markdownProseClassName,
   remarkPlugins,
 } from '@/lib/markdown-components';
+
+/** A body's links lead to GitHub or elsewhere: open them beside funny, not in its place. */
+const bodyComponents = {
+  ...baseMarkdownComponents,
+  a: ({ href, children }: { href?: string; children?: ReactNode }) => (
+    <a href={href} target="_blank" rel="noopener noreferrer">
+      {children}
+    </a>
+  ),
+};
 
 const LazyMarkdown = lazy(() =>
   Promise.all([import('react-markdown'), import('rehype-raw'), import('rehype-sanitize')]).then(
@@ -14,7 +25,7 @@ const LazyMarkdown = lazy(() =>
           <ReactMarkdown
             remarkPlugins={remarkPlugins}
             rehypePlugins={[rehypeRaw, rehypeSanitize]}
-            components={baseMarkdownComponents}
+            components={bodyComponents}
           >
             {content}
           </ReactMarkdown>
@@ -25,8 +36,15 @@ const LazyMarkdown = lazy(() =>
 );
 
 /** GitHub-flavoured markdown body (PR / issue descriptions and comments), sanitized. */
-export function MarkdownBody({ body }: { body: string | null | undefined }) {
-  const trimmed = (body ?? '').trim();
+export function MarkdownBody({
+  body,
+  repoUrl,
+}: {
+  body: string | null | undefined;
+  /** `https://github.com/owner/repo`: with it, `#123` links to that repository's item. */
+  repoUrl?: string | null;
+}) {
+  const trimmed = linkIssueReferences((body ?? '').trim(), repoUrl ?? null);
   if (!trimmed) {
     return <span className="text-muted-foreground italic">(empty)</span>;
   }

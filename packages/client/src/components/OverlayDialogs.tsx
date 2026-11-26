@@ -11,6 +11,7 @@ import {
   preloadTextSearchDialog,
   scheduleShortcutTargetPreloads,
 } from '@/platform/shortcut-target-preloads';
+import { useGitHubItemViewerStore } from '@/stores/github-item-viewer-store';
 import { useInternalEditorStore } from '@/stores/internal-editor-store';
 import { useMediaPreviewStore } from '@/stores/media-preview-store';
 import { useUIStore } from '@/stores/ui-store';
@@ -34,6 +35,9 @@ const monacoEditorImport = () => {
   return import('@/components/MonacoEditorDialog').then((m) => ({ default: m.MonacoEditorDialog }));
 };
 const MonacoEditorDialog = lazy(monacoEditorImport);
+const GitHubItemViewer = lazy(() =>
+  import('@/components/GitHubItemViewer').then((m) => ({ default: m.GitHubItemViewer })),
+);
 const MediaPreviewDialog = lazy(() =>
   import('@/components/MediaPreviewDialog').then((m) => ({ default: m.MediaPreviewDialog })),
 );
@@ -58,6 +62,7 @@ export function OverlayDialogs() {
   const internalEditorContent = useInternalEditorStore((s) => s.initialContent);
   const mediaPreviewOpen = useMediaPreviewStore((s) => s.isOpen);
   const mediaPreviewPath = useMediaPreviewStore((s) => s.filePath);
+  const githubItemOpen = useGitHubItemViewerStore((s) => s.target !== null);
 
   return (
     <>
@@ -99,6 +104,9 @@ export function OverlayDialogs() {
           />
         )}
       </Suspense>
+
+      {/* Pull request / issue view a PR or issue chip opened (global, lazy-loaded) */}
+      <Suspense>{githubItemOpen && <GitHubItemViewer />}</Suspense>
 
       {/* Media preview dialog (image/audio/video/pdf — global, lazy-loaded) */}
       <Suspense>

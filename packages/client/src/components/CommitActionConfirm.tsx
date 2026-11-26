@@ -81,6 +81,15 @@ export function CommitActionConfirm({ pending, onConfirm, onCancel }: Props) {
           confirmLabel: t('history.confirmRebaseCurrentOntoButton', 'Rebase'),
           variant: 'default' as const,
         },
+        'drop-stash': {
+          title: t('history.confirmDropStashTitle', 'Discard stash'),
+          description: t(
+            'history.confirmDropStashDesc',
+            'This will drop the newest stash entry (stash@{0}) and the changes it holds. This action cannot be undone.',
+          ),
+          confirmLabel: t('history.confirmDropStashButton', 'Discard stash'),
+          variant: 'destructive' as const,
+        },
       }[pending.kind]
     : null;
 

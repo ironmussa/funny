@@ -99,6 +99,7 @@ export function PinnedPRCard({
         {!hideSummary && (
           <PRCardSummary
             pr={pr}
+            projectId={projectId}
             now={now}
             isMerged={isMerged}
             canMerge={canMerge}

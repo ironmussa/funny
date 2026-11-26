@@ -204,9 +204,15 @@ export const githubApi = {
       { method: 'POST', body: JSON.stringify({ projectId, issueNumbers }) },
     ),
 
-  githubIssueComments: (projectId: string, issueNumber: number) =>
-    request<{ comments: import('@funny/shared').PRIssueComment[] }>(
-      `/github/issue-comments?projectId=${projectId}&issueNumber=${issueNumber}`,
+  githubIssue: (projectId: string, issueNumber: number) =>
+    request<{ issue: import('@funny/shared').EnrichedGitHubIssue }>(
+      `/github/issue?projectId=${projectId}&issueNumber=${issueNumber}`,
+    ),
+
+  /** The issue's comments and events (labels, mentions, closing), oldest first. */
+  githubIssueTimeline: (projectId: string, issueNumber: number) =>
+    request<{ items: import('@funny/shared').IssueTimelineItem[] }>(
+      `/github/issue-timeline?projectId=${projectId}&issueNumber=${issueNumber}`,
     ),
 
   githubPRConversation: (projectId: string, prNumber: number) =>

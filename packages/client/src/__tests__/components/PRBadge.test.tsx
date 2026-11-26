@@ -1,8 +1,9 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, describe, expect, test } from 'bun:test';
 
-import { screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 
 import { PRBadge } from '@/components/PRBadge';
+import { githubRepoOfUrl, useGitHubItemViewerStore } from '@/stores/github-item-viewer-store';
 
 import { renderWithProviders } from '../helpers/render';
 
@@ -71,5 +72,62 @@ describe('PRBadge', () => {
     expect(badge).not.toHaveClass('text-xs');
     expect(badge).not.toHaveClass('border');
     expect(screen.getByTestId('pr-icon-MERGED')).not.toHaveClass('icon-sm');
+  });
+
+  describe('with a project', () => {
+    afterEach(() => useGitHubItemViewerStore.getState().close());
+
+    const url = 'https://github.com/acme/app/pull/12';
+
+    test("a click opens funny's PR view, not GitHub", () => {
+      renderWithProviders(<PRBadge prNumber={12} prUrl={url} projectId="p-1" data-testid="pr" />);
+
+      const badge = screen.getByTestId('pr');
+      expect(badge.tagName).toBe('BUTTON');
+      expect(badge).not.toHaveAttribute('href');
+      fireEvent.click(badge);
+
+      expect(useGitHubItemViewerStore.getState().target).toEqual({
+        kind: 'pr',
+        projectId: 'p-1',
+        number: 12,
+        url,
+      });
+    });
+
+    test('the external link icon beside it goes to GitHub', () => {
+      renderWithProviders(
+        <PRBadge
+          prNumber={12}
+          prUrl={url}
+          projectId="p-1"
+          variant="plain"
+          showExternalIcon={false}
+          data-testid="pr"
+        />,
+      );
+
+      const external = screen.getByTestId('pr-external');
+      expect(external).toHaveAttribute('href', url);
+      expect(external).toHaveAttribute('target', '_blank');
+      fireEvent.click(external);
+      expect(useGitHubItemViewerStore.getState().target).toBeNull();
+    });
+
+    test('without a project the chip stays the GitHub link', () => {
+      renderWithProviders(<PRBadge prNumber={12} prUrl={url} data-testid="pr" />);
+
+      expect(screen.getByTestId('pr')).toHaveAttribute('href', url);
+      expect(screen.queryByTestId('pr-external')).toBeNull();
+    });
+  });
+});
+
+describe('githubRepoOfUrl', () => {
+  test('reads owner/repo of a GitHub URL, case-insensitively', () => {
+    expect(githubRepoOfUrl('https://github.com/Acme/App/pull/3')).toBe('acme/app');
+    expect(githubRepoOfUrl('https://github.com/acme/app/issues/3#c')).toBe('acme/app');
+    expect(githubRepoOfUrl('https://example.com/acme/app')).toBeNull();
+    expect(githubRepoOfUrl(undefined)).toBeNull();
   });
 });

@@ -21,8 +21,8 @@ export function useRightPaneThreadId(): string | null {
 }
 
 /**
- * The project the right pane should scope to. In the grid view this is the
- * grid-selected thread's project; otherwise the store's `selectedProjectId`.
+ * The project the right pane should scope to. In the grid view with a selected
+ * thread this is that thread's project; otherwise the store's `selectedProjectId`.
  *
  * Use the lightweight thread index instead of ThreadContext here. A freshly
  * selected grid column can update before its heavy `threadDataById` payload is
@@ -36,6 +36,7 @@ export function useRightPaneProjectId(): string | null {
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   return rightPaneProjectId(
     liveColumnsOpen,
+    gridSelectedThreadId,
     gridSelectedThread?.projectId || null,
     selectedProjectId,
   );

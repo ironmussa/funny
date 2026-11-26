@@ -11,6 +11,11 @@ import {
 } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
+import {
+  STORAGE_KEY_FACTORY_LEFT_WIDTH,
+  STORAGE_KEY_KANBAN_LEFT_WIDTH,
+  STORAGE_KEY_LEFT_WIDTH,
+} from '@/components/dockview/layout-ids';
 import type { RightTabSpec } from '@/components/dockview/types';
 import { DockviewLayout } from '@/components/DockviewLayout';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
@@ -36,6 +41,7 @@ import { useWS } from '@/hooks/use-ws';
 import { resolveLeftPaneOpen } from '@/lib/app-layout';
 import { effectiveThreadId, isRightPaneVisible } from '@/lib/grid-right-pane';
 import { canDoGitOps } from '@/lib/thread-variant';
+import { buildPath, stripOrgPrefix } from '@/lib/url';
 import { cn } from '@/lib/utils';
 import { loadInstalledVisualizers } from '@/lib/visualizer-loader';
 import { preloadAllThreadsView } from '@/platform/shortcut-target-preloads';
@@ -69,6 +75,17 @@ const ThreadView = lazy(preloadThreadView);
 
 const SIDEBAR_WIDTH_STORAGE_KEY = 'sidebar_width';
 const DEFAULT_SIDEBAR_WIDTH = 240;
+const THREADS_LEFT_WIDTH = {
+  storageKey: STORAGE_KEY_LEFT_WIDTH,
+  defaultWidth: DEFAULT_SIDEBAR_WIDTH,
+};
+const FACTORY_LEFT_WIDTH = { storageKey: STORAGE_KEY_FACTORY_LEFT_WIDTH, defaultWidth: 560 };
+const KANBAN_LEFT_WIDTH = { storageKey: STORAGE_KEY_KANBAN_LEFT_WIDTH, defaultWidth: 900 };
+const LEFT_WIDTH_BY_MODE = {
+  threads: THREADS_LEFT_WIDTH,
+  kanban: KANBAN_LEFT_WIDTH,
+  factory: FACTORY_LEFT_WIDTH,
+} as const;
 const RIGHT_PANE_LOADING_FALLBACK = <LoadingState testId="right-pane-loading" label="Loading…" />;
 
 /** Placeholder matching the persisted sidebar width to avoid CLS during lazy load */
@@ -142,6 +159,9 @@ const AddProjectView = lazy(() =>
 );
 const AnalyticsView = lazy(() =>
   import('@/components/AnalyticsView').then((m) => ({ default: m.AnalyticsView })),
+);
+const KanbanSidebarView = lazy(() =>
+  import('@/components/KanbanSidebarView').then((m) => ({ default: m.KanbanSidebarView })),
 );
 const FactoryQueueView = lazy(() =>
   import('@/components/FactoryQueueView').then((m) => ({ default: m.FactoryQueueView })),
@@ -217,6 +237,64 @@ function useRightPaneCanShowGit(liveColumnsOpen: boolean, gridSelectedThreadId: 
   return gridSelectedThreadId ? gridSelectedCanDoGit : false;
 }
 
+/**
+ * The left sidebar: the thread list, or the kanban board or factory queue in
+ * its place (`leftPanelMode`, toggled from the tool rail). Opening a thread
+ * from the board or the factory shows it in the center while they stay here.
+ * The old `/factory` and `/kanban` routes open them here and land on the home
+ * page.
+ */
+function LeftSidebar() {
+  const mode = useUIStore((s) => s.leftPanelMode);
+  const setMode = useUIStore((s) => s.setLeftPanelMode);
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
+  const factoryRoute = parseRoute(pathname).factory;
+  const kanbanRoute = stripOrgPrefix(pathname)[1] === '/kanban';
+  useEffect(() => {
+    if (!factoryRoute && !kanbanRoute) return;
+    setMode(factoryRoute ? 'factory' : 'kanban');
+    navigate(buildPath('/'), { replace: true });
+  }, [factoryRoute, kanbanRoute, navigate, setMode]);
+
+  if (mode === 'kanban') {
+    return (
+      <ErrorBoundary area="kanban-sidebar">
+        <Suspense fallback={<SidebarPlaceholder />}>
+          <div className="bg-sidebar flex h-full w-full" data-testid="kanban-sidebar">
+            <KanbanSidebarView />
+          </div>
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
+
+  if (mode === 'factory') {
+    return (
+      <ErrorBoundary area="factory-sidebar">
+        <Suspense fallback={<SidebarPlaceholder />}>
+          <div className="bg-sidebar flex h-full w-full" data-testid="factory-sidebar">
+            <FactoryQueueView />
+          </div>
+        </Suspense>
+      </ErrorBoundary>
+    );
+  }
+  return (
+    <ErrorBoundary area="sidebar">
+      <Suspense fallback={<SidebarPlaceholder />}>
+        <AppSidebar />
+      </Suspense>
+    </ErrorBoundary>
+  );
+}
+
+/** The tool rail, able to expand the left sidebar (it opens the sidebar's views there). */
+function AppToolRail({ viewsOnly }: { viewsOnly: boolean }) {
+  const { setOpen } = useSidebar();
+  return <ToolRail viewsOnly={viewsOnly} onShowSidebar={() => setOpen(true)} />;
+}
+
 /** The thread panel: its own header (hidden under full-screen views) above the thread. */
 function ThreadPanel({ showHeader, children }: { showHeader: boolean; children: ReactNode }) {
   return (
@@ -267,7 +345,6 @@ export function App() {
   const parsedRoute = useMemo(() => parseRoute(pathname), [pathname]);
   const externalClaudeSessionId = parsedRoute.externalClaudeSessionId;
   const workflowsProjectId = parsedRoute.workflowsProjectId;
-  const factoryViewOpen = parsedRoute.factory;
 
   // --- Right panel layout ---
   const isFullScreenView =
@@ -275,8 +352,6 @@ export function App() {
     generalSettingsOpen ||
     analyticsOpen ||
     !!workflowsProjectId ||
-    factoryViewOpen ||
-    liveColumnsOpen ||
     !!externalClaudeSessionId ||
     testRunnerOpen ||
     automationInboxOpen ||
@@ -331,25 +406,16 @@ export function App() {
 
   // --- Dockview panels ---
 
-  const leftPanel = (
-    <ErrorBoundary area="sidebar">
-      <Suspense fallback={<SidebarPlaceholder />}>
-        <AppSidebar />
-      </Suspense>
-    </ErrorBoundary>
-  );
+  const leftPanel = <LeftSidebar />;
 
-  // The grid view is full-screen, but unlike the other full-screen views it
-  // hosts the right pane in a sibling dockview slot (acting on the selected
-  // thread). Allow it through when a thread is selected. See `grid-thread-actions`.
-  // The rail shows wherever a right panel could (openspec `tool-panels`).
-  const toolRailVisible = isRightPaneVisible(
-    true,
-    isFullScreenView,
-    liveColumnsOpen,
-    gridSelectedThreadId,
-    !!effectiveId || hasSelectedProject,
-  );
+  // The thread grid is not a full-screen view: it is a center view like the
+  // thread view, with the sidebar, the tools, the terminal and the browser
+  // around it. Analytics and the test runner host the tools too (openspec
+  // `tool-panels`). Other full-screen views (settings, workflows, the inbox…)
+  // take the whole window.
+  const hostsTools = analyticsOpen || testRunnerOpen;
+  const hidesTools = isFullScreenView && !hostsTools;
+  const toolRailVisible = isRightPaneVisible(true, hidesTools, !!effectiveId || hasSelectedProject);
   const rightPaneVisible = reviewPaneOpen && toolRailVisible;
   const reviewSubTab = useUIStore((s) => s.reviewSubTab);
   const setReviewSubTabStore = useUIStore((s) => s.setReviewSubTab);
@@ -412,16 +478,12 @@ export function App() {
               <div className="absolute inset-0 z-10 flex">
                 {workflowsProjectId ? (
                   <WorkflowsView projectId={workflowsProjectId} />
-                ) : factoryViewOpen ? (
-                  <FactoryQueueView />
                 ) : generalSettingsOpen ? (
                   <GeneralSettingsView />
                 ) : settingsOpen ? (
                   <SettingsDetailView />
                 ) : analyticsOpen ? (
                   <AnalyticsView />
-                ) : liveColumnsOpen ? (
-                  <LiveColumnsView />
                 ) : externalClaudeSessionId ? (
                   <ExternalClaudeSessionView sessionId={externalClaudeSessionId} />
                 ) : testRunnerOpen ? (
@@ -441,8 +503,20 @@ export function App() {
           Settings/Analytics/etc. is instant (no message refetch / Monaco
           / syntax-highlight re-render). Hidden via display:none when an
           overlay is active. */}
+          {liveColumnsOpen && !isFullScreenView && (
+            <Suspense>
+              <div className="flex min-h-0 min-w-0 flex-1">
+                <LiveColumnsView />
+              </div>
+            </Suspense>
+          )}
           <Suspense>
-            <div className={cn('flex min-h-0 min-w-0 flex-1', isFullScreenView && 'hidden')}>
+            <div
+              className={cn(
+                'flex min-h-0 min-w-0 flex-1',
+                (isFullScreenView || liveColumnsOpen) && 'hidden',
+              )}
+            >
               <ThreadProvider threadId={displayThreadId}>
                 <ThreadView onReady={markPrimaryViewReady} />
               </ThreadProvider>
@@ -458,7 +532,6 @@ export function App() {
       automationInboxOpen,
       displayThreadId,
       externalClaudeSessionId,
-      factoryViewOpen,
       generalSettingsOpen,
       isFullScreenView,
       liveColumnsOpen,
@@ -477,7 +550,7 @@ export function App() {
         <div
           className={cn(
             'pointer-events-none absolute inset-x-0 z-20',
-            isFullScreenView ? 'top-0' : 'top-12',
+            isFullScreenView || liveColumnsOpen ? 'top-0' : 'top-12',
           )}
         >
           <div className="pointer-events-auto">
@@ -486,7 +559,9 @@ export function App() {
         </div>
       </ErrorBoundary>
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
-        <ThreadPanel showHeader={!isFullScreenView}>{threadContent}</ThreadPanel>
+        <ThreadPanel showHeader={!isFullScreenView && !liveColumnsOpen}>
+          {threadContent}
+        </ThreadPanel>
       </div>
     </SidebarInset>
   );
@@ -495,32 +570,36 @@ export function App() {
     <SidebarProvider defaultOpen={true} className="h-dvh min-h-0 overflow-hidden">
       <ThreadProvider threadId={effectiveId}>
         <div className="flex min-h-0 flex-1 overflow-hidden" data-testid="main-panel-group">
-          <ReviewPaneStateProvider>
-            <SidebarAwareDockview
-              leftPanel={leftPanel}
-              centerPanel={centerPanel}
-              rightPane={{
-                right: singleRightPanel,
-                rightTabs,
-                activeRightTab: reviewSubTab,
-                onActiveRightTabChange: (id) =>
-                  // SAFETY: the ids come from rightTabs, built from REVIEW_TABS, whose ids are all ReviewSubTab names.
-                  setReviewSubTabStore(id as typeof reviewSubTab),
-                rightPaneOpen: rightPaneVisible,
-                initialRightWidth: Math.round(window.innerWidth * (reviewPaneWidth / 100)),
-              }}
-              terminalDockview={terminalDockview}
-              isFullScreenView={isFullScreenView}
-              hideLeftPane={!!workflowsProjectId}
-              liveColumnsOpen={liveColumnsOpen}
-              browserPanelOpen={browserPanelOpen}
-              togglebrowserPanel={togglebrowserPanel}
-              browserPanelWidth={browserPanelWidth}
-            />
-          </ReviewPaneStateProvider>
-          {toolRailVisible && (
+          <div className="relative flex min-h-0 min-w-0 flex-1">
+            <ReviewPaneStateProvider>
+              <SidebarAwareDockview
+                leftPanel={leftPanel}
+                centerPanel={centerPanel}
+                rightPane={{
+                  right: singleRightPanel,
+                  rightTabs,
+                  activeRightTab: reviewSubTab,
+                  onActiveRightTabChange: (id) =>
+                    // SAFETY: the ids come from rightTabs, built from REVIEW_TABS, whose ids are all ReviewSubTab names.
+                    setReviewSubTabStore(id as typeof reviewSubTab),
+                  rightPaneOpen: rightPaneVisible,
+                  initialRightWidth: Math.round(window.innerWidth * (reviewPaneWidth / 100)),
+                }}
+                terminalDockview={terminalDockview}
+                hidesTools={hidesTools}
+                hideLeftPane={!!workflowsProjectId}
+                browserPanelOpen={browserPanelOpen}
+                togglebrowserPanel={togglebrowserPanel}
+                browserPanelWidth={browserPanelWidth}
+              />
+            </ReviewPaneStateProvider>
+          </div>
+          {/* The rail holds the view switches (threads, kanban, factory, grid),
+            so it stays whenever the tools are not hidden: with nothing to act
+            on (no thread, no project) its tools are disabled, not gone. */}
+          {!hidesTools && (
             <ErrorBoundary area="tool-rail">
-              <ToolRail />
+              <AppToolRail viewsOnly={!toolRailVisible} />
             </ErrorBoundary>
           )}
         </div>
@@ -551,9 +630,8 @@ function SidebarAwareDockview({
   centerPanel,
   rightPane,
   terminalDockview,
-  isFullScreenView,
+  hidesTools,
   hideLeftPane,
-  liveColumnsOpen,
   browserPanelOpen,
   togglebrowserPanel,
   browserPanelWidth,
@@ -563,14 +641,16 @@ function SidebarAwareDockview({
   /** The right tool panel (openspec `tool-panels`): one group of the same dockview. */
   rightPane: RightPaneProps;
   terminalDockview: ReturnType<typeof useTerminalDockview>;
-  isFullScreenView: boolean;
+  /** A full-screen view that takes the whole window: no terminal or browser beside it. */
+  hidesTools: boolean;
   hideLeftPane: boolean;
-  liveColumnsOpen: boolean;
   browserPanelOpen: boolean;
   togglebrowserPanel: () => void;
   browserPanelWidth: number;
 }) {
   const { open: sidebarOpen } = useSidebar();
+  // The board and the factory queue need more room than the thread list: each keeps its width.
+  const leftWidthMode = LEFT_WIDTH_BY_MODE[useUIStore((s) => s.leftPanelMode)];
   const browserPanel = useMemo(
     () => (
       <Suspense fallback={null}>
@@ -591,14 +671,15 @@ function SidebarAwareDockview({
       onActiveBottomTabChange={terminalDockview.onActiveBottomTabChange}
       onBottomTabClose={terminalDockview.onBottomTabClose}
       onBottomTabsReorder={terminalDockview.onBottomTabsReorder}
-      bottomPaneOpen={terminalDockview.bottomPaneOpen && (!isFullScreenView || liveColumnsOpen)}
+      bottomPaneOpen={terminalDockview.bottomPaneOpen && !hidesTools}
       bottomPrefixActions={terminalDockview.bottomPrefixActions}
       bottomLeftActions={terminalDockview.bottomLeftActions}
       bottomRightActions={terminalDockview.bottomRightActions}
       browser={browserPanel}
-      browserOpen={browserPanelOpen && !isFullScreenView}
+      browserOpen={browserPanelOpen && !hidesTools}
       onBrowserClose={togglebrowserPanel}
       initialLeftWidth={DEFAULT_SIDEBAR_WIDTH}
+      leftWidthMode={leftWidthMode}
       initialBrowserWidth={browserPanelWidth}
     />
   );

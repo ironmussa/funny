@@ -27,7 +27,7 @@ setDefaultTimeout(15_000);
 const apiMock = (() => ({
   projectGetRemoteUrl: vi.fn(),
   githubIssuesEnriched: vi.fn(),
-  githubIssueComments: vi.fn(),
+  githubIssueTimeline: vi.fn(),
   githubDeleteIssues: vi.fn(),
 }))();
 const logError = (() => vi.fn())();
@@ -211,19 +211,22 @@ describe('IssuesTab remote checks', () => {
         ],
       }),
     );
-    apiMock.githubIssueComments.mockReturnValue(
+    apiMock.githubIssueTimeline.mockReturnValue(
       okAsync({
-        comments: [
+        items: [
           {
-            id: 99,
-            author: 'reviewer',
-            author_avatar_url: '',
-            author_association: 'MEMBER',
-            body: 'I can reproduce it',
-            created_at: '2026-01-02T00:00:00Z',
-            updated_at: '2026-01-02T00:00:00Z',
-            html_url: '',
-            reactions: { total: 0 },
+            type: 'comment',
+            comment: {
+              id: 99,
+              author: 'reviewer',
+              author_avatar_url: '',
+              author_association: 'MEMBER',
+              body: 'I can reproduce it',
+              created_at: '2026-01-02T00:00:00Z',
+              updated_at: '2026-01-02T00:00:00Z',
+              html_url: '',
+              reactions: { total: 0 },
+            },
           },
         ],
       }),
@@ -234,7 +237,7 @@ describe('IssuesTab remote checks', () => {
     expect(await screen.findByTestId('issue-detail-dialog')).toBeInTheDocument();
     expect(screen.getByTestId('issue-detail-title')).toHaveTextContent('Crash on start');
     expect(await screen.findByTestId('issue-detail-comment-99')).toBeInTheDocument();
-    expect(apiMock.githubIssueComments).toHaveBeenCalledWith('project-1', 7);
+    expect(apiMock.githubIssueTimeline).toHaveBeenCalledWith('project-1', 7);
     // The first dialog open loads MarkdownBody cold, which can pass 5 s when the
     // pre-push runs many test files in parallel.
   }, 15_000);

@@ -17,6 +17,7 @@ import {
   PANEL_CENTER,
   PANEL_LEFT,
   PANEL_TOP,
+  STORAGE_KEY_LEFT_WIDTH,
   bottomPanelId,
   rightPanelId,
 } from './dockview/layout-ids';
@@ -28,6 +29,7 @@ import { useLayoutPropRefs } from './dockview/use-layout-prop-refs';
 import { useLayoutReady } from './dockview/use-layout-ready';
 import { useLayoutRightPaneSync } from './dockview/use-layout-right-pane-sync';
 import { useLeftPaneSync } from './dockview/use-left-pane-sync';
+import { type LeftWidthMode, useLeftWidthMode } from './dockview/use-left-width-mode';
 import { usePanelHosts } from './dockview/use-panel-hosts';
 
 type DockviewLayoutProps = {
@@ -76,6 +78,9 @@ type DockviewLayoutProps = {
   /** Fires when the user clicks the browser panel's native X. */
   onBrowserClose?: () => void;
   initialLeftWidth?: number;
+  /** Where the left width is remembered: each thing the sidebar shows keeps
+   *  its own (`dockview.left_width` when absent). */
+  leftWidthMode?: LeftWidthMode;
   initialRightWidth?: number;
   initialBottomHeight?: number;
   initialBrowserWidth?: number;
@@ -126,6 +131,7 @@ export function DockviewLayout({
   browserTitle = 'Browser',
   onBrowserClose,
   initialLeftWidth = 240,
+  leftWidthMode,
   initialRightWidth = 400,
   initialBottomHeight = 280,
   initialBrowserWidth = 480,
@@ -156,6 +162,11 @@ export function DockviewLayout({
     initialBrowserWidth,
   });
 
+  const leftWidthKeyRef = useLeftWidthMode(
+    apiRef,
+    leftWidthMode ?? { storageKey: STORAGE_KEY_LEFT_WIDTH, defaultWidth: initialLeftWidth },
+  );
+
   const ops = useLayoutPanelOps(refs, right);
   const { addBrowserPanel, removeBrowserPanel } = ops;
 
@@ -169,6 +180,7 @@ export function DockviewLayout({
     browser,
     browserOpen,
     bottomPaneOpen,
+    leftWidthKeyRef,
   });
 
   useLeftPaneSync(apiRef, leftPaneOpen);

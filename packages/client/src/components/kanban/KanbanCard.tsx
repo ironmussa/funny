@@ -146,6 +146,7 @@ function KanbanCardFooter({
           id={thread.id}
           testIdPrefix="kanban-card-git"
           prTestId={`kanban-card-pr-${thread.id}`}
+          projectId={thread.projectId || undefined}
         />
       )}
     </>
@@ -297,13 +298,11 @@ export const KanbanCard = memo(function KanbanCard({
     if (isDragging) return;
     if (onOpen) return onOpen();
     startTransition(() => {
-      setKanbanContext({
-        projectId,
-        search,
-        caseSensitive,
-        threadId: thread.id,
-        viewMode: 'board',
-      });
+      // The board stays open in the left sidebar, so the thread needs no way
+      // back to it: only a search is handed over (to reopen it in the thread).
+      setKanbanContext(
+        search?.trim() ? { projectId, search, caseSensitive, threadId: thread.id } : null,
+      );
       navigate(buildPath(`/projects/${thread.projectId}/threads/${thread.id}`));
     });
   };
@@ -331,6 +330,7 @@ export const KanbanCard = memo(function KanbanCard({
       title={
         <ThreadTitle
           title={title}
+          projectId={thread.projectId || undefined}
           search={search || ''}
           multiline
           containerClassName="flex-1"

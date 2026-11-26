@@ -131,7 +131,10 @@ describe('ThreadPowerline', () => {
 
     const badge = screen.getByTestId('thread-pr-badge-thread-1');
     expect(badge).toHaveTextContent('#51');
-    expect(badge).toHaveAttribute('href', 'https://github.com/org/repo/pull/51');
+    expect(screen.getByTestId('thread-pr-badge-thread-1-external')).toHaveAttribute(
+      'href',
+      'https://github.com/org/repo/pull/51',
+    );
   });
 
   test('local thread keeps its single branch segment', () => {

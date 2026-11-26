@@ -20,6 +20,7 @@ export function GitStatsChip({
   id,
   testIdPrefix,
   prTestId,
+  projectId,
 }: {
   gitStatus: GitStatusInfo;
   /** The thread id, the last part of every test id. */
@@ -27,6 +28,8 @@ export function GitStatsChip({
   /** Builds `<prefix>-stats-<id>`, `<prefix>-dirty-<id>` and `<prefix>-sync-<id>`. */
   testIdPrefix: string;
   prTestId: string;
+  /** The thread's project: its PR chip opens funny's PR view. */
+  projectId?: string;
 }) {
   const { t } = useTranslation();
   const dirty = gitStatus.dirtyFileCount > 0;
@@ -42,6 +45,7 @@ export function GitStatsChip({
           prNumber={gitStatus.prNumber}
           prState={gitStatus.prState ?? 'OPEN'}
           prUrl={gitStatus.prUrl}
+          projectId={projectId}
           variant="plain"
           showExternalIcon={false}
           data-testid={prTestId}

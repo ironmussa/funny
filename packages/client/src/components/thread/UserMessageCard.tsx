@@ -40,6 +40,7 @@ import { EFFORT_LEVELS } from '@/lib/providers';
 import { parseGitHubPullRequestReference, parseLinearIssueReference } from '@/lib/thread-title';
 import { resolveModelLabel, timeAgo } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
+import { useOptionalThreadProjectId } from '@/stores/thread-context';
 
 const COLLAPSED_MAX_H = 48; // px – roughly 8 lines of text
 
@@ -124,7 +125,11 @@ function UserMessageCommandLineChip({ command }: { command: string }) {
  * !command lines, replacing them with inline chips.
  * Returns an array of ReactNode (strings and chip elements).
  */
-function renderInlineContent(text: string, fileMap: Map<string, ReferencedItem>): ReactNode[] {
+function renderInlineContent(
+  text: string,
+  fileMap: Map<string, ReferencedItem>,
+  projectId: string | undefined,
+): ReactNode[] {
   // Build combined regex: leading command lines + slash commands + @path mentions
   const regexParts: string[] = [];
 
@@ -210,6 +215,7 @@ function renderInlineContent(text: string, fileMap: Map<string, ReferencedItem>)
             key={`github-pr-${match.index}`}
             prNumber={githubPullRequest.prNumber}
             prUrl={githubPullRequest.url}
+            projectId={projectId}
             size="xs"
             variant="inverse"
             data-testid="user-message-github-pr"
@@ -258,7 +264,11 @@ function UserMessageContent({
   const preRef = useRef<HTMLPreElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const inlineNodes = useMemo(() => renderInlineContent(content, fileMap), [content, fileMap]);
+  const projectId = useOptionalThreadProjectId();
+  const inlineNodes = useMemo(
+    () => renderInlineContent(content, fileMap, projectId),
+    [content, fileMap, projectId],
+  );
 
   const checkScrollEnd = useCallback(() => {
     const el = preRef.current;

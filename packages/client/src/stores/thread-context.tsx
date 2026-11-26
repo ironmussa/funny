@@ -102,6 +102,15 @@ export function useThreadProjectId() {
   return useThreadStore((s) => resolveThread(s, ctx, row)?.projectId);
 }
 
+/**
+ * The project of the enclosing thread, or undefined outside a `<ThreadProvider>`
+ * (a message card rendered on its own) and for a scratch thread.
+ */
+export function useOptionalThreadProjectId(): string | undefined {
+  const ctx = useContext(ThreadContext);
+  return useThreadById(ctx?.threadId ?? undefined)?.projectId || undefined;
+}
+
 export function useThreadWorktreePath() {
   const { ctx, row } = useThreadSource();
   return useThreadStore((s) => resolveThread(s, ctx, row)?.worktreePath);

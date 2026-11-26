@@ -1,10 +1,12 @@
+import type { Job } from '@funny/shared';
 import { AlarmClock, SquareTerminal, type LucideIcon } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useThreadJobsById, useThreadWatchersById } from '@/data/background/hooks';
 import { cn } from '@/lib/utils';
 import {
+  formatClock,
   formatCountdown,
   selectActiveWatchersForThread,
   selectRunningJobsForThread,
@@ -49,7 +51,7 @@ export function ThreadWatcherIndicator({
           icon={SquareTerminal}
           className="text-status-info"
           testId={`thread-job-indicator-${threadId}`}
-          tooltip={`${jobs.length} background job${jobs.length === 1 ? '' : 's'} running`}
+          tooltip={<JobsTooltip jobs={jobs} />}
         />
       )}
       {watchers.length > 0 && (
@@ -60,6 +62,32 @@ export function ThreadWatcherIndicator({
         />
       )}
     </span>
+  );
+}
+
+/** What each running job is: its label (or command), the command, pid and start time. */
+function JobsTooltip({ jobs }: { jobs: Job[] }) {
+  return (
+    <div className="flex max-w-sm flex-col gap-1.5">
+      <span className="font-medium">
+        {jobs.length} background job{jobs.length === 1 ? '' : 's'} running
+      </span>
+      {jobs.map((job) => (
+        <div
+          key={job.id}
+          className="flex flex-col gap-0.5"
+          data-testid={`thread-job-tooltip-${job.id}`}
+        >
+          {job.label && <span className="truncate">{job.label}</span>}
+          <code className="text-2xs line-clamp-2 font-mono break-all opacity-80">
+            {job.command}
+          </code>
+          <span className="text-2xs opacity-70">
+            {job.pid !== null && `pid ${job.pid} · `}started {formatClock(job.startedAt)}
+          </span>
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -101,7 +129,7 @@ function IndicatorIcon({
   icon: LucideIcon;
   className: string;
   testId: string;
-  tooltip: string;
+  tooltip: ReactNode;
 }) {
   return (
     <Tooltip>

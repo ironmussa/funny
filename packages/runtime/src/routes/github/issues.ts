@@ -1,17 +1,12 @@
 import { listBranches } from '@funny/core/git';
-import type { PRIssueComment } from '@funny/shared';
+import type { EnrichedGitHubIssue, GitHubIssue } from '@funny/shared';
 import { Hono } from 'hono';
 
 import { log } from '../../lib/logger.js';
 import type { HonoEnv } from '../../types/hono-env.js';
-import {
-  fetchIssueComments,
-  fetchRepoIssues,
-  githubRepoFor,
-  mapIssueComment,
-  resolveGithubToken,
-} from './helpers.js';
+import { fetchIssue, fetchRepoIssues, githubRepoFor, resolveGithubToken } from './helpers.js';
 import { linkIssues, type LinkablePR } from './issue-links.js';
+import { fetchIssueTimeline } from './issue-timeline.js';
 import { fetchIssuesWithLinks } from './issues-graphql.js';
 import { type GithubListContext, readGithubListContext } from './list-context.js';
 import { positiveIntParam } from './query.js';
@@ -106,9 +101,9 @@ issueRoutes.get('/issues-enriched', async (c) => {
   }
 });
 
-// ── GET /issue-comments — comments of one issue, oldest first ──────
+// ── GET /issue-timeline — comments and events of one issue, oldest first ──────
 
-issueRoutes.get('/issue-comments', async (c) => {
+issueRoutes.get('/issue-timeline', async (c) => {
   const projectId = c.req.query('projectId');
   const issueNumber = positiveIntParam(c, 'issueNumber');
   if (!projectId || !issueNumber) {
@@ -119,10 +114,56 @@ issueRoutes.get('/issue-comments', async (c) => {
   if (repo instanceof Response) return repo;
 
   try {
-    const res = await fetchIssueComments(repo, issueNumber);
+    const items = await fetchIssueTimeline(repo, issueNumber);
+    if (!items) return c.json({ error: 'Issue not found' }, 404);
+    return c.json({ items });
+  } catch (error: any) {
+    log.warn('failed to load issue timeline', {
+      namespace: 'github-issues',
+      repo: `${repo.owner}/${repo.repo}`,
+      issueNumber,
+      error: error?.message,
+    });
+    return c.json({ error: error.message }, 502);
+  }
+});
+
+// ── GET /issue — one issue, for funny's issue view ──────
+
+issueRoutes.get('/issue', async (c) => {
+  const projectId = c.req.query('projectId');
+  const issueNumber = positiveIntParam(c, 'issueNumber');
+  if (!projectId || !issueNumber) {
+    return c.json({ error: 'projectId and issueNumber are required' }, 400);
+  }
+
+  const repo = await githubRepoFor(c, projectId);
+  if (repo instanceof Response) return repo;
+
+  try {
+    const res = await fetchIssue(repo, issueNumber);
+    if (res.status === 404) return c.json({ error: 'Issue not found' }, 404);
     if (!res.ok) return c.json({ error: `GitHub API error: ${res.status}` }, 502);
-    const comments: PRIssueComment[] = (await res.json()).map(mapIssueComment);
-    return c.json({ comments });
+    // SAFETY: the shape of GitHub's REST issue response.
+    const raw = (await res.json()) as GitHubIssue;
+    // The issues endpoint answers pull requests too; those open in the PR view.
+    if (raw.pull_request) return c.json({ error: 'Not an issue' }, 404);
+    const issue: EnrichedGitHubIssue = {
+      number: raw.number,
+      title: raw.title,
+      state: raw.state,
+      body: raw.body,
+      created_at: raw.created_at,
+      updated_at: raw.updated_at,
+      html_url: raw.html_url,
+      user: raw.user ? { login: raw.user.login, avatar_url: raw.user.avatar_url } : null,
+      labels: (raw.labels ?? []).map((label) => ({ name: label.name, color: label.color })),
+      comments: raw.comments ?? 0,
+      linkedBranch: null,
+      linkedPR: null,
+      suggestedBranchName: suggestBranchName(raw.number, raw.title),
+    };
+    return c.json({ issue });
   } catch (error: any) {
     return c.json({ error: error.message }, 502);
   }

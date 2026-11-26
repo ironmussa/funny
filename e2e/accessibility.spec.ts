@@ -15,9 +15,10 @@ test.describe('A. Accessibility', () => {
   test('A.1 Sidebar navigation icons have accessible labels', async ({ authedPage: page }) => {
     const icons = [
       'sidebar-search',
-      'sidebar-kanban',
-      'sidebar-grid',
-      'sidebar-analytics',
+      'tool-rail-kanban',
+      'tool-rail-threads',
+      'tool-rail-grid',
+      'tool-rail-analytics',
       'sidebar-collapse',
       'sidebar-add-project',
       'sidebar-settings',

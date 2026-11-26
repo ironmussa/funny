@@ -104,6 +104,7 @@ import { FactoryBoard } from '@/components/factory-board/FactoryBoard';
 import { factoryRunDependencies } from '@/components/factory-board/run-dependencies';
 import { FactoryQueueView } from '@/components/FactoryQueueView';
 import { useFactoryViewStore } from '@/stores/factory-view-store';
+import { useGitHubItemViewerStore } from '@/stores/github-item-viewer-store';
 
 const recent = () => new Date(Date.now() - 3600_000).toISOString();
 const implementStep = (threadId: string) => ({
@@ -263,7 +264,11 @@ describe('FactoryBoard', () => {
     ]);
     const open = screen.getByTestId('factory-board-pr-r1');
     expect(open.textContent).toBe('#443');
-    expect(open.getAttribute('href')).toBe('https://github.com/o/r/pull/443');
+    // The chip opens funny's PR view; the icon beside it goes to GitHub.
+    expect(open.getAttribute('href')).toBeNull();
+    expect(screen.getByTestId('factory-board-pr-r1-external').getAttribute('href')).toBe(
+      'https://github.com/o/r/pull/443',
+    );
     expect(screen.getByTestId('factory-board-pr-r1-icon-OPEN')).toBeTruthy();
     expect(screen.getByTestId('factory-board-pr-r2-icon-MERGED')).toBeTruthy();
   });
@@ -291,9 +296,22 @@ describe('FactoryBoard', () => {
     const mergedFooter = within(mergedCard).getByTestId('factory-board-card-r1-footer');
     const linkedIssue = within(mergedFooter).getByTestId('factory-board-issue-r1');
     expect(linkedIssue.textContent).toBe('#556');
-    expect(linkedIssue.getAttribute('href')).toBe('https://github.com/o/r/issues/556');
+    // The ticket color sets the issue apart from the PR; the icon says a merged run closed it.
+    expect(linkedIssue).toHaveClass('text-status-info');
+    expect(within(mergedFooter).getByTestId('factory-board-issue-r1-icon-closed')).toBeTruthy();
+    const openIssue = screen.getByTestId('factory-board-issue-r2');
+    expect(openIssue).toHaveClass('text-status-info');
+    expect(screen.getByTestId('factory-board-issue-r2-icon-open')).toBeTruthy();
+    expect(
+      within(mergedFooter).getByTestId('factory-board-issue-r1-external').getAttribute('href'),
+    ).toBe('https://github.com/o/r/issues/556');
     fireEvent.click(linkedIssue);
     expect(mocks.navigate).not.toHaveBeenCalled();
+    expect(useGitHubItemViewerStore.getState().target).toMatchObject({
+      kind: 'issue',
+      number: 556,
+    });
+    useGitHubItemViewerStore.getState().close();
 
     const queuedCard = screen.getByTestId('factory-board-card-r2');
     expect(within(queuedCard).getByTestId('factory-board-open-r2').textContent).toBe(
@@ -403,7 +421,9 @@ describe('FactoryBoard', () => {
     expect(within(footer).getByTestId('kanban-card-pr-t-impl').textContent).toBe('#443');
     const issue = within(footer).getByTestId('factory-board-issue-r1');
     expect(issue.textContent).toBe(`#${run.issueNumber}`);
-    expect(issue.getAttribute('href')).toBe(`https://github.com/o/r/issues/${run.issueNumber}`);
+    expect(within(footer).getByTestId('factory-board-issue-r1-external').getAttribute('href')).toBe(
+      `https://github.com/o/r/issues/${run.issueNumber}`,
+    );
     expect(screen.queryByTestId('factory-board-pr-r1')).toBeNull();
     expect(within(card).getByTestId('kanban-card-more-t-impl')).toBeTruthy();
     expect(card.getAttribute('draggable')).toBe('false');

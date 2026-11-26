@@ -25,7 +25,7 @@ test.describe('17. Grid / Live Columns View', () => {
     await page.goto('/');
     await waitForSidebar(page);
 
-    await page.getByTestId('sidebar-grid').click();
+    await page.getByTestId('tool-rail-grid').click();
     await page.waitForLoadState('networkidle');
 
     expect(page.url()).toContain('/grid');

@@ -3,9 +3,12 @@ import { eq } from '@tanstack/db';
 import { useLiveQuery } from '@tanstack/react-db';
 import { useMemo } from 'react';
 
+import { remoteUrlToBrowseUrl } from '@/lib/git-remote-url';
+
 import { useDataLayer, useDataQuery } from '../hooks';
 import { liveQueryKey } from '../live-query-key';
 import { projectBranchesQuery } from './branches';
+import { projectRemoteUrlQuery } from './remote';
 import { projectRoleQuery, roleAllows } from './role';
 import { compareProjects, getProjectsData } from './store';
 
@@ -48,6 +51,20 @@ export function useProjectById(projectId: string | null | undefined): Project | 
 export function useProjectCurrentBranch(projectId: string | null | undefined): string | undefined {
   const { data } = useDataQuery({ ...projectBranchesQuery(projectId ?? ''), enabled: false });
   return projectId ? (data?.currentBranch ?? undefined) : undefined;
+}
+
+/**
+ * The project's repository on GitHub (`https://github.com/owner/repo`), from
+ * its origin remote; `undefined` while it loads, without a remote, or for a
+ * remote that is not on GitHub.
+ */
+export function useProjectGitHubRepoUrl(projectId: string | null | undefined): string | undefined {
+  const { data } = useDataQuery({
+    ...projectRemoteUrlQuery(projectId ?? ''),
+    enabled: !!projectId,
+  });
+  const browseUrl = data ? remoteUrlToBrowseUrl(data) : null;
+  return browseUrl && /^https:\/\/(www\.)?github\.com\//i.test(browseUrl) ? browseUrl : undefined;
 }
 
 /**

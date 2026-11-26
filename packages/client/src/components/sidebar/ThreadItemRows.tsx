@@ -120,6 +120,7 @@ export function ThreadItemTitleRow({
     <div className="flex min-w-0 items-center gap-1.5">
       <ThreadTitle
         title={thread.title}
+        projectId={thread.projectId || undefined}
         search={search}
         density="compact"
         className="text-thread-title text-sm leading-tight"
@@ -135,6 +136,7 @@ export function ThreadItemTitleRow({
           id={thread.id}
           testIdPrefix="thread-git"
           prTestId={`thread-pr-badge-${thread.id}`}
+          projectId={thread.projectId || undefined}
         />
       )}
       {/* External creator icon */}

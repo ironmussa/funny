@@ -37,6 +37,7 @@ import {
   type GraphBranchSummary,
   type GraphNodeParentLabel,
   pinThreadBranchFirst,
+  isStashRef,
   threadBaseBranchesAt,
 } from '@/lib/graph-refs';
 import { cn } from '@/lib/utils';
@@ -55,6 +56,8 @@ export interface GraphCommitRowProps {
   githubBrowseBaseUrl: string | null;
   effectiveThreadId: string | undefined;
   projectModeId: string | null;
+  /** The graph's project: its PR chips open funny's PR view. */
+  prProjectId?: string;
   onAfterAction: () => void;
   /** Opens the new-thread composer on a branch; null when there is no project. */
   onCreateThreadFromBranch: ((branch: string) => void) | null;
@@ -127,6 +130,16 @@ function useRowAvatars(
 }
 
 /**
+ * True when an event on the row started in the row's own DOM. React bubbles
+ * events from portals (the actions menu, its confirm dialogs) up the component
+ * tree, so without this a click on "Discard stash" or "Reset" in a dialog also
+ * selected the row and opened the commit details.
+ */
+export function isFromInsideRow(e: { currentTarget: Element; target: EventTarget }): boolean {
+  return e.target instanceof Node && e.currentTarget.contains(e.target);
+}
+
+/**
  * The refs on one commit row, folded and ordered for its chips, plus what its
  * actions menu offers: PR links, pushable branches, merge targets, thread bases.
  */
@@ -159,21 +172,34 @@ function useCommitRowRefs(
   const pushableBranches = useMemo(
     () =>
       foldedRefs.flatMap((ref) =>
-        ref.kind === 'local' && !ref.syncedRemote && ref.name !== 'HEAD' ? [ref.name] : [],
+        ref.kind === 'local' && !ref.syncedRemote && ref.name !== 'HEAD' && !isStashRef(ref.name)
+          ? [ref.name]
+          : [],
       ),
     [foldedRefs],
   );
   const targetBranches = useMemo(
     () =>
       foldedRefs.flatMap((ref) =>
-        ref.kind === 'local' && ref.name !== 'HEAD' && !branchSummaryByName.get(ref.name)?.isCurrent
+        ref.kind === 'local' &&
+        ref.name !== 'HEAD' &&
+        !isStashRef(ref.name) &&
+        !branchSummaryByName.get(ref.name)?.isCurrent
           ? [ref.name]
           : [],
       ),
     [branchSummaryByName, foldedRefs],
   );
   const threadBranches = useMemo(() => threadBaseBranchesAt(foldedRefs), [foldedRefs]);
-  return { foldedRefs, pullRequestLinks, pushableBranches, targetBranches, threadBranches };
+  const isStashTip = useMemo(() => foldedRefs.some((ref) => isStashRef(ref.name)), [foldedRefs]);
+  return {
+    foldedRefs,
+    pullRequestLinks,
+    pushableBranches,
+    targetBranches,
+    threadBranches,
+    isStashTip,
+  };
 }
 
 /**
@@ -252,6 +278,7 @@ export function GraphCommitRow({
     githubBrowseBaseUrl,
     effectiveThreadId,
     projectModeId,
+    prProjectId,
     onAfterAction,
     onCreateThreadFromBranch,
     branchSummaryByName,
@@ -300,8 +327,14 @@ export function GraphCommitRow({
   // `Monitor` (lives only on this machine), a lone remote-tracking branch shows
   // `Cloud`, a tag shows `Tag`.
   const lanePastel = graphLanePastel(graphRow?.nodeColor ?? 0);
-  const { foldedRefs, pullRequestLinks, pushableBranches, targetBranches, threadBranches } =
-    useCommitRowRefs(entry, threadBranch, branchSummaryByName);
+  const {
+    foldedRefs,
+    pullRequestLinks,
+    pushableBranches,
+    targetBranches,
+    threadBranches,
+    isStashTip,
+  } = useCommitRowRefs(entry, threadBranch, branchSummaryByName);
 
   const githubUrl = githubCommitUrlForRemoteCommit(githubBrowseBaseUrl, entry.hash, unpushed);
   const commitTime = useMemo(
@@ -335,8 +368,12 @@ export function GraphCommitRow({
       <div
         role="button"
         tabIndex={0}
-        onClick={onSelect}
-        onKeyDown={(e) => activateOnEnterOrSpace(e, onSelect)}
+        onClick={(e) => {
+          if (isFromInsideRow(e)) onSelect();
+        }}
+        onKeyDown={(e) => {
+          if (isFromInsideRow(e)) activateOnEnterOrSpace(e, onSelect);
+        }}
         className={cn(
           'group relative flex h-full w-full cursor-pointer items-center gap-2 overflow-hidden pl-3 pr-2 text-left transition-colors',
           selected ? 'bg-sidebar-accent text-sidebar-accent-foreground' : 'hover:bg-accent/50',
@@ -387,6 +424,7 @@ export function GraphCommitRow({
             <GraphCommitRefsLine
               foldedRefs={foldedRefs}
               pullRequestLinks={pullRequestLinks}
+              prProjectId={prProjectId}
               branchSummaryByName={branchSummaryByName}
               githubBrowseBaseUrl={githubBrowseBaseUrl}
               branchActionInProgress={branchActionInProgress}
@@ -439,6 +477,7 @@ export function GraphCommitRow({
               localBranches={pushableBranches}
               targetBranches={targetBranches}
               threadBranches={threadBranches}
+              isStashTip={isStashTip}
               onCreateThreadFromBranch={onCreateThreadFromBranch ?? undefined}
               rebaseEvents={rebaseEvents}
               onSelectRebaseEvent={onSelectRebaseEvent}
@@ -570,6 +609,8 @@ interface GraphCommitRefsLineProps extends Pick<
 > {
   foldedRefs: CommitRowRefs['foldedRefs'];
   pullRequestLinks: CommitRowRefs['pullRequestLinks'];
+  /** The graph's project: its PR chips open funny's PR view. */
+  prProjectId?: string;
   /** Height of one chip line. */
   color: string;
 }
@@ -578,6 +619,7 @@ interface GraphCommitRefsLineProps extends Pick<
 function GraphCommitRefsLine({
   foldedRefs,
   pullRequestLinks,
+  prProjectId,
   branchSummaryByName,
   githubBrowseBaseUrl,
   branchActionInProgress,
@@ -621,6 +663,7 @@ function GraphCommitRefsLine({
           prNumber={pr.number}
           prState={pr.state}
           prUrl={pr.url}
+          projectId={prProjectId}
           // The same plain chip as the sidebar's thread rows (`ThreadItemTitleRow`).
           variant="plain"
           showExternalIcon={false}

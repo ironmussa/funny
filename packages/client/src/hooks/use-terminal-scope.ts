@@ -48,11 +48,12 @@ export function resolveTerminalScope({
   activeThread: TerminalThread | null;
 }): TerminalScope {
   // Live columns have no thread route of their own. Their explicit selection
-  // is therefore the terminal context, and an empty selection must not leak
-  // the last project/thread visited in the regular single-thread view.
+  // is therefore the terminal context. With no column selected the grid is
+  // like the thread view with no thread open: the selected project's
+  // terminal, never the last thread visited in the single-thread view.
   if (liveColumnsOpen) {
     if (!gridThread) {
-      return { scopeId: null, scratchThreadId: null, worktreePath: null };
+      return { scopeId: selectedProjectId, scratchThreadId: null, worktreePath: null };
     }
     if (isScratch(gridThread)) {
       return {

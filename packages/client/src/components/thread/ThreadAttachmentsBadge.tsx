@@ -100,6 +100,8 @@ interface ThreadTitleProps {
   badgeTestId?: string;
   /** Stop click propagation on the badge */
   stopBadgePropagation?: boolean;
+  /** The thread's project: a PR referenced in the title opens funny's PR view. */
+  projectId?: string;
 }
 
 function ThreadTitlePartRenderer({
@@ -109,6 +111,7 @@ function ThreadTitlePartRenderer({
   titleClass,
   capitalizeFirstLetter,
   tokenSize,
+  projectId,
 }: {
   part: ThreadTitlePart;
   partIndex: number;
@@ -116,6 +119,7 @@ function ThreadTitlePartRenderer({
   titleClass: string;
   capitalizeFirstLetter: boolean;
   tokenSize: (typeof TOKEN_DENSITY)[ThreadTitleDensity];
+  projectId?: string;
 }) {
   if (part.kind === 'linearIssue') {
     return (
@@ -133,6 +137,7 @@ function ThreadTitlePartRenderer({
       <PRBadge
         prNumber={part.reference.prNumber}
         prUrl={part.reference.url}
+        projectId={projectId}
         size={tokenSize.referenceSize}
         data-testid="thread-title-github-pr"
       />
@@ -171,6 +176,7 @@ export function ThreadTitle({
   density = 'default',
   badgeTestId,
   stopBadgePropagation,
+  projectId,
 }: ThreadTitleProps) {
   const { attachedFiles, leadingCommand, titleParts, visibleText } = useMemo(
     () => parseThreadTitleForDisplay(title),
@@ -225,6 +231,7 @@ export function ThreadTitle({
                 titleClass={titleClass}
                 capitalizeFirstLetter={shouldCapitalizeTitle && index === firstTextPartIndex}
                 tokenSize={tokenSize}
+                projectId={projectId}
               />
             ))}
           </span>

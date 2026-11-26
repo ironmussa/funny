@@ -36,6 +36,7 @@ function InboxItemHeading({
         <ThreadTitle
           as="span"
           title={thread.title}
+          projectId={thread.projectId || undefined}
           className="text-xs"
           containerClassName="inline-flex max-w-full align-bottom"
         />

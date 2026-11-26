@@ -9,6 +9,7 @@ import {
   graphNodeParentLabels,
   graphNodeParentRefLabels,
   graphNodeRefLabel,
+  isStashRef,
   summarizeGraphBranches,
   threadBaseBranchesAt,
 } from '@/lib/graph-refs';
@@ -371,6 +372,16 @@ describe('graphNodeParentRefLabels', () => {
 });
 
 describe('summarizeGraphBranches', () => {
+  it('does not summarize the stash ref as an unpublished branch', () => {
+    expect(isStashRef('refs/stash')).toBe(true);
+    expect(isStashRef('stash')).toBe(false);
+    expect(
+      summarizeGraphBranches([
+        { hash: 'stash', parentHashes: ['tip'], refs: [local('refs/stash')], headBranch: null },
+      ]),
+    ).toEqual([]);
+  });
+
   it('marks a local and remote branch on the same tip as synced', () => {
     expect(
       summarizeGraphBranches([
@@ -587,6 +598,11 @@ describe('threadBaseBranchesAt', () => {
       'main',
     );
     expect(threadBaseBranchesAt(refs)).toEqual(['main', 'feat/x']);
+  });
+
+  it('never offers the stash ref as a thread base', () => {
+    const refs = foldGraphRefs([local('refs/stash'), local('main')], 'main');
+    expect(threadBaseBranchesAt(refs)).toEqual(['main']);
   });
 
   it('de-duplicates a branch present on two remotes', () => {

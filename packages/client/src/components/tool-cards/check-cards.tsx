@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils';
 import { useCheckRun } from '@/stores/check-runs-store';
 import { useThreadId } from '@/stores/thread-context';
 
+import { HighlightedCode } from './HighlightedCode';
 import { parseMcpResult } from './mcp-tool';
 
 function isString(value: unknown): value is string {
@@ -91,13 +92,17 @@ function CheckRunDetails({
 
   if (shown) {
     return (
-      <div
-        className="text-muted-foreground px-3 pb-1.5 font-mono text-xs break-all"
-        title={cwd ? t('checks.cwd', { cwd }) : undefined}
-        data-testid="check-run-command"
-      >
-        <span className="text-muted-foreground/60 select-none">$ </span>
-        {shown}
+      <div className="px-3 pb-2">
+        <div
+          className="border-border/40 bg-background/80 flex overflow-x-auto rounded border px-2.5 py-1.5 font-mono text-xs leading-relaxed"
+          title={cwd ? t('checks.cwd', { cwd }) : undefined}
+          data-testid="check-run-command"
+        >
+          <span className="text-muted-foreground/60 shrink-0 whitespace-pre select-none">
+            {'$ '}
+          </span>
+          <HighlightedCode code={shown} language="bash" className="min-w-0 flex-1" />
+        </div>
       </div>
     );
   }

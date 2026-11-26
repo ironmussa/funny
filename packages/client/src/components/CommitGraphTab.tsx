@@ -201,6 +201,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
     githubBrowseBaseUrl,
     effectiveThreadId,
     projectModeId,
+    prProjectId: remoteProjectId || undefined,
     onAfterAction: refreshLog,
     onCreateThreadFromBranch: createThreadFromBranch,
     branchSummaryByName,

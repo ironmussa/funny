@@ -4,7 +4,7 @@
 
 ### Sidebar
 
-`sidebar-search`, `sidebar-kanban`, `sidebar-grid`, `sidebar-analytics`, `sidebar-collapse`, `sidebar-add-project`, `sidebar-no-projects-cta`, `sidebar-logout`, `sidebar-settings`, `archive-thread-cancel`, `archive-thread-confirm`, `delete-thread-cancel`, `delete-thread-confirm`, `rename-project-input`, `rename-project-cancel`, `rename-project-confirm`, `delete-project-cancel`, `delete-project-confirm`
+`sidebar-search`, `sidebar-kanban`, `tool-rail-grid`, `tool-rail-analytics`, `sidebar-collapse`, `sidebar-add-project`, `sidebar-no-projects-cta`, `sidebar-logout`, `sidebar-settings`, `archive-thread-cancel`, `archive-thread-confirm`, `delete-thread-cancel`, `delete-thread-confirm`, `rename-project-input`, `rename-project-cancel`, `rename-project-confirm`, `delete-project-cancel`, `delete-project-confirm`
 
 ### Project Item
 
@@ -94,13 +94,13 @@
 
 ## 2. Sidebar — `sidebar.spec.ts`
 
-- [x] 2.1 Sidebar renders with navigation icons — `sidebar-search`, `sidebar-kanban`, `sidebar-grid`, `sidebar-analytics` visibles
+- [x] 2.1 Sidebar renders with navigation icons — `sidebar-search`, `sidebar-kanban`, `tool-rail-grid`, `tool-rail-analytics` visibles
 - [x] 2.2 Sidebar collapse/expand — Click `sidebar-collapse` colapsa; click en PanelLeft re-expande
 - [ ] 2.3 Sidebar width persistence — Redimensionar guarda ancho en localStorage (`sidebar_width`)
 - [x] 2.4 Navigate to /list — Click `sidebar-search` navega a `/list`
 - [x] 2.5 Navigate to /kanban — Click `sidebar-kanban` navega a `/kanban`
-- [x] 2.6 Navigate to /grid — Click `sidebar-grid` navega a `/grid`
-- [x] 2.7 Navigate to /analytics — Click `sidebar-analytics` navega a `/analytics`
+- [x] 2.6 Navigate to /grid — Click `tool-rail-grid` navega a `/grid`
+- [x] 2.7 Navigate to /analytics — Click `tool-rail-analytics` navega a `/analytics`
 - [x] 2.8 Add project navigates to /new — Click `sidebar-add-project` navega a `/new`
 - [x] 2.9 Project accordion expand/collapse — Click `project-item-{id}` expande/colapsa threads
 - [x] 2.10 Project context menu - rename — `project-menu-rename` + `rename-project-input` + confirm/cancel
@@ -341,13 +341,13 @@
 - [x] 16.8 Group by selector changes timeline — `analytics-group-by-week` envia groupBy=week
 - [x] 16.9 Project filter sends correct projectId — Filtro proyecto en request
 - [x] 16.10 No data message when overview is empty — `analytics-no-data` visible
-- [x] 16.11 Navigate to analytics via sidebar — `sidebar-analytics` navega a /analytics
+- [x] 16.11 Navigate to analytics via tool rail — `tool-rail-analytics` navega a /analytics
 - [x] 16.12 Loading spinner shows while fetching — `analytics-loading` visible
 
 ## 17. Grid/Live Columns View — `grid-view.spec.ts`
 
 - [x] 17.1 Grid view shows empty state — `grid-empty-state` visible sin threads activos
-- [x] 17.2 Grid view accessible via sidebar — `sidebar-grid` navega a /grid
+- [x] 17.2 Grid view accessible via tool rail — `tool-rail-grid` navega a /grid
 - [x] 17.3 Grid view has add thread button — `grid-add-thread` visible
 - [x] 17.4 Add thread button opens project picker — Popover muestra proyectos
 - [x] 17.5 Grid view shows title — `grid-view` visible con "Grid" text

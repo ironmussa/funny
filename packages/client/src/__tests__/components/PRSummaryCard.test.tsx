@@ -89,7 +89,10 @@ describe('PRSummaryCard', () => {
     );
 
     const number = screen.getByTestId('pr-summary-number');
-    expect(number).toHaveAttribute('href', 'https://github.com/acme/repo/pull/51');
+    expect(screen.getByTestId('pr-summary-number-external')).toHaveAttribute(
+      'href',
+      'https://github.com/acme/repo/pull/51',
+    );
     expect(number).toHaveTextContent('#51');
     expect(screen.getByTestId('pr-summary-title')).toHaveTextContent(
       'fix(core): throttle public auth token endpoints',

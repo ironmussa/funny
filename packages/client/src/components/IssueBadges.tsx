@@ -30,7 +30,14 @@ export function IssueLabelBadges({ issue }: { issue: EnrichedGitHubIssue }) {
 }
 
 /** The branch and pull request linked to the issue. */
-export function IssueLinkBadges({ issue }: { issue: EnrichedGitHubIssue }) {
+export function IssueLinkBadges({
+  issue,
+  projectId,
+}: {
+  issue: EnrichedGitHubIssue;
+  /** The issue's project: the linked PR chip opens funny's PR view. */
+  projectId?: string;
+}) {
   return (
     <>
       {issue.linkedBranch && (
@@ -46,6 +53,7 @@ export function IssueLinkBadges({ issue }: { issue: EnrichedGitHubIssue }) {
           prNumber={issue.linkedPR.number}
           prState={toPRBadgeState(issue.linkedPR.state)}
           prUrl={issue.linkedPR.url}
+          projectId={projectId}
           size="compact"
         />
       )}
@@ -54,11 +62,17 @@ export function IssueLinkBadges({ issue }: { issue: EnrichedGitHubIssue }) {
 }
 
 /** Label, linked-branch, and linked-PR badges shown in an issue's metadata row. */
-export function IssueBadges({ issue }: { issue: EnrichedGitHubIssue }) {
+export function IssueBadges({
+  issue,
+  projectId,
+}: {
+  issue: EnrichedGitHubIssue;
+  projectId?: string;
+}) {
   return (
     <>
       <IssueLabelBadges issue={issue} />
-      <IssueLinkBadges issue={issue} />
+      <IssueLinkBadges issue={issue} projectId={projectId} />
     </>
   );
 }

@@ -1,5 +1,5 @@
 import { draggable } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
-import { Loader2, X, GripVertical } from 'lucide-react';
+import { X, GripVertical } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -7,15 +7,14 @@ import { type MessageStreamHandle } from '@/components/thread/MessageStream';
 import { ProjectHeader } from '@/components/thread/ProjectHeader';
 import { ThreadConversation } from '@/components/thread/ThreadConversation';
 import { ThreadSearchBar } from '@/components/thread/ThreadSearchBar';
+import { ThreadStatusPin } from '@/components/thread/ThreadStatusPin';
 import { LoadingState } from '@/components/ui/loading-state';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { useThreadSearchState } from '@/hooks/use-thread-search';
 import { createClientLogger } from '@/lib/client-logger';
 import { setDashedDragPreview } from '@/lib/drag-preview';
 import { isThreadSearchShortcut } from '@/lib/thread-search-shortcut';
-import { getDisplayThreadStatus, statusConfig } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
-import { useRunnerStatusStore } from '@/stores/runner-status-store';
 import { ThreadProvider } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
@@ -126,11 +125,6 @@ export const ThreadColumn = memo(function ThreadColumn({
     return () => window.removeEventListener('keydown', handler, true);
   }, [threadId, setSearchOpen]);
 
-  const runnerStatus = useRunnerStatusStore((s) => s.status);
-  const status = getDisplayThreadStatus(thread?.status ?? 'idle', runnerStatus);
-  const StatusIcon = statusConfig[status]?.icon ?? Loader2;
-  const statusClass = statusConfig[status]?.className ?? '';
-
   if (loading) {
     return (
       <div className="border-border flex min-h-0 flex-1 rounded-sm border">
@@ -174,7 +168,10 @@ export const ThreadColumn = memo(function ThreadColumn({
             leading={
               <>
                 <GripVertical className="icon-xs text-muted-foreground shrink-0" />
-                <StatusIcon className={cn('icon-sm shrink-0', statusClass)} />
+                {/* `status-glyph-dots`: like a sidebar thread row, a dot theme (Minimal) shows dots here. */}
+                <span className="status-glyph-dots inline-flex shrink-0">
+                  <ThreadStatusPin thread={thread} hoverGroup="row" showStatusTooltip />
+                </span>
               </>
             }
             trailing={

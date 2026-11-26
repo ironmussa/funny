@@ -76,6 +76,7 @@ export function PRSummaryCard({
     >
       <PRCompactIdentity
         pr={compactPr}
+        projectId={projectId}
         fallbackState={detailPrState}
         numberTestId="pr-summary-number"
         titleTestId="pr-summary-title"

@@ -198,6 +198,7 @@ export function ProjectHeaderLeftContent({ leading }: ProjectHeaderLeftContentPr
                       <ThreadTitle
                         as="span"
                         title={activeThreadTitle ?? ''}
+                        projectId={activeThreadProjectId || undefined}
                         density="title"
                         className="text-sm font-medium"
                         containerClassName="max-w-full"

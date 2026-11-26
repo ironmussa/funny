@@ -19,38 +19,35 @@ export function effectiveThreadId(
 }
 
 /**
- * Whether the right pane should render.
+ * Whether the right pane (and the tool rail's panels) can act.
  *
- * Normally it's hidden under any full-screen view. The grid is full-screen too,
- * but it hosts the right pane in a sibling dockview slot, so let it through when
- * the grid is open AND a thread is selected.
- *
- * Outside the grid it also needs something to show: a thread or a selected
- * project (`hasContext`). With neither, every tab would be an empty state.
+ * Hidden under a full-screen view that takes the whole window (settings,
+ * workflows, the inbox…). The thread grid, analytics and the test runner are
+ * not such views: they host the tools like the thread view does. The pane
+ * also needs something to show: a thread or a selected project
+ * (`hasContext`). With neither, every tab would be an empty state.
  */
 export function isRightPaneVisible(
   reviewPaneOpen: boolean,
-  isFullScreenView: boolean,
-  liveColumnsOpen: boolean,
-  gridSelectedThreadId: string | null,
+  hidesTools: boolean,
   hasContext: boolean,
 ): boolean {
-  if (!reviewPaneOpen) return false;
-  if (isFullScreenView) return liveColumnsOpen && !!gridSelectedThreadId;
-  return hasContext;
+  return reviewPaneOpen && !hidesTools && hasContext;
 }
 
 /**
  * The project the right pane (review / files) should scope to.
  *
- * In the grid view this is the grid-selected thread's project (resolved from
- * thread context); otherwise the store's selected project. Like
- * {@link effectiveThreadId}, the grid value has NO effect outside the grid.
+ * In the grid view with a selected thread this is that thread's project
+ * (resolved from thread context; `null` for a scratch thread); otherwise the
+ * store's selected project. Like {@link effectiveThreadId}, the grid
+ * selection has NO effect outside the grid.
  */
 export function rightPaneProjectId(
   liveColumnsOpen: boolean,
+  gridSelectedThreadId: string | null,
   gridThreadProjectId: string | null,
   selectedProjectId: string | null,
 ): string | null {
-  return liveColumnsOpen ? gridThreadProjectId : selectedProjectId;
+  return liveColumnsOpen && gridSelectedThreadId ? gridThreadProjectId : selectedProjectId;
 }

@@ -1,4 +1,14 @@
-import { FlaskConical, Globe, Terminal } from 'lucide-react';
+import {
+  BarChart3,
+  Columns3,
+  Factory,
+  FlaskConical,
+  Globe,
+  LayoutGrid,
+  MessagesSquare,
+  Terminal,
+  type LucideIcon,
+} from 'lucide-react';
 import { memo, startTransition, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -10,14 +20,17 @@ import { useProjects } from '@/data/projects/hooks';
 import { usePanelParam } from '@/hooks/use-panel-param';
 import { usePreviewWindow } from '@/hooks/use-preview-window';
 import { useRightPaneProjectId } from '@/hooks/use-right-pane-target';
+import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import * as variant from '@/lib/thread-variant';
 import { TOOL_PANELS, type ToolPanelContext, type ToolPanelDef } from '@/lib/tool-panels/registry';
+import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
 import { useBrowserPanelStore } from '@/stores/browser-panel-store';
 import { useTerminalStore } from '@/stores/terminal-store';
 import { useThreadId, useThreadSelector, useThreadWorktreePath } from '@/stores/thread-context';
-import { selectRightPanel, useUIStore } from '@/stores/ui-store';
+import { useThreadHistoryStore } from '@/stores/thread-history-store';
+import { selectRightPanel, useUIStore, type LeftPanelMode } from '@/stores/ui-store';
 
 /** What the registry's availability rules need, for the thread the rail acts on. */
 export function useToolPanelContext(): ToolPanelContext {
@@ -82,7 +95,15 @@ function RailButton({
 /** The comment count badge: up to 99, then "99+". */
 const countLabel = (count: number) => (count > 99 ? '99+' : count);
 
-function PanelButton({ panel, active }: { panel: ToolPanelDef; active: boolean }) {
+function PanelButton({
+  panel,
+  active,
+  disabled,
+}: {
+  panel: ToolPanelDef;
+  active: boolean;
+  disabled?: boolean;
+}) {
   const { t } = useTranslation();
   const togglePanel = useUIStore((s) => s.togglePanel);
   const setPanelParam = usePanelParam();
@@ -94,6 +115,7 @@ function PanelButton({ panel, active }: { panel: ToolPanelDef; active: boolean }
       active={active}
       testId={`tool-rail-${panel.id}`}
       ariaLabel={title}
+      disabled={disabled}
       onClick={() =>
         startTransition(() => {
           togglePanel(panel.id);
@@ -121,7 +143,7 @@ function PanelButton({ panel, active }: { panel: ToolPanelDef; active: boolean }
   );
 }
 
-function TestsButton() {
+function TestsButton({ disabled }: { disabled?: boolean }) {
   const { t } = useTranslation();
   const testRunnerOpen = useUIStore((s) => s.testRunnerOpen);
   const setTestRunnerOpen = useUIStore((s) => s.setTestRunnerOpen);
@@ -131,6 +153,7 @@ function TestsButton() {
       active={testRunnerOpen}
       testId="tool-rail-tests"
       ariaLabel={t('tests.title', 'Tests')}
+      disabled={disabled}
       onClick={() =>
         startTransition(() => {
           const opening = !testRunnerOpen;
@@ -145,7 +168,7 @@ function TestsButton() {
   );
 }
 
-function TerminalButton({ projectId }: { projectId: string }) {
+function TerminalButton({ projectId, disabled }: { projectId: string; disabled?: boolean }) {
   const { t } = useTranslation();
   const worktreePath = useThreadWorktreePath();
   const projects = useProjects();
@@ -160,6 +183,7 @@ function TerminalButton({ projectId }: { projectId: string }) {
       active={visible}
       testId="tool-rail-terminal"
       ariaLabel={t('terminal.toggle', 'Toggle Terminal')}
+      disabled={disabled}
       onClick={() => {
         if (hasTabs || visible) {
           toggleTerminalPanel(projectId);
@@ -183,7 +207,7 @@ function TerminalButton({ projectId }: { projectId: string }) {
   );
 }
 
-function BrowserButton() {
+function BrowserButton({ disabled }: { disabled?: boolean }) {
   const { t } = useTranslation();
   const open = useBrowserPanelStore((s) => s.open);
   const togglePanel = useBrowserPanelStore((s) => s.togglePanel);
@@ -192,6 +216,7 @@ function BrowserButton() {
       active={open}
       testId="tool-rail-browser"
       ariaLabel={t('preview.browser')}
+      disabled={disabled}
       onClick={togglePanel}
       label={t('preview.browser')}
     >
@@ -200,20 +225,173 @@ function BrowserButton() {
   );
 }
 
+/** The views the left sidebar can show, in rail order. */
+const LEFT_VIEWS: readonly {
+  mode: LeftPanelMode;
+  icon: LucideIcon;
+  labelKey: string;
+  labelFallback: string;
+}[] = [
+  {
+    mode: 'threads',
+    icon: MessagesSquare,
+    labelKey: 'sidebar.threadsView',
+    labelFallback: 'Threads',
+  },
+  { mode: 'kanban', icon: Columns3, labelKey: 'sidebar.kanbanView', labelFallback: 'Kanban' },
+  { mode: 'factory', icon: Factory, labelKey: 'sidebar.factory', labelFallback: 'Factory queue' },
+];
+
+/**
+ * Where leaving the grid lands: the thread that was open before it (the grid
+ * has no thread in its URL), so the center is not left empty.
+ */
+function pathBehindGrid(): string {
+  const last = useThreadHistoryStore.getState().past.at(-1);
+  if (!last) return '/';
+  return variant.getThreadRoute({
+    id: last.threadId,
+    projectId: last.projectId,
+    isScratch: last.isScratch,
+  });
+}
+
+/**
+ * Shows one view in the left sidebar: the thread list, the kanban board or
+ * the factory queue. Pressing the active board or queue goes back to the
+ * thread list. The thread in the center does not change, except when leaving
+ * the grid, which goes back to the thread that was open before it.
+ */
+function LeftViewButton({
+  view,
+  onShowSidebar,
+}: {
+  view: (typeof LEFT_VIEWS)[number];
+  onShowSidebar?: () => void;
+}) {
+  const { t } = useTranslation();
+  const navigate = useStableNavigate();
+  const gridOpen = useUIStore((s) => s.liveColumnsOpen);
+  // The views are one choice: while the grid is shown, none of these is lit.
+  const active = useUIStore((s) => !s.liveColumnsOpen && s.leftPanelMode === view.mode);
+  const setLeftPanelMode = useUIStore((s) => s.setLeftPanelMode);
+  const label = t(view.labelKey, view.labelFallback);
+  const Icon = view.icon;
+  return (
+    <RailButton
+      active={active}
+      testId={`tool-rail-${view.mode}`}
+      ariaLabel={label}
+      onClick={() => {
+        const closing = active && view.mode !== 'threads';
+        setLeftPanelMode(closing ? 'threads' : view.mode);
+        if (gridOpen) {
+          // Flag and URL in one click, as when the grid opens (see PageButton).
+          useUIStore.getState().setLiveColumnsOpen(false);
+          navigate(buildPath(pathBehindGrid()));
+        }
+        if (!closing) onShowSidebar?.();
+      }}
+      label={label}
+    >
+      <Icon className="icon-base" />
+    </RailButton>
+  );
+}
+
+interface RailPage {
+  id: 'grid' | 'analytics';
+  path: string;
+  icon: LucideIcon;
+  labelKey: string;
+  labelFallback: string;
+}
+
+/** The thread grid: a view, so it sits with the sidebar views. */
+const GRID_PAGE: RailPage = {
+  id: 'grid',
+  path: '/grid',
+  icon: LayoutGrid,
+  labelKey: 'sidebar.grid',
+  labelFallback: 'Grid',
+};
+
+const ANALYTICS_PAGE: RailPage = {
+  id: 'analytics',
+  path: '/analytics',
+  icon: BarChart3,
+  labelKey: 'sidebar.analytics',
+  labelFallback: 'Analytics',
+};
+
+/**
+ * Opens a page (the thread grid, analytics) through its URL. Pressing
+ * analytics again while it is open goes back home; the grid is a view like the
+ * thread list, so pressing it while it is shown does nothing.
+ *
+ * The grid's open flag is set in the same click as the URL: the route sync
+ * would only set it after a render in which the URL (`/grid`, no thread) and
+ * the flag (closed) disagree, and in that render the app follows no thread, so
+ * the rail's thread tools vanish and come back.
+ */
+function PageButton({ page }: { page: RailPage }) {
+  const { t } = useTranslation();
+  const navigate = useStableNavigate();
+  const active = useUIStore((s) => (page.id === 'grid' ? s.liveColumnsOpen : s.analyticsOpen));
+  const setLeftPanelMode = useUIStore((s) => s.setLeftPanelMode);
+  const setLiveColumnsOpen = useUIStore((s) => s.setLiveColumnsOpen);
+  const label = t(page.labelKey, page.labelFallback);
+  const Icon = page.icon;
+  return (
+    <RailButton
+      active={active}
+      testId={`tool-rail-${page.id}`}
+      ariaLabel={label}
+      onClick={() => {
+        if (page.id === 'grid') {
+          if (active) return;
+          // The grid is its own view, with the thread list beside it.
+          setLeftPanelMode('threads');
+          setLiveColumnsOpen(true);
+        }
+        navigate(buildPath(active ? '/' : page.path));
+      }}
+      label={label}
+    >
+      <Icon className="icon-base" />
+    </RailButton>
+  );
+}
+
 /**
  * The tool rail (openspec `tool-panels`): a column of icons at the right edge
  * of the window. The panel icons come from the registry and open, switch or
- * close the right panel; below them, the test runner, terminal and browser.
+ * close the right panel; below them, the test runner, terminal and browser;
+ * then the views (thread list, kanban board and factory queue in the left
+ * sidebar, and the full-screen thread grid); last, analytics.
  * Rendered inside a `ThreadProvider` for the thread the right pane acts on.
  */
-export const ToolRail = memo(function ToolRail({ className }: { className?: string }) {
+export const ToolRail = memo(function ToolRail({
+  className,
+  viewsOnly = false,
+  onShowSidebar,
+}: {
+  className?: string;
+  /** Expands the left sidebar when one of its views is chosen. */
+  onShowSidebar?: () => void;
+  /** Nothing to act on (no thread and no selected project): only the view
+   *  toggles work. */
+  viewsOnly?: boolean;
+}) {
   const ctx = useToolPanelContext();
   const threadStatus = useThreadSelector((thread) => thread?.status);
   const rightPanel = useUIStore(selectRightPanel);
   const threadId = useThreadId();
-  const panels = TOOL_PANELS.filter((panel) => panel.isAvailable(ctx));
-  const showProjectTools = !ctx.scratch && !!ctx.projectId;
-  if (threadStatus === 'setting_up') return null;
+  // The rail keeps one shape: every icon is always there, and one that does
+  // not apply (a scratch thread's review, a thread still setting up) is
+  // disabled. Adding and removing icons made the rail jump on every switch.
+  const noTools = viewsOnly || threadStatus === 'setting_up';
+  const noProjectTools = noTools || ctx.scratch || !ctx.projectId;
 
   return (
     <nav
@@ -224,13 +402,28 @@ export const ToolRail = memo(function ToolRail({ className }: { className?: stri
         className,
       )}
     >
-      {panels.map((panel) => (
-        <PanelButton key={panel.id} panel={panel} active={rightPanel === panel.id} />
+      {TOOL_PANELS.map((panel) => {
+        const disabled = noTools || !panel.isAvailable(ctx);
+        return (
+          <PanelButton
+            key={panel.id}
+            panel={panel}
+            active={!disabled && rightPanel === panel.id}
+            disabled={disabled}
+          />
+        );
+      })}
+      <Separator className="my-1 w-6" />
+      <TestsButton disabled={noProjectTools} />
+      <TerminalButton projectId={ctx.projectId ?? ''} disabled={noProjectTools} />
+      <BrowserButton disabled={noTools || !(threadId || ctx.projectId)} />
+      <Separator className="my-1 w-6" />
+      {LEFT_VIEWS.map((view) => (
+        <LeftViewButton key={view.mode} view={view} onShowSidebar={onShowSidebar} />
       ))}
-      {(showProjectTools || threadId) && <Separator className="my-1 w-6" />}
-      {showProjectTools && <TestsButton />}
-      {showProjectTools && ctx.projectId && <TerminalButton projectId={ctx.projectId} />}
-      {(threadId || ctx.projectId) && <BrowserButton />}
+      <PageButton page={GRID_PAGE} />
+      <Separator className="my-1 w-6" />
+      <PageButton page={ANALYTICS_PAGE} />
     </nav>
   );
 });

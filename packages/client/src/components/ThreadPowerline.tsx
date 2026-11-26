@@ -179,6 +179,7 @@ export function ThreadPowerline({
           prNumber={prStatus.prNumber!}
           prState={prStatus.prState ?? 'OPEN'}
           prUrl={prStatus.prUrl}
+          projectId={thread.projectId || undefined}
           size={prBadgeSize}
           data-testid={prBadgeTestId}
         />

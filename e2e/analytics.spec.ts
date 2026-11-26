@@ -323,7 +323,7 @@ test.describe('16. Analytics View', () => {
     await page.goto('/');
     await waitForSidebar(page);
 
-    await page.getByTestId('sidebar-analytics').click();
+    await page.getByTestId('tool-rail-analytics').click();
     await page.waitForLoadState('networkidle');
 
     // URL should change to /analytics

@@ -220,6 +220,46 @@ export interface PRIssueComment {
   reactions: PRReactionSummary;
 }
 
+// ─── Issue timeline (comments + events, as GitHub's issue page shows them) ─────
+
+export interface IssueTimelineActor {
+  login: string;
+  avatar_url: string;
+}
+
+/** An issue or pull request another timeline item points at. */
+export interface IssueTimelineRef {
+  kind: 'issue' | 'pr';
+  number: number;
+  title: string;
+  url: string;
+  state: 'open' | 'closed' | 'merged';
+  /** `owner/name` of the item's repository, lower-cased. */
+  repo: string;
+}
+
+type IssueTimelineEventBase = { id: string; created_at: string; actor: IssueTimelineActor | null };
+
+export type IssueTimelineEvent = IssueTimelineEventBase &
+  (
+    | { type: 'labeled' | 'unlabeled'; label: { name: string; color: string } }
+    | { type: 'cross-referenced'; source: IssueTimelineRef; willClose: boolean }
+    | {
+        type: 'closed';
+        stateReason: 'completed' | 'not_planned' | 'duplicate' | null;
+        closer:
+          | { kind: 'pr'; ref: IssueTimelineRef }
+          | { kind: 'commit'; sha: string; url: string }
+          | null;
+      }
+    | { type: 'reopened' }
+    | { type: 'renamed'; from: string; to: string }
+    | { type: 'assigned' | 'unassigned'; assignee: IssueTimelineActor | null }
+    | { type: 'commit-referenced'; commit: { sha: string; url: string; message: string } }
+  );
+
+export type IssueTimelineItem = { type: 'comment'; comment: PRIssueComment } | IssueTimelineEvent;
+
 export interface PRReview {
   id: number;
   author: string;

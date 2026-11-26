@@ -11,6 +11,7 @@ import {
   MoreVertical,
   Plus,
   RotateCcw,
+  Trash2,
 } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -49,6 +50,8 @@ interface Props {
   targetBranches?: string[];
   /** Branches at this commit a new thread can start from (see `threadBaseBranchesAt`). */
   threadBranches?: string[];
+  /** The commit is the tip of `refs/stash` (stash@{0}): offers "Discard stash". */
+  isStashTip?: boolean;
   /** Opens the new-thread composer on a branch. No "New thread" items without it. */
   onCreateThreadFromBranch?: (branch: string) => void;
   rebaseEvents?: GitRebaseReflogEventDTO[];
@@ -96,6 +99,7 @@ export function CommitActionsMenu({
   localBranches = NO_BRANCHES,
   targetBranches = NO_TARGET_BRANCHES,
   threadBranches = NO_THREAD_BRANCHES,
+  isStashTip = false,
   onCreateThreadFromBranch,
   rebaseEvents = NO_REBASE_EVENTS,
   onSelectRebaseEvent,
@@ -252,9 +256,18 @@ export function CommitActionsMenu({
                 <RotateCcw className="icon-sm" />
                 {t('history.revert', 'Revert')}
               </DropdownMenuItem>
+              {isStashTip && (
+                <DropdownMenuItem
+                  variant="destructive"
+                  onClick={() => request('drop-stash', hash)}
+                  data-testid={`graph-commit-menu-drop-stash-${shortHash}`}
+                >
+                  <Trash2 className="icon-sm" />
+                  {t('graph.dropStash', 'Discard stash')}
+                </DropdownMenuItem>
+              )}
               <DropdownMenuItem
                 variant="destructive"
-
                 onClick={() => request('reset', hash)}
                 data-testid={`graph-commit-menu-reset-${shortHash}`}
               >

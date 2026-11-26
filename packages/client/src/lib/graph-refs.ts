@@ -165,6 +165,15 @@ export function foldGraphRefs(
 }
 
 /**
+ * True for git's stash ref (`refs/stash`, the newest entry `stash@{0}`). git log
+ * decorates it like a branch, but it cannot be pushed, merged into, rebased onto
+ * or used as a thread base: it only offers "drop".
+ */
+export function isStashRef(name: string): boolean {
+  return name === 'refs/stash';
+}
+
+/**
  * Branches a new thread can start from at a commit: every branch chip on it
  * (local, or a lone remote-tracking ref named without its remote, since the
  * composer's branch picker lists remote branches by bare name). Tags and the
@@ -173,7 +182,7 @@ export function foldGraphRefs(
 export function threadBaseBranchesAt(refs: readonly FoldedRef[]): string[] {
   const out = new Set<string>();
   for (const ref of refs) {
-    if (ref.kind === 'tag' || ref.name === 'HEAD') continue;
+    if (ref.kind === 'tag' || ref.name === 'HEAD' || isStashRef(ref.name)) continue;
     out.add(ref.kind === 'remote' ? remoteBranchOf(ref.name) : ref.name);
   }
   return [...out];
@@ -605,7 +614,7 @@ export function summarizeGraphBranches(
 
   for (const entry of entries) {
     for (const ref of entry.refs) {
-      if (ref.kind === 'tag' || ref.name === 'HEAD') continue;
+      if (ref.kind === 'tag' || ref.name === 'HEAD' || isStashRef(ref.name)) continue;
       if (ref.kind === 'local') {
         const summary = ensure(ref.name);
         summary.localRef = ref.name;

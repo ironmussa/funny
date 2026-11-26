@@ -24,6 +24,8 @@ import type { MergeMethod } from './use-pr-conversation';
 
 interface PRCardSummaryProps {
   pr: GitHubPR;
+  /** The PR's project: its number chip opens funny's PR view. */
+  projectId?: string;
   now: number;
   isMerged: boolean;
   canMerge: boolean;
@@ -35,6 +37,7 @@ interface PRCardSummaryProps {
 /** The PR's title / meta / actions line: badge, title, merge line, authors, merge menu, links. */
 export function PRCardSummary({
   pr,
+  projectId,
   now,
   isMerged,
   canMerge,
@@ -71,6 +74,7 @@ export function PRCardSummary({
             prNumber={pr.number}
             prState={isMerged ? 'MERGED' : pr.state === 'closed' ? 'CLOSED' : 'OPEN'}
             prUrl={pr.html_url}
+            projectId={projectId}
             size="xxs"
             data-testid={`pinned-pr-link-${pr.number}`}
           />

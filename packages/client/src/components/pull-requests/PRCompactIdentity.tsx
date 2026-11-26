@@ -39,6 +39,8 @@ interface PRCompactIdentityPR {
 
 interface PRCompactIdentityProps {
   pr: PRCompactIdentityPR;
+  /** The PR's project: its number chip opens funny's PR view (GitHub from the icon beside it). */
+  projectId?: string;
   fallbackState?: PRCompactState;
   fallbackTitle?: string;
   onTitleClick?: () => void;
@@ -75,6 +77,7 @@ function isNumber(value: unknown): value is number {
 
 export function PRCompactIdentity({
   pr,
+  projectId,
   fallbackState = 'OPEN',
   fallbackTitle = 'Pull request',
   onTitleClick,
@@ -134,6 +137,7 @@ export function PRCompactIdentity({
           prNumber={pr.number}
           prState={resolvedState}
           prUrl={pr.html_url}
+          projectId={projectId}
           size="compact"
           className="mt-0.5"
           data-testid={numberTestId}

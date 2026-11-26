@@ -113,7 +113,7 @@ export function FactoryApprovalRequestCard({
       : t(TITLE[outcome].key, TITLE[outcome].fallback, { issue: run.issueNumber ?? '' });
   return (
     <CardFrame id={request.id} outcome={outcome} title={title}>
-      <RunFacts request={request} run={run} />
+      <RunFacts projectId={projectId} request={request} run={run} />
       {outcome === 'pending' ? (
         <PendingBody projectId={projectId} request={request} run={run} />
       ) : (
@@ -161,7 +161,15 @@ function isLineCount(value: number | undefined): value is number {
   return typeof value === 'number';
 }
 
-function RunFacts({ request, run }: { request: FactoryApprovalRequest; run: FactoryRun }) {
+function RunFacts({
+  projectId,
+  request,
+  run,
+}: {
+  projectId: string;
+  request: FactoryApprovalRequest;
+  run: FactoryRun;
+}) {
   const { t } = useTranslation();
   const prNumber = run.prUrl ? pullRequestNumber(run.prUrl) : null;
   return (
@@ -171,6 +179,7 @@ function RunFacts({ request, run }: { request: FactoryApprovalRequest; run: Fact
           prNumber={prNumber}
           prState={run.state === 'merged' ? 'MERGED' : 'OPEN'}
           prUrl={run.prUrl}
+          projectId={projectId}
           variant="plain"
           data-testid={`factory-approval-pr-${request.id}`}
         />

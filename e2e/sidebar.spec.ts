@@ -5,9 +5,8 @@ test.describe('2. Sidebar', () => {
     await waitForSidebar(page);
 
     await expect(page.getByTestId('sidebar-search')).toBeVisible();
-    await expect(page.getByTestId('sidebar-kanban')).toBeVisible();
-    await expect(page.getByTestId('sidebar-grid')).toBeVisible();
-    await expect(page.getByTestId('sidebar-analytics')).toBeVisible();
+    await expect(page.getByTestId('tool-rail-grid')).toBeVisible();
+    await expect(page.getByTestId('tool-rail-analytics')).toBeVisible();
     await expect(page.getByTestId('sidebar-settings')).toBeVisible();
   });
 
@@ -33,21 +32,23 @@ test.describe('2. Sidebar', () => {
     await expect(page).toHaveURL(/\/list/);
   });
 
-  test('2.5 Navigate to /kanban', async ({ authedPage: page }) => {
+  test('2.5 Kanban opens in the left sidebar from the tool rail', async ({ authedPage: page }) => {
     await waitForSidebar(page);
-    await page.getByTestId('sidebar-kanban').click();
-    await expect(page).toHaveURL(/\/kanban/);
+    await page.getByTestId('tool-rail-kanban').click();
+    await expect(page.getByTestId('kanban-sidebar')).toBeVisible();
+    await page.getByTestId('tool-rail-threads').click();
+    await expect(page.getByTestId('kanban-sidebar')).toHaveCount(0);
   });
 
   test('2.6 Navigate to /grid', async ({ authedPage: page }) => {
     await waitForSidebar(page);
-    await page.getByTestId('sidebar-grid').click();
+    await page.getByTestId('tool-rail-grid').click();
     await expect(page).toHaveURL(/\/grid/);
   });
 
   test('2.7 Navigate to /analytics', async ({ authedPage: page }) => {
     await waitForSidebar(page);
-    await page.getByTestId('sidebar-analytics').click();
+    await page.getByTestId('tool-rail-analytics').click();
     await expect(page).toHaveURL(/\/analytics/);
   });
 

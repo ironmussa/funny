@@ -138,6 +138,7 @@ function ThreadPickerDialogContent({
                   <div className="flex min-w-0 flex-1 flex-col">
                     <ThreadTitle
                       title={thread.title}
+                      projectId={thread.projectId || undefined}
                       search={search}
                       className="text-sm"
                       badgeTestId={`thread-picker-attachments-${thread.id}`}

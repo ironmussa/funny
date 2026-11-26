@@ -23,6 +23,10 @@ export const bottomPanelId = (tabId: string) => `bottom:${tabId}`;
 export const isBottomPanelId = (id: string) => id.startsWith('bottom:');
 
 export const STORAGE_KEY_LEFT_WIDTH = 'dockview.left_width';
+/** The left sidebar's width while it shows the factory queue, which needs more room. */
+export const STORAGE_KEY_FACTORY_LEFT_WIDTH = 'dockview.left_width.factory';
+/** The left sidebar's width while it shows the kanban board. */
+export const STORAGE_KEY_KANBAN_LEFT_WIDTH = 'dockview.left_width.kanban';
 export const STORAGE_KEY_RIGHT_WIDTH = 'dockview.right_width';
 export const STORAGE_KEY_BOTTOM_HEIGHT = 'dockview.bottom_height';
 export const STORAGE_KEY_BROWSER_WIDTH = 'dockview.browser_width';

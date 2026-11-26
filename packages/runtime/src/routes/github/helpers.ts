@@ -316,6 +316,14 @@ export function fetchIssueComments(
   );
 }
 
+/** One issue of the repository (`/repos/:owner/:repo/issues/:n`; a PR number answers a PR). */
+export function fetchIssue(
+  repo: { owner: string; repo: string; token: string },
+  issueNumber: number,
+): Promise<Response> {
+  return githubApiFetch(`/repos/${repo.owner}/${repo.repo}/issues/${issueNumber}`, repo.token);
+}
+
 /**
  * Load a project the caller may access — owner, collaborator (with their own
  * checkout path), or org member; the same rule the git routes apply through

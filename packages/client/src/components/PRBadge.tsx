@@ -1,16 +1,26 @@
 import type { TFunction } from 'i18next';
 import { ExternalLink } from 'lucide-react';
+import type { SyntheticEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { GIT_STAT_CHIP_CLASS, GIT_STAT_ICON_CLASS } from '@/components/git/GitStatChip';
+import { GitHubExternalLink } from '@/components/GitHubExternalLink';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { PR_STATE_ICON, PR_STATE_TEXT_CLASS, type PRState } from '@/lib/git-icons';
 import { cn } from '@/lib/utils';
+import { openGitHubItem } from '@/stores/github-item-viewer-store';
 
 export interface PRBadgeProps {
   prNumber: number;
   prState?: PRState;
   prUrl?: string;
+  /**
+   * The project whose repository holds the PR. With it, a click opens funny's
+   * PR view and an external link icon beside the chip goes to GitHub; without
+   * it (no project: a scratch thread, a PR of another repository) the chip is
+   * the GitHub link itself.
+   */
+  projectId?: string;
   /** "sm" for large displays, "xs" for lists, "compact" for powerline rows, "xxs" for compact headers */
   size?: 'sm' | 'xs' | 'compact' | 'xxs';
   /**
@@ -45,6 +55,23 @@ const SIZE_CLASS = {
 
 /** The git stat chip at a small powerline's text size (`PowerlineBar` size "sm"). */
 const PLAIN_COMPACT_CLASS = 'flex shrink-0 items-center gap-0.5 text-2xs leading-4';
+
+/** The text color of each state's pill, for the GitHub arrow beside it. */
+const STATE_TEXT_CLASS = {
+  OPEN: 'text-emerald-700 dark:text-emerald-200',
+  MERGED: 'text-violet-700 dark:text-violet-200',
+  CLOSED: 'text-rose-700 dark:text-rose-200',
+} as const;
+
+/** The GitHub arrow's color: the chip's own text color. */
+function externalLinkColorClass(
+  variant: NonNullable<PRBadgeProps['variant']>,
+  prState: PRState,
+): string {
+  if (variant === 'plain') return PR_STATE_TEXT_CLASS[prState];
+  if (variant === 'inverse') return 'text-background/70';
+  return STATE_TEXT_CLASS[prState];
+}
 
 const STATE_CLASS = {
   OPEN: 'border-emerald-300/70 bg-emerald-50 text-emerald-700 hover:border-emerald-400 hover:text-emerald-800 dark:border-emerald-400/35 dark:bg-emerald-400/15 dark:text-emerald-200 dark:hover:border-emerald-300/60 dark:hover:text-emerald-100',
@@ -106,6 +133,7 @@ export function PRBadge({
   prNumber,
   prState = 'OPEN',
   prUrl,
+  projectId,
   size = 'xs',
   variant = 'default',
   showExternalIcon = !!prUrl,
@@ -131,6 +159,47 @@ export function PRBadge({
       {showExternalIcon ? <ExternalLink className={iconClassName} aria-hidden="true" /> : null}
     </>
   );
+
+  if (projectId) {
+    const testId = props['data-testid'];
+    const openInFunny = (event: SyntheticEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      openGitHubItem({ kind: 'pr', projectId, number: prNumber, url: prUrl });
+    };
+    return (
+      <span className={cn('inline-flex shrink-0 items-center gap-0.5', className)}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={openInFunny}
+              onKeyDown={(e) => e.stopPropagation()}
+              className={prBadgeClassName({ variant, prState, size, linked: true })}
+              data-testid={testId}
+              aria-label={tooltipLabel}
+            >
+              <StateIcon
+                className={iconClassName}
+                aria-hidden="true"
+                data-testid={testId ? `${testId}-icon-${prState}` : undefined}
+              />
+              <span className={cn(plain && 'font-mono')}>#{prNumber}</span>
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top">{tooltipLabel}</TooltipContent>
+        </Tooltip>
+        {prUrl && (
+          <GitHubExternalLink
+            url={prUrl}
+            iconClassName={iconClassName}
+            className={externalLinkColorClass(variant, prState)}
+            data-testid={testId ? `${testId}-external` : undefined}
+          />
+        )}
+      </span>
+    );
+  }
 
   if (prUrl) {
     return (

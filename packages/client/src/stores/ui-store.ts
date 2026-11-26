@@ -28,6 +28,11 @@ const OPEN_RIGHT_PANEL_KEY = 'tool_panels.open.right';
 const NO_PANEL = 'none';
 const REVIEW_SUB_TAB_KEY = 'review_sub_tab';
 const GRID_SELECTED_THREAD_KEY = 'funny:grid-selected-thread:v1';
+const LEFT_PANEL_MODE_KEY = 'left_panel_mode';
+
+/** What the left sidebar shows: the thread list, or the kanban board or factory queue in its place. */
+export type LeftPanelMode = 'threads' | 'kanban' | 'factory';
+const LEFT_PANEL_MODES: readonly LeftPanelMode[] = ['threads', 'kanban', 'factory'];
 
 /** The tool panel open in each location (openspec `tool-panels`); absent = closed. */
 export interface OpenPanels {
@@ -93,6 +98,9 @@ function clearSelectedThread() {
 interface UIState {
   /** The tool panel open in each location. Change it only through the panel actions. */
   openPanels: OpenPanels;
+  /** What the left sidebar shows; remembered on the device. */
+  leftPanelMode: LeftPanelMode;
+  setLeftPanelMode: (mode: LeftPanelMode) => void;
   reviewPaneWidth: number; // percentage of viewport width
   reviewPaneResizing: boolean;
   settingsOpen: boolean;
@@ -260,6 +268,14 @@ type GetUIState = StoreApi<UIState>['getState'];
 function readInitialUIState() {
   return {
     openPanels: readOpenPanels(),
+    leftPanelMode: ((): LeftPanelMode => {
+      try {
+        const stored = localStorage.getItem(LEFT_PANEL_MODE_KEY);
+        return LEFT_PANEL_MODES.find((mode) => mode === stored) ?? 'threads';
+      } catch {
+        return 'threads';
+      }
+    })(),
     reviewPaneWidth: (() => {
       try {
         const stored = localStorage.getItem(REVIEW_PANE_WIDTH_KEY);
@@ -477,6 +493,12 @@ function rightPaneActions(set: SetUIState, get: GetUIState) {
           : { testRunnerOpen: false },
       );
     },
+    setLeftPanelMode: (mode) => {
+      try {
+        localStorage.setItem(LEFT_PANEL_MODE_KEY, mode);
+      } catch {}
+      set({ leftPanelMode: mode });
+    },
     setReviewPaneWidth: (width) => {
       const clamped = Math.max(MIN_REVIEW_PANE_WIDTH, Math.min(MAX_REVIEW_PANE_WIDTH, width));
       try {
@@ -663,7 +685,6 @@ function navigationActions(set: SetUIState, get: GetUIState) {
         open
           ? {
               liveColumnsOpen: true,
-              openPanels: withRightClosed(get().openPanels),
               settingsOpen: false,
               activeSettingsPage: null,
               allThreadsProjectId: null,

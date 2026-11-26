@@ -14,7 +14,6 @@ import {
   STORAGE_KEY_BOTTOM_HEIGHT,
   STORAGE_KEY_BROWSER_WIDTH,
   STORAGE_KEY_LAYOUT,
-  STORAGE_KEY_LEFT_WIDTH,
   STORAGE_KEY_RIGHT_WIDTH,
   TOP_EDGE_ID,
   isBottomPanelId,
@@ -38,6 +37,8 @@ type LayoutReadyInput = {
   browser: ReactNode | undefined;
   browserOpen: boolean;
   bottomPaneOpen: boolean;
+  /** The key the left width is saved under: it follows what the sidebar shows. */
+  leftWidthKeyRef: MutableRefObject<string>;
 };
 
 /** Builds or restores DockviewLayout's grid when dockview is ready, and
@@ -52,6 +53,7 @@ export function useLayoutReady({
   browser,
   browserOpen,
   bottomPaneOpen,
+  leftWidthKeyRef,
 }: LayoutReadyInput) {
   const {
     initialLeftWidthResolved,
@@ -286,6 +288,7 @@ export function useLayoutReady({
         suppressCloseRef,
         isAnimatingRef,
         schedulePersistLayout,
+        leftWidthKeyRef,
       });
     },
     [
@@ -295,6 +298,7 @@ export function useLayoutReady({
       apiRef,
       buildDefaultLayout,
       isAnimatingRef,
+      leftWidthKeyRef,
       onActiveBottomTabChangeRef,
       onActiveRightTabChangeRef,
       onBottomTabCloseRef,
@@ -320,6 +324,7 @@ type LayoutEventDeps = Pick<
 > &
   Pick<LayoutPanelOps, 'suppressCloseRef' | 'isAnimatingRef'> & {
     schedulePersistLayout: (api: DockviewApi) => void;
+    leftWidthKeyRef: MutableRefObject<string>;
   };
 
 function subscribeLayoutEvents(
@@ -335,6 +340,7 @@ function subscribeLayoutEvents(
     suppressCloseRef,
     isAnimatingRef,
     schedulePersistLayout,
+    leftWidthKeyRef,
   }: LayoutEventDeps,
 ) {
   // Active panel changes → notify the store(s).
@@ -374,7 +380,7 @@ function subscribeLayoutEvents(
 
     // Persist left/right/browser widths and bottom height (cheap, always)
     const lp = api.getPanel(PANEL_LEFT);
-    if (lp) writeStoredSize(STORAGE_KEY_LEFT_WIDTH, lp.group.width);
+    if (lp) writeStoredSize(leftWidthKeyRef.current, lp.group.width);
     persistRightWidth(api, STORAGE_KEY_RIGHT_WIDTH);
     const bp = api.panels.find((p) => isBottomPanelId(p.id));
     if (bp) writeStoredSize(STORAGE_KEY_BOTTOM_HEIGHT, bp.group.height);

@@ -35,15 +35,15 @@ describe('resolveTerminalScope', () => {
     });
   });
 
-  test('does not fall back to stale context when no split is selected', () => {
+  test('uses the selected project, never the last thread, when no split is selected', () => {
     expect(
       resolveTerminalScope({
         liveColumnsOpen: true,
         gridThread: null,
-        selectedProjectId: 'stale-project',
+        selectedProjectId: 'selected-project',
         activeThread: regularThread,
       }),
-    ).toEqual({ scopeId: null, scratchThreadId: null, worktreePath: null });
+    ).toEqual({ scopeId: 'selected-project', scratchThreadId: null, worktreePath: null });
   });
 
   test('preserves scratch routing for a selected split thread', () => {

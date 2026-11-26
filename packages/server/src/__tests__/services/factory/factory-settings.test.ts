@@ -187,10 +187,11 @@ describe('factory lanes in the settings', () => {
     return { svc, factoryId };
   }
 
-  test('the prefixes default to feature: and feature/, and a save changes them', async () => {
+  // D11: `feature:` is a common team label; the factory's own convention does not collide with it.
+  test('the prefixes default to lane: and lane/, and a save changes them', async () => {
     const svc = settings();
     const saved = (await svc.save('alice', 'p1', { enabled: true }))._unsafeUnwrap();
-    expect(saved).toMatchObject({ laneLabelPrefix: 'feature:', laneBranchPrefix: 'feature/' });
+    expect(saved).toMatchObject({ laneLabelPrefix: 'lane:', laneBranchPrefix: 'lane/' });
     const changed = (
       await svc.save('alice', 'p1', {
         enabled: true,

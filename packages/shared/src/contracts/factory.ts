@@ -245,9 +245,9 @@ export function approvalGapFor(
 export type FactoryTooBig = 'ask' | 'split';
 
 /** What a label starts with to name a lane, unless the factory says otherwise (change factory-lanes). */
-export const DEFAULT_LANE_LABEL_PREFIX = 'feature:';
+export const DEFAULT_LANE_LABEL_PREFIX = 'lane:';
 /** What a lane's branch starts with, unless the factory says otherwise. */
-export const DEFAULT_LANE_BRANCH_PREFIX = 'feature/';
+export const DEFAULT_LANE_BRANCH_PREFIX = 'lane/';
 
 /**
  * A branch name the factory may merge into: what git accepts as a branch
@@ -273,7 +273,7 @@ export const factoryBaseBranchSchema = z
     'Not a valid branch name',
   );
 
-/** A lane label prefix: some text without spaces, such as `feature:`. */
+/** A lane label prefix: some text without spaces, such as `lane:`. */
 export const factoryLaneLabelPrefixSchema = z
   .string()
   .trim()
@@ -281,7 +281,7 @@ export const factoryLaneLabelPrefixSchema = z
   .max(50)
   .refine((prefix) => !/\s/.test(prefix), { message: 'Must not contain spaces' });
 
-/** A lane branch prefix: what, followed by a lane's name, is a branch name (`feature/`). */
+/** A lane branch prefix: what, followed by a lane's name, is a branch name (`lane/`). */
 export const factoryLaneBranchPrefixSchema = z
   .string()
   .trim()
@@ -337,9 +337,9 @@ export const saveFactorySettingsInput = z
     holdPathsAwaitingApproval: z.boolean().optional(),
     /** The branch the factory's pull requests merge into; empty: the repository's default branch. */
     baseBranch: factoryBaseBranchSchema.optional(),
-    /** What a label starts with to name a lane (`feature:`); fixed while the factory has lanes. */
+    /** What a label starts with to name a lane (`lane:`); fixed while the factory has lanes. */
     laneLabelPrefix: factoryLaneLabelPrefixSchema.optional(),
-    /** What a lane's branch starts with (`feature/`); fixed while the factory has lanes. */
+    /** What a lane's branch starts with (`lane/`); fixed while the factory has lanes. */
     laneBranchPrefix: factoryLaneBranchPrefixSchema.optional(),
   })
   .strict();
@@ -1395,6 +1395,14 @@ export interface FactoryLane {
   /** Why the last check could not run (an old git on the runner), or null. */
   conflictsNote: string | null;
 }
+
+/**
+ * A lane as the factory view's lane filter shows it (openspec factory-lanes,
+ * D10): every lane of the caller's factories, with or without loaded runs.
+ */
+export type FactoryQueueLane = Pick<FactoryLane, 'name' | 'label' | 'branch' | 'state'> & {
+  projectId: string;
+};
 
 /** Another lane this one's merge conflicts with, and where. */
 export interface FactoryLaneConflict {

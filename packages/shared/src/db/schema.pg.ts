@@ -333,9 +333,9 @@ export const factorySettings = pgTable(
     holdPathsAwaitingApproval: integer('hold_paths_awaiting_approval'),
     /** The branch the factory merges into; null: the repository's default branch. */
     baseBranch: text('base_branch'),
-    /** What a label starts with to name a lane (change factory-lanes); null: `feature:`. */
+    /** What a label starts with to name a lane (change factory-lanes); null: `lane:` (`feature:` on rows from before migration 141). */
     laneLabelPrefix: text('lane_label_prefix'),
-    /** What a lane's branch starts with; null: `feature/`. */
+    /** What a lane's branch starts with; null: `lane/` (`feature/` before migration 141). */
     laneBranchPrefix: text('lane_branch_prefix'),
     /** JSON object of the factory's per-step overrides (`FactoryStepOverrides`), or null. */
     stepOverrides: text('step_overrides'),

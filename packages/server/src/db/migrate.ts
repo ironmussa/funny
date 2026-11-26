@@ -2652,6 +2652,20 @@ const migrations: Migration[] = [
       await ctx().addColumn('factory_lanes', 'conflicts_note', 'TEXT');
     },
   },
+  {
+    // Change factory-lanes D11: the lane prefixes default to `lane:` / `lane/`.
+    // A factory saved before keeps the `feature:` / `feature/` it read until
+    // now, so its labels and lanes do not change meaning.
+    name: '141_factory_lane_prefix_defaults',
+    async up() {
+      await ctx().exec(sql`
+        UPDATE factory_settings SET lane_label_prefix = 'feature:' WHERE lane_label_prefix IS NULL
+      `);
+      await ctx().exec(sql`
+        UPDATE factory_settings SET lane_branch_prefix = 'feature/' WHERE lane_branch_prefix IS NULL
+      `);
+    },
+  },
 ];
 
 /**

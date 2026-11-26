@@ -22,7 +22,8 @@ export function GitStatChip({
   testId: string;
   className: string;
   icon: LucideIcon;
-  count?: number;
+  /** Always shown, 1 included: a chip never shows a bare icon. */
+  count: number;
   tooltip: ReactNode;
 }) {
   return (
@@ -30,7 +31,7 @@ export function GitStatChip({
       <TooltipTrigger asChild>
         <span className={cn(GIT_STAT_CHIP_CLASS, className)} data-testid={testId}>
           <Icon className={GIT_STAT_ICON_CLASS} aria-hidden="true" />
-          {count ? <span className="font-mono">{count}</span> : null}
+          <span className="font-mono">{count}</span>
         </span>
       </TooltipTrigger>
       <TooltipContent side="top">{tooltip}</TooltipContent>

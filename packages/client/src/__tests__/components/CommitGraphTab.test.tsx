@@ -64,12 +64,12 @@ describe('GraphCommitSyncMarkers', () => {
     expect(chip).toHaveTextContent('16');
   });
 
-  test('an older commit of the run shows only the arrow', () => {
+  test('an older commit of the run counts itself: 1', () => {
     renderWithProviders(<GraphCommitSyncMarkers unpushed shortHash="1111112" />);
 
     const chip = screen.getByTestId('graph-unpushed-1111112');
     expect(chip.querySelector('svg')).toHaveClass('lucide-arrow-up');
-    expect(chip).toHaveTextContent('');
+    expect(chip).toHaveTextContent('1');
   });
 
   test('does not render when the commit has no sync markers', () => {

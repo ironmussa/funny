@@ -1,6 +1,8 @@
 import { useTranslation } from 'react-i18next';
 
 import { GitStatChip } from '@/components/git/GitStatChip';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { GIT_UNPULLED_ICON, GIT_UNPUSHED_ICON } from '@/lib/git-icons';
 import { gitSyncStateConfig, shortTimeAgo } from '@/lib/thread-utils';
@@ -13,10 +15,10 @@ export function GraphCommitTime({ committedAt }: { committedAt: string }) {
 }
 
 /**
- * A commit's sync state, drawn like the sidebar's git chips (`GitStatChip`): an
- * arrow up for not pushed, down for not pulled, in the sidebar's color. The
- * newest commit of a run carries the run's size (the count the sidebar shows),
- * the older ones only the arrow.
+ * A commit's sync state, drawn like a thread's git widget (`GitStatsChip`): the
+ * same muted chip holding an arrow up for not pushed, down for not pulled, in
+ * the sidebar's color. The newest commit of a run carries the run's size (the
+ * count the sidebar shows); an older commit of the run counts itself, 1.
  */
 export function GraphCommitSyncMarkers({
   unpushed,
@@ -38,25 +40,32 @@ export function GraphCommitSyncMarkers({
   const syncClass = gitSyncStateConfig.unpushed.className;
 
   return (
-    <span className={cn('inline-flex shrink-0 items-center gap-1.5', className)}>
+    <Badge
+      variant="subtle"
+      size="stat-group"
+      weight="normal"
+      corners="square"
+      className={cn('shrink-0', className)}
+    >
       {unpushed && (
         <GitStatChip
           testId={`graph-unpushed-${shortHash}`}
           className={syncClass}
           icon={GIT_UNPUSHED_ICON}
-          count={unpushedCount}
+          count={unpushedCount ?? 1}
           tooltip={t('history.unpushed', 'Not pushed')}
         />
       )}
+      {unpushed && unpulled && <Separator orientation="vertical" className="h-3" />}
       {unpulled && (
         <GitStatChip
           testId={`graph-unpulled-${shortHash}`}
           className={syncClass}
           icon={GIT_UNPULLED_ICON}
-          count={unpulledCount}
+          count={unpulledCount ?? 1}
           tooltip={t('history.unpulled', 'Not pulled')}
         />
       )}
-    </span>
+    </Badge>
   );
 }

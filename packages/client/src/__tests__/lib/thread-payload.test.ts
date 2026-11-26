@@ -251,4 +251,24 @@ describe('sandbox runtime (project-sandboxes)', () => {
     ]);
     expect(buildRuntimeModes({ hasLauncher: false })).toEqual([{ value: 'local', label: 'Local' }]);
   });
+
+  test('omits empty effort strings for providers without effort support (e.g. gemini)', () => {
+    const empty = buildThreadPayload(
+      baseInput({
+        opts: { provider: 'gemini', model: 'gemini-3.1-pro-preview', mode: 'autoEdit', effort: '' },
+      }),
+    );
+    expect(empty.kind).toBe('normal');
+    if (empty.kind !== 'normal') throw new Error('unreachable');
+    expect(empty.payload.effort).toBeUndefined();
+
+    const valid = buildThreadPayload(
+      baseInput({
+        opts: { provider: 'claude', model: 'sonnet', mode: 'autoEdit', effort: 'high' },
+      }),
+    );
+    expect(valid.kind).toBe('normal');
+    if (valid.kind !== 'normal') throw new Error('unreachable');
+    expect(valid.payload.effort).toBe('high');
+  });
 });

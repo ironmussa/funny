@@ -225,7 +225,7 @@ export function buildThreadPayload(input: BuildInput): BuildResult {
       provider: opts.provider,
       model: opts.model,
       permissionMode: opts.mode,
-      effort: opts.effort,
+      effort: opts.effort || undefined,
       baseBranch: opts.baseBranch,
       prompt,
       ...pickAttachments(opts, images),

@@ -178,7 +178,7 @@ async function sendPrompt(
       provider: p.provider,
       model: p.model,
       mode: p.mode,
-      effort: p.effort,
+      effort: p.effort || undefined,
       ...buildThreadOptions({ ...p, threadMode }),
       fileReferences: payload.fileReferences,
       symbolReferences: payload.symbolReferences,

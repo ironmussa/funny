@@ -14,6 +14,17 @@ import { diagnosticSurfacePosition } from './diagnostic-mode';
 import { NATIVE_HOST_FOCUS_EVIDENCE } from './platform/lifecycle';
 import { resolveFileTreeVisibility, resolveSidebarVisibility } from './responsive-layout';
 
+// Re-exported for the tests and other consumers that import them from `./app`.
+export { NativeFileTreeDock } from './app/file-tree-dock';
+export {
+  areMessageRowsEqual,
+  ExpandableNativeDiff,
+  NATIVE_DIFF_INITIAL_MAX_LINES,
+} from './app/message-row';
+export { PermissionCard, ThreadControls } from './app/thread-controls';
+export { THREAD_RETAINED_WINDOW_SIZE } from './app/thread-transcript';
+export { SelectedThreadHeader } from './app/thread-view';
+
 function AuthenticatedShell({
   application,
   diagnostics,

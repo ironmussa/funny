@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { areMessageRowsEqual } from '../app/message-row';
+import { areMessageRowsEqual } from '../app';
 import { buildMessage } from './helpers/fixtures';
 
 const message = buildMessage({ id: 'm1', threadId: 't1', role: 'assistant', content: 'hello' });

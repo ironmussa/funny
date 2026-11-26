@@ -7,8 +7,7 @@ import { flushSync } from '@gpuix/react';
 import { createTestRoot, hasNativeTestRenderer } from '@gpuix/react/testing';
 import { Profiler } from 'react';
 
-import { PermissionCard, ThreadControls } from '../app/thread-controls';
-import { SelectedThreadHeader } from '../app/thread-view';
+import { PermissionCard, SelectedThreadHeader, ThreadControls } from '../app';
 import { createNativeApplicationServices } from '../application';
 import { createNativeClientComposition } from '../platform/composition';
 import type { NativeHeaders } from '../platform/transport';

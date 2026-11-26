@@ -13,11 +13,12 @@ import { EMPTY_FACTORY_RUN_METRICS, type FactoryRunMetrics } from '@funny/shared
 import { metric } from '../../../lib/telemetry.js';
 import type { WaitCiOptions } from '../factory-ci-actions.js';
 import { prNumberOf, type FactoryPullRequestRef } from '../factory-pull-requests.js';
-import type {
-  ClassifiedHead,
-  FactoryActionProviderDeps,
-  FactoryRunScope,
-  HeldProof,
+import {
+  runReaderOf,
+  type ClassifiedHead,
+  type FactoryActionProviderDeps,
+  type FactoryRunScope,
+  type HeldProof,
 } from './shared.js';
 
 /** What one execution of a run's flow learns and changes as its steps act. */
@@ -110,6 +111,6 @@ export function createActionCore(deps: FactoryActionProviderDeps): ActionCore {
     state,
     count,
     pullRequest,
-    reader: { repo: scope.repo, ownerId: scope.userId, projectId: scope.projectId },
+    reader: runReaderOf(scope),
   };
 }

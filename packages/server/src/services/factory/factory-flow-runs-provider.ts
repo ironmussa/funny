@@ -22,6 +22,7 @@ import {
   type FactoryProofDeps,
   type FactoryRunScope,
   NO_CHANGE_TRIAGE_LABEL,
+  runReaderOf,
 } from './factory-action-provider.js';
 import { createFactoryBatchesRepository } from './factory-batches.js';
 import type { EarlyIntegration } from './factory-early-integration.js';
@@ -96,6 +97,7 @@ export const scopeOf = (job: FactoryRunJob): FactoryRunScope => ({
   issueTitle: job.issue?.title ?? job.run.triggerName ?? flowOf(job),
   branch: factoryRunBranch(job.run),
   issueUrl: job.issue?.url,
+  baseBranch: job.run.baseBranch,
 });
 
 /** Whether another queued run of the factory waits for this run's issue (it is a blocker). */
@@ -495,12 +497,7 @@ export function createRunProvider(ctx: FlowRunsContext, attempt: RunAttempt) {
     continuation: continuationFor(deps, scope),
     github: deps.github,
     ...integrationDepsFor(ctx, job, scope, controller.signal),
-    defaultBranch: () =>
-      deps.github.defaultBranch({
-        repo: scope.repo,
-        ownerId: scope.userId,
-        projectId: scope.projectId,
-      }),
+    defaultBranch: () => deps.github.defaultBranch(runReaderOf(scope)),
     ...issueDepsOf(deps, job, scope),
     split: splitDepsOf(deps, job, scope),
     dropLabel: async () => splitDepsFor(deps, job, scope)?.release(true),

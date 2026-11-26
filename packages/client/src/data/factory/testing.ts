@@ -13,6 +13,8 @@ export function buildFactoryRun(overrides: Partial<FactoryRun> = {}): FactoryRun
     issueNumber: 1,
     issueTitle: null,
     triggerName: null,
+    baseBranch: null,
+    lane: null,
     inputs: {},
     prUrl: null,
     state: 'merged',

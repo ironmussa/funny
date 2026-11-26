@@ -263,6 +263,33 @@ describe('FactoryBoard', () => {
     expect(screen.getByTestId('factory-board-pr-r2-icon-MERGED')).toBeTruthy();
   });
 
+  // openspec factory-lanes: a run in a lane merges into the lane's branch.
+  test("a run in a lane shows the lane's branch, and a run on the factory's own branch shows none", () => {
+    renderBoard([
+      queueRun('r1', 'working', { lane: 'payments', baseBranch: 'feature/payments' }),
+      queueRun('r2', 'working', { lane: null, baseBranch: 'dev' }),
+    ]);
+    expect(screen.getByTestId('factory-board-lane-r1').textContent).toContain('feature/payments');
+    expect(screen.queryByTestId('factory-board-lane-r2')).toBeNull();
+  });
+
+  test('a queued issue whose feature labels cannot be used says so on its card', () => {
+    renderBoard([
+      queueRun('r1', 'requested', {
+        waitReason: { kind: 'lane-ambiguous', blockers: [], detail: 'a, b' },
+      }),
+      queueRun('r2', 'requested', {
+        waitReason: { kind: 'lane-invalid', blockers: [], detail: 'not a branch' },
+      }),
+    ]);
+    expect(screen.getByTestId('factory-board-card-r1').textContent).toContain(
+      'Several feature labels',
+    );
+    expect(screen.getByTestId('factory-board-card-r2').textContent).toContain(
+      'Feature label not usable',
+    );
+  });
+
   test('a card shows no step strip: the column says the step', () => {
     renderBoard([
       queueRun('r1', 'working', {

@@ -41,6 +41,7 @@ import {
   createWorkflowJournalRepository,
   databaseJournal,
 } from '../workflow-engine/journal-repository.js';
+import { runReaderOf } from './factory-action-provider.js';
 import type { EarlyIntegration, EarlyOutcome } from './factory-early-integration.js';
 import {
   blocksOthers,
@@ -247,11 +248,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
     // The branch the pull request merges into names the merge lane. Unknown
     // (GitHub could not be read): the lane is the repository's, which still
     // merges one at a time.
-    const base = await deps.github.defaultBranch({
-      repo: scope.repo,
-      ownerId: scope.userId,
-      projectId: scope.projectId,
-    });
+    const base = await deps.github.defaultBranch(runReaderOf(scope));
     const baseBranch = base.isOk() ? base.value : '';
 
     const context: YamlPipelineContext = {

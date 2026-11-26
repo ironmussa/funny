@@ -9,6 +9,7 @@ import { describe, expect, test } from 'bun:test';
 import { createRepoGithub } from '@funny/core/github-app';
 import { okAsync } from 'neverthrow';
 
+import { readerBaseBranch } from '../../../services/factory/factory-github.js';
 import { createFactoryRepoReads } from '../../../services/factory/factory-repo-reads.js';
 import { fakeFetch } from '../../helpers/builders-services.js';
 
@@ -113,6 +114,88 @@ describe('factory repo reads', () => {
       number: 9,
       url: 'https://github.com/o/r/pull/9',
       baseRef: 'main',
+    });
+  });
+
+  // openspec factory-lanes, D3: the run's recorded base is what every read of "the base" answers.
+  test("a reader for a run answers the run's base branch, not the factory's setting", async () => {
+    const reader = { repo: 'o/r', ownerId: 'alice', projectId: 'p1' };
+    let settingReads = 0;
+    const setting = async () => {
+      settingReads += 1;
+      return 'develop';
+    };
+    const github = createRepoGithub({
+      tokenFor: () => okAsync('tok'),
+      fetch: fakeFetch(async () => new Response('{}')),
+    });
+    const runReads = createFactoryRepoReads('o/r', github, () =>
+      readerBaseBranch({ ...reader, baseBranch: 'feature/a' }, setting),
+    );
+
+    // Answered without asking GitHub for the default branch, or the setting.
+    expect((await runReads.defaultBranch())._unsafeUnwrap()).toBe('feature/a');
+    expect(settingReads).toBe(0);
+
+    // No run (the queue's checks, the sentinel): the factory's setting.
+    expect(await readerBaseBranch(reader, setting)).toBe('develop');
+    expect(await readerBaseBranch({ ...reader, baseBranch: null }, setting)).toBe('develop');
+  });
+
+  // openspec factory-lanes, D1: a lane's branch is cut from the branch the factory merges into.
+  describe('ensureBranch', () => {
+    function github(routes: Record<string, { status: number; body?: unknown }>) {
+      const calls: Array<{ method: string; path: string; body?: unknown }> = [];
+      const fetchImpl = fakeFetch(async (url, init) => {
+        const path = url.replace('https://api.github.com', '');
+        const method = init?.method ?? 'GET';
+        calls.push({ method, path, body: init?.body ? JSON.parse(String(init.body)) : undefined });
+        const answer = routes[`${method} ${path}`] ?? { status: 404 };
+        return new Response(JSON.stringify(answer.body ?? {}), { status: answer.status });
+      });
+      const reads = createFactoryRepoReads(
+        'o/r',
+        createRepoGithub({ tokenFor: () => okAsync('tok'), fetch: fetchImpl }),
+        async () => 'dev',
+      );
+      return { reads, calls };
+    }
+
+    test('a branch that exists is left alone', async () => {
+      const { reads, calls } = github({
+        'GET /repos/o/r/git/ref/heads/feature/a': { status: 200, body: { object: { sha: 'x' } } },
+      });
+      expect((await reads.ensureBranch('feature/a'))._unsafeUnwrap()).toBe('exists');
+      expect(calls.filter((call) => call.method === 'POST')).toEqual([]);
+    });
+
+    test('a missing branch is made from the head of the branch the factory merges into', async () => {
+      const { reads, calls } = github({
+        'GET /repos/o/r/git/ref/heads/dev': { status: 200, body: { object: { sha: 'dev-head' } } },
+        'POST /repos/o/r/git/refs': { status: 201 },
+      });
+      expect((await reads.ensureBranch('feature/a'))._unsafeUnwrap()).toBe('created');
+      expect(calls.at(-1)).toEqual({
+        method: 'POST',
+        path: '/repos/o/r/git/refs',
+        body: { ref: 'refs/heads/feature/a', sha: 'dev-head' },
+      });
+    });
+
+    test('a branch made by someone else meanwhile counts as existing', async () => {
+      const { reads } = github({
+        'GET /repos/o/r/git/ref/heads/dev': { status: 200, body: { object: { sha: 'dev-head' } } },
+        'POST /repos/o/r/git/refs': { status: 422 },
+      });
+      expect((await reads.ensureBranch('feature/a'))._unsafeUnwrap()).toBe('exists');
+    });
+
+    test('a refusal is an error, not a branch', async () => {
+      const { reads } = github({
+        'GET /repos/o/r/git/ref/heads/dev': { status: 200, body: { object: { sha: 'dev-head' } } },
+        'POST /repos/o/r/git/refs': { status: 403 },
+      });
+      expect((await reads.ensureBranch('feature/a')).isErr()).toBe(true);
     });
   });
 });

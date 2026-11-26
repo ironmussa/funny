@@ -85,4 +85,4 @@ the base branch is green again or a member closes it.
 #### Scenario: A red lane branch
 
 - **WHEN** the lane branch `feature/a` turns red after a factory merge into it
-- **THEN** new `lane:a` issues wait on the incident, and `lane:b` issues and issues without a lane are still admitted
+- **THEN** new `feature:a` issues wait on the incident, and `feature:b` issues and issues without a lane are still admitted

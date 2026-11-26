@@ -91,6 +91,8 @@ export function createFactoryRunsRepository(
       source: input.source ?? 'label',
       flowName: input.flowName ?? null,
       admittedAt: state === 'requested' ? null : new Date().toISOString(),
+      baseBranch: input.baseBranch ?? null,
+      lane: input.lane ?? null,
       ...triggerFieldsOf(input),
     });
     return ResultAsync.fromPromise(db.insert(factoryRuns).values(row), storage).map(() =>

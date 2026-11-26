@@ -2586,6 +2586,52 @@ const migrations: Migration[] = [
       await ctx().addColumn('factory_runs', 'hold', 'TEXT');
     },
   },
+  {
+    // Change factory-lanes: a run's base branch is decided once, at admission,
+    // and the commit its merge made is kept (a blocker on another branch is
+    // finished when that commit is in the waiting run's base). Null on older
+    // runs: the factory's setting, and no known merge commit.
+    name: '137_factory_runs_base_branch',
+    async up() {
+      await ctx().addColumn('factory_runs', 'base_branch', 'TEXT');
+      await ctx().addColumn('factory_runs', 'lane', 'TEXT');
+      await ctx().addColumn('factory_runs', 'merge_sha', 'TEXT');
+    },
+  },
+  {
+    // Change factory-lanes: a label `<prefix><name>` sends an issue to the
+    // branch `<branch prefix><name>`. One lane per factory and name; its sync
+    // with the factory's base branch is a state on the row.
+    name: '138_factory_lanes',
+    async up() {
+      await ctx().addColumn('factory_settings', 'lane_label_prefix', 'TEXT');
+      await ctx().addColumn('factory_settings', 'lane_branch_prefix', 'TEXT');
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS factory_lanes (
+          id TEXT PRIMARY KEY,
+          factory_id TEXT NOT NULL REFERENCES factory_settings(id) ON DELETE CASCADE,
+          name TEXT NOT NULL,
+          branch TEXT NOT NULL,
+          state TEXT NOT NULL DEFAULT 'active',
+          ci_warning TEXT,
+          created_at TEXT NOT NULL,
+          sync_state TEXT NOT NULL DEFAULT 'idle',
+          sync_base_sha TEXT,
+          sync_pr_number INTEGER,
+          sync_thread_id TEXT,
+          sync_attempts INTEGER NOT NULL DEFAULT 0,
+          sync_started_at TEXT,
+          sync_error TEXT,
+          last_synced_base_sha TEXT,
+          finish_pr_number INTEGER
+        )
+      `);
+      await ctx().exec(sql`
+        CREATE UNIQUE INDEX IF NOT EXISTS factory_lanes_factory_name
+        ON factory_lanes (factory_id, name)
+      `);
+    },
+  },
 ];
 
 /**

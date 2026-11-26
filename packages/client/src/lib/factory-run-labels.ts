@@ -145,6 +145,22 @@ export function factoryWaitReasonText(t: TFunction, reason: FactoryWaitReason): 
         'factory.wait.noFreeSlot',
         'Waiting for a free slot: the factory is running as many runs as it may',
       );
+    case 'lane-ambiguous':
+      return t(
+        'factory.wait.laneAmbiguous',
+        'It carries the labels of several features ({{lanes}}): leave one',
+        { lanes: reason.detail ?? '' },
+      );
+    case 'lane-invalid':
+      return t('factory.wait.laneInvalid', 'Its feature label cannot be used: {{why}}', {
+        why: reason.detail ?? '',
+      });
+    case 'blocker-on-other-branch':
+      return t(
+        'factory.wait.otherBranch',
+        'Waiting for {{blockers}}, merged into another branch, to reach this one',
+        { blockers },
+      );
     case 'proof-not-configured':
       return t(
         'factory.wait.proofNotConfigured',

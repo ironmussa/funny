@@ -84,6 +84,8 @@ export const WithIncident: Story = {
       tooBig: 'ask',
       holdPathsAwaitingApproval: false,
       baseBranch: '',
+      laneLabelPrefix: 'feature:',
+      laneBranchPrefix: 'feature/',
       blockedReason: null,
       updatedAt: ago(1),
       incident: {

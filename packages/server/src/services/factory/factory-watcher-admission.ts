@@ -22,6 +22,7 @@ import {
 } from './factory-dependencies.js';
 import { flowReadsOf, loadFactoryFlow } from './factory-flow.js';
 import { READY_ISSUES_PAGE, type FactoryIssue, type FactoryRepoReader } from './factory-github.js';
+import { createFactoryLanesRepository, resolveLane } from './factory-lanes.js';
 import {
   factoryRunBranch,
   NO_FREE_SLOT,
@@ -250,13 +251,114 @@ async function admitQueued(
   const issue = await openQueuedIssue(factory, run, ctx);
   if (!issue) return false;
 
+  // Where it runs, before anything else holds it: a label that names no usable
+  // lane is for a person to fix, whatever its blockers are.
+  const base = await baseFor(factory, repo, issue, run);
+  if ('wait' in base) {
+    await noteWaitReason(run, base.wait);
+    return false;
+  }
+
   const blocked = await blockedReason(ctx, issue.number);
   const stackedOn = stackTarget(factory, ctx, blocked);
   const reason = (stackedOn ? null : blocked) ?? pathsHeld(ctx, run, stackedOn);
   await noteWaitReason(run, reason);
   if (reason) return false;
 
-  return admitAndStart(factory, repo, mode, issue, run, stackedOn);
+  return admitAndStart(factory, repo, mode, issue, run, stackedOn, base);
+}
+
+/** The branch a run is admitted on, and the lane that branch is of, if any. */
+interface AdmissionBase {
+  branch: string | null;
+  lane: string | null;
+}
+
+const lanes = createFactoryLanesRepository();
+
+/**
+ * Where an issue admitted now runs (openspec factory-lanes, D1 and D2): the
+ * branch of the lane its label names, made with its row the first time, else
+ * the factory's own branch. A run that already has a base (it was admitted
+ * before and sent back to the queue) keeps it, whatever its labels say now.
+ * `wait`: the label names several lanes, no usable branch, or a branch the
+ * factory could not make; the issue stays queued with the reason.
+ */
+async function baseFor(
+  factory: WatchedFactory,
+  repo: string,
+  issue: FactoryIssue,
+  run: FactoryRunView,
+): Promise<AdmissionBase | { wait: FactoryWaitReason }> {
+  if (run.baseBranch) return { branch: run.baseBranch, lane: run.lane };
+  const own = await baseBranchFor(factory, repo);
+  const labels = issue.labels ?? [];
+  // Most issues name no lane: nothing more to read for them.
+  if (resolveLane(labels, factory).kind === 'none') return { branch: own, lane: null };
+
+  const reader = { repo, ownerId: factory.userId, projectId: factory.projectId };
+  const repoDefault = await deps!.github.defaultBranchHead(reader);
+  const reserved = [own, repoDefault.isOk() ? repoDefault.value.branch : null].filter(
+    (branch): branch is string => Boolean(branch),
+  );
+  const choice = resolveLane(labels, factory, reserved);
+  if (choice.kind === 'none') return { branch: own, lane: null };
+  if (choice.kind === 'ambiguous') {
+    return { wait: { kind: 'lane-ambiguous', blockers: [], detail: choice.names.join(', ') } };
+  }
+  if (choice.kind === 'invalid') {
+    return { wait: { kind: 'lane-invalid', blockers: [], detail: choice.message } };
+  }
+
+  const known = await lanes.find(factory.id, choice.name);
+  if (known.isErr()) return { wait: laneUnusable(known.error.message) };
+  // A finished lane's label sends late work to the factory's own branch.
+  if (known.value?.state === 'finished') return { branch: own, lane: null };
+  if (known.value) return { branch: known.value.branch, lane: known.value.name };
+
+  // The first issue of the lane: its branch first, so a lane's row means a branch exists.
+  if (!deps!.github.ensureBranch)
+    return { wait: laneUnusable('this factory cannot make branches') };
+  const made = await deps!.github.ensureBranch(reader, choice.branch);
+  if (made.isErr()) {
+    return {
+      wait: laneUnusable(`the branch ${choice.branch} could not be made: ${made.error.message}`),
+    };
+  }
+  const lane = await lanes.ensure(factory.id, choice);
+  if (lane.isErr()) return { wait: laneUnusable(lane.error.message) };
+  log.info('Issue factory lane created', {
+    namespace: 'factory',
+    factoryId: factory.id,
+    lane: lane.value.name,
+    branch: lane.value.branch,
+    branchCreated: made.value === 'created',
+    issue: issue.number,
+  });
+  return { branch: lane.value.branch, lane: lane.value.name };
+}
+
+const laneUnusable = (detail: string): FactoryWaitReason => ({
+  kind: 'lane-invalid',
+  blockers: [],
+  detail,
+});
+
+/**
+ * The branch a run admitted now starts from and merges into (change
+ * factory-lanes, D2): the factory's "merge into" branch, else the repository's
+ * default branch. Recorded on the run, so a later change of the setting does
+ * not move it. Null when GitHub cannot be read: the run then follows the
+ * factory's setting, as runs did before they recorded a base.
+ */
+async function baseBranchFor(factory: WatchedFactory, repo: string): Promise<string | null> {
+  if (!deps) return null;
+  const base = await deps.github.defaultBranch({
+    repo,
+    ownerId: factory.userId,
+    projectId: factory.projectId,
+  });
+  return base.isOk() ? base.value : null;
 }
 
 /**
@@ -272,11 +374,17 @@ async function admitAndStart(
   run: FactoryRunView,
   /** The run it starts on top of instead of waiting for (D10), or null. */
   stackedOn: FactoryStackedOn | null = null,
+  /** Where it runs, when the caller resolved it (an issue's lane); else the factory's own branch. */
+  given: AdmissionBase | null = null,
 ): Promise<Launch | false | typeof NO_FREE_SLOT> {
   if (!runs) return false;
   // The capacity check is part of the write: the slots counted at the start of
   // the pass may have been taken during the GitHub reads above.
-  const admitted = await runs.admit(factory.id, run.id);
+  const base: AdmissionBase = given ?? {
+    branch: run.baseBranch ?? (await baseBranchFor(factory, repo)),
+    lane: run.lane,
+  };
+  const admitted = await runs.admit(factory.id, run.id, base);
   if (admitted.isOk() && admitted.value === NO_FREE_SLOT) return NO_FREE_SLOT;
   // Cancelled meanwhile (or another pass took it): not ours to start.
   if (admitted.isErr() || admitted.value !== 'admitted') return false;
@@ -286,6 +394,8 @@ async function admitAndStart(
     state: 'queued',
     waitReason: null,
     stackedOn,
+    baseBranch: base.branch,
+    lane: base.lane,
   });
   return { started };
 }

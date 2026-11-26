@@ -312,6 +312,8 @@ const factorySettings = (over: Partial<FactorySettings> = {}): FactorySettings =
   tooBig: 'ask',
   holdPathsAwaitingApproval: false,
   baseBranch: '',
+  laneLabelPrefix: 'feature:',
+  laneBranchPrefix: 'feature/',
   blockedReason: null,
   updatedAt: '2026-11-16T00:00:00.000Z',
   ...over,

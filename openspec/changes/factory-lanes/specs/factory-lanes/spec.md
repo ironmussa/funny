@@ -10,7 +10,7 @@ kept close to the factory's base branch so that merging a finished feature back 
 ### Requirement: A lane is named by a label on the issue
 
 An issue SHALL select a lane by carrying a label made of the factory's lane prefix and a name
-(`lane:payments`, with the default prefix `lane:`), compared without regard to case. The lane's
+(`feature:payments`, with the default prefix `feature:`), compared without regard to case. The lane's
 branch SHALL be the factory's lane branch prefix followed by that name (`feature/payments`, with
 the default prefix `feature/`). A member with `steer` SHALL be able to change both prefixes in the
 factory's settings while the factory has no lane. The label that admits issues to the factory
@@ -23,22 +23,22 @@ Lanes SHALL share the factory's concurrency limits.
 
 #### Scenario: The first issue of a feature
 
-- **WHEN** the factory admits issue #30 labelled `lane:payments`, and it has no lane `payments`
+- **WHEN** the factory admits issue #30 labelled `feature:payments`, and it has no lane `payments`
 - **THEN** the factory creates the lane `payments`, creates `feature/payments` from its "Merge into" branch, and #30 runs on that branch
 
 #### Scenario: Another issue of the same feature
 
-- **WHEN** issue #31 is labelled `Lane:Payments` and the lane `payments` exists
+- **WHEN** issue #31 is labelled `Feature:Payments` and the lane `payments` exists
 - **THEN** #31 runs on `feature/payments`, and no other lane is created
 
 #### Scenario: A lane label without the factory's label
 
-- **WHEN** the factory admits automatically on `ready-for-agent` and an issue carries only `lane:payments`
+- **WHEN** the factory admits automatically on `ready-for-agent` and an issue carries only `feature:payments`
 - **THEN** the issue is not admitted and no lane is created
 
 #### Scenario: A name that is not a branch
 
-- **WHEN** an issue is labelled `lane:a..b`
+- **WHEN** an issue is labelled `feature:a..b`
 - **THEN** it is not admitted, and the board shows that its lane name is not valid
 
 ### Requirement: A factory shows and manages its lanes
@@ -58,7 +58,7 @@ without a lane; the name SHALL make a new lane only after the finished one was r
 
 #### Scenario: A mistyped label
 
-- **WHEN** an issue labelled `lane:paymnets` was admitted and made the lane `paymnets`
+- **WHEN** an issue labelled `feature:paymnets` was admitted and made the lane `paymnets`
 - **THEN** the settings list that lane, and once its run ended the enabler can remove it
 
 ### Requirement: A run's base branch is decided at admission
@@ -73,17 +73,17 @@ existed SHALL use the factory's "Merge into" branch.
 
 #### Scenario: An issue in a lane
 
-- **WHEN** issue #30 carries `lane:a`
+- **WHEN** issue #30 carries `feature:a`
 - **THEN** #30's run starts from `origin/feature/a`, its pull request targets `feature/a`, and it merges into `feature/a`
 
 #### Scenario: The label changes after admission
 
-- **WHEN** #30's run is in flight on `feature/a` and a member replaces `lane:a` with `lane:b` on the issue
+- **WHEN** #30's run is in flight on `feature/a` and a member replaces `feature:a` with `feature:b` on the issue
 - **THEN** the run keeps `feature/a` as its base until it ends
 
 #### Scenario: Two lanes at once
 
-- **WHEN** an issue carries both `lane:a` and `lane:b`
+- **WHEN** an issue carries both `feature:a` and `feature:b`
 - **THEN** it is not admitted, and the board shows that it matches two lanes
 
 #### Scenario: Lanes merge independently
@@ -185,17 +185,17 @@ be left in place. An issue naming the finished lane SHALL then run without a lan
 
 #### Scenario: Finishing a feature
 
-- **WHEN** the enabler asks to finish the lane `lane:a` and none of its runs is in flight
+- **WHEN** the enabler asks to finish the lane `feature:a` and none of its runs is in flight
 - **THEN** the factory opens `feature/a` → `dev` listing the lane's issues and leaves the merge to a person
 
 #### Scenario: The lane's pull request merges
 
 - **WHEN** a person merges `feature/a` → `dev`
-- **THEN** the factory marks the lane `a` as finished, and a later issue labelled `lane:a` runs on `dev`
+- **THEN** the factory marks the lane `a` as finished, and a later issue labelled `feature:a` runs on `dev`
 
 #### Scenario: Finishing with work in flight
 
-- **WHEN** the enabler asks to finish `lane:a` while #30's run is in flight on `feature/a`
+- **WHEN** the enabler asks to finish `feature:a` while #30's run is in flight on `feature/a`
 - **THEN** the request is refused with a message naming #30
 
 ### Requirement: Conflicts between lanes are reported early

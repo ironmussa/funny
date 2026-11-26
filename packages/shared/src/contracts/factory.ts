@@ -244,6 +244,11 @@ export function approvalGapFor(
 /** What the factory does with an issue triage finds too large for one change. */
 export type FactoryTooBig = 'ask' | 'split';
 
+/** What a label starts with to name a lane, unless the factory says otherwise (change factory-lanes). */
+export const DEFAULT_LANE_LABEL_PREFIX = 'feature:';
+/** What a lane's branch starts with, unless the factory says otherwise. */
+export const DEFAULT_LANE_BRANCH_PREFIX = 'feature/';
+
 /**
  * A branch name the factory may merge into: what git accepts as a branch
  * (`git check-ref-format --branch`), kept to the common subset. Empty means the
@@ -267,6 +272,24 @@ export const factoryBaseBranchSchema = z
         !name.split('/').some((part) => part.startsWith('.'))),
     'Not a valid branch name',
   );
+
+/** A lane label prefix: some text without spaces, such as `feature:`. */
+export const factoryLaneLabelPrefixSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(50)
+  .refine((prefix) => !/\s/.test(prefix), { message: 'Must not contain spaces' });
+
+/** A lane branch prefix: what, followed by a lane's name, is a branch name (`feature/`). */
+export const factoryLaneBranchPrefixSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(100)
+  .refine((prefix) => factoryBaseBranchSchema.safeParse(`${prefix}x`).success, {
+    message: 'Not the start of a valid branch name',
+  });
 
 export const saveFactorySettingsInput = z
   .object({
@@ -314,6 +337,10 @@ export const saveFactorySettingsInput = z
     holdPathsAwaitingApproval: z.boolean().optional(),
     /** The branch the factory's pull requests merge into; empty: the repository's default branch. */
     baseBranch: factoryBaseBranchSchema.optional(),
+    /** What a label starts with to name a lane (`feature:`); fixed while the factory has lanes. */
+    laneLabelPrefix: factoryLaneLabelPrefixSchema.optional(),
+    /** What a lane's branch starts with (`feature/`); fixed while the factory has lanes. */
+    laneBranchPrefix: factoryLaneBranchPrefixSchema.optional(),
   })
   .strict();
 
@@ -361,6 +388,12 @@ export interface FactorySettings {
    * the default branch.
    */
   baseBranch: string;
+  /**
+   * What a label starts with to name a lane (change factory-lanes): an issue
+   * labelled `<prefix><name>` runs on the branch `<laneBranchPrefix><name>`.
+   */
+  laneLabelPrefix: string;
+  laneBranchPrefix: string;
   /** Why the factory cannot make progress now (e.g. its runner is offline), or null. */
   blockedReason: string | null;
   /**
@@ -464,6 +497,13 @@ export interface FactoryRun {
   triggerName: string | null;
   /** The input values its trigger supplied; empty for an issue run. */
   inputs: Record<string, string>;
+  /**
+   * The branch the run starts from and merges into, decided when it was
+   * admitted (change factory-lanes); null before that and on older runs.
+   */
+  baseBranch: string | null;
+  /** The lane it was admitted to (the name after the lane label's prefix), or null. */
+  lane: string | null;
   prUrl: string | null;
   state: FactoryRunState;
   currentStep: string | null;
@@ -745,8 +785,16 @@ export interface FactoryWaitReason {
     /** As `paths-overlap`, and every such run is parked for a member's approval. */
     | 'paths-awaiting-approval'
     /** Retried or approved while every slot was taken: first in line for the next one. */
-    | 'no-free-slot';
+    | 'no-free-slot'
+    /** The issue carries the labels of two or more lanes (change factory-lanes). */
+    | 'lane-ambiguous'
+    /** Its lane label names no usable branch, or the lane's branch could not be made. */
+    | 'lane-invalid'
+    /** A blocker merged into another branch, and that merge is not in this run's base yet. */
+    | 'blocker-on-other-branch';
   blockers: number[];
+  /** What a lane reason is about: the lanes it matches, or why its lane cannot be used. */
+  detail?: string;
 }
 
 /** At most this many issues per send. */

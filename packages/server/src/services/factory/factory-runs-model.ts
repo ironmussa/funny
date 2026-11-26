@@ -83,8 +83,12 @@ const WAIT_REASON_SCHEMA = z.object({
     'paths-overlap',
     'paths-awaiting-approval',
     'no-free-slot',
+    'lane-ambiguous',
+    'lane-invalid',
+    'blocker-on-other-branch',
   ]),
   blockers: z.array(z.number().int()),
+  detail: z.string().optional(),
 });
 
 /** States a run moves through; non-terminal ones block re-admitting the issue. */
@@ -349,6 +353,15 @@ export interface FactoryRunView {
   triggerName: string | null;
   /** The input values its trigger supplied; empty for an issue run. */
   inputs: Record<string, string>;
+  /**
+   * The branch it starts from and merges into, decided at admission (change
+   * factory-lanes); null before admission and on older runs: the factory's setting.
+   */
+  baseBranch: string | null;
+  /** The lane it was admitted to (its name), or null: the factory's own branch. */
+  lane: string | null;
+  /** The commit its merge made on its base branch, or null. */
+  mergeSha: string | null;
   prUrl: string | null;
   state: FactoryRunState;
   currentStep: string | null;
@@ -447,6 +460,9 @@ const plainFieldsOf = (row: Row) => ({
   triggerId: row.triggerId ?? null,
   triggerName: row.triggerName ?? null,
   inputs: parseStoredInputs(row.inputs ?? null, 'factory_runs.inputs'),
+  baseBranch: row.baseBranch ?? null,
+  lane: row.lane ?? null,
+  mergeSha: row.mergeSha ?? null,
   prUrl: row.prUrl,
   // SAFETY: factory_runs.state is written only in this module, always from a FactoryRunState value.
   state: row.state as FactoryRunState,
@@ -630,6 +646,10 @@ export interface StartRunInput {
   /** Defaults to `label` (the automatic-mode admission). */
   source?: FactoryRunSource;
   flowName?: string;
+  /** The run's base branch, for a run recorded already admitted (change factory-lanes). */
+  baseBranch?: string | null;
+  /** The lane of that base branch, when it is a lane's. */
+  lane?: string | null;
 }
 
 /** What the run stores of a regression proof (the contract's shape). */
@@ -663,6 +683,8 @@ export interface UpdateRunInput {
   integrationPendingAt?: string | null;
   /** The run this one is stacked on (D10). */
   stackedOn?: FactoryStackedOn | null;
+  /** The commit its merge made on its base branch (change factory-lanes). */
+  mergeSha?: string | null;
 }
 
 /** Update fields stored as they are, and the ones stored as JSON. */
@@ -676,6 +698,7 @@ const PLAIN_FIELDS = [
   'flowCommit',
   'regenerateNode',
   'integrationPendingAt',
+  'mergeSha',
 ] as const;
 const JSON_FIELDS = [
   'threadIds',
@@ -744,6 +767,9 @@ export function newRunRow(
     triggerId: null,
     triggerName: null,
     inputs: null,
+    baseBranch: null,
+    lane: null,
+    mergeSha: null,
     ...given,
   };
 }

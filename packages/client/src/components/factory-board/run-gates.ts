@@ -218,6 +218,8 @@ const BLOCKING_WAITS: ReadonlySet<FactoryWaitReason['kind']> = new Set([
   'circular',
   'blockers-unreadable',
   'proof-not-configured',
+  'lane-ambiguous',
+  'lane-invalid',
 ]);
 
 function waitLabel(t: TFunction, reason: FactoryWaitReason): string {
@@ -243,6 +245,12 @@ function waitLabel(t: TFunction, reason: FactoryWaitReason): string {
       return t('factoryBoard.wait.noProofRules', 'No proof rules');
     case 'no-free-slot':
       return t('factoryBoard.wait.noFreeSlot', 'No free slot');
+    case 'lane-ambiguous':
+      return t('factoryBoard.wait.laneAmbiguous', 'Several feature labels');
+    case 'lane-invalid':
+      return t('factoryBoard.wait.laneInvalid', 'Feature label not usable');
+    case 'blocker-on-other-branch':
+      return t('factoryBoard.wait.otherBranch', 'After {{issues}} reaches this branch', { issues });
   }
 }
 

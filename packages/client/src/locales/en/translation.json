@@ -1859,7 +1859,10 @@
       "circular": "Circular dependency with {{blockers}}",
       "unreadable": "Its blockers could not be read from GitHub",
       "proofNotConfigured": "Regression proof not configured: its flow has no proof rules, so it would never merge",
-      "noFreeSlot": "Waiting for a free slot: the factory is running as many runs as it may"
+      "noFreeSlot": "Waiting for a free slot: the factory is running as many runs as it may",
+      "laneAmbiguous": "It carries the labels of several features ({{lanes}}): leave one",
+      "laneInvalid": "Its feature label cannot be used: {{why}}",
+      "otherBranch": "Waiting for {{blockers}}, merged into another branch, to reach this one"
     },
     "queuePosition": "{{label}} · #{{position}}",
     "issueInFactory": "In your issue factory",
@@ -2182,7 +2185,10 @@
       "circular": "Circular dependency",
       "unreadable": "Blockers unreadable",
       "noProofRules": "No proof rules",
-      "noFreeSlot": "No free slot"
+      "noFreeSlot": "No free slot",
+      "laneAmbiguous": "Several feature labels",
+      "laneInvalid": "Feature label not usable",
+      "otherBranch": "After {{issues}} reaches this branch"
     },
     "problem": {
       "noReview": "No review",

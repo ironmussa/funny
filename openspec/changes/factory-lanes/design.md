@@ -42,7 +42,7 @@ merge commit.
 
 ### D1. A lane is a label convention, and the factory label still admits
 
-A lane is named on the issue: a label `<lane prefix><name>` (default `lane:`), matched without
+A lane is named on the issue: a label `<lane prefix><name>` (default `feature:`), matched without
 regard to case, selects the lane `<name>`, whose branch is `<branch prefix><name>` (default
 `feature/`). The two prefixes are columns of `factory_settings`, changeable only while the factory
 has no lane. A feature is one label the team creates in GitHub, with nothing to register in funny.
@@ -162,8 +162,11 @@ Other base (another lane, or no lane while the candidate has one): finished only
 otherwise `blocker-on-other-branch`. A blocker merged into the "Merge into" branch therefore
 unblocks a lane's issue after that lane's next sync, which the base's move already triggers. Stacking
 (`factory-stacking.ts`) refuses a blocker with another base before it looks at its branch.
-This requires recording the merge commit on the run (`factory_runs.merge_sha`) when `merge`
-succeeds.
+The merge commit is read from the blocker's pull request (`merge_commit_sha`) the first time this
+check needs it and kept on the run (`factory_runs.merge_sha`). It is not written by `merge`: a run
+merges through four paths (alone, as a batch member, through GitHub's merge queue, or by a person
+outside the factory), and the pull request is the one place that knows the commit for all of them
+and for runs merged before this change.
 
 ### D6. The sentinel watches every base with a recent factory merge
 
@@ -248,5 +251,5 @@ would then follow the factory's branch, so stop or finish lane runs before rolli
 
 None. Decided in review: the factory label admits and the lane label only routes (D1); a sync is
 its own state machine with no reviewer (D4); a lane task's issue closes when it merges into the
-lane (D9); a lane is a `lane:<name>` label, created at first admission (D1); it is marked finished when its
+lane (D9); a lane is a `feature:<name>` label, created at first admission (D1); it is marked finished when its
 final pull request merges (D8).

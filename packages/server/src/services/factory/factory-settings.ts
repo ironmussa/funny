@@ -1,5 +1,7 @@
 import {
   DEFAULT_FACTORY_BATCH,
+  DEFAULT_LANE_BRANCH_PREFIX,
+  DEFAULT_LANE_LABEL_PREFIX,
   DEFAULT_MAX_LOW_RISK_LINES,
   factoryStepOverridesSchema,
   APPROVAL_ADJUST_LINES_RANGE,
@@ -14,6 +16,8 @@ import {
   type FactorySettings,
   type FactoryStepOverrides,
   factoryBaseBranchSchema,
+  factoryLaneBranchPrefixSchema,
+  factoryLaneLabelPrefixSchema,
   type FactoryTooBig,
 } from '@funny/shared/contracts/factory';
 /**
@@ -33,13 +37,15 @@ import {
 import { errorMessage } from '@funny/shared/errors';
 import { parseStoredJson } from '@funny/shared/json-validation';
 import { KNOWN_PROVIDER_IDS, providerModelProblem } from '@funny/shared/models';
-import { and, eq, exists, inArray, or } from 'drizzle-orm';
-import { errAsync, ResultAsync } from 'neverthrow';
+import { and, eq, exists, inArray, notInArray, or } from 'drizzle-orm';
+import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import { z } from 'zod';
 
 import { db } from '../../db/index.js';
-import { factoryRuns, factorySettings, projects } from '../../db/schema.js';
+import { factoryLanes, factoryRuns, factorySettings, projects } from '../../db/schema.js';
 import { requireProjectAccess } from '../project-access.js';
+import { createFactoryLanesRepository, type FactoryLaneView } from './factory-lanes.js';
+import { TERMINAL_STATES } from './factory-runs-model.js';
 import { awaitsPullRequest } from './factory-runs.js';
 import type { ProjectAgentDefaults } from './factory-step-options.js';
 
@@ -164,6 +170,8 @@ const configOf = (row: Row): FactoryConfig => ({
   tooBig: tooBigOf(row),
   holdPathsAwaitingApproval: row.holdPathsAwaitingApproval === 1,
   baseBranch: row.baseBranch ?? '',
+  laneLabelPrefix: row.laneLabelPrefix ?? DEFAULT_LANE_LABEL_PREFIX,
+  laneBranchPrefix: row.laneBranchPrefix ?? DEFAULT_LANE_BRANCH_PREFIX,
 });
 
 const toView = (row: Row): FactorySettingsView => ({
@@ -186,6 +194,16 @@ const SAVE_RULES: readonly SaveRule[] = [
   ({ baseBranch }) =>
     baseBranch !== undefined && !factoryBaseBranchSchema.safeParse(baseBranch).success
       ? 'baseBranch is not a valid branch name'
+      : null,
+  ({ laneLabelPrefix }) =>
+    laneLabelPrefix !== undefined &&
+    !factoryLaneLabelPrefixSchema.safeParse(laneLabelPrefix).success
+      ? 'laneLabelPrefix must be some text without spaces'
+      : null,
+  ({ laneBranchPrefix }) =>
+    laneBranchPrefix !== undefined &&
+    !factoryLaneBranchPrefixSchema.safeParse(laneBranchPrefix).success
+      ? 'laneBranchPrefix is not the start of a valid branch name'
       : null,
   ({ label }) => (label !== undefined && label.trim() === '' ? 'Label must not be empty' : null),
   ({ mode }) =>
@@ -282,6 +300,8 @@ const DEFAULTS: FactoryConfig = {
   tooBig: 'ask',
   holdPathsAwaitingApproval: false,
   baseBranch: '',
+  laneLabelPrefix: DEFAULT_LANE_LABEL_PREFIX,
+  laneBranchPrefix: DEFAULT_LANE_BRANCH_PREFIX,
 };
 
 /** The configured fields a save stores: the ones it carries, else `base`'s. */
@@ -306,6 +326,8 @@ function mergeConfig(input: SaveFactorySettingsInput, base: FactoryConfig): Fact
     tooBig: pick('tooBig'),
     holdPathsAwaitingApproval: pick('holdPathsAwaitingApproval'),
     baseBranch: pick('baseBranch').trim(),
+    laneLabelPrefix: pick('laneLabelPrefix').trim(),
+    laneBranchPrefix: pick('laneBranchPrefix').trim(),
   };
 }
 
@@ -342,6 +364,8 @@ function buildRow(
     tooBig: config.tooBig,
     holdPathsAwaitingApproval: config.holdPathsAwaitingApproval ? 1 : 0,
     baseBranch: config.baseBranch || null,
+    laneLabelPrefix: config.laneLabelPrefix,
+    laneBranchPrefix: config.laneBranchPrefix,
     // A save is a new configuration: the watcher re-reports what still blocks it.
     blockedReason: null,
     createdAt: now,
@@ -453,6 +477,8 @@ const COLUMNS_OF: Record<keyof FactoryConfig, readonly (keyof Row)[]> = {
   tooBig: ['tooBig'],
   holdPathsAwaitingApproval: ['holdPathsAwaitingApproval'],
   baseBranch: ['baseBranch'],
+  laneLabelPrefix: ['laneLabelPrefix'],
+  laneBranchPrefix: ['laneBranchPrefix'],
 };
 
 /** What a save writes over a stored row: the toggle, the bookkeeping and the fields it carries. */
@@ -543,11 +569,136 @@ export function createFactorySettingsService(
       // so it needs the same capability as starting a thread by hand.
       return requireProjectAccess(userId, projectId, 'steer', accessErrors)
         .andThen(() => find(userId, projectId))
+        .andThen((existing) => lanesFix(userId, projectId, input, existing).map(() => existing))
         .andThen((existing) =>
           upsert(buildRow(deps.newId(), userId, projectId, input, existing), input),
         );
     },
+
+    /** The lanes of the caller's factory for a project, oldest first (openspec factory-lanes). */
+    lanes(userId: string, projectId: string): ResultAsync<FactoryLaneView[], FactorySettingsError> {
+      return requireProjectAccess(userId, projectId, 'view', accessErrors)
+        .andThen(() => ownFactoryId(userId, projectId))
+        .andThen((factoryId) =>
+          factoryId ? lanes.list(factoryId).mapErr(storageOf) : okAsync<FactoryLaneView[]>([]),
+        );
+    },
+
+    /**
+     * Remove a lane of the caller's factory: its row only, its branch is left
+     * on GitHub. Refused while a run of the lane has not ended or its sync is
+     * in flight: both still write to the lane's branch.
+     */
+    removeLane(
+      userId: string,
+      projectId: string,
+      name: string,
+    ): ResultAsync<void, FactorySettingsError> {
+      return requireProjectAccess(userId, projectId, 'steer', accessErrors)
+        .andThen(() => ownFactoryId(userId, projectId))
+        .andThen((factoryId) =>
+          factoryId
+            ? lanes.find(factoryId, name.trim().toLowerCase()).mapErr(storageOf)
+            : okAsync<FactoryLaneView | null>(null),
+        )
+        .andThen((lane) => {
+          if (!lane) return errAsync<void, FactorySettingsError>(NO_SUCH_LANE);
+          if (SYNC_IN_FLIGHT.has(lane.syncState)) {
+            return errAsync<void, FactorySettingsError>({
+              kind: 'invalid',
+              message: `The lane ${lane.name} is being synced: remove it when the sync ends`,
+            });
+          }
+          return openRunsOfLane(lane).andThen((open) =>
+            open.length > 0
+              ? errAsync<void, FactorySettingsError>({
+                  kind: 'invalid',
+                  message: `The lane ${lane.name} still has runs that have not ended (${open.join(', ')}): stop or finish them first`,
+                })
+              : lanes
+                  .remove(lane.id)
+                  .mapErr(storageOf)
+                  .map(() => undefined),
+          );
+        });
+    },
   };
+}
+
+const lanes = createFactoryLanesRepository();
+
+const NO_SUCH_LANE: FactorySettingsError = { kind: 'not-found', message: 'Lane not found' };
+
+/** Sync states in which the factory is writing to the lane's branch. */
+const SYNC_IN_FLIGHT: ReadonlySet<string> = new Set(['merging', 'resolving', 'checking']);
+
+const storageOf = (error: { message: string }): FactorySettingsError => ({
+  kind: 'storage',
+  message: error.message,
+});
+
+const ownFactoryId = (
+  userId: string,
+  projectId: string,
+): ResultAsync<string | null, FactorySettingsError> =>
+  ResultAsync.fromPromise(
+    db.select({ id: factorySettings.id }).from(factorySettings).where(byOwner(userId, projectId)),
+    storage,
+  ).map(([row]) => row?.id ?? null);
+
+/** The runs admitted to a lane that have not ended, named as the board names them. */
+const openRunsOfLane = (lane: FactoryLaneView): ResultAsync<string[], FactorySettingsError> =>
+  ResultAsync.fromPromise(
+    db
+      .select({ id: factoryRuns.id, issueNumber: factoryRuns.issueNumber })
+      .from(factoryRuns)
+      .where(
+        and(
+          eq(factoryRuns.factoryId, lane.factoryId),
+          eq(factoryRuns.lane, lane.name),
+          notInArray(factoryRuns.state, [...TERMINAL_STATES]),
+        ),
+      ),
+    storage,
+  ).map((rows) =>
+    rows.map((row) => (row.issueNumber > 0 ? `#${row.issueNumber}` : `run-${row.id.slice(0, 8)}`)),
+  );
+
+/** The settings every lane of a factory was made with: fixed while it has lanes. */
+const LANE_FIXED_FIELDS = ['baseBranch', 'laneLabelPrefix', 'laneBranchPrefix'] as const;
+
+/**
+ * Refuse a save that changes what the factory's lanes were made with (openspec
+ * factory-lanes, D1): each lane's branch was cut from the "merge into" branch
+ * and is kept in sync with it, and its name comes from the two prefixes.
+ */
+function lanesFix(
+  userId: string,
+  projectId: string,
+  input: SaveFactorySettingsInput,
+  existing: FactorySettingsView | null,
+): ResultAsync<void, FactorySettingsError> {
+  const changed = LANE_FIXED_FIELDS.filter(
+    (field) => input[field] !== undefined && existing && input[field]!.trim() !== existing[field],
+  );
+  if (!existing || changed.length === 0) return okAsync(undefined);
+  return ResultAsync.fromPromise(
+    db
+      .select({ name: factoryLanes.name })
+      .from(factoryLanes)
+      .innerJoin(factorySettings, eq(factoryLanes.factoryId, factorySettings.id))
+      .where(byOwner(userId, projectId)),
+    storage,
+  ).andThen((lanes) =>
+    lanes.length === 0
+      ? okAsync(undefined)
+      : errAsync<void, FactorySettingsError>({
+          kind: 'invalid',
+          message: `${changed.join(', ')} cannot change while the factory has lanes (${lanes
+            .map((lane) => lane.name)
+            .join(', ')}): finish or remove them first`,
+        }),
+  );
 }
 
 /**

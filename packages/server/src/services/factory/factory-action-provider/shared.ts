@@ -158,7 +158,26 @@ export interface FactoryRunScope {
   branch: string;
   /** The issue's page (the reviewer reads the issue there). */
   issueUrl?: string;
+  /**
+   * The branch the run starts from and merges into, as recorded when it was
+   * admitted (change factory-lanes); null: the factory's "merge into" branch.
+   */
+  baseBranch?: string | null;
 }
+
+/**
+ * Who reads the repository for a run, and with which base branch: every read
+ * of "the base" for a run goes through this reader, so the run's recorded
+ * branch is what `defaultBranch()` answers.
+ */
+export const runReaderOf = (
+  scope: Pick<FactoryRunScope, 'repo' | 'userId' | 'projectId' | 'baseBranch'>,
+) => ({
+  repo: scope.repo,
+  ownerId: scope.userId,
+  projectId: scope.projectId,
+  baseBranch: scope.baseBranch ?? null,
+});
 
 /** The scope of a run that has an issue: what the steps judging a change against it need. */
 export type IssueRunScope = FactoryRunScope & { issueNumber: number };

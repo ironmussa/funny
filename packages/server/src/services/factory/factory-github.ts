@@ -62,6 +62,12 @@ export interface FactoryRepoReader {
   repo: string;
   ownerId: string;
   projectId: string;
+  /**
+   * The base branch of the run this read is for (change factory-lanes, D3):
+   * what `defaultBranch()` answers. Absent for a read with no run, which gets
+   * the factory's "merge into" branch.
+   */
+  baseBranch?: string | null;
 }
 
 export interface FactoryGithubPort {
@@ -169,6 +175,15 @@ export interface FactoryGithubPort {
    * `reader.ownerId`'s own access. Absent in fakes that never close one.
    */
   closeIssue?(reader: FactoryRepoReader, issueNumber: number): ResultAsync<void, GithubCallError>;
+  /**
+   * Make `branch` from the head of the branch the factory merges into when it
+   * does not exist (a lane's branch, change factory-lanes). Absent: the
+   * factory cannot make branches, and a lane whose branch is missing is refused.
+   */
+  ensureBranch?(
+    reader: FactoryRepoReader,
+    branch: string,
+  ): ResultAsync<'created' | 'exists', GithubCallError>;
   /** CI state and merge of a run's pull request (`wait_ci` / `merge`). */
   pullRequests: FactoryPullRequests;
 }
@@ -239,6 +254,18 @@ function fetchIssues(
   });
 }
 
+/**
+ * The branch a reader's "base" is (change factory-lanes, D3): the one recorded
+ * on the run it reads for, else the factory's "merge into" setting (null: the
+ * repository's default branch). The setting is not read when the run has one.
+ */
+export async function readerBaseBranch(
+  reader: FactoryRepoReader,
+  settingOf: (ownerId: string, projectId: string) => Promise<string | null>,
+): Promise<string | null> {
+  return reader.baseBranch || settingOf(reader.ownerId, reader.projectId);
+}
+
 /** The production GitHub side: the project's runner for the repo, the deployment's App for tokens. */
 export function createFactoryGithub(
   ports: RunnerPorts,
@@ -271,7 +298,7 @@ export function createFactoryGithub(
         api: GITHUB_API,
         userAgent: USER_AGENT,
       }),
-      () => factoryBaseBranchOf(reader.ownerId, reader.projectId),
+      () => readerBaseBranch(reader, factoryBaseBranchOf),
     );
 
   return {
@@ -303,6 +330,7 @@ export function createFactoryGithub(
     commentOnIssue: (reader, issueNumber, body) => reads(reader).commentOnIssue(issueNumber, body),
     createIssue: (reader, issue) => reads(reader).createIssue(issue),
     closeIssue: (reader, issueNumber) => reads(reader).closeIssue(issueNumber),
+    ensureBranch: (reader, branch) => reads(reader).ensureBranch(branch),
     branchState: (reader, branch) => reads(reader).branchState(branch),
     mergeCommitState: (reader, number) => reads(reader).mergeCommitState(number),
     issueText: (reader, issueNumber) => reads(reader).issueText(issueNumber),

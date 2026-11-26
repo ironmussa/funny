@@ -1818,7 +1818,10 @@
       "circular": "Dependência circular com {{blockers}}",
       "unreadable": "Não foi possível ler as bloqueadoras no GitHub",
       "proofNotConfigured": "Prova de regressão não configurada: o fluxo não tem regras de prova, então nunca faria merge",
-      "noFreeSlot": "Esperando um slot livre: o factory já roda todas as runs que pode ao mesmo tempo"
+      "noFreeSlot": "Esperando um slot livre: o factory já roda todas as runs que pode ao mesmo tempo",
+      "laneAmbiguous": "Tem as labels de várias features ({{lanes}}): deixe uma",
+      "laneInvalid": "A label de feature não pode ser usada: {{why}}",
+      "otherBranch": "Aguardando {{blockers}}, mesclada em outra branch, chegar a esta"
     },
     "queuePosition": "{{label}} · #{{position}}",
     "issueInFactory": "No seu factory de issues",
@@ -2141,7 +2144,10 @@
       "circular": "Dependência circular",
       "unreadable": "Bloqueios ilegíveis",
       "noProofRules": "Sem regras de proof",
-      "noFreeSlot": "Sem vaga livre"
+      "noFreeSlot": "Sem vaga livre",
+      "laneAmbiguous": "Várias labels de feature",
+      "laneInvalid": "Label de feature não utilizável",
+      "otherBranch": "Quando {{issues}} chegar a esta branch"
     },
     "problem": {
       "noReview": "Sem review",

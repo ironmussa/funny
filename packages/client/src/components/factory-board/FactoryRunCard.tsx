@@ -23,6 +23,7 @@ import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { BOARD_CARD_TITLE_CLASS, BoardCard } from '@/components/board/BoardCard';
+import { BranchBadge } from '@/components/BranchBadge';
 import { KanbanCard } from '@/components/kanban/KanbanCard';
 import { PRBadge } from '@/components/PRBadge';
 import {
@@ -234,6 +235,14 @@ function FactoryRunCardBody({
             detail={state.detail}
             testId={`factory-board-state-${run.id}`}
             data={{ 'data-state': run.state }}
+          />
+        )}
+        {/* A run in a lane merges into the lane's branch, not the factory's own (openspec factory-lanes). */}
+        {run.lane && run.baseBranch && (
+          <BranchBadge
+            branch={run.baseBranch}
+            size="xs"
+            data-testid={`factory-board-lane-${run.id}`}
           />
         )}
         <ReplacedMarker run={run} replacedBy={replacedBy} />

@@ -145,6 +145,12 @@ interface GithubScript {
   closed?: number[];
   /** The checks of the base branch (default: green). */
   baseCi?: CiState;
+  /** The factory's "merge into" branch as GitHub reads resolve it now (default `main`). */
+  mergeInto?: { branch: string };
+  /** GitHub refuses to make a branch. */
+  branchesRefused?: boolean;
+  /** Each issue's labels as GitHub reads the issue back. */
+  labels?: Record<number, string[]>;
   /** When each issue last changed (GitHub's `updated_at`); an absent one never changed. */
   updated?: Record<number, string>;
   /** Each pull request's state, by number; an absent one is open. */
@@ -177,6 +183,10 @@ type FakeGithub = FactoryGithubPort & {
   created: Array<{ number: number; title: string; body: string }>;
   /** Pull requests closed as replaced, with what replaced them and who closed them. */
   closedReplaced: Array<{ number: number; by: FactoryReplacedBy; origin?: string }>;
+  /** What each read of "the base branch" answered, in order. */
+  baseBranches: string[];
+  /** Branches the factory asked to exist (a lane's), in order. */
+  ensuredBranches: string[];
 };
 
 function fakeGithub(
@@ -196,6 +206,14 @@ function fakeGithub(
     prLookups: [],
     created: [],
     closedReplaced: [],
+    baseBranches: [],
+    ensuredBranches: [],
+    ensureBranch: (_reader: unknown, branch: string) => {
+      if (script.branchesRefused) return errAsync({ message: 'GitHub answered 403', status: 403 });
+      const existed = port.ensuredBranches.includes(branch);
+      port.ensuredBranches.push(branch);
+      return okAsync(existed ? ('exists' as const) : ('created' as const));
+    },
     resolveRepo: async () => repo,
     createIssue: (_reader: unknown, issue: { title: string; body: string }) => {
       if (
@@ -223,6 +241,7 @@ function fakeGithub(
             pullRequest: false,
             createdAt: '2026-01-01T00:00:00Z',
             updatedAt: script.updated?.[number] ?? '2026-01-01T00:00:00Z',
+            labels: script.labels?.[number],
           }),
     issueBlockers: (_reader: unknown, number: number) => {
       const blockers = script.blockers?.[number] ?? [];
@@ -243,7 +262,12 @@ function fakeGithub(
       return okAsync({ ...repoFlows, ...script.files }[path] ?? null);
     },
     branchAhead: () => okAsync(script.branchAhead ?? true),
-    defaultBranch: () => okAsync('main'),
+    // As in `factory-github.ts`: a run's recorded base wins over the factory's setting.
+    defaultBranch: (reader: { baseBranch?: string | null }) => {
+      const branch = reader.baseBranch || script.mergeInto?.branch || 'main';
+      port.baseBranches.push(branch);
+      return okAsync(branch);
+    },
     branchState: () =>
       okAsync({ sha: 'base-sha', ci: script.baseCi ?? { kind: 'green' as const } }),
     // Merge commits whose checks are unknown: every recent merge stays a suspect.
@@ -622,6 +646,176 @@ describe('factory watcher', () => {
     expect(launcher.calls).toHaveLength(0);
     const listed = (await runs.list(factoryId))._unsafeUnwrap();
     expect(listed.map((run) => run.state)).toEqual(['merged']);
+  });
+
+  // openspec factory-lanes, D2: the base is decided once, when the run is admitted.
+  test('a run keeps the base branch it was admitted with when the setting changes', async () => {
+    const factoryId = await enableFactory({ maxConcurrent: 2 });
+    const poll = fakePoll();
+    const launcher = fakeLauncher();
+    const mergeInto = { branch: 'develop' };
+    const issues = [{ number: 1, title: 'a', url: 'u/1' }];
+    await startWatcherWithProof({
+      ports,
+      github: fakeGithub('acme/repo', issues, { mergeInto }),
+      createPoll: poll.createPoll,
+      launch: launcher.launch,
+      resolveRuntime,
+      waitThread: pendingThreads,
+    });
+
+    await poll.ticks[0]!();
+    expect(launcher.calls[0]!.body).toMatchObject({ baseBranch: 'develop', baseFromRemote: true });
+
+    // The enabler now merges into `main`: the run in flight stays on `develop`,
+    // and the next issue admitted takes `main`.
+    mergeInto.branch = 'main';
+    issues.push({ number: 2, title: 'b', url: 'u/2' });
+    await poll.ticks[0]!();
+
+    expect(launcher.calls[1]!.body).toMatchObject({ baseBranch: 'main' });
+    const runs = (await createFactoryRunsRepository().list(factoryId))._unsafeUnwrap();
+    const baseOf = (issue: number) => runs.find((run) => run.issueNumber === issue)?.baseBranch;
+    expect(baseOf(1)).toBe('develop');
+    expect(baseOf(2)).toBe('main');
+  });
+
+  describe('lanes (openspec factory-lanes)', () => {
+    const three = [
+      { number: 1, title: 'a', url: 'u/1' },
+      { number: 2, title: 'b', url: 'u/2' },
+      { number: 3, title: 'c', url: 'u/3' },
+    ];
+
+    async function tickWith(script: GithubScript, issues = three) {
+      const factoryId = await enableFactory({ maxConcurrent: 5 });
+      const poll = fakePoll();
+      const launcher = fakeLauncher();
+      const github = fakeGithub('acme/repo', issues, { mergeInto: { branch: 'dev' }, ...script });
+      await startWatcherWithProof({
+        ports,
+        github,
+        createPoll: poll.createPoll,
+        launch: launcher.launch,
+        resolveRuntime,
+        waitThread: pendingThreads,
+      });
+      await poll.ticks[0]!();
+      const runs = (await createFactoryRunsRepository().list(factoryId))._unsafeUnwrap();
+      const runOf = (issue: number) => runs.find((run) => run.issueNumber === issue)!;
+      return { factoryId, poll, launcher, github, runOf };
+    }
+
+    test('the first issue of a feature makes the lane and its branch; the next one reuses them', async () => {
+      const { factoryId, launcher, github, runOf } = await tickWith({
+        labels: { 1: ['feature:payments'], 2: ['Feature:Payments'], 3: [] },
+      });
+
+      expect(runOf(1)).toMatchObject({ baseBranch: 'feature/payments', lane: 'payments' });
+      expect(runOf(2)).toMatchObject({ baseBranch: 'feature/payments', lane: 'payments' });
+      // No lane label: the factory's own branch.
+      expect(runOf(3)).toMatchObject({ baseBranch: 'dev', lane: null });
+      // The branch is asked for once, when the lane is made.
+      expect(github.ensuredBranches).toEqual(['feature/payments']);
+      const bases = launcher.calls.map((call) => String(call.body.baseBranch)).sort();
+      expect(bases).toEqual(['dev', 'feature/payments', 'feature/payments']);
+
+      const { createFactoryLanesRepository } =
+        await import('../../../services/factory/factory-lanes.js');
+      const lanes = (await createFactoryLanesRepository().list(factoryId))._unsafeUnwrap();
+      expect(lanes).toMatchObject([
+        { name: 'payments', branch: 'feature/payments', state: 'active', syncState: 'idle' },
+      ]);
+    });
+
+    test('an issue with the labels of two lanes is not admitted, and says which', async () => {
+      const { launcher, runOf } = await tickWith({ labels: { 1: ['feature:a', 'feature:b'] } }, [
+        three[0]!,
+      ]);
+      expect(launcher.calls).toHaveLength(0);
+      expect(runOf(1)).toMatchObject({
+        state: 'requested',
+        waitReason: { kind: 'lane-ambiguous', detail: 'a, b' },
+      });
+    });
+
+    test('a lane label that names no branch keeps the issue queued, and makes no lane', async () => {
+      const { factoryId, launcher, github, runOf } = await tickWith(
+        { labels: { 1: ['feature:a..b'] } },
+        [three[0]!],
+      );
+      expect(launcher.calls).toHaveLength(0);
+      expect(runOf(1).waitReason?.kind).toBe('lane-invalid');
+      expect(github.ensuredBranches).toEqual([]);
+      const { createFactoryLanesRepository } =
+        await import('../../../services/factory/factory-lanes.js');
+      expect((await createFactoryLanesRepository().list(factoryId))._unsafeUnwrap()).toEqual([]);
+    });
+
+    test('a lane whose branch cannot be made keeps the issue queued with the reason', async () => {
+      const { factoryId, launcher, runOf } = await tickWith(
+        { labels: { 1: ['feature:a'] }, branchesRefused: true },
+        [three[0]!],
+      );
+      expect(launcher.calls).toHaveLength(0);
+      expect(runOf(1).waitReason).toMatchObject({ kind: 'lane-invalid' });
+      expect(runOf(1).waitReason?.detail).toContain('feature/a');
+      const { createFactoryLanesRepository } =
+        await import('../../../services/factory/factory-lanes.js');
+      expect((await createFactoryLanesRepository().list(factoryId))._unsafeUnwrap()).toEqual([]);
+    });
+
+    test('a label changed after admission does not move the run', async () => {
+      const labels: Record<number, string[]> = { 1: ['feature:a'] };
+      const { factoryId, poll } = await tickWith({ labels }, [three[0]!]);
+      labels[1] = ['feature:b'];
+      await poll.ticks[0]!();
+      const [run] = (await createFactoryRunsRepository().list(factoryId))._unsafeUnwrap();
+      expect(run).toMatchObject({ baseBranch: 'feature/a', lane: 'a' });
+    });
+
+    test("a finished lane's label sends the issue to the factory's own branch", async () => {
+      const factoryId = await enableFactory({ maxConcurrent: 5 });
+      testDb.sqlite.run(
+        `INSERT INTO factory_lanes (id, factory_id, name, branch, state, created_at)
+         VALUES ('l1', '${factoryId}', 'a', 'feature/a', 'finished', '2026-01-01')`,
+      );
+      const poll = fakePoll();
+      const github = fakeGithub('acme/repo', [three[0]!], {
+        mergeInto: { branch: 'dev' },
+        labels: { 1: ['feature:a'] },
+      });
+      await startWatcherWithProof({
+        ports,
+        github,
+        createPoll: poll.createPoll,
+        launch: fakeLauncher().launch,
+        resolveRuntime,
+        waitThread: pendingThreads,
+      });
+      await poll.ticks[0]!();
+      const [run] = (await createFactoryRunsRepository().list(factoryId))._unsafeUnwrap();
+      expect(run).toMatchObject({ baseBranch: 'dev', lane: null });
+      expect(github.ensuredBranches).toEqual([]);
+    });
+  });
+
+  test('a run sent back to the queue and admitted again keeps its first base branch', async () => {
+    const factoryId = await enableFactory();
+    const runs = createFactoryRunsRepository();
+    const queued = (
+      await runs.enqueue({ factoryId, issueNumbers: [5], flowName: 'issue-to-merge' })
+    )._unsafeUnwrap().queued[0]!;
+    expect((await runs.admit(factoryId, queued.id, { branch: 'develop' }))._unsafeUnwrap()).toBe(
+      'admitted',
+    );
+    expect((await runs.requeue(queued.id))._unsafeUnwrap()).toBe(true);
+    expect((await runs.admit(factoryId, queued.id, { branch: 'main' }))._unsafeUnwrap()).toBe(
+      'admitted',
+    );
+
+    const [stored] = (await runs.list(factoryId))._unsafeUnwrap();
+    expect(stored!.baseBranch).toBe('develop');
   });
 
   test('admits at most maxConcurrent issues per tick', async () => {
@@ -1817,6 +2011,38 @@ describe('factory flow', () => {
 
     await eventually(factoryId, (r) => r.state === 'merged');
     expect(launcher.calls).toHaveLength(0);
+  });
+
+  // openspec factory-lanes, D2 and D3: a resumed run reads its recorded base, not the setting.
+  test('after a restart a run still uses the base branch recorded on it', async () => {
+    seedThread(testDb.db, { id: 't-done', projectId: 'p1', userId: 'alice', status: 'completed' });
+    const factoryId = await enableFactory();
+    await createFactoryRunsRepository().start({
+      factoryId,
+      issueNumber: 7,
+      threadIds: ['t-done'],
+      state: 'working',
+      currentStep: 'implement',
+      baseBranch: 'feature/a',
+    });
+    const poll = fakePoll();
+    const github = fakeGithub('o/r', [], { mergeInto: { branch: 'main' } });
+    await startWatcherWithProof({
+      ports,
+      github,
+      createPoll: poll.createPoll,
+      launch: fakeLauncher().launch,
+      resolveRuntime,
+    });
+
+    await poll.ticks[0]!();
+
+    const run = await eventually(factoryId, (r) => r.state === 'merged');
+    expect(run.baseBranch).toBe('feature/a');
+    // Every read of the base made for the run answered its own branch. The one
+    // other read is the tick's sentinel, which watches the factory's own base.
+    expect(github.baseBranches).toContain('feature/a');
+    expect(github.baseBranches.filter((branch) => branch !== 'feature/a')).toEqual(['main']);
   });
 
   test('a run starting for the first time checkpoints its implement thread in the journal', async () => {

@@ -371,6 +371,8 @@ export function createTestDb() {
       hold_paths_awaiting_approval INTEGER,
       size_gate_enabled INTEGER,
       base_branch TEXT,
+      lane_label_prefix TEXT,
+      lane_branch_prefix TEXT,
       size_ignored_paths TEXT,
       stage_limits TEXT,
       batch_size INTEGER,
@@ -439,9 +441,35 @@ export function createTestDb() {
       issue_title TEXT,
       trigger_id TEXT,
       trigger_name TEXT,
-      inputs TEXT
+      inputs TEXT,
+      base_branch TEXT,
+      lane TEXT,
+      merge_sha TEXT
     )
   `);
+  testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS factory_lanes (
+      id TEXT PRIMARY KEY,
+      factory_id TEXT NOT NULL REFERENCES factory_settings(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      branch TEXT NOT NULL,
+      state TEXT NOT NULL DEFAULT 'active',
+      ci_warning TEXT,
+      created_at TEXT NOT NULL,
+      sync_state TEXT NOT NULL DEFAULT 'idle',
+      sync_base_sha TEXT,
+      sync_pr_number INTEGER,
+      sync_thread_id TEXT,
+      sync_attempts INTEGER NOT NULL DEFAULT 0,
+      sync_started_at TEXT,
+      sync_error TEXT,
+      last_synced_base_sha TEXT,
+      finish_pr_number INTEGER
+    )
+  `);
+  testDb.run(
+    sql`CREATE UNIQUE INDEX IF NOT EXISTS factory_lanes_factory_name ON factory_lanes (factory_id, name)`,
+  );
   testDb.run(sql`
     CREATE TABLE IF NOT EXISTS factory_triggers (
       id TEXT PRIMARY KEY,

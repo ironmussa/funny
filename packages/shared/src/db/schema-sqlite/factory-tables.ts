@@ -54,6 +54,10 @@ export const factorySettings = sqliteTable(
     holdPathsAwaitingApproval: integer('hold_paths_awaiting_approval'),
     /** The branch the factory merges into; null: the repository's default branch. */
     baseBranch: text('base_branch'),
+    /** What a label starts with to name a lane (change factory-lanes); null: `feature:`. */
+    laneLabelPrefix: text('lane_label_prefix'),
+    /** What a lane's branch starts with; null: `feature/`. */
+    laneBranchPrefix: text('lane_branch_prefix'),
     /** JSON object of the factory's per-step overrides (`FactoryStepOverrides`), or null. */
     stepOverrides: text('step_overrides'),
     createdAt: text('created_at').notNull(),
@@ -140,7 +144,56 @@ export const factoryRuns = sqliteTable('factory_runs', {
   triggerName: text('trigger_name'),
   /** JSON object of the input values the trigger supplied; null for an issue run. */
   inputs: text('inputs'),
+  /**
+   * The branch the run starts from and merges into, decided at admission
+   * (change factory-lanes, D2); null on runs from before: the factory's setting.
+   */
+  baseBranch: text('base_branch'),
+  /** The lane it was admitted to (the lane's name), or null: the factory's own branch. */
+  lane: text('lane'),
+  /** The commit the run's merge made on its base branch; null until it merges. */
+  mergeSha: text('merge_sha'),
 });
+
+/**
+ * A lane of a factory (change factory-lanes): the issues labelled
+ * `<lane label prefix><name>` run on `branch`. Created when the factory first
+ * admits such an issue. `sync_state` is the lane-sync machine of
+ * `factory-lane-sync.ts`, written with compare-and-set.
+ */
+// Dialect mirror: schema.pg.ts and schema.sqlite.ts must declare the same columns.
+// fallow-ignore-next-line code-duplication
+export const factoryLanes = sqliteTable(
+  'factory_lanes',
+  {
+    id: text('id').primaryKey(),
+    factoryId: text('factory_id')
+      .notNull()
+      .references(() => factorySettings.id, { onDelete: 'cascade' }),
+    /** The lane's name, lower-cased: the label without its prefix. */
+    name: text('name').notNull(),
+    branch: text('branch').notNull(),
+    /** `active` → `finished` (its final pull request merged). */
+    state: text('state').notNull().default('active'),
+    /** Why the repository's workflows may not run for this branch, or null. */
+    ciWarning: text('ci_warning'),
+    createdAt: text('created_at').notNull(),
+    /** `idle` | `merging` | `resolving` | `checking` | `needs_human`. */
+    syncState: text('sync_state').notNull().default('idle'),
+    /** The base head the sync in flight brings in. */
+    syncBaseSha: text('sync_base_sha'),
+    syncPrNumber: integer('sync_pr_number'),
+    syncThreadId: text('sync_thread_id'),
+    syncAttempts: integer('sync_attempts').notNull().default(0),
+    syncStartedAt: text('sync_started_at'),
+    syncError: text('sync_error'),
+    /** The base head the lane's branch last took in. */
+    lastSyncedBaseSha: text('last_synced_base_sha'),
+    /** The pull request that merges the lane into the factory's base, once asked. */
+    finishPrNumber: integer('finish_pr_number'),
+  },
+  (t) => [uniqueIndex('factory_lanes_factory_name').on(t.factoryId, t.name)],
+);
 
 /**
  * What starts a factory flow besides an issue (change flow-triggers): a cron

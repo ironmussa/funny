@@ -86,7 +86,14 @@ integration figures), served over the `factory` tRPC group. See
    the GitHub side reads it for the enabler (`factoryBaseBranchOf`, passed to
    `createFactoryRepoReads`), so `defaultBranch()` answers it and every user of the base
    (worktree start, `branchAhead`, `integrate`, stacking's retarget, the merge lane, the sentinel)
-   follows. Flows and prompts are still read from the repository's default branch. `create_pr`
+   follows. The base is decided once per run, when it is admitted, and recorded on it
+   (`factory_runs.base_branch`, migration 137; `baseBranchFor` in `factory-watcher-admission.ts`,
+   written inside `runs.admit`, and only the first time). The run's steps read it through
+   `runReaderOf(scope)`, whose reader carries `baseBranch`, and `readerBaseBranch` prefers it over
+   the factory's setting: a later change of **Merge into**, a retry or a restart does not move a
+   run to another branch. A read with no run (the queue's flow checks, the sentinel) still gets
+   the factory's setting, and a run from before migration 137 has none recorded and follows the
+   setting. Flows and prompts are still read from the repository's default branch. `create_pr`
    retargets a pull request the agent opened against another branch (`retargetIfMisdirected`),
    and stops the run when it cannot. If the branch exists already (a retried
    run), the worktree checks it out and the agent goes on from the earlier attempt

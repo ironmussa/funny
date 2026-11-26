@@ -12,7 +12,7 @@ import {
   type FactoryTriage,
   type FactoryWaitReason,
 } from '@funny/shared/contracts/factory';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 import { okAsync, ResultAsync } from 'neverthrow';
 
 import { db } from '../../db/index.js';
@@ -142,6 +142,12 @@ export function queueOperations(newId: () => string) {
     admit: (
       factoryId: string,
       runId: string,
+      /**
+       * The branch the run starts from and merges into (change factory-lanes,
+       * D2). Recorded with the admission, and only the first time: a run sent
+       * back to the queue and admitted again keeps the branch it had.
+       */
+      base: { branch: string | null; lane?: string | null } = { branch: null },
     ): ResultAsync<'admitted' | 'gone' | typeof NO_FREE_SLOT, FactoryRunsError> =>
       withFreeSlot(factoryId, async () => {
         const moved = await moveRun(runId, 'admit', {
@@ -149,7 +155,14 @@ export function queueOperations(newId: () => string) {
           waitReason: null,
         });
         if (moved.isErr()) throw new Error(moved.error.message);
-        return moved.value ? ('admitted' as const) : ('gone' as const);
+        if (!moved.value) return 'gone' as const;
+        if (base.branch) {
+          await db
+            .update(factoryRuns)
+            .set({ baseBranch: base.branch, lane: base.lane ?? null })
+            .where(and(eq(factoryRuns.id, runId), isNull(factoryRuns.baseBranch)));
+        }
+        return 'admitted' as const;
       }),
 
     /** `queued → requested`, keeping its place: its flow could not start any agent. */

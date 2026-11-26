@@ -16,6 +16,8 @@ function run(over: Partial<FactoryRun> = {}): FactoryRun {
     factoryId: 'f1',
     issueNumber: seq,
     issueTitle: null,
+    baseBranch: null,
+    lane: null,
     triggerName: null,
     inputs: {},
     prUrl: null,

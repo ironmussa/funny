@@ -169,3 +169,113 @@ describe('factory runs repository', () => {
     expect(stored).toMatchObject({ mode: 'manual', label: 'new' });
   });
 });
+
+// openspec factory-lanes, D1: what a member may do with the lanes of their factory.
+describe('factory lanes in the settings', () => {
+  async function factoryWithLane() {
+    const svc = settings();
+    (await svc.save('alice', 'p1', { enabled: true, baseBranch: 'dev' }))._unsafeUnwrap();
+    const factoryId = present((await svc.factoryId('alice', 'p1'))._unsafeUnwrap(), 'a factory');
+    const { createFactoryLanesRepository } =
+      await import('../../../services/factory/factory-lanes.js');
+    (
+      await createFactoryLanesRepository().ensure(factoryId, {
+        name: 'payments',
+        branch: 'feature/payments',
+      })
+    )._unsafeUnwrap();
+    return { svc, factoryId };
+  }
+
+  test('the prefixes default to feature: and feature/, and a save changes them', async () => {
+    const svc = settings();
+    const saved = (await svc.save('alice', 'p1', { enabled: true }))._unsafeUnwrap();
+    expect(saved).toMatchObject({ laneLabelPrefix: 'feature:', laneBranchPrefix: 'feature/' });
+    const changed = (
+      await svc.save('alice', 'p1', {
+        enabled: true,
+        laneLabelPrefix: 'epic:',
+        laneBranchPrefix: 'epics/',
+      })
+    )._unsafeUnwrap();
+    expect(changed).toMatchObject({ laneLabelPrefix: 'epic:', laneBranchPrefix: 'epics/' });
+  });
+
+  test('a prefix that is not usable is refused', async () => {
+    const svc = settings();
+    const spaced = await svc.save('alice', 'p1', { enabled: true, laneLabelPrefix: 'my feature:' });
+    expect(spaced._unsafeUnwrapErr().kind).toBe('invalid');
+    const branch = await svc.save('alice', 'p1', { enabled: true, laneBranchPrefix: '/feature/' });
+    expect(branch._unsafeUnwrapErr().kind).toBe('invalid');
+  });
+
+  test('"merge into" and the prefixes cannot change while the factory has lanes', async () => {
+    const { svc } = await factoryWithLane();
+    for (const change of [
+      { baseBranch: 'main' },
+      { laneLabelPrefix: 'epic:' },
+      { laneBranchPrefix: 'epics/' },
+    ]) {
+      const refused = (
+        await svc.save('alice', 'p1', { enabled: true, ...change })
+      )._unsafeUnwrapErr();
+      expect(refused.kind).toBe('invalid');
+      expect(refused.message).toContain('payments');
+    }
+    // Saving the same values, or anything else, still works.
+    const same = await svc.save('alice', 'p1', {
+      enabled: true,
+      baseBranch: 'dev',
+      maxConcurrent: 4,
+    });
+    expect(same._unsafeUnwrap()).toMatchObject({ baseBranch: 'dev', maxConcurrent: 4 });
+  });
+
+  test('a member lists the lanes of their own factory only', async () => {
+    const { svc } = await factoryWithLane();
+    expect((await svc.lanes('alice', 'p1'))._unsafeUnwrap()).toMatchObject([
+      { name: 'payments', branch: 'feature/payments', state: 'active' },
+    ]);
+    seedProjectMember(testDb.db, { projectId: 'p1', userId: 'bob', role: 'member' });
+    expect((await svc.lanes('bob', 'p1'))._unsafeUnwrap()).toEqual([]);
+    expect((await svc.lanes('mallory', 'p1'))._unsafeUnwrapErr().kind).toBe('not-found');
+  });
+
+  test('a lane with a run that has not ended cannot be removed; afterwards it can', async () => {
+    const { svc, factoryId } = await factoryWithLane();
+    const runs = createFactoryRunsRepository();
+    const run = (
+      await runs.start({
+        factoryId,
+        issueNumber: 30,
+        state: 'working',
+        baseBranch: 'feature/payments',
+        lane: 'payments',
+      })
+    )._unsafeUnwrap();
+
+    const refused = (await svc.removeLane('alice', 'p1', 'payments'))._unsafeUnwrapErr();
+    expect(refused.kind).toBe('invalid');
+    expect(refused.message).toContain('#30');
+
+    testDb.sqlite.run(`UPDATE factory_runs SET state = 'merged' WHERE id = '${run.id}'`);
+    (await svc.removeLane('alice', 'p1', 'Payments'))._unsafeUnwrap();
+    expect((await svc.lanes('alice', 'p1'))._unsafeUnwrap()).toEqual([]);
+  });
+
+  test('a lane being synced cannot be removed, and an unknown lane is not found', async () => {
+    const { svc } = await factoryWithLane();
+    testDb.sqlite.run(`UPDATE factory_lanes SET sync_state = 'checking'`);
+    expect((await svc.removeLane('alice', 'p1', 'payments'))._unsafeUnwrapErr().kind).toBe(
+      'invalid',
+    );
+    expect((await svc.removeLane('alice', 'p1', 'nope'))._unsafeUnwrapErr().kind).toBe('not-found');
+  });
+
+  test('removing a lane needs steer on the project', async () => {
+    await factoryWithLane();
+    seedProjectMember(testDb.db, { projectId: 'p1', userId: 'vic', role: 'viewer' });
+    const refused = (await settings().removeLane('vic', 'p1', 'payments'))._unsafeUnwrapErr();
+    expect(refused.kind).toBe('forbidden');
+  });
+});

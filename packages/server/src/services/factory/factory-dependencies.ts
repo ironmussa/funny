@@ -41,7 +41,7 @@ export interface BlockerInput {
 
 type BlockerStatus = Exclude<
   FactoryWaitReason['kind'],
-  'circular' | 'blockers-unreadable' | 'proof-not-configured'
+  'circular' | 'blockers-unreadable' | 'proof-not-configured' | 'lane-ambiguous' | 'lane-invalid'
 >;
 
 /** The reasons shown first when several blockers hold the issue: the most actionable. */

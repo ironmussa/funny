@@ -11,7 +11,7 @@ far from the base that the final merge hurts.
 
 ## What Changes
 
-- A factory gets **lanes**, named by a label on the issue with a standard form: `lane:<name>`
+- A factory gets **lanes**, named by a label on the issue with a standard form: `feature:<name>`
   runs on the branch `feature/<name>` (both prefixes are factory settings). Nobody registers a
   lane: the factory creates it, and its branch, when it first admits an issue that names it. An
   issue with no lane label runs on the factory's "Merge into" branch as today; an issue with two
@@ -44,7 +44,7 @@ far from the base that the final merge hurts.
 
 ### New Capabilities
 
-- `factory-lanes`: lanes of a factory (the `lane:<name>` label convention), how a run gets its base branch, lane sync,
+- `factory-lanes`: lanes of a factory (the `feature:<name>` label convention), how a run gets its base branch, lane sync,
   cross-lane dependencies, and the later-phase lane features (cross-lane
   conflict warning, final lane pull request).
 

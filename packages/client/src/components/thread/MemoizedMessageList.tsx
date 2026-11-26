@@ -792,13 +792,16 @@ export const MemoizedMessageList = memo(
               data-testid="sticky-section-content"
               className="relative z-50 will-change-transform"
             >
-              {/* Opaque, padding included: rows scroll under the docked copy, and
-                  its hover footer would otherwise sit on top of them. */}
+              {/* Opaque above the card so rows scroll under it. Below the card it
+                  ends at the card's edge; the footer and the band under it only
+                  open on hover / focus / an open menu, so the floating card does
+                  not cut the rows with an empty strip. */}
               <div
                 data-testid="sticky-section-card"
                 data-docked={isStickyDocked ? 'true' : 'false'}
                 className={cn(
-                  'bg-background pt-1 pb-3 md:pt-3',
+                  'bg-background pt-1 md:pt-3',
+                  'hover:pb-3 focus-within:pb-3 has-[[data-state=open]]:pb-3',
                   'transition-[opacity,transform] duration-200 ease-out',
                   isStickyDocked
                     ? 'pointer-events-auto translate-y-0 opacity-100'
@@ -809,6 +812,7 @@ export const MemoizedMessageList = memo(
                   item={candidateHiddenSectionUserItem}
                   includeItemKey={false}
                   includeUserObserver={false}
+                  collapsedFooter
                   onOpenLightbox={onOpenLightbox}
                   onFork={onFork}
                   onRewind={onRewind}

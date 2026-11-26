@@ -249,6 +249,40 @@ describe('UserMessageCard', () => {
     );
   });
 
+  test('a floating copy takes no footer space until hovered, focused or its menu opens', () => {
+    renderWithProviders(
+      <UserMessageCard
+        content="floating"
+        timestamp={new Date().toISOString()}
+        onFork={vi.fn()}
+        collapsedFooter
+        data-testid="msg-floating"
+      />,
+    );
+
+    const footer = screen.getByTestId('user-message-footer');
+    expect(footer).toHaveClass(
+      'hidden',
+      'group-hover:flex',
+      'group-focus-within:flex',
+      'group-has-[[data-state=open]]:flex',
+    );
+    expect(footer).not.toHaveClass('flex');
+  });
+
+  test('an inline card keeps its footer height reserved', () => {
+    renderWithProviders(
+      <UserMessageCard
+        content="inline"
+        timestamp={new Date().toISOString()}
+        data-testid="msg-in"
+      />,
+    );
+
+    expect(screen.getByTestId('user-message-footer')).toHaveClass('flex');
+    expect(screen.getByTestId('user-message-footer')).not.toHaveClass('hidden');
+  });
+
   test('supports keyboard activation when the card is clickable', () => {
     const onClick = vi.fn();
 

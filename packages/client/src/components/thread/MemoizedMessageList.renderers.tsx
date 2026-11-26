@@ -209,6 +209,8 @@ type UserMessageRendererProps = {
   item: MessageItem;
   includeItemKey?: boolean;
   includeUserObserver?: boolean;
+  /** Floating (sticky) copy: the hover footer takes no space until revealed. */
+  collapsedFooter?: boolean;
   onOpenLightbox: (images: { src: string; alt: string }[], index: number) => void;
   onFork?: (messageId: string) => void;
   onRewind?: (messageId: string) => void;
@@ -238,6 +240,7 @@ export function UserMessageRenderer({
   item,
   includeItemKey = true,
   includeUserObserver = true,
+  collapsedFooter = false,
   onOpenLightbox,
   onFork,
   onRewind,
@@ -261,6 +264,7 @@ export function UserMessageRenderer({
         resumeTestId={`auto-resume-${msg.id}`}
         data-testid={`user-message-${msg.id}`}
         content={msg.content}
+        collapsedFooter={collapsedFooter}
         automatic={msg.author === 'Claude Code'}
         images={msg.images}
         model={msg.model}

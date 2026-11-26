@@ -416,8 +416,11 @@ describe('MemoizedMessageList virtualization', () => {
     expect(card.className).toContain('transition-[opacity,transform]');
     await waitFor(() => expect(getByTestId('sticky-section-card').dataset.docked).toBe('true'));
     expect(getByTestId('sticky-section-card').className).toContain('opacity-100');
-    // Rows scroll under the docked copy; it must mask them (footer included).
-    expect(getByTestId('sticky-section-card')).toHaveClass('bg-background', 'pb-3');
+    // Rows scroll under the docked copy, so it masks them above the card. Below
+    // the card there is no fixed band: it and the footer open only on hover.
+    const docked = getByTestId('sticky-section-card');
+    expect(docked).toHaveClass('bg-background', 'hover:pb-3');
+    expect(docked).not.toHaveClass('pb-3');
   });
 
   test('shows sticky context for the first visible section when a later user row is visible', async () => {

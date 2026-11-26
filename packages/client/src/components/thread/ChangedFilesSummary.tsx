@@ -1,6 +1,6 @@
 import type { FileDiffSummary } from '@funny/shared';
 import { RotateCcw } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
@@ -93,13 +93,14 @@ export function ChangedFilesSummary({
     [threadId, diffCache, files, fallbackDiffs],
   );
 
-  // `loadDiffForFile` is local to this component, not a callback into a parent.
-  // The effect synchronizes the expanded dialog with its asynchronously loaded resource.
-  useEffect(() => {
-    if (expandedFile && !diffCache.has(expandedFile)) {
-      loadDiffForFile(expandedFile);
-    }
-  }, [diffCache, expandedFile, loadDiffForFile]);
+  // Opening a file's diff starts loading it, unless it is already cached.
+  const expandFile = useCallback(
+    (filePath: string) => {
+      setExpandedFile(filePath);
+      void loadDiffForFile(filePath);
+    },
+    [loadDiffForFile],
+  );
 
   const requestFullDiff = useCallback(
     async (
@@ -196,7 +197,7 @@ export function ChangedFilesSummary({
               <TooltipTrigger asChild>
                 <button
                   type="button"
-                  onClick={() => setExpandedFile(f.path)}
+                  onClick={() => expandFile(f.path)}
                   className="text-muted-foreground hover:text-foreground min-w-0 flex-1 truncate text-left font-mono transition-colors hover:underline"
                   data-testid={`changed-files-open-${f.path}`}
                 >

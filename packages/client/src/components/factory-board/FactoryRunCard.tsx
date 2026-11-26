@@ -205,24 +205,20 @@ function ReplacedMarker({
   );
 }
 
-/** What the factory adds under a card's title: gate chips, why it waits, what it blocks. */
+/** What the factory adds under a card's title: the run's state and gate chips. */
 function FactoryRunCardBody({
   run,
   hasThread,
-  onSelect,
-  dependencies,
   replacedBy,
 }: {
   run: FactoryQueueRun;
   hasThread: boolean;
-  onSelect: (run: FactoryQueueRun) => void;
-  dependencies: FactoryRunDependencyLookup;
   replacedBy: FactoryRunReplacement | null | undefined;
 }) {
   const { t } = useTranslation();
   const state = factoryBoardStateChip(t, run, hasThread);
   return (
-    <div className="flex flex-col gap-1.5 empty:hidden">
+    <>
       {/* The run's state when the icon and column do not say it, why it waits, what the gates found. Each explains itself on hover. */}
       <div className="flex flex-wrap items-center gap-1 empty:hidden">
         {state && (
@@ -239,13 +235,7 @@ function FactoryRunCardBody({
         <AgentAskedMarker run={run} />
         <AsksAgainMarker run={run} />
       </div>
-      <FactoryRunDependencyNote
-        run={run}
-        dependencies={dependencies}
-        onSelect={onSelect}
-        testIdPrefix={`factory-board-deps-${run.id}`}
-      />
-    </div>
+    </>
   );
 }
 
@@ -321,6 +311,7 @@ function QueuedFactoryRunCard({
   menuItems,
   status,
   children,
+  below,
   onOpen,
 }: {
   run: FactoryQueueRun;
@@ -331,6 +322,7 @@ function QueuedFactoryRunCard({
   menuItems: ReactNode;
   status: ReactNode;
   children: ReactNode;
+  below: ReactNode;
   onOpen: () => void;
 }) {
   const { t } = useTranslation();
@@ -366,6 +358,7 @@ function QueuedFactoryRunCard({
         </>
       }
       time={stepTime ?? timeAgo(factoryRunActivityAt(run), t, now)}
+      below={below}
       actionsOpen={menuOpen}
       actions={
         menuItems ? (
@@ -432,15 +425,18 @@ export const FactoryRunCard = memo(function FactoryRunCard({
   );
   const body = (
     <>
-      <FactoryRunCardBody
-        run={run}
-        hasThread={Boolean(thread)}
-        onSelect={onSelect}
-        dependencies={dependencies}
-        replacedBy={replacedBy}
-      />
+      <FactoryRunCardBody run={run} hasThread={Boolean(thread)} replacedBy={replacedBy} />
       {dialog}
     </>
+  );
+  // Under the project line, so the card reads title, chips, project, then what it holds up.
+  const below = (
+    <FactoryRunDependencyNote
+      run={run}
+      dependencies={dependencies}
+      onSelect={onSelect}
+      testIdPrefix={`factory-board-deps-${run.id}`}
+    />
   );
 
   if (!thread) {
@@ -453,6 +449,7 @@ export const FactoryRunCard = memo(function FactoryRunCard({
         stepTime={stepTime}
         menuItems={menuItems}
         status={status}
+        below={below}
         onOpen={open}
       >
         {body}
@@ -477,6 +474,7 @@ export const FactoryRunCard = memo(function FactoryRunCard({
       // No powerline: each of the run's threads has its own worktree and diff,
       // so the card links the threads (under its chips) instead of one branch.
       footerLead={<FactoryRunProject name={projectName} />}
+      below={below}
     >
       {body}
     </KanbanCard>

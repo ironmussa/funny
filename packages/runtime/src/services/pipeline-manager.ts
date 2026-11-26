@@ -553,8 +553,7 @@ export async function cleanupReviewerThread(
 
 // ── Verdict parser ──────────────────────────────────────────
 
-/** A reviewer's verdict and its findings (the whole reply when it had no JSON). */
-export interface ReviewVerdict {
+interface ReviewVerdict {
   verdict: PipelineVerdict;
   findings: unknown;
 }

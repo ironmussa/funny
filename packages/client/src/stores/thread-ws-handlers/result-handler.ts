@@ -4,10 +4,11 @@ import type { MessageRole, Thread, ThreadStatus } from '@funny/shared';
 import { toast } from 'sonner';
 
 import { readThreadIndex, readThreadRow } from '@/data/threads/read';
-import { isScratch } from '@/lib/thread-variant';
+import { isFactoryThread, isScratch } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 
 import { settlePreSendState } from '../optimistic-run-state';
+import { useSidebarFilterStore } from '../sidebar-filter-store';
 import { useThreadActiveToolStore } from '../thread-active-tool-store';
 import {
   invalidateThreadData,
@@ -268,35 +269,54 @@ const ERROR_REASON_MESSAGES = new Map<string, string>(
   } satisfies Record<string, string>),
 );
 
+/**
+ * A user who hides factory threads from the sidebar does not want to hear
+ * each time one of their steps completes either. Failures still show.
+ */
+function isQuietFactoryCompletion(
+  resultStatus: ThreadStatus,
+  row: Thread | undefined,
+  loaded: Thread | undefined,
+): boolean {
+  return (
+    resultStatus === 'completed' &&
+    useSidebarFilterStore.getState().hideFactoryThreads &&
+    isFactoryThread(row ?? loaded)
+  );
+}
+
+/** The title and project a result toast names and links to. */
+function resultToastTarget(row: Thread | undefined, payload: Thread | undefined) {
+  let threadTitle = 'Thread';
+  let projectId: string | null = null;
+  if (row) {
+    threadTitle = row.title ?? threadTitle;
+    // Scratch threads keep projectId = null, so downstream notification
+    // routing falls through to a no-op rather than guessing.
+    if (!isScratch(row)) projectId = row.projectId;
+  }
+  // Fallback: use the loaded payload if the thread wasn't found in sidebar data.
+  if (threadTitle === 'Thread' && payload) {
+    threadTitle = payload.title ?? threadTitle;
+    projectId = projectId ?? payload.projectId;
+  }
+  return { threadTitle, projectId };
+}
+
 function notifyThreadResult(
   threadId: string,
   resultStatus: ThreadStatus,
   get: Get,
   errorReason?: string,
 ): void {
-  let threadTitle = 'Thread';
-  let projectId: string | null = null;
-
   // Look up the thread from the unified index. Project / scratch / unknown
-  // all resolve uniformly. Falls back to the loaded payload below for cases
-  // where the thread was never loaded into the sidebar.
+  // all resolve uniformly. Falls back to the loaded payload for cases where
+  // the thread was never loaded into the sidebar.
   const state = get();
-  const t = readThreadRow(threadId);
-  if (t) {
-    threadTitle = t.title ?? threadTitle;
-    // Scratch threads keep projectId = null, so downstream notification
-    // routing falls through to a no-op rather than guessing.
-    if (!isScratch(t)) projectId = t.projectId;
-  }
-
-  // Fallback: use the loaded payload if the thread wasn't found in sidebar data.
-  if (threadTitle === 'Thread') {
-    const payload = state.threadDataById[threadId];
-    if (payload) {
-      threadTitle = payload.title ?? threadTitle;
-      projectId = projectId ?? payload.projectId;
-    }
-  }
+  const row = readThreadRow(threadId);
+  const payload = state.threadDataById[threadId];
+  if (isQuietFactoryCompletion(resultStatus, row, payload)) return;
+  const { threadTitle, projectId } = resultToastTarget(row, payload);
 
   const navigate = getNavigate();
   const navigateToThread = () => {

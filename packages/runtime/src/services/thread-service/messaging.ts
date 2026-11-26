@@ -476,12 +476,6 @@ async function buildMessageContents(
   return { augmentedContent: withPrecedingPrompt(params, augmentedContent), persistedContent };
 }
 
-/** How a follow-up is delivered: queued behind the running turn, or steered into it. */
-interface FollowUpDelivery {
-  willQueue: boolean;
-  steer: boolean;
-}
-
 /**
  * Decide whether this send will be queued or steer the live turn. When
  * queued, the user message is deliberately NOT persisted to `messages` — it
@@ -490,6 +484,11 @@ interface FollowUpDelivery {
  * This avoids the double-render bug where the stored message and the
  * client-side dequeue buffer both surface the same content twice.
  */
+interface FollowUpDelivery {
+  willQueue: boolean;
+  steer: boolean;
+}
+
 function decideFollowUpDelivery(
   params: SendMessageParams,
   thread: SendThread,

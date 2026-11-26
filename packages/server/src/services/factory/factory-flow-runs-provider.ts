@@ -454,6 +454,8 @@ export interface RunAttempt {
   projectDefaults: Awaited<ReturnType<typeof projectAgentDefaults>>;
   /** What each agent step ran with, after the steps an earlier attempt recorded. */
   stepOptions: FactoryRunView['stepOptions'];
+  /** The role threads the run started, after the ones an earlier attempt recorded. */
+  roleThreads: FactoryRunView['roleThreads'];
   record: (input: UpdateRunInput) => Promise<void>;
   /** The run has no journal rows: it replays its recorded threads instead. */
   legacyReplay: boolean;
@@ -471,6 +473,11 @@ export function createRunProvider(ctx: FlowRunsContext, attempt: RunAttempt) {
     recordStepOptions: async (entry) => {
       attempt.stepOptions.push(entry);
       await record({ stepOptions: [...attempt.stepOptions] });
+    },
+    recordRoleThread: async (role, threadId) => {
+      if (attempt.roleThreads.some((entry) => entry.threadId === threadId)) return;
+      attempt.roleThreads.push({ role, threadId, startedAt: new Date().toISOString() });
+      await record({ roleThreads: [...attempt.roleThreads] });
     },
     scope,
     threadIds: job.run.threadIds,

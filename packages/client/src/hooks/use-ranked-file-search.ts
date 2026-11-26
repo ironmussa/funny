@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 
+import { useAdjustOnChange } from '@/hooks/use-resettable-state';
 import { api } from '@/lib/api';
 import type { RankedFileSearchResponse, RankedFileSearchTarget } from '@/lib/api/browse';
 
@@ -26,23 +27,30 @@ export function useRankedFileSearch({
   limit,
   debounceMs = DEFAULT_DEBOUNCE_MS,
 }: UseRankedFileSearchOptions): RankedFileSearchState {
-  const [state, setState] = useState<RankedFileSearchState>({
-    response: null,
-    searching: false,
-    error: null,
-  });
   const threadId = target && 'threadId' in target ? target.threadId : undefined;
   const path = target && 'path' in target ? target.path : undefined;
+  const active = enabled && !!(threadId || path);
+  const [state, setState] = useState<RankedFileSearchState>({
+    response: null,
+    searching: active,
+    error: null,
+  });
+
+  // Each new search shows `searching` (or clears when inactive) during render
+  // (react.dev "adjusting state when a prop changes"); the effect only fetches.
+  useAdjustOnChange([active, threadId, path, query, limit, debounceMs], () => {
+    setState((previous) =>
+      active
+        ? { ...previous, searching: true, error: null }
+        : { response: null, searching: false, error: null },
+    );
+  });
 
   useEffect(() => {
-    if (!enabled || (!threadId && !path)) {
-      setState({ response: null, searching: false, error: null });
-      return;
-    }
+    if (!active) return;
 
     const controller = new AbortController();
     let current = true;
-    setState((previous) => ({ ...previous, searching: true, error: null }));
 
     const timer = setTimeout(async () => {
       const searchTarget: RankedFileSearchTarget = threadId ? { threadId } : { path: path! };
@@ -61,7 +69,7 @@ export function useRankedFileSearch({
       clearTimeout(timer);
       controller.abort();
     };
-  }, [enabled, threadId, path, query, limit, debounceMs]);
+  }, [active, threadId, path, query, limit, debounceMs]);
 
   return state;
 }

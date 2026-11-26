@@ -68,10 +68,17 @@ logRoutes.use('/:threadId/commit/:hash/*', validateCommitHashParam);
 // differ. These helpers hold the parsing, tracing, and response-shaping logic
 // so the handlers below stay thin and the response shape lives in one place.
 
-/** One page of a log request: how many entries, after how many. */
 interface LogPaging {
   limit: number;
   skip: number;
+}
+
+/** One page of the log, with the look-ahead entry trimmed. */
+interface LogPayload<E> {
+  entries: E[];
+  hasMore: boolean;
+  unpushedHashes: string[];
+  unpulledHashes: string[];
 }
 
 /**
@@ -91,14 +98,6 @@ export function parseLogPagingFrom(
 /** Parse the shared `limit` and `skip` query params off a request context. */
 function parseLogPaging(c: Context<HonoEnv>): LogPaging {
   return parseLogPagingFrom(c.req.query('limit'), c.req.query('skip'));
-}
-
-/** A page of log entries, whether more follow, and which of them are unpushed / unpulled. */
-interface LogPayload<E> {
-  entries: E[];
-  hasMore: boolean;
-  unpushedHashes: string[];
-  unpulledHashes: string[];
 }
 
 /**

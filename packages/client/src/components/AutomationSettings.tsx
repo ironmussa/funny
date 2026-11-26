@@ -1,27 +1,10 @@
-import type { Automation, AgentModel, PermissionMode, AutomationSchedule } from '@funny/shared';
-import { Plus, Pencil, Trash2, Play, Pause, History } from 'lucide-react';
+import type { Automation } from '@funny/shared';
+import { Plus } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { EmptyState } from '@/components/ui/empty-state';
-import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   createAutomation,
   deleteAutomation,
@@ -31,49 +14,11 @@ import {
 import { useAutomationRuns, useProjectAutomations } from '@/data/automations/hooks';
 import { loadAutomationRuns, loadAutomations } from '@/data/automations/loaders';
 import { buildPath } from '@/lib/url';
-import { cn } from '@/lib/utils';
 import { useProjectStore } from '@/stores/project-store';
 
-import { SegmentedControl } from './settings/SegmentedControl';
-
-const SCHEDULE_PRESETS: { value: string; label: string }[] = [
-  { value: '*/15 * * * *', label: 'Every 15 min' },
-  { value: '*/30 * * * *', label: 'Every 30 min' },
-  { value: '0 * * * *', label: 'Every hour' },
-  { value: '0 */2 * * *', label: 'Every 2 hours' },
-  { value: '0 */6 * * *', label: 'Every 6 hours' },
-  { value: '0 */12 * * *', label: 'Every 12 hours' },
-  { value: '0 9 * * *', label: 'Daily at 9am' },
-  { value: '0 9 * * 1', label: 'Weekly (Mon 9am)' },
-];
-
-/** Find a friendly label for a cron expression, or show the raw expression */
-function getScheduleLabel(cron: string): string {
-  const preset = SCHEDULE_PRESETS.find((p) => p.value === cron);
-  return preset?.label ?? cron;
-}
-
-const MODEL_OPTIONS: { value: AgentModel; label: string }[] = [
-  { value: 'haiku', label: 'Haiku' },
-  { value: 'sonnet', label: 'Sonnet' },
-  { value: 'opus', label: 'Opus' },
-];
-
-interface FormState {
-  name: string;
-  prompt: string;
-  schedule: AutomationSchedule;
-  model: AgentModel;
-  permissionMode: PermissionMode;
-}
-
-const defaultForm: FormState = {
-  name: '',
-  prompt: '',
-  schedule: '0 * * * *',
-  model: 'sonnet',
-  permissionMode: 'autoEdit',
-};
+import { defaultForm, type FormState } from './automation-settings/automation-form';
+import { AutomationFormDialog } from './automation-settings/AutomationFormDialog';
+import { AutomationRow } from './automation-settings/AutomationRow';
 
 export function AutomationSettings() {
   const navigate = useNavigate();
@@ -94,16 +39,23 @@ export function AutomationSettings() {
   // Auto-open the create dialog when navigated here from the project menu's
   // "Create automation" entry. Clear the history state so a refresh/back won't
   // re-trigger it.
+  // The dialog opens during render (once per history entry); only the history
+  // rewrite, a side effect, runs in the effect.
+  // react-router types `location.state` as `any`; ProjectActionsMenu sets this shape.
+  const navState: { openCreateAutomation?: boolean } | null = location.state;
+  const openCreateRequested = Boolean(navState?.openCreateAutomation);
+  const [openedForLocationKey, setOpenedForLocationKey] = useState<string | null>(null);
+  if (openCreateRequested && openedForLocationKey !== location.key) {
+    setOpenedForLocationKey(location.key);
+    setEditingId(null);
+    setForm(defaultForm);
+    setDialogOpen(true);
+  }
   useEffect(() => {
-    // react-router types `location.state` as `any`; ProjectActionsMenu sets this shape.
-    const navState: { openCreateAutomation?: boolean } | null = location.state;
-    if (navState?.openCreateAutomation) {
-      setEditingId(null);
-      setForm(defaultForm);
-      setDialogOpen(true);
+    if (openCreateRequested) {
       navigate(location.pathname + location.search, { replace: true, state: null });
     }
-  }, [location, navigate]);
+  }, [openCreateRequested, location.pathname, location.search, navigate]);
 
   const openCreateDialog = () => {
     setEditingId(null);
@@ -207,262 +159,33 @@ export function AutomationSettings() {
         />
       ) : (
         automations.map((a) => (
-          <div key={a.id} className="space-y-1">
-            <div className="settings-item-card group flex items-center justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span
-                    className={cn(
-                      'h-2 w-2 rounded-full shrink-0',
-                      a.enabled ? 'bg-status-success/80' : 'bg-muted-foreground/30',
-                    )}
-                  />
-                  <span className="truncate text-sm font-medium">{a.name}</span>
-                  <span className="bg-muted text-muted-foreground shrink-0 rounded-full px-1.5 py-0.5 text-xs">
-                    {getScheduleLabel(a.schedule)}
-                  </span>
-                  <span className="bg-muted text-muted-foreground shrink-0 rounded-full px-1.5 py-0.5 text-xs">
-                    {a.model}
-                  </span>
-                  {a.source === 'config' && (
-                    <span
-                      className="bg-status-info/15 text-status-info shrink-0 rounded-full px-1.5 py-0.5 text-xs"
-                      data-testid={`automation-config-badge-${a.id}`}
-                    >
-                      .funny.json
-                    </span>
-                  )}
-                </div>
-                <p className="text-muted-foreground mt-0.5 truncate pl-4 text-xs">{a.prompt}</p>
-                {a.lastRunAt && (
-                  <p className="text-muted-foreground/70 mt-0.5 pl-4 text-xs">
-                    Last run: {new Date(a.lastRunAt).toLocaleString()}
-                  </p>
-                )}
-              </div>
-
-              <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost-success-soft"
-                      size="icon-sm"
-                      onClick={() => handleTrigger(a)}
-                    >
-                      <Play className="icon-sm" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Run Now</TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="muted" size="icon-sm" onClick={() => handleToggleEnabled(a)}>
-                      {a.enabled ? <Pause className="icon-sm" /> : <Play className="icon-sm" />}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>{a.enabled ? 'Pause' : 'Enable'}</TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button variant="muted" size="icon-sm" onClick={() => handleViewRuns(a.id)}>
-                      <History className="icon-sm" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Run History</TooltipContent>
-                </Tooltip>
-                {a.source !== 'config' && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button variant="muted" size="icon-sm" onClick={() => openEditDialog(a)}>
-                        <Pencil className="icon-sm" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Edit</TooltipContent>
-                  </Tooltip>
-                )}
-                {a.source !== 'config' && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="muted-destructive"
-                        size="icon-sm"
-                        onClick={() => handleDelete(a)}
-                      >
-                        <Trash2 className="icon-sm" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>Delete</TooltipContent>
-                  </Tooltip>
-                )}
-              </div>
-            </div>
-
-            {/* Inline run history */}
-            {runsAutomationId === a.id && (
-              <div className="ml-4 space-y-1">
-                {selectedAutomationRuns.length === 0 ? (
-                  <p className="text-muted-foreground py-2 pl-2 text-xs">No runs yet.</p>
-                ) : (
-                  selectedAutomationRuns.slice(0, 10).map((run) => (
-                    <div
-                      key={run.id}
-                      className="border-border/30 flex items-center justify-between gap-2 rounded border px-2 py-1.5 text-xs"
-                    >
-                      <div className="flex min-w-0 items-center gap-2">
-                        <span
-                          className={cn(
-                            'h-1.5 w-1.5 rounded-full shrink-0',
-                            // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
-                            run.status === 'running'
-                              ? 'bg-status-info animate-pulse'
-                              : run.status === 'completed'
-                                ? 'bg-status-success/80'
-                                : run.status === 'failed'
-                                  ? 'bg-status-error'
-                                  : 'bg-muted-foreground/30',
-                          )}
-                        />
-                        <span className="text-muted-foreground truncate">
-                          {new Date(run.startedAt).toLocaleString()}
-                        </span>
-                        <span className="text-muted-foreground/70">{run.status}</span>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="2xs"
-                        onClick={() => {
-                          navigate(
-                            buildPath(`/projects/${selectedProjectId}/threads/${run.threadId}`),
-                          );
-                        }}
-                      >
-                        View
-                      </Button>
-                    </div>
-                  ))
-                )}
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  className="h-5 w-full"
-                  onClick={() => setRunsAutomationId(null)}
-                >
-                  Close
-                </Button>
-              </div>
-            )}
-          </div>
+          <AutomationRow
+            key={a.id}
+            a={a}
+            runsOpen={runsAutomationId === a.id}
+            runs={selectedAutomationRuns}
+            onTrigger={handleTrigger}
+            onToggleEnabled={handleToggleEnabled}
+            onViewRuns={handleViewRuns}
+            onEdit={openEditDialog}
+            onDelete={handleDelete}
+            onOpenThread={(threadId) => {
+              navigate(buildPath(`/projects/${selectedProjectId}/threads/${threadId}`));
+            }}
+            onCloseRuns={() => setRunsAutomationId(null)}
+          />
         ))
       )}
 
       {/* Create/Edit Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{editingId ? 'Edit Automation' : 'Create Automation'}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div>
-              <label htmlFor="automation-name" className="settings-label">
-                Name
-              </label>
-              <Input
-                id="automation-name"
-                placeholder="e.g. Daily Issue Triage"
-                value={form.name}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                autoFocus
-              />
-            </div>
-            <div>
-              <label htmlFor="automation-prompt" className="settings-label">
-                Prompt
-              </label>
-              <Textarea
-                id="automation-prompt"
-                textSize="sm"
-                className="min-h-[100px] resize-y"
-                placeholder="What should the agent do?"
-                value={form.prompt}
-                onChange={(e) => setForm((f) => ({ ...f, prompt: e.target.value }))}
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <fieldset>
-                <legend className="settings-label">Schedule</legend>
-                <Select
-                  value={
-                    SCHEDULE_PRESETS.some((p) => p.value === form.schedule)
-                      ? form.schedule
-                      : '__custom__'
-                  }
-                  onValueChange={(v) => {
-                    if (v !== '__custom__') setForm((f) => ({ ...f, schedule: v }));
-                  }}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {SCHEDULE_PRESETS.map((opt) => (
-                      <SelectItem key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </SelectItem>
-                    ))}
-                    <SelectItem value="__custom__">Custom cron…</SelectItem>
-                  </SelectContent>
-                </Select>
-                {!SCHEDULE_PRESETS.some((p) => p.value === form.schedule) && (
-                  <Input
-                    mono
-                    size="xs"
-                    className="mt-1.5"
-                    placeholder="*/30 * * * *"
-                    value={form.schedule}
-                    onChange={(e) => setForm((f) => ({ ...f, schedule: e.target.value }))}
-                  />
-                )}
-                <p className="text-muted-foreground mt-1 text-xs">
-                  Cron: min hour day month weekday
-                </p>
-              </fieldset>
-              <fieldset>
-                <legend className="settings-label">Model</legend>
-                <SegmentedControl
-                  options={MODEL_OPTIONS}
-                  value={form.model}
-                  onChange={(v) => setForm((f) => ({ ...f, model: v }))}
-                />
-              </fieldset>
-            </div>
-            <p className="text-muted-foreground text-xs">
-              Automations run locally in read-only mode (no file writes).
-            </p>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => handleSave(true)}
-              disabled={!form.name.trim() || !form.prompt.trim()}
-              gap="snug"
-            >
-              <Play className="icon-xs" />
-              {editingId ? 'Save & Test' : 'Create & Test'}
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => handleSave(false)}
-              disabled={!form.name.trim() || !form.prompt.trim()}
-            >
-              {editingId ? 'Save' : 'Create'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <AutomationFormDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        isEditing={Boolean(editingId)}
+        form={form}
+        setForm={setForm}
+        onSave={handleSave}
+      />
     </div>
   );
 }

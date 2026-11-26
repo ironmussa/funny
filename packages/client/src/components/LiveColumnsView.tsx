@@ -1,19 +1,23 @@
-import { monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
-import { Plus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import { ImageLightbox } from '@/components/ImageLightbox';
 import { EmptyGridCell } from '@/components/live-columns/EmptyGridCell';
-import { MAX_GRID_COLS, MAX_GRID_ROWS } from '@/components/live-columns/grid-constants';
+import {
+  GRID_COLS_KEY,
+  GRID_ROWS_KEY,
+  MAX_GRID_COLS,
+  MAX_GRID_ROWS,
+} from '@/components/live-columns/grid-constants';
+import { withoutColumn } from '@/components/live-columns/grid-layout';
 import { GridCellDropTarget } from '@/components/live-columns/GridCellDropTarget';
 import { GridColumnInsertDropTarget } from '@/components/live-columns/GridColumnInsertDropTarget';
-import { GridPicker } from '@/components/live-columns/GridPicker';
+import { GridToolbar } from '@/components/live-columns/GridToolbar';
 import { ProjectPickerDialog } from '@/components/live-columns/ProjectPickerDialog';
 import { ThreadColumn } from '@/components/live-columns/ThreadColumn';
-import { ThreadHeaderActions } from '@/components/thread/ProjectHeader';
-import { Button } from '@/components/ui/button';
+import { useGridDragMonitor } from '@/components/live-columns/use-grid-drag-monitor';
+import { useGridNewColumnShortcut } from '@/components/live-columns/use-grid-new-column-shortcut';
 import { fetchForThread } from '@/data/git-status/actions';
 import { useProjects } from '@/data/projects/hooks';
 import { isProjectListed } from '@/data/threads/read';
@@ -26,9 +30,6 @@ import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
 const log = createClientLogger('LiveColumnsView');
-
-const GRID_COLS_KEY = 'funny:grid-cols:v1';
-const GRID_ROWS_KEY = 'funny:grid-rows:v1';
 
 type OpenLightboxFn = (images: { src: string; alt: string }[], index: number) => void;
 
@@ -150,7 +151,6 @@ export function LiveColumnsView() {
     },
     [setGridSelectedThreadId],
   );
-
   const handleRemoveFromGrid = useCallback(
     (cellIndex: number) => {
       const updated = { ...gridCells };
@@ -174,29 +174,9 @@ export function LiveColumnsView() {
       }
 
       const newCols = gridCols - 1;
-      const collapsed: GridCellAssignments = {};
-      for (const [key, val] of Object.entries(updated)) {
-        const oldIdx = Number(key);
-        const oldCol = oldIdx % gridCols;
-        const oldRow = Math.floor(oldIdx / gridCols);
-        if (oldCol === col) continue;
-        const newCol = oldCol > col ? oldCol - 1 : oldCol;
-        collapsed[String(oldRow * newCols + newCol)] = val;
-      }
-      setGridCells(collapsed);
+      setGridCells(withoutColumn(updated, col, gridCols));
       setGridCols(newCols);
-      setPendingProjectByCell((prevPending) => {
-        const remapped: Record<number, string> = {};
-        for (const [key, val] of Object.entries(prevPending)) {
-          const oldIdx = Number(key);
-          const oldCol = oldIdx % gridCols;
-          const oldRow = Math.floor(oldIdx / gridCols);
-          if (oldCol === col) continue;
-          const newCol = oldCol > col ? oldCol - 1 : oldCol;
-          remapped[oldRow * newCols + newCol] = val;
-        }
-        return remapped;
-      });
+      setPendingProjectByCell((prevPending) => withoutColumn(prevPending, col, gridCols));
       localStorage.setItem(GRID_COLS_KEY, String(newCols));
     },
     [gridCells, gridCols, gridRows],
@@ -257,151 +237,27 @@ export function LiveColumnsView() {
     },
     [pickerTarget, handleAddColumnWithProject, presetProjectInCell],
   );
+  const openNewColumnPicker = useCallback(() => setPickerTarget({ kind: 'new-column' }), []);
+  useGridNewColumnShortcut(gridCols, openNewColumnPicker);
 
-  // Alt+N opens the project picker for a new column (mirrors the header "+").
-  // Scoped to LiveColumnsView so it only fires while the grid is mounted.
-  // Uses capture phase + stopImmediatePropagation to override the global Alt+N.
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
-      if (e.key !== 'n' && e.key !== 'N') return;
-      const target = e.target instanceof HTMLElement ? e.target : null;
-      const tag = target?.tagName;
-      if (tag === 'INPUT' || tag === 'TEXTAREA' || target?.isContentEditable) {
-        return;
-      }
-      if (gridCols >= MAX_GRID_COLS) return;
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      log.info('shortcut.grid_new_thread');
-      setPickerTarget({ kind: 'new-column' });
-    };
-    window.addEventListener('keydown', handler, true);
-    return () => window.removeEventListener('keydown', handler, true);
-  }, [gridCols]);
-
-  const [isDragging, setIsDragging] = useState(false);
-
-  useEffect(() => {
-    return monitorForElements({
-      onDragStart: ({ source }) => {
-        if (source.data.type === 'grid-thread') setIsDragging(true);
-      },
-      onDrop: ({ source, location }) => {
-        setIsDragging(false);
-        if (source.data.type !== 'grid-thread') return;
-        const targets = location.current.dropTargets;
-        if (!targets.length) return;
-
-        const targetData = targets[0].data;
-        // SAFETY: every 'grid-thread' draggable (ThreadColumn, useGridThreadDrag)
-        // puts the thread id string in `threadId`.
-        const threadId = source.data.threadId as string;
-
-        if (targetData.type === 'grid-cell') {
-          // SAFETY: GridCellDropTarget's 'grid-cell' data carries its `cellIndex: number` prop.
-          const cellIndex = targetData.cellIndex as number;
-          setGridCells((prev) => {
-            const updated = { ...prev };
-
-            // Find the source cell index if it was already in the grid
-            let sourceKey: string | undefined;
-            for (const [key, val] of Object.entries(updated)) {
-              if (val === threadId) {
-                sourceKey = key;
-                delete updated[key];
-              }
-            }
-
-            // If the target cell already has a thread, and we are dragging from within the grid,
-            // swap them. Otherwise, just overwrite/place.
-            const existingThreadId = updated[String(cellIndex)];
-            if (existingThreadId && sourceKey) {
-              updated[sourceKey] = existingThreadId;
-            }
-
-            updated[String(cellIndex)] = threadId;
-            return updated;
-          });
-          return;
-        }
-
-        if (targetData.type === 'grid-col-insert') {
-          // SAFETY: GridColumnInsertDropTarget's 'grid-col-insert' data carries its
-          // `insertIndex: number` prop.
-          const insertIndex = targetData.insertIndex as number;
-          if (gridCols >= MAX_GRID_COLS) {
-            toast.info(t('live.gridFull', 'Grid is full'));
-            return;
-          }
-          const oldCols = gridCols;
-          const newCols = oldCols + 1;
-          setGridCells((prev) => {
-            const updated: GridCellAssignments = {};
-            for (const [key, val] of Object.entries(prev)) {
-              if (val === threadId) continue;
-              const oldIdx = Number(key);
-              const oldCol = oldIdx % oldCols;
-              const oldRow = Math.floor(oldIdx / oldCols);
-              const newCol = oldCol < insertIndex ? oldCol : oldCol + 1;
-              const newIdx = oldRow * newCols + newCol;
-              updated[String(newIdx)] = val;
-            }
-            updated[String(insertIndex)] = threadId;
-            return updated;
-          });
-          setPendingProjectByCell((prevPending) => {
-            const remapped: Record<number, string> = {};
-            for (const [key, val] of Object.entries(prevPending)) {
-              const oldIdx = Number(key);
-              const oldCol = oldIdx % oldCols;
-              const oldRow = Math.floor(oldIdx / oldCols);
-              const newCol = oldCol < insertIndex ? oldCol : oldCol + 1;
-              remapped[oldRow * newCols + newCol] = val;
-            }
-            return remapped;
-          });
-          setGridCols(newCols);
-          localStorage.setItem(GRID_COLS_KEY, String(newCols));
-        }
-      },
-    });
-  }, [gridCols, t]);
+  const isDragging = useGridDragMonitor({
+    gridCols,
+    t,
+    setGridCells,
+    setPendingProjectByCell,
+    setGridCols,
+  });
 
   return (
     <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden" data-testid="grid-view">
-      <div className="border-border flex shrink-0 items-center gap-2 border-b px-4 py-2">
-        <Button
-          variant="outline"
-          size="icon"
-          className="size-7"
-          data-testid="grid-new-thread"
-          disabled={gridCols >= MAX_GRID_COLS}
-          onClick={() => setPickerTarget({ kind: 'new-column' })}
-        >
-          <Plus className="icon-base" />
-        </Button>
-        <GridPicker
-          cols={gridCols}
-          rows={gridRows}
-          onChange={(c, r) => {
-            setGridCols(c);
-            setGridRows(r);
-            localStorage.setItem(GRID_COLS_KEY, String(c));
-            localStorage.setItem(GRID_ROWS_KEY, String(r));
-          }}
-        />
-
-        {/* Consolidated thread actions — act on the selected thread. Hidden
-            when nothing is selected (empty grid). */}
-        {gridSelectedThreadId && (
-          <div className="ml-auto flex items-center gap-2" data-testid="grid-thread-actions">
-            <ThreadProvider threadId={gridSelectedThreadId}>
-              <ThreadHeaderActions hideTimeline />
-            </ThreadProvider>
-          </div>
-        )}
-      </div>
+      <GridToolbar
+        gridCols={gridCols}
+        gridRows={gridRows}
+        setGridCols={setGridCols}
+        setGridRows={setGridRows}
+        gridSelectedThreadId={gridSelectedThreadId}
+        onNewColumn={openNewColumnPicker}
+      />
 
       <div
         data-testid="grid-container"

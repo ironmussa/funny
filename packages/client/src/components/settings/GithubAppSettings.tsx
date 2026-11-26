@@ -37,15 +37,18 @@ function useGithubAppState() {
   const [accounts, setAccounts] = useState<GithubAppAccount[] | null>(null);
   const [hasToken, setHasToken] = useState(false);
 
-  const load = useCallback(async () => {
-    const result = await api.getGithubAppStatus();
-    const next = result.isOk() ? result.value : { configured: false, source: 'none' as const };
-    setStatus(next);
-    if (next.configured) return;
-    const listed = await api.getGithubAppAccounts();
-    setAccounts(listed.isOk() ? listed.value.accounts : []);
-    setHasToken(listed.isOk() && listed.value.hasToken);
-  }, []);
+  const load = useCallback(
+    () =>
+      api.getGithubAppStatus().then(async (result) => {
+        const next = result.isOk() ? result.value : { configured: false, source: 'none' as const };
+        setStatus(next);
+        if (next.configured) return;
+        const listed = await api.getGithubAppAccounts();
+        setAccounts(listed.isOk() ? listed.value.accounts : []);
+        setHasToken(listed.isOk() && listed.value.hasToken);
+      }),
+    [],
+  );
 
   useEffect(() => {
     void load();

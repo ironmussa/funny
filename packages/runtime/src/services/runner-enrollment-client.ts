@@ -66,12 +66,12 @@ const defaultDependencies: RunnerEnrollmentClientDependencies = {
   env: process.env,
 };
 
-/** The headers of a request to the server, by name. */
+/** Internal retry signal: registration did not yield a session yet. */
+/** HTTP header names to values for a request to the central server. */
 interface RequestHeaders {
   [name: string]: string;
 }
 
-/** Internal retry signal: registration did not yield a session yet. */
 class RegistrationRetry extends Error {
   constructor(readonly reenrolled: boolean) {
     super('Runner registration did not yield a session');
@@ -132,7 +132,7 @@ export class RunnerEnrollmentClient {
 
   private async centralFetch(
     path: string,
-    options: Omit<RequestInit, 'headers'> & { headers?: RequestHeaders } = {},
+    options: Omit<RequestInit, 'headers'> & { headers?: Record<string, string> } = {},
   ): Promise<Response> {
     const headers: RequestHeaders = {
       'Content-Type': 'application/json',

@@ -1,6 +1,7 @@
 import type { FileDiffSummary } from '@funny/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { useAdjustOnChange } from '@/hooks/use-resettable-state';
 import { api } from '@/lib/api';
 import { setVisibleInterval } from '@/lib/visible-interval';
 import { withCleanup } from '@/lib/while-pending';
@@ -117,30 +118,23 @@ export function useThreadChangedFiles(enabled: boolean = true) {
   const [files, setFiles] = useState<FileDiffSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [manualRefresh, setManualRefresh] = useState(0);
-  const prevThreadIdRef = useRef(threadId);
 
-  // Clear stale data immediately when switching threads
+  // Clear stale data immediately when switching threads, during render
+  // (react.dev "adjusting state when a prop changes").
+  useAdjustOnChange([threadId], () => {
+    setFiles([]);
+    setLoading(!!threadId);
+  });
+
+  // No touched paths → no modified files to show, and no diff API call (see
+  // the effect). This prevents unnecessary loading flickers for idle threads.
+  if (threadId && touchedPaths.size === 0 && (files.length > 0 || loading)) {
+    setFiles([]);
+    setLoading(false);
+  }
+
   useEffect(() => {
-    if (threadId !== prevThreadIdRef.current) {
-      prevThreadIdRef.current = threadId;
-      setFiles([]);
-      setLoading(!!threadId);
-    }
-  }, [threadId]);
-
-  useEffect(() => {
-    if (!threadId) {
-      setFiles([]);
-      return;
-    }
-
-    // No touched paths → no modified files to show; skip the diff API call entirely.
-    // This prevents unnecessary loading flickers for idle threads.
-    if (touchedPaths.size === 0) {
-      setFiles([]);
-      setLoading(false);
-      return;
-    }
+    if (!threadId || touchedPaths.size === 0) return;
 
     let cancelled = false;
     const timer = setTimeout(async () => {

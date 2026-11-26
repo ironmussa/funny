@@ -102,17 +102,16 @@ export async function indexProject(projectPath: string): Promise<void> {
   }
 }
 
-/** The best symbol matches, whether more matched, and whether the index is ready. */
+/**
+ * Search symbols across a project's index.
+ * Returns fuzzy-matched results sorted by relevance.
+ */
 interface SymbolSearch {
   symbols: SymbolSearchResult[];
   truncated: boolean;
   indexed: boolean;
 }
 
-/**
- * Search symbols across a project's index.
- * Returns fuzzy-matched results sorted by relevance.
- */
 export function searchSymbols(
   projectPath: string,
   query?: string,

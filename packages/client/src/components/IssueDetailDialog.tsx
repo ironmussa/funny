@@ -33,6 +33,60 @@ type CommentsState =
   | { status: 'error'; message: string }
   | { status: 'ready'; comments: PRIssueComment[] };
 
+const NO_COMMENTS: CommentsState = { status: 'ready', comments: [] };
+const LOADING_COMMENTS: CommentsState = { status: 'loading' };
+
+/**
+ * The issue's comments while the dialog is open. They are derived during
+ * render: an issue without comments needs no request, and a response only
+ * counts for the issue it was fetched for.
+ */
+function useIssueComments(
+  open: boolean,
+  projectId: string,
+  issueNumber: number,
+  commentCount: number,
+): CommentsState {
+  const requestKey = `${projectId}#${issueNumber}#${commentCount}`;
+  const [fetched, setFetched] = useState<{ key: string; state: CommentsState } | null>(null);
+  // Each opening starts from the loading state, as the dialog refetches.
+  const [prevOpen, setPrevOpen] = useState(open);
+  if (prevOpen !== open) {
+    setPrevOpen(open);
+    if (open) setFetched(null);
+  }
+  const comments: CommentsState =
+    commentCount === 0
+      ? NO_COMMENTS
+      : fetched?.key === requestKey
+        ? fetched.state
+        : LOADING_COMMENTS;
+
+  useEffect(() => {
+    if (!open || commentCount === 0) return;
+    let cancelled = false;
+    const key = `${projectId}#${issueNumber}#${commentCount}`;
+    api.githubIssueComments(projectId, issueNumber).then((result) => {
+      if (cancelled) return;
+      if (result.isOk()) {
+        setFetched({ key, state: { status: 'ready', comments: result.value.comments } });
+      } else {
+        log.error('failed to load issue comments', {
+          projectId,
+          issueNumber,
+          error: result.error.message,
+        });
+        setFetched({ key, state: { status: 'error', message: result.error.message } });
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, projectId, issueNumber, commentCount]);
+
+  return comments;
+}
+
 /** Issue detail popup: description and comment thread, like the PR detail dialog. */
 export function IssueDetailDialog({
   open,
@@ -43,35 +97,7 @@ export function IssueDetailDialog({
 }: IssueDetailDialogProps) {
   const { t } = useTranslation();
   const now = useMinuteTick();
-  const [comments, setComments] = useState<CommentsState>({ status: 'loading' });
-
-  const issueNumber = issue.number;
-  const commentCount = issue.comments;
-  useEffect(() => {
-    if (!open) return;
-    if (commentCount === 0) {
-      setComments({ status: 'ready', comments: [] });
-      return;
-    }
-    let cancelled = false;
-    setComments({ status: 'loading' });
-    api.githubIssueComments(projectId, issueNumber).then((result) => {
-      if (cancelled) return;
-      if (result.isOk()) {
-        setComments({ status: 'ready', comments: result.value.comments });
-      } else {
-        log.error('failed to load issue comments', {
-          projectId,
-          issueNumber,
-          error: result.error.message,
-        });
-        setComments({ status: 'error', message: result.error.message });
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [open, projectId, issueNumber, commentCount]);
+  const comments = useIssueComments(open, projectId, issue.number, issue.comments);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

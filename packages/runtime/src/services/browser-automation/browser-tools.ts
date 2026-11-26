@@ -204,13 +204,13 @@ async function untilDialog<T>(s: BrowserSession, work: Promise<T>): Promise<T | 
   }
 }
 
-/** Settles with `'dialog'` when the page opens a dialog; `cancel` stops listening. */
-interface NextDialog {
+/** Settles when the page opens a dialog; `cancel` stops listening. */
+interface PendingDialog {
   promise: Promise<'dialog'>;
   cancel: () => void;
 }
 
-function nextDialog(s: BrowserSession): NextDialog {
+function nextDialog(s: BrowserSession): PendingDialog {
   let listener: () => void = () => {};
   const promise = new Promise<'dialog'>((resolve) => {
     listener = () => resolve('dialog');
@@ -444,13 +444,12 @@ export function browserSnapshot(
   });
 }
 
-/** A point on the page, in CSS pixels. */
-interface PagePoint {
+interface Point {
   x: number;
   y: number;
 }
 
-function requirePoint(args: { x?: number; y?: number }, action: string): PagePoint {
+function requirePoint(args: Partial<Point>, action: string): Point {
   if (args.x === undefined || args.y === undefined) {
     throw new ToolFailure('invalid-arguments', `${action} needs a ref or both x and y.`);
   }

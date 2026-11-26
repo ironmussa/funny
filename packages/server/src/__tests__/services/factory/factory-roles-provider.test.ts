@@ -511,6 +511,28 @@ describe('the review step', () => {
     ]);
   });
 
+  // The run named its reviewer's thread only with the verdict, so the board
+  // could not link a review still working to its thread.
+  test("the reviewer's thread is noted on the run before its verdict", async () => {
+    const noted: Array<{ role: string; threadId: string }> = [];
+    const atWait: { noted: string[] | null } = { noted: null };
+    const { provider, recorded } = reviewing({
+      says: [[passOf(SHA_A)]],
+      gate: async () => {
+        atWait.noted ??= noted.map((entry) => entry.threadId);
+      },
+      extra: {
+        recordRoleThread: async (role, threadId) => {
+          noted.push({ role, threadId });
+        },
+      },
+    });
+    await provider.review!({});
+    expect(atWait.noted).toEqual(['rev-1']);
+    expect(noted).toEqual([{ role: 'review', threadId: 'rev-1' }]);
+    expect(recorded.some((input) => input.reviews !== undefined)).toBe(true);
+  });
+
   test('a resumed run adopts the review thread it already launched for the commit', async () => {
     const { provider, bodies, stored } = reviewing({
       says: [[passOf(SHA_A)]],

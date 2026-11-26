@@ -1,7 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 
-import { DockviewLayout, type BottomTabSpec, type RightTabSpec } from '@/components/DockviewLayout';
+import type { BottomTabSpec, RightTabSpec } from '@/components/dockview/types';
+import { DockviewLayout } from '@/components/DockviewLayout';
 import { Button } from '@/components/ui/button';
 
 function PanelPlaceholder({

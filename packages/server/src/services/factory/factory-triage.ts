@@ -322,6 +322,8 @@ export interface FactoryTriageDeps {
    * other's paths. Default: no exclusion.
    */
   exclusive?<T>(work: () => Promise<T>): Promise<T>;
+  /** Note the triage thread on the run as soon as it runs, before it answers. */
+  noteThread?(threadId: string): Promise<void>;
   record(input: UpdateRunInput): Promise<void>;
   count(event: string): Promise<void>;
 }
@@ -670,6 +672,7 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
       }
       // A triage agent is running: the run is in flight and holds its slot.
       await deps.record({ state: 'triaging' });
+      await deps.noteThread?.(thread.value);
       return decide(thread.value);
     },
   };

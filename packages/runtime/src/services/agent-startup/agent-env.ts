@@ -6,7 +6,7 @@ import { errorMessage } from '@funny/shared/errors';
 import { log } from '../../lib/logger.js';
 import { getServices } from '../service-registry.js';
 
-/** Environment variables an agent subprocess is started with. */
+/** Environment variables to add to an agent subprocess. */
 interface EnvVars {
   [name: string]: string;
 }

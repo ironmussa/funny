@@ -1,221 +1,17 @@
-import {
-  draggable,
-  dropTargetForElements,
-  monitorForElements,
-} from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import type { ProjectHook, HookType } from '@funny/shared';
 import { HOOK_TYPES } from '@funny/shared';
-import { Editor } from '@monaco-editor/react';
-import { Plus, Pencil, Trash2, X, Check, GripVertical } from 'lucide-react';
-import { useTheme } from 'next-themes';
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+import { Plus } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
-import { CommandHighlight } from '@/components/CommandHighlight';
+import { HookForm } from '@/components/project-hooks-settings/HookForm';
+import { HookItem, hookKey } from '@/components/project-hooks-settings/HookItem';
+import { useHookReorderMonitor } from '@/components/project-hooks-settings/use-hook-reorder-monitor';
 import { Button } from '@/components/ui/button';
-import '@/lib/monaco-setup';
 import { EmptyState } from '@/components/ui/empty-state';
-import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
-import { defineFunnyDarkTheme, monacoThemeFor } from '@/lib/monaco-theme';
-import { cn } from '@/lib/utils';
 import { useProjectStore } from '@/stores/project-store';
-import { useSettingsStore, EDITOR_FONT_SIZE_PX } from '@/stores/settings-store';
-
-/* ── Inline shell editor (Monaco) ── */
-
-function ShellEditor({
-  value,
-  onChange,
-  testId,
-  ariaLabel,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  testId?: string;
-  ariaLabel: string;
-}) {
-  const { resolvedTheme } = useTheme();
-  const codeFontSizePx = EDITOR_FONT_SIZE_PX[useSettingsStore((s) => s.fontSize)];
-  const monacoTheme = monacoThemeFor(resolvedTheme);
-  const lineCount = Math.max(value.split('\n').length, 3);
-  const height = Math.min(Math.max(lineCount * 22 + 16, 100), 400);
-
-  return (
-    <div className="border-input overflow-hidden rounded-md border" data-testid={testId}>
-      <Editor
-        height={height}
-        language="shell"
-        theme={monacoTheme}
-        beforeMount={defineFunnyDarkTheme}
-        value={value}
-        onChange={(v) => onChange(v ?? '')}
-        options={{
-          minimap: { enabled: false },
-          fontSize: codeFontSizePx,
-          fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-          lineNumbers: 'off',
-          glyphMargin: false,
-          folding: false,
-          lineDecorationsWidth: 8,
-          lineNumbersMinChars: 0,
-          scrollBeyondLastLine: false,
-          wordWrap: 'on',
-          automaticLayout: true,
-          overviewRulerLanes: 0,
-          hideCursorInOverviewRuler: true,
-          scrollbar: { vertical: 'auto', horizontal: 'hidden', verticalScrollbarSize: 8 },
-          renderLineHighlight: 'none',
-          ariaLabel,
-          padding: { top: 6, bottom: 6 },
-        }}
-      />
-    </div>
-  );
-}
-
-/** Unique key for a hook command (hookType + index) */
-function hookKey(hook: ProjectHook): string {
-  return `${hook.hookType}:${hook.index}`;
-}
-
-/* ── Draggable hook row ── */
-function HookItem({
-  hook,
-  onEdit,
-  onDelete,
-  onToggleEnabled,
-  t,
-}: {
-  hook: ProjectHook;
-  onEdit: (hook: ProjectHook) => void;
-  onDelete: (hook: ProjectHook) => void;
-  onToggleEnabled: (hook: ProjectHook) => void;
-  t: (key: string) => string;
-}) {
-  const ref = useRef<HTMLDivElement>(null);
-  const handleRef = useRef<HTMLDivElement>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [isDropTarget, setIsDropTarget] = useState(false);
-  const key = hookKey(hook);
-
-  useEffect(() => {
-    const el = ref.current;
-    const handle = handleRef.current;
-    if (!el || !handle) return;
-
-    const cleanupDrag = draggable({
-      element: el,
-      dragHandle: handle,
-      getInitialData: () => ({
-        type: 'hook-item',
-        key,
-        hookType: hook.hookType,
-        index: hook.index,
-      }),
-      onDragStart: () => setIsDragging(true),
-      onDrop: () => setIsDragging(false),
-    });
-
-    const cleanupDrop = dropTargetForElements({
-      element: el,
-      getData: () => ({ type: 'hook-item', key, hookType: hook.hookType, index: hook.index }),
-      canDrop: ({ source }) =>
-        source.data.type === 'hook-item' &&
-        source.data.key !== key &&
-        source.data.hookType === hook.hookType,
-      onDragEnter: () => setIsDropTarget(true),
-      onDragLeave: () => setIsDropTarget(false),
-      onDrop: () => setIsDropTarget(false),
-    });
-
-    return () => {
-      cleanupDrag();
-      cleanupDrop();
-    };
-  }, [key, hook.hookType, hook.index]);
-
-  return (
-    <div
-      ref={ref}
-      data-testid={`hook-item-${key}`}
-      className={cn(
-        'group flex items-center gap-1.5 rounded-md border border-border/50 bg-card px-1.5 py-1.5 transition-all hover:bg-accent/30',
-        isDragging && 'opacity-40',
-        isDropTarget && 'ring-2 ring-ring',
-      )}
-    >
-      {/* Drag handle */}
-      <div
-        ref={handleRef}
-        className="text-muted-foreground/40 hover:text-muted-foreground shrink-0 cursor-grab active:cursor-grabbing"
-        data-testid={`hook-drag-${key}`}
-      >
-        <GripVertical className="icon-sm" />
-      </div>
-
-      {/* Content */}
-      <div className="min-w-0 flex-1">
-        <span className="text-sm font-medium">{hook.label}</span>
-        <CommandHighlight command={hook.command} />
-      </div>
-
-      {/* Actions */}
-      <div className="flex shrink-0 items-center gap-1.5">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div>
-              <Switch
-                checked={hook.enabled}
-                onCheckedChange={() => onToggleEnabled(hook)}
-                data-testid={`hook-toggle-${key}`}
-              />
-            </div>
-          </TooltipTrigger>
-          <TooltipContent>{hook.enabled ? t('hooks.enabled') : t('hooks.disabled')}</TooltipContent>
-        </Tooltip>
-        <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="muted"
-                size="icon-xs"
-                onClick={() => onEdit(hook)}
-                data-testid={`hook-edit-${key}`}
-              >
-                <Pencil className="icon-xs" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{t('hooks.edit')}</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="muted-destructive"
-                size="icon-xs"
-                onClick={() => onDelete(hook)}
-                data-testid={`hook-delete-${key}`}
-              >
-                <Trash2 className="icon-xs" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{t('hooks.delete')}</TooltipContent>
-          </Tooltip>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 export function ProjectHooksSettings() {
   const { t } = useTranslation();
@@ -236,51 +32,14 @@ export function ProjectHooksSettings() {
   }, [selectedProjectId]);
 
   useEffect(() => {
-    loadHooks();
-  }, [loadHooks]);
-
-  // Drag-and-drop reorder monitor
-  useEffect(() => {
-    return monitorForElements({
-      onDrop({ source, location }) {
-        const targets = location.current.dropTargets;
-        if (!targets.length) return;
-        if (source.data.type !== 'hook-item') return;
-
-        // SAFETY: type 'hook-item' was checked above; HookItem's getInitialData sets hookType from hook.hookType, a HookType.
-        const sourceHookType = source.data.hookType as HookType;
-        // SAFETY: the same 'hook-item' data sets index from hook.index, a number.
-        const sourceIndex = source.data.index as number;
-        // SAFETY: only HookItem drop targets accept a 'hook-item' source (canDrop), and their getData sets index from hook.index, a number.
-        const targetIndex = targets[0].data.index as number;
-        if (sourceIndex === targetIndex || sourceHookType !== targets[0].data.hookType) return;
-
-        setHooks((prev) => {
-          // Get hooks of this type
-          const typeHooks = prev.filter((h) => h.hookType === sourceHookType);
-          const others = prev.filter((h) => h.hookType !== sourceHookType);
-
-          const oldIdx = typeHooks.findIndex((h) => h.index === sourceIndex);
-          const newIdx = typeHooks.findIndex((h) => h.index === targetIndex);
-          if (oldIdx === -1 || newIdx === -1) return prev;
-
-          const reordered = [...typeHooks];
-          const [moved] = reordered.splice(oldIdx, 1);
-          reordered.splice(newIdx, 0, moved);
-
-          // Persist reorder
-          if (selectedProjectId) {
-            const newOrder = reordered.map((h) => h.index);
-            api.reorderHooks(selectedProjectId, sourceHookType, newOrder);
-          }
-
-          // Update indexes
-          const updated = reordered.map((h, i) => ({ ...h, index: i }));
-          return [...others, ...updated];
-        });
-      },
+    if (!selectedProjectId) return;
+    void api.listHooks(selectedProjectId).then((result) => {
+      if (result.isOk()) setHooks(result.value);
     });
   }, [selectedProjectId]);
+
+  // Drag-and-drop reorder monitor
+  useHookReorderMonitor(selectedProjectId, setHooks);
 
   const handleAdd = async () => {
     if (!selectedProjectId) return;
@@ -436,64 +195,21 @@ export function ProjectHooksSettings() {
             const key = hookKey(hook);
             if (editingKey === key) {
               return (
-                <div key={key} data-testid={`hook-item-${key}`} className="settings-form-panel">
-                  <div>
-                    <span id="hooks-edit-type-label" className="settings-label">
-                      {t('hooks.hookType')}
-                    </span>
-                    <Select
-                      value={hookType}
-                      // SAFETY: the SelectItem values are the entries of HOOK_TYPES, each a HookType.
-                      onValueChange={(v) => setHookType(v as HookType)}
-                    >
-                      <SelectTrigger
-                        aria-labelledby="hooks-edit-type-label"
-                        data-testid="hooks-type-select"
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {HOOK_TYPES.map((ht) => (
-                          <SelectItem key={ht} value={ht}>
-                            {hookTypeLabelFn(ht)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <label htmlFor="hooks-edit-label" className="settings-label">
-                      {t('hooks.label')}
-                    </label>
-                    <Input
-                      id="hooks-edit-label"
-                      placeholder={t('hooks.label')}
-                      value={label}
-                      onChange={(e) => setLabel(e.target.value)}
-                      data-testid="hooks-label-input"
-                      autoFocus
-                    />
-                  </div>
-                  <div>
-                    <span className="settings-label">{t('hooks.command')}</span>
-                    <ShellEditor
-                      ariaLabel={t('hooks.command')}
-                      value={command}
-                      onChange={setCommand}
-                      testId="hooks-command-input"
-                    />
-                  </div>
-                  <div className="flex items-center justify-end gap-2 pt-1">
-                    <Button variant="ghost" size="sm" onClick={cancelEdit}>
-                      <X className="icon-sm mr-1" />
-                      {t('common.cancel')}
-                    </Button>
-                    <Button size="sm" onClick={() => handleUpdate(hook)}>
-                      <Check className="icon-sm mr-1" />
-                      {t('common.save')}
-                    </Button>
-                  </div>
-                </div>
+                <HookForm
+                  key={key}
+                  idPrefix="hooks-edit"
+                  testId={`hook-item-${key}`}
+                  hookType={hookType}
+                  setHookType={setHookType}
+                  label={label}
+                  setLabel={setLabel}
+                  command={command}
+                  setCommand={setCommand}
+                  hookTypeLabelFn={hookTypeLabelFn}
+                  onCancel={cancelEdit}
+                  onSubmit={() => handleUpdate(hook)}
+                  submitLabel={t('common.save')}
+                />
               );
             }
 
@@ -513,61 +229,19 @@ export function ProjectHooksSettings() {
 
       {/* Add form */}
       {adding && (
-        <div className="settings-form-panel">
-          <div>
-            <span id="hooks-add-type-label" className="settings-label">
-              {t('hooks.hookType')}
-            </span>
-            <Select
-              value={hookType}
-              // SAFETY: the SelectItem values are the entries of HOOK_TYPES, each a HookType.
-              onValueChange={(v) => setHookType(v as HookType)}
-            >
-              <SelectTrigger aria-labelledby="hooks-add-type-label" data-testid="hooks-type-select">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {HOOK_TYPES.map((ht) => (
-                  <SelectItem key={ht} value={ht}>
-                    {hookTypeLabelFn(ht)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <label htmlFor="hooks-add-label" className="settings-label">
-              {t('hooks.label')}
-            </label>
-            <Input
-              id="hooks-add-label"
-              placeholder={t('hooks.label')}
-              value={label}
-              onChange={(e) => setLabel(e.target.value)}
-              data-testid="hooks-label-input"
-              autoFocus
-            />
-          </div>
-          <div>
-            <span className="settings-label">{t('hooks.command')}</span>
-            <ShellEditor
-              ariaLabel={t('hooks.command')}
-              value={command}
-              onChange={setCommand}
-              testId="hooks-command-input"
-            />
-          </div>
-          <div className="flex items-center justify-end gap-2 pt-1">
-            <Button variant="ghost" size="sm" onClick={cancelEdit}>
-              <X className="icon-sm mr-1" />
-              {t('common.cancel')}
-            </Button>
-            <Button size="sm" onClick={handleAdd}>
-              <Check className="icon-sm mr-1" />
-              {t('hooks.addHook')}
-            </Button>
-          </div>
-        </div>
+        <HookForm
+          idPrefix="hooks-add"
+          hookType={hookType}
+          setHookType={setHookType}
+          label={label}
+          setLabel={setLabel}
+          command={command}
+          setCommand={setCommand}
+          hookTypeLabelFn={hookTypeLabelFn}
+          onCancel={cancelEdit}
+          onSubmit={handleAdd}
+          submitLabel={t('hooks.addHook')}
+        />
       )}
     </div>
   );

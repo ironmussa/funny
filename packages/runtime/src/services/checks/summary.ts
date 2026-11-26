@@ -25,7 +25,7 @@ const at = (file?: string, line?: number, column?: number) =>
     ? `${file}${line !== undefined ? `:${line}` : ''}${column !== undefined ? `:${column}` : ''}`
     : '';
 
-/** A section of a run summary: its lines, and how many issues it reported. */
+/** Summary lines of one kind of run, and how many issues it reported. */
 interface SummaryLines {
   lines: string[];
   issues: number;

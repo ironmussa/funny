@@ -6,8 +6,8 @@ import type { usePRDetail } from '@/data/pull-requests/hooks';
 import type { useReviewState } from '@/hooks/use-review-state';
 import type { ReviewSubTab } from '@/stores/ui-store';
 
-import { ExpandedDiffPresenter } from './ExpandedDiffPresenter';
-import { ReviewDialogs, type ConfirmDialogState } from './ReviewDialogs';
+import { type ConfirmDialogState } from './ReviewDialogs';
+import { ReviewExpandedDiff, ReviewPaneDialogs } from './ReviewPaneOverlays';
 import { useReviewPaneModel } from './use-review-pane-model';
 
 /**
@@ -166,62 +166,21 @@ export function ReviewPaneStateProvider({ children }: { children: ReactNode }) {
       {children}
       {/* Both overlays Radix-portal to document.body, so positioning them here
           is fine regardless of where the tabs render. */}
-      <ExpandedDiffPresenter
-        expandedFile={review.expandedFile}
-        expandedSummary={expanded.summary}
-        expandedDiffContent={expanded.diffContent}
-        ExpandedIcon={expanded.Icon}
-        onClose={expanded.onClose}
-        onFileSelect={expanded.onFileSelect}
-        fileSearch={review.fileSearch}
-        setFileSearch={review.setFileSearch}
-        fileSearchCaseSensitive={review.fileSearchCaseSensitive}
-        setFileSearchCaseSensitive={review.setFileSearchCaseSensitive}
-        filteredDiffs={review.filteredDiffs}
-        summaries={review.summaries}
-        checkedFiles={review.checkedFiles}
-        toggleFile={review.toggleFile}
-        onRevertFile={review.handleRevertFile}
-        onIgnore={review.handleIgnore}
+      <ReviewExpandedDiff
+        review={review}
+        expanded={expanded}
         basePath={basePath}
-        loadingDiff={review.loadingDiff}
-        diffCache={review.diffCache}
         prThreads={prThreads}
-        requestFullDiff={review.requestFullDiff}
-        handleResolveConflict={review.handleResolveConflict}
-        handleStagePatch={review.handleStagePatch}
-        patchStagingInProgress={review.patchStagingInProgress}
-        handleSelectionStateChange={review.handleSelectionStateChange}
-        selectAllSignal={review.selectAllSignal}
-        deselectAllSignal={review.deselectAllSignal}
       />
-      <ReviewDialogs
+      <ReviewPaneDialogs
+        review={review}
         confirmDialog={confirmDialog}
         setConfirmDialog={setConfirmDialog}
-        executeRevert={review.executeRevert}
-        executeDiscardAll={review.executeDiscardAll}
-        executeIgnoreFiles={review.executeIgnoreFiles}
-        executeResetSoft={review.executeResetSoft}
-        executeStashDrop={review.stash.executeStashDrop}
-        pullStrategyDialog={review.pullStrategyDialog}
-        setPullStrategyDialog={review.setPullStrategyDialog}
-        handlePullStrategyChosen={review.handlePullStrategyChosen}
-        prDialog={review.prDialog}
-        setPrDialog={review.setPrDialog}
         threadBranch={threadBranch}
         baseBranch={baseBranch}
-        prInProgress={review.prInProgress}
-        handleCreatePROnly={review.handleCreatePROnly}
-        mergeDialog={review.mergeDialog}
-        setMergeDialog={review.setMergeDialog}
         currentBranch={currentBranch}
-        mergeInProgress={review.mergeInProgress}
-        handleMergeWithTarget={review.handleMergeWithTarget}
-        publishProjectId={remoteCheckProjectId ?? ''}
-        publishProjectPath={basePath}
-        publishDialogOpen={review.publishDialogOpen}
-        setPublishDialogOpen={review.setPublishDialogOpen}
-        handlePublishSuccess={review.handlePublishSuccess}
+        remoteCheckProjectId={remoteCheckProjectId}
+        basePath={basePath}
       />
     </ReviewPaneContext.Provider>
   );

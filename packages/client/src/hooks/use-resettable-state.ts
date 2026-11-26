@@ -24,3 +24,17 @@ export function useResettableState<T>(
   }
   return [value, setValue];
 }
+
+/**
+ * Runs `adjust` during render whenever one of `keys` changes (not on mount).
+ * `adjust` may only set this component's state: it replaces
+ * `useEffect(() => { setA(...); setB(...); }, keys)` with React's "adjusting
+ * state when a prop changes" pattern, so the old values are never painted.
+ */
+export function useAdjustOnChange(keys: readonly unknown[], adjust: () => void): void {
+  const [seenKeys, setSeenKeys] = useState(keys);
+  if (!sameKeys(seenKeys, keys)) {
+    setSeenKeys(keys);
+    adjust();
+  }
+}

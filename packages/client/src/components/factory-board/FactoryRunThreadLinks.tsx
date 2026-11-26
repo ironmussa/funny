@@ -26,7 +26,7 @@ import {
  * retry); the run's panel lists them all.
  */
 export function factoryRunCardThreadLinks(
-  run: Pick<FactoryQueueRun, 'triage' | 'stepOptions' | 'reviews'>,
+  run: Pick<FactoryQueueRun, 'triage' | 'stepOptions' | 'reviews' | 'roleThreads'>,
 ): FactoryRunThreadLink[] {
   const links = factoryRunThreadLinks(run);
   return links.filter((link) => links.findLast((other) => other.role === link.role) === link);

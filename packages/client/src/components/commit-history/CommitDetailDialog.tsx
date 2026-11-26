@@ -18,6 +18,7 @@ import { SearchBar } from '@/components/ui/search-bar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCommitActions } from '@/hooks/use-commit-actions';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
+import { useAdjustOnChange } from '@/hooks/use-resettable-state';
 import { api } from '@/lib/api';
 import { copyCommitHashToClipboard } from '@/lib/commit-hash-copy';
 import { parseDiffNew, parseDiffOld } from '@/lib/diff-parse';
@@ -93,6 +94,23 @@ interface CommitDetailDataArgs {
   projectModeId: string | null;
 }
 
+/**
+ * What the selection allows: whether there is a git context to read from, if a
+ * commit is to be loaded, and the body the commit list already has (shown
+ * until the full body loads).
+ */
+function commitSelection({
+  selectedCommit,
+  selectedHash,
+  effectiveThreadId,
+  projectModeId,
+}: CommitDetailDataArgs) {
+  const hasGitContext = !!(effectiveThreadId || projectModeId);
+  const willLoad = !!selectedHash && hasGitContext;
+  const initialBody = willLoad ? selectedCommit?.body.trim() || null : null;
+  return { hasGitContext, willLoad, initialBody };
+}
+
 /** Loaded files / commit body / file search / diff content of the selected commit. */
 function useCommitDetailData({
   selectedCommit,
@@ -101,31 +119,39 @@ function useCommitDetailData({
   projectModeId,
 }: CommitDetailDataArgs) {
   const { t } = useTranslation();
+  const { hasGitContext, willLoad, initialBody } = commitSelection({
+    selectedCommit,
+    selectedHash,
+    effectiveThreadId,
+    projectModeId,
+  });
   const [commitFiles, setCommitFiles] = useState<CommitFile[]>([]);
-  const [filesLoading, setFilesLoading] = useState(false);
-  const [commitBody, setCommitBody] = useState<string | null>(null);
+  const [filesLoading, setFilesLoading] = useState(willLoad);
+  const [commitBody, setCommitBody] = useState<string | null>(initialBody);
   const [fileSearch, setFileSearch] = useState('');
   const [fileSearchCaseSensitive, setFileSearchCaseSensitive] = useState(false);
   const [expandedFile, setExpandedFile] = useState<string | null>(null);
   const [diffContent, setDiffContent] = useState<string | null>(null);
   const [diffLoading, setDiffLoading] = useState(false);
 
-  const hasGitContext = !!(effectiveThreadId || projectModeId);
+  // A new selection resets what the previous one loaded during render (React's
+  // "adjusting state when a prop changes"); the effect below only fetches.
+  useAdjustOnChange(
+    [selectedHash, selectedCommit?.body, hasGitContext, effectiveThreadId, projectModeId, t],
+    () => {
+      setFilesLoading(willLoad);
+      if (!willLoad) setCommitFiles([]);
+      setCommitBody(initialBody);
+      setFileSearch('');
+    },
+  );
 
   // Load commit files + body when selection changes
   // Async writes are owned by this selection and ignored after cleanup flips cancelled.
   // react-doctor-disable-next-line react-doctor/no-set-state-after-await-in-effect
   useEffect(() => {
-    if (!selectedHash || !hasGitContext) {
-      setCommitFiles([]);
-      setCommitBody(null);
-      setFileSearch('');
-      return;
-    }
+    if (!selectedHash || !hasGitContext) return;
     let cancelled = false;
-    setFilesLoading(true);
-    setCommitBody(selectedCommit?.body.trim() || null);
-    setFileSearch('');
     (async () => {
       return withCleanup(
         async () => {

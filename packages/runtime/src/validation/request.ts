@@ -78,9 +78,9 @@ export function queryList<TSchema extends ZodTypeAny>(itemSchema: TSchema) {
   }, z.array(itemSchema));
 }
 
-/** A request's query parameters: one value, or every value of a repeated key. */
+/** Every query parameter, one value or all of a repeated one. */
 interface QueryValues {
-  [key: string]: string | string[];
+  [name: string]: string | string[];
 }
 
 function queryValues(c: Context): QueryValues {

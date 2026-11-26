@@ -22,6 +22,17 @@ const procedures = trpc.threads;
  */
 export type ShareLevel = 'view' | 'comment' | 'steer';
 
+/** `POST /threads/:id/message`, as the runner answers it (thread-service `messaging.ts`). */
+export interface SendMessageResponse {
+  ok: boolean;
+  handledLocally?: 'shell_escape';
+  /** The thread was busy: the message was queued instead of started. */
+  queued?: boolean;
+  /** Messages now in the thread's queue (with `queued`). */
+  queuedCount?: number;
+  queuedMessageId?: string;
+}
+
 export interface ThreadShareGrant {
   threadId: string;
   sharedWithUserId: string;
@@ -196,7 +207,7 @@ export const threadsApi = {
     },
     images?: ImageAttachment[],
   ) =>
-    request<{ ok: boolean; handledLocally?: 'shell_escape' }>(`/threads/${threadId}/message`, {
+    request<SendMessageResponse>(`/threads/${threadId}/message`, {
       method: 'POST',
       // Undefined options are dropped by JSON.stringify.
       body: JSON.stringify({ content, images, ...opts }),

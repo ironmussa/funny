@@ -61,7 +61,6 @@ interface LockFile {
   skills: Record<string, LockFileSkill>;
 }
 
-/** The name and description a SKILL.md frontmatter declares. */
 interface SkillFrontmatter {
   name?: string;
   description?: string;
@@ -164,7 +163,6 @@ function parseThreadMode(value: string | undefined): 'local' | 'worktree' | unde
   return normalized === 'local' || normalized === 'worktree' ? normalized : undefined;
 }
 
-/** The description and thread mode a command .md frontmatter declares. */
 interface CommandFrontmatter {
   description?: string;
   threadMode?: 'local' | 'worktree';
@@ -349,15 +347,14 @@ function readPluginLayout(installPath: string, pluginKey: string): PluginLayout 
   };
 }
 
-/** A plugin's name and the extra command / skill paths its manifest lists. */
-interface PluginManifestPaths {
+interface PluginManifest {
   name: string;
   commands: string[];
   skills: string[];
 }
 
 /** `.claude-plugin/plugin.json`, or the fallback name and no extra paths when absent or invalid. */
-function readPluginManifest(installPath: string, pluginKey: string): PluginManifestPaths {
+function readPluginManifest(installPath: string, pluginKey: string): PluginManifest {
   // fallback: "commit-commands" from "commit-commands@claude-plugins-official"
   const fallback = { name: pluginKey.split('@')[0], commands: [], skills: [] };
   const pluginJsonPath = join(installPath, '.claude-plugin', 'plugin.json');

@@ -22,7 +22,7 @@ import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 import { cn } from '@/lib/utils';
-import { whilePending, withCleanup } from '@/lib/while-pending';
+import { whilePending } from '@/lib/while-pending';
 import { useAuthStore } from '@/stores/auth-store';
 
 interface Member {
@@ -87,59 +87,61 @@ function useTeamMembersData() {
   // Invite link state
   const [inviteLinks, setInviteLinks] = useState<InviteLink[]>([]);
 
-  const loadMembers = useCallback(async () => {
-    return withCleanup(
-      async () => {
-        try {
-          const res = await authClient.organization.listMembers();
+  // The loaders set state from their promise callbacks, so the mount effect
+  // below only starts the requests.
+  const loadMembers = useCallback(
+    () =>
+      authClient.organization
+        .listMembers()
+        .then(
+          (res) => {
+            if (res.data) {
+              // SAFETY: listMembers returns the org plugin's member rows, which carry every Member
+              // field; their role is one of the plugin's configured roles (owner, admin, member,
+              // viewer), which are the TeamRole values. createdAt may arrive as a Date but is not read.
+              // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
+              setMembers(res.data as unknown as Member[]);
+            }
+          },
+          (err) => console.error('[TeamMembers] Failed to load members:', err),
+        )
+        .finally(() => setLoading(false)),
+    [],
+  );
+
+  const loadInvitations = useCallback(
+    () =>
+      authClient.organization.listInvitations().then(
+        (res) => {
           if (res.data) {
-            // SAFETY: listMembers returns the org plugin's member rows, which carry every Member
-            // field; their role is one of the plugin's configured roles (owner, admin, member,
-            // viewer), which are the TeamRole values. createdAt may arrive as a Date but is not read.
-            // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
-            setMembers(res.data as unknown as Member[]);
+            setInvitations(
+              // SAFETY: listInvitations returns the org plugin's invitation rows, which carry every
+              // PendingInvitation field; expiresAt may be a Date, and it is only passed to new Date().
+              // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
+              (res.data as unknown as PendingInvitation[]).filter((i) => i.status === 'pending'),
+            );
           }
-        } catch (err) {
-          console.error('[TeamMembers] Failed to load members:', err);
-        }
-      },
-      () => {
-        setLoading(false);
-      },
-    );
-  }, []);
+        },
+        (err) => console.error('[TeamMembers] Failed to load invitations:', err),
+      ),
+    [],
+  );
 
-  const loadInvitations = useCallback(async () => {
-    try {
-      const res = await authClient.organization.listInvitations();
-      if (res.data) {
-        setInvitations(
-          // SAFETY: listInvitations returns the org plugin's invitation rows, which carry every
-          // PendingInvitation field; expiresAt may be a Date, and it is only passed to new Date().
-          // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
-          (res.data as unknown as PendingInvitation[]).filter((i) => i.status === 'pending'),
-        );
-      }
-    } catch (err) {
-      console.error('[TeamMembers] Failed to load invitations:', err);
-    }
-  }, []);
+  const loadInviteLinks = useCallback(
+    () =>
+      api.listInviteLinks().then((result) => {
+        if (result.isOk()) setInviteLinks(result.value);
+      }),
+    [],
+  );
 
-  const loadInviteLinks = useCallback(async () => {
-    const result = await api.listInviteLinks();
-    if (result.isOk()) {
-      setInviteLinks(result.value);
-    }
-  }, []);
-
-  const checkSmtpConfig = useCallback(async () => {
-    const result = await api.getSmtpSettings();
-    if (result.isOk()) {
-      setSmtpConfigured(result.value.configured);
-    } else {
-      setSmtpConfigured(false);
-    }
-  }, []);
+  const checkSmtpConfig = useCallback(
+    () =>
+      api
+        .getSmtpSettings()
+        .then((result) => setSmtpConfigured(result.isOk() ? result.value.configured : false)),
+    [],
+  );
 
   useEffect(() => {
     loadMembers();

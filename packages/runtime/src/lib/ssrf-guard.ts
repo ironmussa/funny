@@ -150,8 +150,7 @@ function formatIpForUrlHost(ip: string): string {
   return isIP(ip) === 6 ? `[${ip}]` : ip;
 }
 
-/** The URL and request options a guarded fetch sends. */
-interface PinnedRequest {
+interface PinnedDestination {
   url: string;
   init?: RequestInit;
 }
@@ -160,7 +159,7 @@ function withPinnedHttpDestination(
   rawUrl: string,
   init: RequestInit | undefined,
   policy: OutboundPolicy,
-): PinnedRequest {
+): PinnedDestination {
   const parsed = new URL(rawUrl);
   if (parsed.protocol !== 'http:') return { url: rawUrl, init };
 

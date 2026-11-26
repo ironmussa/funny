@@ -35,6 +35,7 @@ export function buildFactoryRun(overrides: Partial<FactoryRun> = {}): FactoryRun
     flowSource: null,
     flowCommit: null,
     stepOptions: [],
+    roleThreads: [],
     mergeApproval: null,
     riskWaiver: null,
     ...overrides,

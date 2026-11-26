@@ -106,7 +106,7 @@ function isCommitAction(action: GitWorkflowAction): boolean {
 
 // ── Main executor ────────────────────────────────────────────
 
-/** The id of a workflow that started; its progress and end arrive as events. */
+/** The id of a workflow that started; its progress arrives as events. */
 interface StartedWorkflow {
   workflowId: string;
 }

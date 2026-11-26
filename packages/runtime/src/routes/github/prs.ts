@@ -32,7 +32,7 @@ const prMergeBodySchema = z
 
 // ── Sorting + search helpers ────────────────────────────────
 
-/** The sort and direction a GitHub endpoint takes. */
+/** The sort and direction params of a GitHub list or search request. */
 interface PRSortParams {
   sort: string;
   direction: string;

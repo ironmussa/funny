@@ -82,12 +82,23 @@ export function ProjectFilesPane() {
   const [queryCaseSensitive, setQueryCaseSensitive] = useState(false);
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
   const requestIdRef = useRef(0);
+  // The base path whose collapsed folders are settled (saved, or collapsed once after the first load).
   const collapsedInitializedRef = useRef<string | null>(null);
 
-  const loadFiles = useCallback(() => {
+  // Restore the saved collapsed folders each time the base path changes.
+  const [collapsedFor, setCollapsedFor] = useState<string | undefined | null>(null);
+  if (collapsedFor !== basePath) {
+    setCollapsedFor(basePath);
+    setCollapsedFolders(loadCollapsed(basePath) ?? new Set());
+  }
+
+  useEffect(() => {
+    collapsedInitializedRef.current = loadCollapsed(basePath) ? (basePath ?? null) : null;
+  }, [basePath]);
+
+  const fetchFiles = useCallback(() => {
     if (!basePath) return;
     const requestId = ++requestIdRef.current;
-    setLoading(true);
 
     api.browseFiles(basePath, undefined, MAX_FILES).then((result) => {
       if (requestId !== requestIdRef.current) return;
@@ -95,6 +106,15 @@ export function ProjectFilesPane() {
         const normalized = result.value.files.map((f) => (isString(f) ? f : f.path));
         setFiles(normalized);
         setTruncated(result.value.truncated);
+        // Without a saved state, a project's folders start collapsed.
+        if (collapsedInitializedRef.current !== basePath && normalized.length > 0) {
+          const allFolders = collectAllFolderPaths(
+            normalized.map((path) => ({ path, status: 'modified', staged: false })),
+          );
+          setCollapsedFolders(allFolders);
+          saveCollapsed(basePath, allFolders);
+          collapsedInitializedRef.current = basePath;
+        }
       } else {
         log.error('Failed to load project files', { error: String(result.error) });
         setFiles([]);
@@ -104,21 +124,27 @@ export function ProjectFilesPane() {
     });
   }, [basePath]);
 
+  const loadFiles = useCallback(() => {
+    if (!basePath) return;
+    setLoading(true);
+    fetchFiles();
+  }, [basePath, fetchFiles]);
+
+  // Show the loader each time the base path changes; the effect below fetches its files.
+  const [loadingFor, setLoadingFor] = useState<string | undefined>(undefined);
+  if (loadingFor !== basePath) {
+    setLoadingFor(basePath);
+    if (basePath) setLoading(true);
+  }
+
   const cancelPendingRequests = useCallback(() => {
     requestIdRef.current++;
   }, []);
 
   useEffect(() => {
-    loadFiles();
+    fetchFiles();
     return cancelPendingRequests;
-  }, [loadFiles, cancelPendingRequests]);
-
-  useEffect(() => {
-    collapsedInitializedRef.current = null;
-    const saved = loadCollapsed(basePath);
-    setCollapsedFolders(saved ?? new Set());
-    if (saved) collapsedInitializedRef.current = basePath ?? null;
-  }, [basePath]);
+  }, [fetchFiles, cancelPendingRequests]);
 
   const allSummaries = useMemo<FileDiffSummary[]>(
     () =>
@@ -129,15 +155,6 @@ export function ProjectFilesPane() {
       })),
     [files],
   );
-
-  useEffect(() => {
-    if (collapsedInitializedRef.current === (basePath ?? null)) return;
-    if (files.length === 0) return;
-    const allFolders = collectAllFolderPaths(allSummaries);
-    setCollapsedFolders(allFolders);
-    saveCollapsed(basePath, allFolders);
-    collapsedInitializedRef.current = basePath ?? null;
-  }, [basePath, files, allSummaries]);
 
   const filteredSummaries = useMemo<FileDiffSummary[]>(() => {
     const trimmed = query.trim();

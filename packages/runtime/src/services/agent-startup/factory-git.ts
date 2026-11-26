@@ -14,16 +14,16 @@ import { factoryGitConfigEnv } from '@funny/core/git';
 /** Where the factory's git configuration files live on this runner. */
 export const factoryGitDir = () => join(homedir(), '.funny', 'factory-git');
 
-/** An agent's environment variables, `GIT_CONFIG_*` entries included. */
-interface GitConfigEnv {
-  [name: string]: string;
-}
-
 /**
  * `extra`'s `GIT_CONFIG_*` entries added after the ones `env` already has (or,
  * without them, the runner's own, which the agent inherits), so neither set
  * overwrites the other.
  */
+/** Environment variables, with the appended `GIT_CONFIG_*` entries. */
+interface GitConfigEnv {
+  [name: string]: string;
+}
+
 export function appendGitConfigEnv(
   env: Record<string, string> | undefined,
   extra: Record<string, string>,

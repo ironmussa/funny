@@ -387,6 +387,8 @@ export const factoryRuns = sqliteTable('factory_runs', {
   mergeApproval: text('merge_approval'),
   /** JSON `FactoryRiskWaiver`: a member marked the run as a lint cleanup; null otherwise. */
   riskWaiver: text('risk_waiver'),
+  /** JSON array of the role threads (triage, review) the run started (`FactoryRoleThread[]`). */
+  roleThreads: text('role_threads'),
   /** The schedule trigger that started the run (change flow-triggers); null otherwise. */
   triggerId: text('trigger_id'),
   /** The trigger's name when the run started, kept for display after an edit or a delete. */

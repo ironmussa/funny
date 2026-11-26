@@ -122,10 +122,17 @@ export function prStates(state: 'open' | 'closed' | 'all'): string[] | null {
   return null;
 }
 
-/** A GraphQL `orderBy`: the field and `ASC` / `DESC`. */
+/** A GraphQL `orderBy` for pull requests. */
 interface PROrder {
   field: string;
   direction: string;
+}
+
+/** One page of pull requests in the REST shape. */
+interface PullRequestPage {
+  prs: GitHubPR[];
+  hasMore: boolean;
+  nextCursor: string | null;
 }
 
 /**
@@ -192,14 +199,7 @@ function mapPullRequestNode(pr: PRNode, owner: string): GitHubPR {
   };
 }
 
-/** One page of pull requests and the cursor of the next page. */
-interface PullRequestsPage {
-  prs: GitHubPR[];
-  hasMore: boolean;
-  nextCursor: string | null;
-}
-
-export function mapPullRequests(data: PullRequestsData, owner: string): PullRequestsPage {
+export function mapPullRequests(data: PullRequestsData, owner: string): PullRequestPage {
   const connection = data.repository?.pullRequests;
   if (!connection) return { prs: [], hasMore: false, nextCursor: null };
   const { hasNextPage, endCursor } = connection.pageInfo;

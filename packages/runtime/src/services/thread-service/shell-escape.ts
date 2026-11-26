@@ -151,14 +151,13 @@ function normalizeShellResult(args: {
   };
 }
 
-/** A command's stdout and stderr cut to the output limit, and whether either was cut. */
-interface CombinedOutput {
+interface TruncatedOutput {
   stdout: string;
   stderr: string;
   truncated: boolean;
 }
 
-function truncateCombinedOutput(stdout: string, stderr: string): CombinedOutput {
+function truncateCombinedOutput(stdout: string, stderr: string): TruncatedOutput {
   let remaining = SHELL_ESCAPE_MAX_OUTPUT_CHARS;
   const nextStdout = stdout.slice(0, remaining);
   remaining -= nextStdout.length;

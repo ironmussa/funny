@@ -1,5 +1,5 @@
 import { SiGithub } from '@icons-pack/react-simple-icons';
-import { Globe, Link2, Loader2, Lock } from 'lucide-react';
+import { Link2, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -19,12 +19,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
-import { cn } from '@/lib/utils';
 import { whilePending } from '@/lib/while-pending';
+
+import { RemoteUrlFields } from './publish-repo/RemoteUrlFields';
+import { RepoVisibilityToggle } from './publish-repo/RepoVisibilityToggle';
 
 const log = createClientLogger('publish-repo-dialog');
 
@@ -66,20 +67,28 @@ export function PublishRepoDialog({
   const [savingRemote, setSavingRemote] = useState(false);
   const [remoteError, setRemoteError] = useState<string | null>(null);
 
-  // Reset everything + fetch orgs when dialog opens
+  // Reset everything when the dialog opens (or its project changes while open)
+  const openKey = open ? JSON.stringify([projectId, defaultName]) : null;
+  const [resetForKey, setResetForKey] = useState<string | null>(null);
+  if (openKey !== resetForKey) {
+    setResetForKey(openKey);
+    if (openKey !== null) {
+      setTab('github');
+      setRepoName(defaultName);
+      setDescription('');
+      setIsPrivate(true);
+      setSelectedOrg('__personal__');
+      setError(null);
+      setRemoteUrl('');
+      setRemoteError(null);
+      setOrgsLoading(true);
+    }
+  }
+
+  // Fetch orgs when dialog opens
   useEffect(() => {
     if (!open) return;
-    setTab('github');
-    setRepoName(defaultName);
-    setDescription('');
-    setIsPrivate(true);
-    setSelectedOrg('__personal__');
-    setError(null);
-    setRemoteUrl('');
-    setRemoteError(null);
-
     const controller = new AbortController();
-    setOrgsLoading(true);
     api
       .projectGetGhOrgs(projectId, controller.signal)
       .then((r) => {
@@ -229,27 +238,11 @@ export function PublishRepoDialog({
                 />
               </div>
 
-              <div
-                className={cn(
-                  'flex items-center justify-between rounded-md border px-3 py-2.5',
-                  'bg-muted/30',
-                )}
-              >
-                <div className="flex items-center gap-2">
-                  {isPrivate ? (
-                    <Lock className="text-muted-foreground size-4" />
-                  ) : (
-                    <Globe className="text-muted-foreground size-4" />
-                  )}
-                  <span className="text-sm">{isPrivate ? 'Private' : 'Public'}</span>
-                </div>
-                <Switch
-                  data-testid="publish-repo-private"
-                  checked={isPrivate}
-                  onCheckedChange={setIsPrivate}
-                  disabled={publishing}
-                />
-              </div>
+              <RepoVisibilityToggle
+                isPrivate={isPrivate}
+                onPrivateChange={setIsPrivate}
+                disabled={publishing}
+              />
 
               {error && (
                 <p className="text-destructive text-sm" data-testid="publish-repo-error">
@@ -261,33 +254,12 @@ export function PublishRepoDialog({
 
           {/* ── Existing remote URL tab ── */}
           <TabsContent value="remote" className="mt-4">
-            <div className="grid gap-4">
-              <div className="grid gap-1.5">
-                <label htmlFor="publish-remote-url" className="text-sm font-medium">
-                  Remote URL
-                </label>
-                <Input
-                  id="publish-remote-url"
-                  data-testid="publish-remote-url"
-                  value={remoteUrl}
-                  onChange={(e) => setRemoteUrl(e.target.value)}
-                  placeholder="https://github.com/user/repo.git"
-                  disabled={savingRemote}
-                  autoFocus
-                />
-                <p className="text-muted-foreground text-xs">
-                  Sets <code className="text-foreground">origin</code> on this project. The remote
-                  must already exist; create the empty repository on your provider first, then push
-                  from the toolbar.
-                </p>
-              </div>
-
-              {remoteError && (
-                <p className="text-destructive text-sm" data-testid="publish-remote-error">
-                  {remoteError}
-                </p>
-              )}
-            </div>
+            <RemoteUrlFields
+              remoteUrl={remoteUrl}
+              onRemoteUrlChange={setRemoteUrl}
+              savingRemote={savingRemote}
+              remoteError={remoteError}
+            />
           </TabsContent>
         </Tabs>
 

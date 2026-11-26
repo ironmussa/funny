@@ -14,10 +14,12 @@ import {
 /**
  * Describes the file runner/v2/common.proto.
  */
-export const file_runner_v2_common: GenFile /*@__PURE__*/ = fileDesc(
-  'ChZydW5uZXIvdjIvY29tbW9uLnByb3RvEglydW5uZXIudjIiLwoPUHJvdG9jb2xWZXJzaW9uEg0KBW1ham9yGAEgASgNEg0KBW1pbm9yGAIgASgNIqQBChBSdW5uZXJEZXNjcmlwdG9yEhMKC2luc3RhbmNlX2lkGAEgASgJEgwKBG5hbWUYAiABKAkSEAoIaG9zdG5hbWUYAyABKAkSGAoQb3BlcmF0aW5nX3N5c3RlbRgEIAEoCRIWCgl3b3Jrc3BhY2UYBSABKAlIAIgBARIbChNhY3RpdmVfcHJvdmlkZXJfaWRzGAYgAygJQgwKCl93b3Jrc3BhY2UixQEKD1RyYW5zcG9ydExpbWl0cxIZChFtYXhfbWVzc2FnZV9ieXRlcxgBIAEoDRIXCg9tYXhfZnJhbWVfYnl0ZXMYAiABKA0SHgoWbWF4X3BlbmRpbmdfb3BlcmF0aW9ucxgDIAEoDRIaChJtYXhfYWN0aXZlX3R1bm5lbHMYBCABKA0SHAoUbWF4X2FjdGl2ZV90ZXJtaW5hbHMYBSABKA0SJAocbWF4X2J1ZmZlcmVkX2J5dGVzX3Blcl9jbGFzcxgGIAEoBCKJAQoPUmVxdWVzdE1ldGFkYXRhEhYKDmNvcnJlbGF0aW9uX2lkGAEgASgJEiwKCGRlYWRsaW5lGAIgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIcCg9pZGVtcG90ZW5jeV9rZXkYAyABKAlIAIgBAUISChBfaWRlbXBvdGVuY3lfa2V5IicKDlNlc3Npb25Db250ZXh0EhUKDXNlc3Npb25fZXBvY2gYASABKAQifQoHRmFpbHVyZRIkCgRjb2RlGAEgASgOMhYucnVubmVyLnYyLkZhaWx1cmVDb2RlEg8KB21lc3NhZ2UYAiABKAkSEQoJcmV0cnlhYmxlGAMgASgIEigKB2RldGFpbHMYBCABKAsyFy5nb29nbGUucHJvdG9idWYuU3RydWN0IiUKBkhlYWRlchIMCgRuYW1lGAEgASgJEg0KBXZhbHVlGAIgASgJKtsBChBSdW5uZXJDYXBhYmlsaXR5EiEKHVJVTk5FUl9DQVBBQklMSVRZX1VOU1BFQ0lGSUVEEAASIAocUlVOTkVSX0NBUEFCSUxJVFlfT1BFUkFUSU9OUxABEhwKGFJVTk5FUl9DQVBBQklMSVRZX0VWRU5UUxACEiEKHVJVTk5FUl9DQVBBQklMSVRZX0hUVFBfVFVOTkVMEAMSHgoaUlVOTkVSX0NBUEFCSUxJVFlfVEVSTUlOQUwQBBIhCh1SVU5ORVJfQ0FQQUJJTElUWV9VU0VSX0VWRU5UUxAFKqYDCgtGYWlsdXJlQ29kZRIcChhGQUlMVVJFX0NPREVfVU5TUEVDSUZJRUQQABIhCh1GQUlMVVJFX0NPREVfSU5WQUxJRF9BUkdVTUVOVBABEiAKHEZBSUxVUkVfQ09ERV9VTkFVVEhFTlRJQ0FURUQQAhIiCh5GQUlMVVJFX0NPREVfUEVSTUlTU0lPTl9ERU5JRUQQAxIaChZGQUlMVVJFX0NPREVfTk9UX0ZPVU5EEAQSGQoVRkFJTFVSRV9DT0RFX0NPTkZMSUNUEAUSIgoeRkFJTFVSRV9DT0RFX0RFQURMSU5FX0VYQ0VFREVEEAYSGgoWRkFJTFVSRV9DT0RFX0NBTkNFTExFRBAHEiMKH0ZBSUxVUkVfQ09ERV9SRVNPVVJDRV9FWEhBVVNURUQQCBIcChhGQUlMVVJFX0NPREVfVU5BVkFJTEFCTEUQCRIlCiFGQUlMVVJFX0NPREVfVU5TVVBQT1JURURfUFJPVE9DT0wQChIUChBGQUlMVVJFX0NPREVfR0FQEAsSGQoVRkFJTFVSRV9DT0RFX0lOVEVSTkFMEAxiBnByb3RvMw',
-  [file_google_protobuf_struct, file_google_protobuf_timestamp],
-);
+export const file_runner_v2_common: GenFile =
+  /*@__PURE__*/
+  fileDesc(
+    'ChZydW5uZXIvdjIvY29tbW9uLnByb3RvEglydW5uZXIudjIiLwoPUHJvdG9jb2xWZXJzaW9uEg0KBW1ham9yGAEgASgNEg0KBW1pbm9yGAIgASgNIqQBChBSdW5uZXJEZXNjcmlwdG9yEhMKC2luc3RhbmNlX2lkGAEgASgJEgwKBG5hbWUYAiABKAkSEAoIaG9zdG5hbWUYAyABKAkSGAoQb3BlcmF0aW5nX3N5c3RlbRgEIAEoCRIWCgl3b3Jrc3BhY2UYBSABKAlIAIgBARIbChNhY3RpdmVfcHJvdmlkZXJfaWRzGAYgAygJQgwKCl93b3Jrc3BhY2UixQEKD1RyYW5zcG9ydExpbWl0cxIZChFtYXhfbWVzc2FnZV9ieXRlcxgBIAEoDRIXCg9tYXhfZnJhbWVfYnl0ZXMYAiABKA0SHgoWbWF4X3BlbmRpbmdfb3BlcmF0aW9ucxgDIAEoDRIaChJtYXhfYWN0aXZlX3R1bm5lbHMYBCABKA0SHAoUbWF4X2FjdGl2ZV90ZXJtaW5hbHMYBSABKA0SJAocbWF4X2J1ZmZlcmVkX2J5dGVzX3Blcl9jbGFzcxgGIAEoBCKJAQoPUmVxdWVzdE1ldGFkYXRhEhYKDmNvcnJlbGF0aW9uX2lkGAEgASgJEiwKCGRlYWRsaW5lGAIgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcBIcCg9pZGVtcG90ZW5jeV9rZXkYAyABKAlIAIgBAUISChBfaWRlbXBvdGVuY3lfa2V5IicKDlNlc3Npb25Db250ZXh0EhUKDXNlc3Npb25fZXBvY2gYASABKAQifQoHRmFpbHVyZRIkCgRjb2RlGAEgASgOMhYucnVubmVyLnYyLkZhaWx1cmVDb2RlEg8KB21lc3NhZ2UYAiABKAkSEQoJcmV0cnlhYmxlGAMgASgIEigKB2RldGFpbHMYBCABKAsyFy5nb29nbGUucHJvdG9idWYuU3RydWN0IiUKBkhlYWRlchIMCgRuYW1lGAEgASgJEg0KBXZhbHVlGAIgASgJKtsBChBSdW5uZXJDYXBhYmlsaXR5EiEKHVJVTk5FUl9DQVBBQklMSVRZX1VOU1BFQ0lGSUVEEAASIAocUlVOTkVSX0NBUEFCSUxJVFlfT1BFUkFUSU9OUxABEhwKGFJVTk5FUl9DQVBBQklMSVRZX0VWRU5UUxACEiEKHVJVTk5FUl9DQVBBQklMSVRZX0hUVFBfVFVOTkVMEAMSHgoaUlVOTkVSX0NBUEFCSUxJVFlfVEVSTUlOQUwQBBIhCh1SVU5ORVJfQ0FQQUJJTElUWV9VU0VSX0VWRU5UUxAFKqYDCgtGYWlsdXJlQ29kZRIcChhGQUlMVVJFX0NPREVfVU5TUEVDSUZJRUQQABIhCh1GQUlMVVJFX0NPREVfSU5WQUxJRF9BUkdVTUVOVBABEiAKHEZBSUxVUkVfQ09ERV9VTkFVVEhFTlRJQ0FURUQQAhIiCh5GQUlMVVJFX0NPREVfUEVSTUlTU0lPTl9ERU5JRUQQAxIaChZGQUlMVVJFX0NPREVfTk9UX0ZPVU5EEAQSGQoVRkFJTFVSRV9DT0RFX0NPTkZMSUNUEAUSIgoeRkFJTFVSRV9DT0RFX0RFQURMSU5FX0VYQ0VFREVEEAYSGgoWRkFJTFVSRV9DT0RFX0NBTkNFTExFRBAHEiMKH0ZBSUxVUkVfQ09ERV9SRVNPVVJDRV9FWEhBVVNURUQQCBIcChhGQUlMVVJFX0NPREVfVU5BVkFJTEFCTEUQCRIlCiFGQUlMVVJFX0NPREVfVU5TVVBQT1JURURfUFJPVE9DT0wQChIUChBGQUlMVVJFX0NPREVfR0FQEAsSGQoVRkFJTFVSRV9DT0RFX0lOVEVSTkFMEAxiBnByb3RvMw',
+    [file_google_protobuf_struct, file_google_protobuf_timestamp],
+  );
 
 /**
  * Identifies a supported wire-protocol release.
@@ -40,10 +42,9 @@ export type ProtocolVersion = Message<'runner.v2.ProtocolVersion'> & {
  * Describes the message runner.v2.ProtocolVersion.
  * Use `create(ProtocolVersionSchema)` to create a new message.
  */
-export const ProtocolVersionSchema: GenMessage<ProtocolVersion> /*@__PURE__*/ = messageDesc(
-  file_runner_v2_common,
-  0,
-);
+export const ProtocolVersionSchema: GenMessage<ProtocolVersion> =
+  /*@__PURE__*/
+  messageDesc(file_runner_v2_common, 0);
 
 /**
  * Runner metadata used for observability. Authorization identity is derived
@@ -87,10 +88,9 @@ export type RunnerDescriptor = Message<'runner.v2.RunnerDescriptor'> & {
  * Describes the message runner.v2.RunnerDescriptor.
  * Use `create(RunnerDescriptorSchema)` to create a new message.
  */
-export const RunnerDescriptorSchema: GenMessage<RunnerDescriptor> /*@__PURE__*/ = messageDesc(
-  file_runner_v2_common,
-  1,
-);
+export const RunnerDescriptorSchema: GenMessage<RunnerDescriptor> =
+  /*@__PURE__*/
+  messageDesc(file_runner_v2_common, 1);
 
 /**
  * Limits selected by the server for one authenticated runner session.
@@ -133,10 +133,9 @@ export type TransportLimits = Message<'runner.v2.TransportLimits'> & {
  * Describes the message runner.v2.TransportLimits.
  * Use `create(TransportLimitsSchema)` to create a new message.
  */
-export const TransportLimitsSchema: GenMessage<TransportLimits> /*@__PURE__*/ = messageDesc(
-  file_runner_v2_common,
-  2,
-);
+export const TransportLimitsSchema: GenMessage<TransportLimits> =
+  /*@__PURE__*/
+  messageDesc(file_runner_v2_common, 2);
 
 /**
  * Metadata common to independently multiplexed requests.
@@ -164,10 +163,9 @@ export type RequestMetadata = Message<'runner.v2.RequestMetadata'> & {
  * Describes the message runner.v2.RequestMetadata.
  * Use `create(RequestMetadataSchema)` to create a new message.
  */
-export const RequestMetadataSchema: GenMessage<RequestMetadata> /*@__PURE__*/ = messageDesc(
-  file_runner_v2_common,
-  3,
-);
+export const RequestMetadataSchema: GenMessage<RequestMetadata> =
+  /*@__PURE__*/
+  messageDesc(file_runner_v2_common, 3);
 
 /**
  * Identifies the negotiated session on all streams after control activation.
@@ -185,10 +183,9 @@ export type SessionContext = Message<'runner.v2.SessionContext'> & {
  * Describes the message runner.v2.SessionContext.
  * Use `create(SessionContextSchema)` to create a new message.
  */
-export const SessionContextSchema: GenMessage<SessionContext> /*@__PURE__*/ = messageDesc(
-  file_runner_v2_common,
-  4,
-);
+export const SessionContextSchema: GenMessage<SessionContext> =
+  /*@__PURE__*/
+  messageDesc(file_runner_v2_common, 4);
 
 /**
  * Typed failure for an individual command, operation, tunnel, or terminal.
@@ -221,10 +218,9 @@ export type Failure = Message<'runner.v2.Failure'> & {
  * Describes the message runner.v2.Failure.
  * Use `create(FailureSchema)` to create a new message.
  */
-export const FailureSchema: GenMessage<Failure> /*@__PURE__*/ = messageDesc(
-  file_runner_v2_common,
-  5,
-);
+export const FailureSchema: GenMessage<Failure> =
+  /*@__PURE__*/
+  messageDesc(file_runner_v2_common, 5);
 
 /**
  * A string-valued header. Repeated entries preserve multi-value headers.
@@ -247,7 +243,7 @@ export type Header = Message<'runner.v2.Header'> & {
  * Describes the message runner.v2.Header.
  * Use `create(HeaderSchema)` to create a new message.
  */
-export const HeaderSchema: GenMessage<Header> /*@__PURE__*/ = messageDesc(file_runner_v2_common, 6);
+export const HeaderSchema: GenMessage<Header> = /*@__PURE__*/ messageDesc(file_runner_v2_common, 6);
 
 /**
  * Features a runner can independently advertise during negotiation.
@@ -292,10 +288,9 @@ export enum RunnerCapability {
 /**
  * Describes the enum runner.v2.RunnerCapability.
  */
-export const RunnerCapabilitySchema: GenEnum<RunnerCapability> /*@__PURE__*/ = enumDesc(
-  file_runner_v2_common,
-  0,
-);
+export const RunnerCapabilitySchema: GenEnum<RunnerCapability> =
+  /*@__PURE__*/
+  enumDesc(file_runner_v2_common, 0);
 
 /**
  * Stable application failure categories. gRPC status still describes failures
@@ -373,7 +368,6 @@ export enum FailureCode {
 /**
  * Describes the enum runner.v2.FailureCode.
  */
-export const FailureCodeSchema: GenEnum<FailureCode> /*@__PURE__*/ = enumDesc(
-  file_runner_v2_common,
-  1,
-);
+export const FailureCodeSchema: GenEnum<FailureCode> =
+  /*@__PURE__*/
+  enumDesc(file_runner_v2_common, 1);

@@ -30,6 +30,7 @@ import {
 import { onAutomationThreadTerminal } from './automation-runs.js';
 import { relayToThreadStream, relayToUser } from './browser-events.js';
 import type { DataMessageHandlers } from './data-message-handler-types.js';
+import { AUTOMATION_DATA_HANDLERS } from './data-message-handlers-automations.js';
 import { WATCHER_JOB_DATA_HANDLERS } from './data-message-handlers-watchers-jobs.js';
 import { forgetThreadOwnership } from './data-ownership.js';
 import { onFactoryThreadTerminal } from './factory/factory-run-control.js';
@@ -694,6 +695,7 @@ const DATA_MESSAGE_HANDLERS: DataMessageHandlers = {
       ? { type, ...asked.value }
       : { type, error: asked.error.kind, message: asked.error.message };
   },
+  ...AUTOMATION_DATA_HANDLERS,
   'data:get_minimax_api_key': async ({ ownerId }) => {
     const { getProviderKey } = await import('./profile-service.js');
     const key = await getProviderKey(ownerId, 'minimax');

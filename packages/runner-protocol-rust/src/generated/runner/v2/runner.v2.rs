@@ -722,6 +722,52 @@ pub struct FactoryGetRun {
     #[prost(string, tag="2")]
     pub run_id: ::prost::alloc::string::String,
 }
+/// automation-agent-tools: what an agent in a thread may do on its owner's
+/// automations in the thread's project. The server takes the actor and project
+/// from the thread's row.
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AutomationList {
+    #[prost(string, tag="1")]
+    pub thread_id: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AutomationCreate {
+    #[prost(string, tag="1")]
+    pub thread_id: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub name: ::prost::alloc::string::String,
+    #[prost(string, tag="3")]
+    pub prompt: ::prost::alloc::string::String,
+    #[prost(string, tag="4")]
+    pub schedule: ::prost::alloc::string::String,
+    #[prost(string, optional, tag="5")]
+    pub model: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag="6")]
+    pub permission_mode: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct AutomationUpdate {
+    #[prost(string, tag="1")]
+    pub thread_id: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub automation_id: ::prost::alloc::string::String,
+    #[prost(message, optional, tag="3")]
+    pub patch: ::core::option::Option<::prost_types::Struct>,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AutomationDelete {
+    #[prost(string, tag="1")]
+    pub thread_id: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub automation_id: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
+pub struct AutomationTrigger {
+    #[prost(string, tag="1")]
+    pub thread_id: ::prost::alloc::string::String,
+    #[prost(string, tag="2")]
+    pub automation_id: ::prost::alloc::string::String,
+}
 /// Background activities (track-background-activities). The server takes the
 /// user and runner from the session, never from the payload.
 #[derive(Clone, PartialEq, ::prost::Message)]
@@ -774,7 +820,7 @@ pub struct OperationsRequest {
     pub session: ::core::option::Option<SessionContext>,
     #[prost(message, optional, tag="2")]
     pub metadata: ::core::option::Option<RequestMetadata>,
-    #[prost(oneof="operations_request::Operation", tags="10, 11, 12, 13, 14, 15, 16, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93")]
+    #[prost(oneof="operations_request::Operation", tags="10, 11, 12, 13, 14, 15, 16, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98")]
     pub operation: ::core::option::Option<operations_request::Operation>,
 }
 /// Nested message and enum types in `OperationsRequest`.
@@ -923,6 +969,16 @@ pub mod operations_request {
         FactoryRequestApproval(super::FactoryRequestApproval),
         #[prost(message, tag="93")]
         FactoryGetRun(super::FactoryGetRun),
+        #[prost(message, tag="94")]
+        AutomationList(super::AutomationList),
+        #[prost(message, tag="95")]
+        AutomationCreate(super::AutomationCreate),
+        #[prost(message, tag="96")]
+        AutomationUpdate(super::AutomationUpdate),
+        #[prost(message, tag="97")]
+        AutomationDelete(super::AutomationDelete),
+        #[prost(message, tag="98")]
+        AutomationTrigger(super::AutomationTrigger),
     }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]

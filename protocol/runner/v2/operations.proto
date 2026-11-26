@@ -190,6 +190,25 @@ message FactoryRequestApproval { string thread_id = 1; string run_id = 2; }
 // One run in detail: its steps, triage, reviews, threads by role and the
 // controls members or agents applied to it. Read-only.
 message FactoryGetRun { string thread_id = 1; string run_id = 2; }
+// automation-agent-tools: what an agent in a thread may do on its owner's
+// automations in the thread's project. The server takes the actor and project
+// from the thread's row.
+message AutomationList { string thread_id = 1; }
+message AutomationCreate {
+  string thread_id = 1;
+  string name = 2;
+  string prompt = 3;
+  string schedule = 4;
+  optional string model = 5;
+  optional string permission_mode = 6;
+}
+message AutomationUpdate {
+  string thread_id = 1;
+  string automation_id = 2;
+  google.protobuf.Struct patch = 3;
+}
+message AutomationDelete { string thread_id = 1; string automation_id = 2; }
+message AutomationTrigger { string thread_id = 1; string automation_id = 2; }
 // Background activities (track-background-activities). The server takes the
 // user and runner from the session, never from the payload.
 message ActivityStart { google.protobuf.Struct activity = 1; }
@@ -285,6 +304,11 @@ message OperationsRequest {
     FactoryControlRun factory_control_run = 91;
     FactoryRequestApproval factory_request_approval = 92;
     FactoryGetRun factory_get_run = 93;
+    AutomationList automation_list = 94;
+    AutomationCreate automation_create = 95;
+    AutomationUpdate automation_update = 96;
+    AutomationDelete automation_delete = 97;
+    AutomationTrigger automation_trigger = 98;
   }
 }
 

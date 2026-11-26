@@ -12,10 +12,12 @@ import { file_runner_v2_common } from './common_pb.js';
 /**
  * Describes the file runner/v2/tunnel.proto.
  */
-export const file_runner_v2_tunnel: GenFile /*@__PURE__*/ = fileDesc(
-  'ChZydW5uZXIvdjIvdHVubmVsLnByb3RvEglydW5uZXIudjIiVgoSVHVubmVsUmVxdWVzdFN0YXJ0Eg4KBm1ldGhvZBgBIAEoCRIMCgRwYXRoGAIgASgJEiIKB2hlYWRlcnMYAyADKAsyES5ydW5uZXIudjIuSGVhZGVyIk4KE1R1bm5lbFJlc3BvbnNlU3RhcnQSEwoLc3RhdHVzX2NvZGUYASABKA0SIgoHaGVhZGVycxgCIAMoCzIRLnJ1bm5lci52Mi5IZWFkZXIiLAoKVHVubmVsRGF0YRIQCghzZXF1ZW5jZRgBIAEoBBIMCgRkYXRhGAIgASgMIiMKCVR1bm5lbEVuZBIWCg5maW5hbF9zZXF1ZW5jZRgBIAEoBCIeCgxUdW5uZWxDYW5jZWwSDgoGcmVhc29uGAEgASgJIhMKEVR1bm5lbFN0cmVhbVJlYWR5IuECCg1UdW5uZWxSZXF1ZXN0EioKB3Nlc3Npb24YASABKAsyGS5ydW5uZXIudjIuU2Vzc2lvbkNvbnRleHQSEQoJdHVubmVsX2lkGAIgASgJEiwKCG1ldGFkYXRhGAMgASgLMhoucnVubmVyLnYyLlJlcXVlc3RNZXRhZGF0YRItCgVyZWFkeRgKIAEoCzIcLnJ1bm5lci52Mi5UdW5uZWxTdHJlYW1SZWFkeUgAEjgKDnJlc3BvbnNlX3N0YXJ0GAsgASgLMh4ucnVubmVyLnYyLlR1bm5lbFJlc3BvbnNlU3RhcnRIABIlCgRkYXRhGAwgASgLMhUucnVubmVyLnYyLlR1bm5lbERhdGFIABIjCgNlbmQYDSABKAsyFC5ydW5uZXIudjIuVHVubmVsRW5kSAASJQoHZmFpbHVyZRgPIAEoCzISLnJ1bm5lci52Mi5GYWlsdXJlSABCBwoFZnJhbWUi3AIKDlR1bm5lbFJlc3BvbnNlEioKB3Nlc3Npb24YASABKAsyGS5ydW5uZXIudjIuU2Vzc2lvbkNvbnRleHQSEQoJdHVubmVsX2lkGAIgASgJEiwKCG1ldGFkYXRhGAMgASgLMhoucnVubmVyLnYyLlJlcXVlc3RNZXRhZGF0YRI2Cg1yZXF1ZXN0X3N0YXJ0GAogASgLMh0ucnVubmVyLnYyLlR1bm5lbFJlcXVlc3RTdGFydEgAEiUKBGRhdGEYDCABKAsyFS5ydW5uZXIudjIuVHVubmVsRGF0YUgAEiMKA2VuZBgNIAEoCzIULnJ1bm5lci52Mi5UdW5uZWxFbmRIABIpCgZjYW5jZWwYDiABKAsyFy5ydW5uZXIudjIuVHVubmVsQ2FuY2VsSAASJQoHZmFpbHVyZRgPIAEoCzISLnJ1bm5lci52Mi5GYWlsdXJlSABCBwoFZnJhbWViBnByb3RvMw',
-  [file_runner_v2_common],
-);
+export const file_runner_v2_tunnel: GenFile =
+  /*@__PURE__*/
+  fileDesc(
+    'ChZydW5uZXIvdjIvdHVubmVsLnByb3RvEglydW5uZXIudjIiVgoSVHVubmVsUmVxdWVzdFN0YXJ0Eg4KBm1ldGhvZBgBIAEoCRIMCgRwYXRoGAIgASgJEiIKB2hlYWRlcnMYAyADKAsyES5ydW5uZXIudjIuSGVhZGVyIk4KE1R1bm5lbFJlc3BvbnNlU3RhcnQSEwoLc3RhdHVzX2NvZGUYASABKA0SIgoHaGVhZGVycxgCIAMoCzIRLnJ1bm5lci52Mi5IZWFkZXIiLAoKVHVubmVsRGF0YRIQCghzZXF1ZW5jZRgBIAEoBBIMCgRkYXRhGAIgASgMIiMKCVR1bm5lbEVuZBIWCg5maW5hbF9zZXF1ZW5jZRgBIAEoBCIeCgxUdW5uZWxDYW5jZWwSDgoGcmVhc29uGAEgASgJIhMKEVR1bm5lbFN0cmVhbVJlYWR5IuECCg1UdW5uZWxSZXF1ZXN0EioKB3Nlc3Npb24YASABKAsyGS5ydW5uZXIudjIuU2Vzc2lvbkNvbnRleHQSEQoJdHVubmVsX2lkGAIgASgJEiwKCG1ldGFkYXRhGAMgASgLMhoucnVubmVyLnYyLlJlcXVlc3RNZXRhZGF0YRItCgVyZWFkeRgKIAEoCzIcLnJ1bm5lci52Mi5UdW5uZWxTdHJlYW1SZWFkeUgAEjgKDnJlc3BvbnNlX3N0YXJ0GAsgASgLMh4ucnVubmVyLnYyLlR1bm5lbFJlc3BvbnNlU3RhcnRIABIlCgRkYXRhGAwgASgLMhUucnVubmVyLnYyLlR1bm5lbERhdGFIABIjCgNlbmQYDSABKAsyFC5ydW5uZXIudjIuVHVubmVsRW5kSAASJQoHZmFpbHVyZRgPIAEoCzISLnJ1bm5lci52Mi5GYWlsdXJlSABCBwoFZnJhbWUi3AIKDlR1bm5lbFJlc3BvbnNlEioKB3Nlc3Npb24YASABKAsyGS5ydW5uZXIudjIuU2Vzc2lvbkNvbnRleHQSEQoJdHVubmVsX2lkGAIgASgJEiwKCG1ldGFkYXRhGAMgASgLMhoucnVubmVyLnYyLlJlcXVlc3RNZXRhZGF0YRI2Cg1yZXF1ZXN0X3N0YXJ0GAogASgLMh0ucnVubmVyLnYyLlR1bm5lbFJlcXVlc3RTdGFydEgAEiUKBGRhdGEYDCABKAsyFS5ydW5uZXIudjIuVHVubmVsRGF0YUgAEiMKA2VuZBgNIAEoCzIULnJ1bm5lci52Mi5UdW5uZWxFbmRIABIpCgZjYW5jZWwYDiABKAsyFy5ydW5uZXIudjIuVHVubmVsQ2FuY2VsSAASJQoHZmFpbHVyZRgPIAEoCzISLnJ1bm5lci52Mi5GYWlsdXJlSABCBwoFZnJhbWViBnByb3RvMw',
+    [file_runner_v2_common],
+  );
 
 /**
  * @generated from message runner.v2.TunnelRequestStart
@@ -41,10 +43,9 @@ export type TunnelRequestStart = Message<'runner.v2.TunnelRequestStart'> & {
  * Describes the message runner.v2.TunnelRequestStart.
  * Use `create(TunnelRequestStartSchema)` to create a new message.
  */
-export const TunnelRequestStartSchema: GenMessage<TunnelRequestStart> /*@__PURE__*/ = messageDesc(
-  file_runner_v2_tunnel,
-  0,
-);
+export const TunnelRequestStartSchema: GenMessage<TunnelRequestStart> =
+  /*@__PURE__*/
+  messageDesc(file_runner_v2_tunnel, 0);
 
 /**
  * @generated from message runner.v2.TunnelResponseStart
@@ -65,10 +66,9 @@ export type TunnelResponseStart = Message<'runner.v2.TunnelResponseStart'> & {
  * Describes the message runner.v2.TunnelResponseStart.
  * Use `create(TunnelResponseStartSchema)` to create a new message.
  */
-export const TunnelResponseStartSchema: GenMessage<TunnelResponseStart> /*@__PURE__*/ = messageDesc(
-  file_runner_v2_tunnel,
-  1,
-);
+export const TunnelResponseStartSchema: GenMessage<TunnelResponseStart> =
+  /*@__PURE__*/
+  messageDesc(file_runner_v2_tunnel, 1);
 
 /**
  * @generated from message runner.v2.TunnelData
@@ -89,10 +89,9 @@ export type TunnelData = Message<'runner.v2.TunnelData'> & {
  * Describes the message runner.v2.TunnelData.
  * Use `create(TunnelDataSchema)` to create a new message.
  */
-export const TunnelDataSchema: GenMessage<TunnelData> /*@__PURE__*/ = messageDesc(
-  file_runner_v2_tunnel,
-  2,
-);
+export const TunnelDataSchema: GenMessage<TunnelData> =
+  /*@__PURE__*/
+  messageDesc(file_runner_v2_tunnel, 2);
 
 /**
  * @generated from message runner.v2.TunnelEnd
@@ -108,10 +107,9 @@ export type TunnelEnd = Message<'runner.v2.TunnelEnd'> & {
  * Describes the message runner.v2.TunnelEnd.
  * Use `create(TunnelEndSchema)` to create a new message.
  */
-export const TunnelEndSchema: GenMessage<TunnelEnd> /*@__PURE__*/ = messageDesc(
-  file_runner_v2_tunnel,
-  3,
-);
+export const TunnelEndSchema: GenMessage<TunnelEnd> =
+  /*@__PURE__*/
+  messageDesc(file_runner_v2_tunnel, 3);
 
 /**
  * @generated from message runner.v2.TunnelCancel
@@ -127,10 +125,9 @@ export type TunnelCancel = Message<'runner.v2.TunnelCancel'> & {
  * Describes the message runner.v2.TunnelCancel.
  * Use `create(TunnelCancelSchema)` to create a new message.
  */
-export const TunnelCancelSchema: GenMessage<TunnelCancel> /*@__PURE__*/ = messageDesc(
-  file_runner_v2_tunnel,
-  4,
-);
+export const TunnelCancelSchema: GenMessage<TunnelCancel> =
+  /*@__PURE__*/
+  messageDesc(file_runner_v2_tunnel, 4);
 
 /**
  * @generated from message runner.v2.TunnelStreamReady
@@ -141,10 +138,9 @@ export type TunnelStreamReady = Message<'runner.v2.TunnelStreamReady'> & {};
  * Describes the message runner.v2.TunnelStreamReady.
  * Use `create(TunnelStreamReadySchema)` to create a new message.
  */
-export const TunnelStreamReadySchema: GenMessage<TunnelStreamReady> /*@__PURE__*/ = messageDesc(
-  file_runner_v2_tunnel,
-  5,
-);
+export const TunnelStreamReadySchema: GenMessage<TunnelStreamReady> =
+  /*@__PURE__*/
+  messageDesc(file_runner_v2_tunnel, 5);
 
 /**
  * Runner-to-server frames. The empty ready frame opens the outbound stream;
@@ -214,10 +210,9 @@ export type TunnelRequest = Message<'runner.v2.TunnelRequest'> & {
  * Describes the message runner.v2.TunnelRequest.
  * Use `create(TunnelRequestSchema)` to create a new message.
  */
-export const TunnelRequestSchema: GenMessage<TunnelRequest> /*@__PURE__*/ = messageDesc(
-  file_runner_v2_tunnel,
-  6,
-);
+export const TunnelRequestSchema: GenMessage<TunnelRequest> =
+  /*@__PURE__*/
+  messageDesc(file_runner_v2_tunnel, 6);
 
 /**
  * Server-to-runner frames delivered on the runner-initiated call.
@@ -286,7 +281,6 @@ export type TunnelResponse = Message<'runner.v2.TunnelResponse'> & {
  * Describes the message runner.v2.TunnelResponse.
  * Use `create(TunnelResponseSchema)` to create a new message.
  */
-export const TunnelResponseSchema: GenMessage<TunnelResponse> /*@__PURE__*/ = messageDesc(
-  file_runner_v2_tunnel,
-  7,
-);
+export const TunnelResponseSchema: GenMessage<TunnelResponse> =
+  /*@__PURE__*/
+  messageDesc(file_runner_v2_tunnel, 7);

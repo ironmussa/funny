@@ -12,10 +12,12 @@ import { file_runner_v2_common } from './common_pb.js';
 /**
  * Describes the file runner/v2/terminal.proto.
  */
-export const file_runner_v2_terminal: GenFile /*@__PURE__*/ = fileDesc(
-  'ChhydW5uZXIvdjIvdGVybWluYWwucHJvdG8SCXJ1bm5lci52MiL6AQoMVGVybWluYWxPcGVuEhMKC3Rlcm1pbmFsX2lkGAEgASgJEgsKA2N3ZBgCIAEoCRIPCgdjb2x1bW5zGAMgASgNEgwKBHJvd3MYBCABKA0SEgoFc2hlbGwYBSABKAlIAIgBARIPCgd1c2VyX2lkGAYgASgJEhcKCnByb2plY3RfaWQYByABKAlIAYgBARISCgVsYWJlbBgIIAEoCUgCiAEBEh4KEXNjcmF0Y2hfdGhyZWFkX2lkGAkgASgJSAOIAQFCCAoGX3NoZWxsQg0KC19wcm9qZWN0X2lkQggKBl9sYWJlbEIUChJfc2NyYXRjaF90aHJlYWRfaWQiXQoOVGVybWluYWxSZXN1bWUSEwoLdGVybWluYWxfaWQYASABKAkSIQoZbGFzdF9zZWVuX291dHB1dF9zZXF1ZW5jZRgCIAEoBBITCgtyZXBsYXlfb25seRgDIAEoCCIuCg1UZXJtaW5hbElucHV0Eg8KB29yZGluYWwYASABKAQSDAoEZGF0YRgCIAEoDCIwCg5UZXJtaW5hbE91dHB1dBIQCghzZXF1ZW5jZRgBIAEoBBIMCgRkYXRhGAIgASgMIi8KDlRlcm1pbmFsUmVzaXplEg8KB2NvbHVtbnMYASABKA0SDAoEcm93cxgCIAEoDSIgCg5UZXJtaW5hbFNpZ25hbBIOCgZzaWduYWwYASABKAkiZQoNVGVybWluYWxDbG9zZRIWCglleGl0X2NvZGUYASABKAVIAIgBARITCgZzaWduYWwYAiABKAlIAYgBARIOCgZyZWFzb24YAyABKAlCDAoKX2V4aXRfY29kZUIJCgdfc2lnbmFsIk4KC1Rlcm1pbmFsR2FwEhoKEnJlcXVlc3RlZF9zZXF1ZW5jZRgBIAEoBBIjChtlYXJsaWVzdF9hdmFpbGFibGVfc2VxdWVuY2UYAiABKAQiFQoTVGVybWluYWxTdHJlYW1SZWFkeSLgAgoPVGVybWluYWxSZXF1ZXN0EioKB3Nlc3Npb24YASABKAsyGS5ydW5uZXIudjIuU2Vzc2lvbkNvbnRleHQSEwoLdGVybWluYWxfaWQYAiABKAkSLAoIbWV0YWRhdGEYAyABKAsyGi5ydW5uZXIudjIuUmVxdWVzdE1ldGFkYXRhEi8KBXJlYWR5GAogASgLMh4ucnVubmVyLnYyLlRlcm1pbmFsU3RyZWFtUmVhZHlIABIrCgZvdXRwdXQYDSABKAsyGS5ydW5uZXIudjIuVGVybWluYWxPdXRwdXRIABIpCgVjbG9zZRgQIAEoCzIYLnJ1bm5lci52Mi5UZXJtaW5hbENsb3NlSAASJQoDZ2FwGBEgASgLMhYucnVubmVyLnYyLlRlcm1pbmFsR2FwSAASJQoHZmFpbHVyZRgSIAEoCzISLnJ1bm5lci52Mi5GYWlsdXJlSABCBwoFZnJhbWUitwMKEFRlcm1pbmFsUmVzcG9uc2USKgoHc2Vzc2lvbhgBIAEoCzIZLnJ1bm5lci52Mi5TZXNzaW9uQ29udGV4dBITCgt0ZXJtaW5hbF9pZBgCIAEoCRIsCghtZXRhZGF0YRgDIAEoCzIaLnJ1bm5lci52Mi5SZXF1ZXN0TWV0YWRhdGESJwoEb3BlbhgKIAEoCzIXLnJ1bm5lci52Mi5UZXJtaW5hbE9wZW5IABIrCgZyZXN1bWUYCyABKAsyGS5ydW5uZXIudjIuVGVybWluYWxSZXN1bWVIABIpCgVpbnB1dBgMIAEoCzIYLnJ1bm5lci52Mi5UZXJtaW5hbElucHV0SAASKwoGcmVzaXplGA4gASgLMhkucnVubmVyLnYyLlRlcm1pbmFsUmVzaXplSAASKwoGc2lnbmFsGA8gASgLMhkucnVubmVyLnYyLlRlcm1pbmFsU2lnbmFsSAASKQoFY2xvc2UYECABKAsyGC5ydW5uZXIudjIuVGVybWluYWxDbG9zZUgAEiUKB2ZhaWx1cmUYEiABKAsyEi5ydW5uZXIudjIuRmFpbHVyZUgAQgcKBWZyYW1lYgZwcm90bzM',
-  [file_runner_v2_common],
-);
+export const file_runner_v2_terminal: GenFile =
+  /*@__PURE__*/
+  fileDesc(
+    'ChhydW5uZXIvdjIvdGVybWluYWwucHJvdG8SCXJ1bm5lci52MiL6AQoMVGVybWluYWxPcGVuEhMKC3Rlcm1pbmFsX2lkGAEgASgJEgsKA2N3ZBgCIAEoCRIPCgdjb2x1bW5zGAMgASgNEgwKBHJvd3MYBCABKA0SEgoFc2hlbGwYBSABKAlIAIgBARIPCgd1c2VyX2lkGAYgASgJEhcKCnByb2plY3RfaWQYByABKAlIAYgBARISCgVsYWJlbBgIIAEoCUgCiAEBEh4KEXNjcmF0Y2hfdGhyZWFkX2lkGAkgASgJSAOIAQFCCAoGX3NoZWxsQg0KC19wcm9qZWN0X2lkQggKBl9sYWJlbEIUChJfc2NyYXRjaF90aHJlYWRfaWQiXQoOVGVybWluYWxSZXN1bWUSEwoLdGVybWluYWxfaWQYASABKAkSIQoZbGFzdF9zZWVuX291dHB1dF9zZXF1ZW5jZRgCIAEoBBITCgtyZXBsYXlfb25seRgDIAEoCCIuCg1UZXJtaW5hbElucHV0Eg8KB29yZGluYWwYASABKAQSDAoEZGF0YRgCIAEoDCIwCg5UZXJtaW5hbE91dHB1dBIQCghzZXF1ZW5jZRgBIAEoBBIMCgRkYXRhGAIgASgMIi8KDlRlcm1pbmFsUmVzaXplEg8KB2NvbHVtbnMYASABKA0SDAoEcm93cxgCIAEoDSIgCg5UZXJtaW5hbFNpZ25hbBIOCgZzaWduYWwYASABKAkiZQoNVGVybWluYWxDbG9zZRIWCglleGl0X2NvZGUYASABKAVIAIgBARITCgZzaWduYWwYAiABKAlIAYgBARIOCgZyZWFzb24YAyABKAlCDAoKX2V4aXRfY29kZUIJCgdfc2lnbmFsIk4KC1Rlcm1pbmFsR2FwEhoKEnJlcXVlc3RlZF9zZXF1ZW5jZRgBIAEoBBIjChtlYXJsaWVzdF9hdmFpbGFibGVfc2VxdWVuY2UYAiABKAQiFQoTVGVybWluYWxTdHJlYW1SZWFkeSLgAgoPVGVybWluYWxSZXF1ZXN0EioKB3Nlc3Npb24YASABKAsyGS5ydW5uZXIudjIuU2Vzc2lvbkNvbnRleHQSEwoLdGVybWluYWxfaWQYAiABKAkSLAoIbWV0YWRhdGEYAyABKAsyGi5ydW5uZXIudjIuUmVxdWVzdE1ldGFkYXRhEi8KBXJlYWR5GAogASgLMh4ucnVubmVyLnYyLlRlcm1pbmFsU3RyZWFtUmVhZHlIABIrCgZvdXRwdXQYDSABKAsyGS5ydW5uZXIudjIuVGVybWluYWxPdXRwdXRIABIpCgVjbG9zZRgQIAEoCzIYLnJ1bm5lci52Mi5UZXJtaW5hbENsb3NlSAASJQoDZ2FwGBEgASgLMhYucnVubmVyLnYyLlRlcm1pbmFsR2FwSAASJQoHZmFpbHVyZRgSIAEoCzISLnJ1bm5lci52Mi5GYWlsdXJlSABCBwoFZnJhbWUitwMKEFRlcm1pbmFsUmVzcG9uc2USKgoHc2Vzc2lvbhgBIAEoCzIZLnJ1bm5lci52Mi5TZXNzaW9uQ29udGV4dBITCgt0ZXJtaW5hbF9pZBgCIAEoCRIsCghtZXRhZGF0YRgDIAEoCzIaLnJ1bm5lci52Mi5SZXF1ZXN0TWV0YWRhdGESJwoEb3BlbhgKIAEoCzIXLnJ1bm5lci52Mi5UZXJtaW5hbE9wZW5IABIrCgZyZXN1bWUYCyABKAsyGS5ydW5uZXIudjIuVGVybWluYWxSZXN1bWVIABIpCgVpbnB1dBgMIAEoCzIYLnJ1bm5lci52Mi5UZXJtaW5hbElucHV0SAASKwoGcmVzaXplGA4gASgLMhkucnVubmVyLnYyLlRlcm1pbmFsUmVzaXplSAASKwoGc2lnbmFsGA8gASgLMhkucnVubmVyLnYyLlRlcm1pbmFsU2lnbmFsSAASKQoFY2xvc2UYECABKAsyGC5ydW5uZXIudjIuVGVybWluYWxDbG9zZUgAEiUKB2ZhaWx1cmUYEiABKAsyEi5ydW5uZXIudjIuRmFpbHVyZUgAQgcKBWZyYW1lYgZwcm90bzM',
+    [file_runner_v2_common],
+  );
 
 /**
  * @generated from message runner.v2.TerminalOpen
@@ -75,10 +77,9 @@ export type TerminalOpen = Message<'runner.v2.TerminalOpen'> & {
  * Describes the message runner.v2.TerminalOpen.
  * Use `create(TerminalOpenSchema)` to create a new message.
  */
-export const TerminalOpenSchema: GenMessage<TerminalOpen> /*@__PURE__*/ = messageDesc(
-  file_runner_v2_terminal,
-  0,
-);
+export const TerminalOpenSchema: GenMessage<TerminalOpen> =
+  /*@__PURE__*/
+  messageDesc(file_runner_v2_terminal, 0);
 
 /**
  * @generated from message runner.v2.TerminalResume
@@ -108,10 +109,9 @@ export type TerminalResume = Message<'runner.v2.TerminalResume'> & {
  * Describes the message runner.v2.TerminalResume.
  * Use `create(TerminalResumeSchema)` to create a new message.
  */
-export const TerminalResumeSchema: GenMessage<TerminalResume> /*@__PURE__*/ = messageDesc(
-  file_runner_v2_terminal,
-  1,
-);
+export const TerminalResumeSchema: GenMessage<TerminalResume> =
+  /*@__PURE__*/
+  messageDesc(file_runner_v2_terminal, 1);
 
 /**
  * @generated from message runner.v2.TerminalInput
@@ -134,10 +134,9 @@ export type TerminalInput = Message<'runner.v2.TerminalInput'> & {
  * Describes the message runner.v2.TerminalInput.
  * Use `create(TerminalInputSchema)` to create a new message.
  */
-export const TerminalInputSchema: GenMessage<TerminalInput> /*@__PURE__*/ = messageDesc(
-  file_runner_v2_terminal,
-  2,
-);
+export const TerminalInputSchema: GenMessage<TerminalInput> =
+  /*@__PURE__*/
+  messageDesc(file_runner_v2_terminal, 2);
 
 /**
  * @generated from message runner.v2.TerminalOutput
@@ -158,10 +157,9 @@ export type TerminalOutput = Message<'runner.v2.TerminalOutput'> & {
  * Describes the message runner.v2.TerminalOutput.
  * Use `create(TerminalOutputSchema)` to create a new message.
  */
-export const TerminalOutputSchema: GenMessage<TerminalOutput> /*@__PURE__*/ = messageDesc(
-  file_runner_v2_terminal,
-  3,
-);
+export const TerminalOutputSchema: GenMessage<TerminalOutput> =
+  /*@__PURE__*/
+  messageDesc(file_runner_v2_terminal, 3);
 
 /**
  * @generated from message runner.v2.TerminalResize
@@ -182,10 +180,9 @@ export type TerminalResize = Message<'runner.v2.TerminalResize'> & {
  * Describes the message runner.v2.TerminalResize.
  * Use `create(TerminalResizeSchema)` to create a new message.
  */
-export const TerminalResizeSchema: GenMessage<TerminalResize> /*@__PURE__*/ = messageDesc(
-  file_runner_v2_terminal,
-  4,
-);
+export const TerminalResizeSchema: GenMessage<TerminalResize> =
+  /*@__PURE__*/
+  messageDesc(file_runner_v2_terminal, 4);
 
 /**
  * @generated from message runner.v2.TerminalSignal
@@ -201,10 +198,9 @@ export type TerminalSignal = Message<'runner.v2.TerminalSignal'> & {
  * Describes the message runner.v2.TerminalSignal.
  * Use `create(TerminalSignalSchema)` to create a new message.
  */
-export const TerminalSignalSchema: GenMessage<TerminalSignal> /*@__PURE__*/ = messageDesc(
-  file_runner_v2_terminal,
-  5,
-);
+export const TerminalSignalSchema: GenMessage<TerminalSignal> =
+  /*@__PURE__*/
+  messageDesc(file_runner_v2_terminal, 5);
 
 /**
  * @generated from message runner.v2.TerminalClose
@@ -230,10 +226,9 @@ export type TerminalClose = Message<'runner.v2.TerminalClose'> & {
  * Describes the message runner.v2.TerminalClose.
  * Use `create(TerminalCloseSchema)` to create a new message.
  */
-export const TerminalCloseSchema: GenMessage<TerminalClose> /*@__PURE__*/ = messageDesc(
-  file_runner_v2_terminal,
-  6,
-);
+export const TerminalCloseSchema: GenMessage<TerminalClose> =
+  /*@__PURE__*/
+  messageDesc(file_runner_v2_terminal, 6);
 
 /**
  * @generated from message runner.v2.TerminalGap
@@ -254,10 +249,9 @@ export type TerminalGap = Message<'runner.v2.TerminalGap'> & {
  * Describes the message runner.v2.TerminalGap.
  * Use `create(TerminalGapSchema)` to create a new message.
  */
-export const TerminalGapSchema: GenMessage<TerminalGap> /*@__PURE__*/ = messageDesc(
-  file_runner_v2_terminal,
-  7,
-);
+export const TerminalGapSchema: GenMessage<TerminalGap> =
+  /*@__PURE__*/
+  messageDesc(file_runner_v2_terminal, 7);
 
 /**
  * @generated from message runner.v2.TerminalStreamReady
@@ -268,10 +262,9 @@ export type TerminalStreamReady = Message<'runner.v2.TerminalStreamReady'> & {};
  * Describes the message runner.v2.TerminalStreamReady.
  * Use `create(TerminalStreamReadySchema)` to create a new message.
  */
-export const TerminalStreamReadySchema: GenMessage<TerminalStreamReady> /*@__PURE__*/ = messageDesc(
-  file_runner_v2_terminal,
-  8,
-);
+export const TerminalStreamReadySchema: GenMessage<TerminalStreamReady> =
+  /*@__PURE__*/
+  messageDesc(file_runner_v2_terminal, 8);
 
 /**
  * Runner-to-server frames. Terminal input is deliberately absent so it can
@@ -341,10 +334,9 @@ export type TerminalRequest = Message<'runner.v2.TerminalRequest'> & {
  * Describes the message runner.v2.TerminalRequest.
  * Use `create(TerminalRequestSchema)` to create a new message.
  */
-export const TerminalRequestSchema: GenMessage<TerminalRequest> /*@__PURE__*/ = messageDesc(
-  file_runner_v2_terminal,
-  9,
-);
+export const TerminalRequestSchema: GenMessage<TerminalRequest> =
+  /*@__PURE__*/
+  messageDesc(file_runner_v2_terminal, 9);
 
 /**
  * Server-to-runner frames delivered on the runner-initiated call.
@@ -427,7 +419,6 @@ export type TerminalResponse = Message<'runner.v2.TerminalResponse'> & {
  * Describes the message runner.v2.TerminalResponse.
  * Use `create(TerminalResponseSchema)` to create a new message.
  */
-export const TerminalResponseSchema: GenMessage<TerminalResponse> /*@__PURE__*/ = messageDesc(
-  file_runner_v2_terminal,
-  10,
-);
+export const TerminalResponseSchema: GenMessage<TerminalResponse> =
+  /*@__PURE__*/
+  messageDesc(file_runner_v2_terminal, 10);

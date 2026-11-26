@@ -7,7 +7,8 @@
  *
  * The `funny` MCP server (`funny_watch`, `funny_spawn`, `funny_spawn_thread`,
  * `funny_search_threads`, `funny_run_checks`, the `funny_factory_*` tools of
- * `agent-factory-tools.ts`), served to every agent over loopback HTTP
+ * `agent-factory-tools.ts`, and the `funny_automation_*` tools of
+ * `agent-automation-tools.ts`), served to every agent over loopback HTTP
  * (`agent-mcp-http.ts`) whatever its provider.
  *
  * `funny_watch` is the SOLE creation path for a watcher (a deferred-wake
@@ -23,6 +24,10 @@
 import { z } from 'zod';
 
 import { log } from '../lib/logger.js';
+import {
+  AUTOMATION_TOOL_INSTRUCTIONS,
+  automationToolDefinitions,
+} from './agent-automation-tools.js';
 import { FACTORY_TOOL_INSTRUCTIONS, factoryToolDefinitions } from './agent-factory-tools.js';
 import { spawnJob } from './agent-job-manager.js';
 import type {
@@ -59,7 +64,9 @@ const WATCH_INSTRUCTIONS =
   'visualizer for them. ' +
   CHECK_INSTRUCTIONS +
   ' ' +
-  FACTORY_TOOL_INSTRUCTIONS;
+  FACTORY_TOOL_INSTRUCTIONS +
+  ' ' +
+  AUTOMATION_TOOL_INSTRUCTIONS;
 
 /** Args the model supplies to `funny_spawn_thread`. */
 export interface SpawnThreadArgs {
@@ -372,6 +379,7 @@ export function watchToolDefinitions(ctx: AgentToolContext): AgentToolDefinition
     // The server refuses these where the thread may not use them (scratch,
     // sandbox, read-only, factory threads): the runner's code is not the guard.
     ...factoryToolDefinitions(ctx),
+    ...automationToolDefinitions(ctx),
   ];
   const hidden = new Set<string>();
   if (ctx.nativeBackgroundJobs) hidden.add('funny_spawn');

@@ -83,6 +83,11 @@ export const RUNNER_OPERATION_EVENT_TYPES = [
   'data:factory_control_run',
   'data:factory_request_approval',
   'data:factory_get_run',
+  'data:automation_list',
+  'data:automation_create',
+  'data:automation_update',
+  'data:automation_delete',
+  'data:automation_trigger',
 ] as const;
 
 export type RunnerOperationEventType = (typeof RUNNER_OPERATION_EVENT_TYPES)[number];
@@ -415,6 +420,37 @@ const OPERATION_MAPPINGS: Record<RunnerOperationEventType, OperationMapping> = {
   'data:factory_get_run': [
     'factoryGetRun',
     (input) => ({ threadId: input.threadId, runId: input.runId }),
+  ],
+  'data:automation_list': ['automationList', inputThreadId],
+  'data:automation_create': [
+    'automationCreate',
+    (input) => {
+      const value: JsonObject = {
+        threadId: input.threadId,
+        name: input.name,
+        prompt: input.prompt,
+        schedule: input.schedule,
+      };
+      if (input.model !== undefined) value.model = input.model;
+      if (input.permissionMode !== undefined) value.permissionMode = input.permissionMode;
+      return value;
+    },
+  ],
+  'data:automation_update': [
+    'automationUpdate',
+    (input) => ({
+      threadId: input.threadId,
+      automationId: input.automationId,
+      patch: input.patch,
+    }),
+  ],
+  'data:automation_delete': [
+    'automationDelete',
+    (input) => ({ threadId: input.threadId, automationId: input.automationId }),
+  ],
+  'data:automation_trigger': [
+    'automationTrigger',
+    (input) => ({ threadId: input.threadId, automationId: input.automationId }),
   ],
   'data:activity_start': ['activityStart', (_input, payload) => ({ activity: payload })],
   'data:activity_update': [

@@ -59,6 +59,11 @@ const NEVER_FROM_SANDBOX_TYPES = new Set([
   'data:factory_control_run',
   'data:factory_request_approval',
   'data:factory_get_run',
+  'data:automation_list',
+  'data:automation_create',
+  'data:automation_update',
+  'data:automation_delete',
+  'data:automation_trigger',
 ]);
 
 export const DATA_SCOPE_RULES: DataScopeRules = {
@@ -123,6 +128,14 @@ export const DATA_SCOPE_RULES: DataScopeRules = {
   'data:factory_control_run': 'refs',
   'data:factory_request_approval': 'refs',
   'data:factory_get_run': 'refs',
+  // Automations from a thread's agent (automation-agent-tools). `refs` ties
+  // the message to a thread this runner serves; the handler takes the actor and
+  // the project from that thread. Never from a sandbox runner.
+  'data:automation_list': 'refs',
+  'data:automation_create': 'refs',
+  'data:automation_update': 'refs',
+  'data:automation_delete': 'refs',
+  'data:automation_trigger': 'refs',
   // The handler adds the owner check `refs` does not make (project-secrets).
   'data:get_project_secrets': 'refs',
   'data:get_minimax_api_key': 'user',

@@ -212,6 +212,11 @@ const OPERATION_KINDS = [
   'factoryControlRun',
   'factoryRequestApproval',
   'factoryGetRun',
+  'automationList',
+  'automationCreate',
+  'automationUpdate',
+  'automationDelete',
+  'automationTrigger',
 ] as const;
 
 function requestKind(request: WireRequest): string | undefined {
@@ -407,6 +412,32 @@ const LEGACY_MAPPERS: Record<OperationKind, LegacyMapper> = {
     type: 'data:factory_get_run',
     threadId: value.threadId,
     runId: value.runId,
+  }),
+  automationList: threadScoped('data:automation_list'),
+  automationCreate: (value) => ({
+    type: 'data:automation_create',
+    threadId: value.threadId,
+    name: value.name,
+    prompt: value.prompt,
+    schedule: value.schedule,
+    ...(value.model !== undefined && { model: value.model }),
+    ...(value.permissionMode !== undefined && { permissionMode: value.permissionMode }),
+  }),
+  automationUpdate: (value) => ({
+    type: 'data:automation_update',
+    threadId: value.threadId,
+    automationId: value.automationId,
+    patch: decodeStruct(value.patch),
+  }),
+  automationDelete: (value) => ({
+    type: 'data:automation_delete',
+    threadId: value.threadId,
+    automationId: value.automationId,
+  }),
+  automationTrigger: (value) => ({
+    type: 'data:automation_trigger',
+    threadId: value.threadId,
+    automationId: value.automationId,
   }),
   getProjectSecrets: threadScoped('data:get_project_secrets'),
   getMinimaxApiKey: principalScoped('data:get_minimax_api_key'),

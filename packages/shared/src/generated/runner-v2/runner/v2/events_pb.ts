@@ -17,10 +17,12 @@ import { file_runner_v2_common } from './common_pb.js';
 /**
  * Describes the file runner/v2/events.proto.
  */
-export const file_runner_v2_events: GenFile /*@__PURE__*/ = fileDesc(
-  'ChZydW5uZXIvdjIvZXZlbnRzLnByb3RvEglydW5uZXIudjIiNQoKRXZlbnRTY29wZRIRCgl0aHJlYWRfaWQYASABKAkSFAoMZXhlY3V0aW9uX2lkGAIgASgJIqgBCgpBZ2VudEV2ZW50EhIKCmV2ZW50X3R5cGUYASABKAkSJQoEZGF0YRgCIAEoCzIXLmdvb2dsZS5wcm90b2J1Zi5TdHJ1Y3QSLgoKZHVyYWJpbGl0eRgDIAEoDjIaLnJ1bm5lci52Mi5FdmVudER1cmFiaWxpdHkSLwoLb2NjdXJyZWRfYXQYBCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIkYKCVVzZXJFdmVudBISCgpldmVudF90eXBlGAEgASgJEiUKBGRhdGEYAiABKAsyFy5nb29nbGUucHJvdG9idWYuU3RydWN0IlsKCEV2ZW50R2FwEhoKEnJlcXVlc3RlZF9zZXF1ZW5jZRgBIAEoBBIjChtlYXJsaWVzdF9hdmFpbGFibGVfc2VxdWVuY2UYAiABKAQSDgoGcmVhc29uGAMgASgJIvYBCg1FdmVudHNSZXF1ZXN0EioKB3Nlc3Npb24YASABKAsyGS5ydW5uZXIudjIuU2Vzc2lvbkNvbnRleHQSJAoFc2NvcGUYAiABKAsyFS5ydW5uZXIudjIuRXZlbnRTY29wZRIQCghzZXF1ZW5jZRgDIAEoBBImCgVldmVudBgKIAEoCzIVLnJ1bm5lci52Mi5BZ2VudEV2ZW50SAASIgoDZ2FwGAsgASgLMhMucnVubmVyLnYyLkV2ZW50R2FwSAASKgoKdXNlcl9ldmVudBgMIAEoCzIULnJ1bm5lci52Mi5Vc2VyRXZlbnRIAEIJCgdwYXlsb2FkIjQKDUV2ZW50QWNjZXB0ZWQSIwobaGlnaGVzdF9jb250aWd1b3VzX3NlcXVlbmNlGAEgASgEIuYBCg5FdmVudHNSZXNwb25zZRIqCgdzZXNzaW9uGAEgASgLMhkucnVubmVyLnYyLlNlc3Npb25Db250ZXh0EiQKBXNjb3BlGAIgASgLMhUucnVubmVyLnYyLkV2ZW50U2NvcGUSLAoIYWNjZXB0ZWQYCiABKAsyGC5ydW5uZXIudjIuRXZlbnRBY2NlcHRlZEgAEiIKA2dhcBgLIAEoCzITLnJ1bm5lci52Mi5FdmVudEdhcEgAEiUKB2ZhaWx1cmUYDCABKAsyEi5ydW5uZXIudjIuRmFpbHVyZUgAQgkKB291dGNvbWUqkAEKD0V2ZW50RHVyYWJpbGl0eRIgChxFVkVOVF9EVVJBQklMSVRZX1VOU1BFQ0lGSUVEEAASHgoaRVZFTlRfRFVSQUJJTElUWV9UUkFOU0lFTlQQARIcChhFVkVOVF9EVVJBQklMSVRZX0RVUkFCTEUQAhIdChlFVkVOVF9EVVJBQklMSVRZX1RFUk1JTkFMEANiBnByb3RvMw',
-  [file_google_protobuf_struct, file_google_protobuf_timestamp, file_runner_v2_common],
-);
+export const file_runner_v2_events: GenFile =
+  /*@__PURE__*/
+  fileDesc(
+    'ChZydW5uZXIvdjIvZXZlbnRzLnByb3RvEglydW5uZXIudjIiNQoKRXZlbnRTY29wZRIRCgl0aHJlYWRfaWQYASABKAkSFAoMZXhlY3V0aW9uX2lkGAIgASgJIqgBCgpBZ2VudEV2ZW50EhIKCmV2ZW50X3R5cGUYASABKAkSJQoEZGF0YRgCIAEoCzIXLmdvb2dsZS5wcm90b2J1Zi5TdHJ1Y3QSLgoKZHVyYWJpbGl0eRgDIAEoDjIaLnJ1bm5lci52Mi5FdmVudER1cmFiaWxpdHkSLwoLb2NjdXJyZWRfYXQYBCABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wIkYKCVVzZXJFdmVudBISCgpldmVudF90eXBlGAEgASgJEiUKBGRhdGEYAiABKAsyFy5nb29nbGUucHJvdG9idWYuU3RydWN0IlsKCEV2ZW50R2FwEhoKEnJlcXVlc3RlZF9zZXF1ZW5jZRgBIAEoBBIjChtlYXJsaWVzdF9hdmFpbGFibGVfc2VxdWVuY2UYAiABKAQSDgoGcmVhc29uGAMgASgJIvYBCg1FdmVudHNSZXF1ZXN0EioKB3Nlc3Npb24YASABKAsyGS5ydW5uZXIudjIuU2Vzc2lvbkNvbnRleHQSJAoFc2NvcGUYAiABKAsyFS5ydW5uZXIudjIuRXZlbnRTY29wZRIQCghzZXF1ZW5jZRgDIAEoBBImCgVldmVudBgKIAEoCzIVLnJ1bm5lci52Mi5BZ2VudEV2ZW50SAASIgoDZ2FwGAsgASgLMhMucnVubmVyLnYyLkV2ZW50R2FwSAASKgoKdXNlcl9ldmVudBgMIAEoCzIULnJ1bm5lci52Mi5Vc2VyRXZlbnRIAEIJCgdwYXlsb2FkIjQKDUV2ZW50QWNjZXB0ZWQSIwobaGlnaGVzdF9jb250aWd1b3VzX3NlcXVlbmNlGAEgASgEIuYBCg5FdmVudHNSZXNwb25zZRIqCgdzZXNzaW9uGAEgASgLMhkucnVubmVyLnYyLlNlc3Npb25Db250ZXh0EiQKBXNjb3BlGAIgASgLMhUucnVubmVyLnYyLkV2ZW50U2NvcGUSLAoIYWNjZXB0ZWQYCiABKAsyGC5ydW5uZXIudjIuRXZlbnRBY2NlcHRlZEgAEiIKA2dhcBgLIAEoCzITLnJ1bm5lci52Mi5FdmVudEdhcEgAEiUKB2ZhaWx1cmUYDCABKAsyEi5ydW5uZXIudjIuRmFpbHVyZUgAQgkKB291dGNvbWUqkAEKD0V2ZW50RHVyYWJpbGl0eRIgChxFVkVOVF9EVVJBQklMSVRZX1VOU1BFQ0lGSUVEEAASHgoaRVZFTlRfRFVSQUJJTElUWV9UUkFOU0lFTlQQARIcChhFVkVOVF9EVVJBQklMSVRZX0RVUkFCTEUQAhIdChlFVkVOVF9EVVJBQklMSVRZX1RFUk1JTkFMEANiBnByb3RvMw',
+    [file_google_protobuf_struct, file_google_protobuf_timestamp, file_runner_v2_common],
+  );
 
 /**
  * @generated from message runner.v2.EventScope
@@ -41,10 +43,9 @@ export type EventScope = Message<'runner.v2.EventScope'> & {
  * Describes the message runner.v2.EventScope.
  * Use `create(EventScopeSchema)` to create a new message.
  */
-export const EventScopeSchema: GenMessage<EventScope> /*@__PURE__*/ = messageDesc(
-  file_runner_v2_events,
-  0,
-);
+export const EventScopeSchema: GenMessage<EventScope> =
+  /*@__PURE__*/
+  messageDesc(file_runner_v2_events, 0);
 
 /**
  * @generated from message runner.v2.AgentEvent
@@ -75,10 +76,9 @@ export type AgentEvent = Message<'runner.v2.AgentEvent'> & {
  * Describes the message runner.v2.AgentEvent.
  * Use `create(AgentEventSchema)` to create a new message.
  */
-export const AgentEventSchema: GenMessage<AgentEvent> /*@__PURE__*/ = messageDesc(
-  file_runner_v2_events,
-  1,
-);
+export const AgentEventSchema: GenMessage<AgentEvent> =
+  /*@__PURE__*/
+  messageDesc(file_runner_v2_events, 1);
 
 /**
  * A transient event addressed to the runner owner rather than to a thread
@@ -105,10 +105,9 @@ export type UserEvent = Message<'runner.v2.UserEvent'> & {
  * Describes the message runner.v2.UserEvent.
  * Use `create(UserEventSchema)` to create a new message.
  */
-export const UserEventSchema: GenMessage<UserEvent> /*@__PURE__*/ = messageDesc(
-  file_runner_v2_events,
-  2,
-);
+export const UserEventSchema: GenMessage<UserEvent> =
+  /*@__PURE__*/
+  messageDesc(file_runner_v2_events, 2);
 
 /**
  * @generated from message runner.v2.EventGap
@@ -134,10 +133,9 @@ export type EventGap = Message<'runner.v2.EventGap'> & {
  * Describes the message runner.v2.EventGap.
  * Use `create(EventGapSchema)` to create a new message.
  */
-export const EventGapSchema: GenMessage<EventGap> /*@__PURE__*/ = messageDesc(
-  file_runner_v2_events,
-  3,
-);
+export const EventGapSchema: GenMessage<EventGap> =
+  /*@__PURE__*/
+  messageDesc(file_runner_v2_events, 3);
 
 /**
  * @generated from message runner.v2.EventsRequest
@@ -190,10 +188,9 @@ export type EventsRequest = Message<'runner.v2.EventsRequest'> & {
  * Describes the message runner.v2.EventsRequest.
  * Use `create(EventsRequestSchema)` to create a new message.
  */
-export const EventsRequestSchema: GenMessage<EventsRequest> /*@__PURE__*/ = messageDesc(
-  file_runner_v2_events,
-  4,
-);
+export const EventsRequestSchema: GenMessage<EventsRequest> =
+  /*@__PURE__*/
+  messageDesc(file_runner_v2_events, 4);
 
 /**
  * @generated from message runner.v2.EventAccepted
@@ -209,10 +206,9 @@ export type EventAccepted = Message<'runner.v2.EventAccepted'> & {
  * Describes the message runner.v2.EventAccepted.
  * Use `create(EventAcceptedSchema)` to create a new message.
  */
-export const EventAcceptedSchema: GenMessage<EventAccepted> /*@__PURE__*/ = messageDesc(
-  file_runner_v2_events,
-  5,
-);
+export const EventAcceptedSchema: GenMessage<EventAccepted> =
+  /*@__PURE__*/
+  messageDesc(file_runner_v2_events, 5);
 
 /**
  * @generated from message runner.v2.EventsResponse
@@ -260,10 +256,9 @@ export type EventsResponse = Message<'runner.v2.EventsResponse'> & {
  * Describes the message runner.v2.EventsResponse.
  * Use `create(EventsResponseSchema)` to create a new message.
  */
-export const EventsResponseSchema: GenMessage<EventsResponse> /*@__PURE__*/ = messageDesc(
-  file_runner_v2_events,
-  6,
-);
+export const EventsResponseSchema: GenMessage<EventsResponse> =
+  /*@__PURE__*/
+  messageDesc(file_runner_v2_events, 6);
 
 /**
  * @generated from enum runner.v2.EventDurability
@@ -293,7 +288,6 @@ export enum EventDurability {
 /**
  * Describes the enum runner.v2.EventDurability.
  */
-export const EventDurabilitySchema: GenEnum<EventDurability> /*@__PURE__*/ = enumDesc(
-  file_runner_v2_events,
-  0,
-);
+export const EventDurabilitySchema: GenEnum<EventDurability> =
+  /*@__PURE__*/
+  enumDesc(file_runner_v2_events, 0);

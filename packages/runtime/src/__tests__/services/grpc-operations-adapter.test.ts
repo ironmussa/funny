@@ -46,6 +46,10 @@ describe('GrpcOperationsAdapter mapping', () => {
       direction: 'after',
       runId: 'run1',
       action: 'retry',
+      automationId: 'auto1',
+      prompt: 'run daily',
+      schedule: '0 9 * * *',
+      patch: { enabled: false },
       payload: P,
     };
     const expected: Record<string, RunnerOperation> = {
@@ -170,6 +174,28 @@ describe('GrpcOperationsAdapter mapping', () => {
       'data:factory_get_run': {
         kind: 'factoryGetRun',
         value: { threadId: 't1', runId: 'run1' },
+      },
+      'data:automation_list': { kind: 'automationList', value: { threadId: 't1' } },
+      'data:automation_create': {
+        kind: 'automationCreate',
+        value: {
+          threadId: 't1',
+          name: 'n',
+          prompt: 'run daily',
+          schedule: '0 9 * * *',
+        },
+      },
+      'data:automation_update': {
+        kind: 'automationUpdate',
+        value: { threadId: 't1', automationId: 'auto1', patch: { enabled: false } },
+      },
+      'data:automation_delete': {
+        kind: 'automationDelete',
+        value: { threadId: 't1', automationId: 'auto1' },
+      },
+      'data:automation_trigger': {
+        kind: 'automationTrigger',
+        value: { threadId: 't1', automationId: 'auto1' },
       },
     };
     expect(Object.keys(expected).sort()).toEqual([...RUNNER_OPERATION_EVENT_TYPES].sort());

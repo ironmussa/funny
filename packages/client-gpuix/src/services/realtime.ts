@@ -9,6 +9,7 @@ import {
   type Unsubscribe,
 } from '@funny/client-core';
 import type { JsonValue } from '@funny/shared/json';
+import type { SocketIoArgument } from '@funny/shared/socket-events';
 import { io } from 'socket.io-client';
 
 import type { NativeCookieJar } from '../platform/transport';
@@ -17,9 +18,9 @@ export interface NativeSocket {
   connected: boolean;
   on(event: string, listener: (...args: any[]) => void): void;
   off(event: string, listener: (...args: any[]) => void): void;
-  onAny(listener: (event: string, data: unknown) => void): void;
-  offAny(listener: (event: string, data: unknown) => void): void;
-  emit(event: string, data: unknown): void;
+  onAny(listener: (event: string, data: SocketIoArgument) => void): void;
+  offAny(listener: (event: string, data: SocketIoArgument) => void): void;
+  emit(event: string, data: SocketIoArgument): void;
   disconnect(): void;
 }
 
@@ -30,7 +31,7 @@ export interface NativeRealtimeSnapshot {
   error: string | null;
 }
 
-function isString(value: unknown): value is string {
+function isString(value: SocketIoArgument): value is string {
   return typeof value === 'string';
 }
 
@@ -40,7 +41,7 @@ interface SocketEnvelope {
   data?: JsonValue;
 }
 
-function isSocketEnvelope(payload: unknown): payload is SocketEnvelope {
+function isSocketEnvelope<T>(payload: T): payload is T & SocketEnvelope {
   return typeof payload === 'object' && payload !== null;
 }
 
@@ -122,7 +123,7 @@ export class NativeRealtimeService {
         skipped: () => undefined,
       },
     });
-    const onAny = (type: string, payload: unknown) => {
+    const onAny = (type: string, payload: SocketIoArgument) => {
       const envelope: SocketEnvelope = isSocketEnvelope(payload) ? payload : {};
       const threadId = isString(envelope.threadId) ? envelope.threadId : '';
       dispatcher.dispatch({ type, threadId, data: envelope.data ?? envelope });
@@ -132,17 +133,17 @@ export class NativeRealtimeService {
       controller.handleConnected();
       if (this.lastOpenThreadId) socket.emit('thread:open', { threadId: this.lastOpenThreadId });
     };
-    const onDisconnect = (reason: unknown) => {
+    const onDisconnect = (reason: SocketIoArgument) => {
       this.update({ phase: 'disconnected', error: isString(reason) ? reason : null });
       if (reason === 'io server disconnect') this.options.onSessionRejected();
     };
-    const onError = (error: unknown) => {
-      const message = error instanceof Error ? error.message : String(error);
+    const onError = (cause: unknown) => {
+      const message = cause instanceof Error ? cause.message : String(cause);
       this.update({ phase: 'error', error: message });
       this.options.platform.diagnostics.report({
         capability: 'transport',
         operation: 'realtime.connect',
-        error,
+        error: cause,
       });
     };
     socket.onAny(onAny);

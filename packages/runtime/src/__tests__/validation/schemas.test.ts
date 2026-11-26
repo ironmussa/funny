@@ -191,6 +191,25 @@ describe('createThreadSchema', () => {
     }
   });
 
+  test('rejects an empty prompt without attachments', () => {
+    const result = createThreadSchema.safeParse({ ...validThread, prompt: '' });
+    expect(result.success).toBe(false);
+  });
+
+  test('accepts an empty prompt when the thread starts with images', () => {
+    const result = createThreadSchema.safeParse({
+      ...validThread,
+      prompt: '',
+      images: [
+        {
+          type: 'image' as const,
+          source: { type: 'base64' as const, media_type: 'image/png' as const, data: 'b' },
+        },
+      ],
+    });
+    expect(result.success).toBe(true);
+  });
+
   test('applies default title to empty string', () => {
     const result = createThreadSchema.safeParse(validThread);
     expect(result.success).toBe(true);
@@ -362,6 +381,19 @@ describe('sendMessageSchema', () => {
   test('rejects missing content', () => {
     const result = sendMessageSchema.safeParse({});
     expect(result.success).toBe(false);
+  });
+
+  test('accepts empty content when the message carries images', () => {
+    const result = sendMessageSchema.safeParse({
+      content: '',
+      images: [
+        {
+          type: 'image' as const,
+          source: { type: 'base64' as const, media_type: 'image/png' as const, data: 'b' },
+        },
+      ],
+    });
+    expect(result.success).toBe(true);
   });
 
   test('accepts with optional model', () => {

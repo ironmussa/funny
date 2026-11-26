@@ -222,6 +222,20 @@ const agentRunInputFields = {
   stagedUploads: z.array(z.string().regex(STAGED_ID_RE)).max(20).optional(),
 };
 
+function hasPromptAttachments(data: {
+  images?: unknown[];
+  fileReferences?: unknown[];
+  symbolReferences?: unknown[];
+  stagedUploads?: unknown[];
+}): boolean {
+  return Boolean(
+    data.images?.length ||
+    data.fileReferences?.length ||
+    data.symbolReferences?.length ||
+    data.stagedUploads?.length,
+  );
+}
+
 export const createThreadSchema = z
   .object({
     /**
@@ -277,7 +291,7 @@ export const createThreadSchema = z
      * generated from the title.
      */
     branch: branchNameSchema.optional(),
-    prompt: z.string().min(1, 'prompt is required').max(500_000),
+    prompt: z.string().max(500_000),
     images: z.array(imageAttachmentSchema).max(10).optional(),
     ...agentRunInputFields,
     worktreePath: z.string().optional(),
@@ -287,6 +301,13 @@ export const createThreadSchema = z
     templateVariables: z.record(z.string(), z.string()).optional(),
   })
   .superRefine((data, ctx) => {
+    if (data.prompt.length === 0 && !hasPromptAttachments(data)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'prompt is required',
+        path: ['prompt'],
+      });
+    }
     // A model sent without a provider is a DEFAULT_PROVIDER model (the service
     // resolves it the same way); with neither, both come from the project.
     validateProviderModel(
@@ -346,7 +367,7 @@ export const createIdleThreadSchema = z.object({
 
 export const sendMessageSchema = z
   .object({
-    content: z.string().min(1, 'content is required').max(500_000),
+    content: z.string().max(500_000),
     provider: agentProviderSchema.optional(),
     model: agentModelSchema.optional(),
     permissionMode: permissionModeSchema.optional(),
@@ -367,13 +388,22 @@ export const sendMessageSchema = z
      */
     expectedBranch: branchNameSchema.optional(),
     /** A never-answered earlier prompt the agent sees before `content` (sandbox retry). */
-    precedingPrompt: z.string().min(1).max(500_000).optional(),
+    precedingPrompt: z.string().max(500_000).optional(),
     /** The images of that earlier prompt: the agent sees them, they are not saved again. */
     precedingImages: z.array(imageAttachmentSchema).max(10).optional(),
     /** The id of this message when the server already saved it (sandbox thread's first message). */
     savedMessageId: z.string().min(1).max(64).optional(),
   })
-  .superRefine((data, ctx) => validateProviderModel(data, ctx));
+  .superRefine((data, ctx) => {
+    if (data.content.length === 0 && !hasPromptAttachments(data)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'content is required',
+        path: ['content'],
+      });
+    }
+    validateProviderModel(data, ctx);
+  });
 
 export const updateQueuedMessageSchema = z.object({
   content: z.string().min(1, 'content is required'),

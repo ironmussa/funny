@@ -89,8 +89,8 @@ async function idleThreadPrompt(
   projectPath: string,
 ): Promise<string | undefined> {
   const { fileReferences: refs = [] } = await withStagedUploads(params, threadId, projectPath);
-  if (params.prompt === undefined) return undefined;
-  return withReferenceManifest(params.prompt, refs, projectPath);
+  if (params.prompt === undefined && refs.length === 0) return undefined;
+  return withReferenceManifest(params.prompt ?? '', refs, projectPath);
 }
 
 /** Branch a backlog thread will run on: a new worktree branch, or the checkout's current one. */
@@ -163,11 +163,11 @@ async function createIdleThreadImpl(params: CreateIdleThreadParams) {
 
   await tm.createThread(thread);
 
-  if (prompt) {
+  if (prompt || params.images?.length) {
     await tm.insertMessage({
       threadId,
       role: 'user',
-      content: stripInlineReferencedContent(prompt),
+      content: stripInlineReferencedContent(prompt ?? ''),
       images: params.images?.length ? JSON.stringify(params.images) : null,
     });
   }

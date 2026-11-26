@@ -94,7 +94,13 @@ export async function createNewWorktreeThread(baseCtx: ProjectThreadContext) {
 
   await tm.createThread(thread);
 
-  if (params.prompt) {
+  const hasInitialMessage = Boolean(
+    params.prompt ||
+    params.images?.length ||
+    params.fileReferences?.length ||
+    params.symbolReferences?.length,
+  );
+  if (hasInitialMessage) {
     // The agent gets the fully augmented prompt (with file contents inlined)
     // when startAgent runs; what we persist for display is the path-only
     // metadata version. See stripInlineReferencedContent.

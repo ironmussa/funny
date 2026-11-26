@@ -388,7 +388,8 @@ async function promoteIdleThread(
 
   const stageUpdates: RuntimeThreadUpdate = {};
   if (thread.stage !== 'in_progress') stageUpdates.stage = 'in_progress';
-  if (!thread.initialPrompt || params.content !== thread.initialPrompt) {
+  // An image-only message keeps the title the thread was created with.
+  if (params.content && params.content !== thread.initialPrompt) {
     stageUpdates.title = params.content.slice(0, 200);
     stageUpdates.initialPrompt = params.content;
   }
@@ -448,7 +449,8 @@ function agentImages(params: SendMessageParams): ImageAttachment[] | undefined {
 
 /** The agent sees a never-answered earlier prompt (sandbox retry) before the message. */
 function withPrecedingPrompt(params: SendMessageParams, content: string): string {
-  return params.precedingPrompt ? `${params.precedingPrompt}\n\n${content}` : content;
+  if (!params.precedingPrompt) return content;
+  return content ? `${params.precedingPrompt}\n\n${content}` : params.precedingPrompt;
 }
 
 /**

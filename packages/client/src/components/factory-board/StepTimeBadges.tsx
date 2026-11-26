@@ -1,6 +1,7 @@
 /** Time on the board (openspec factory-step-timings): a run's time in its step, and a stage's median. */
 import { useTranslation } from 'react-i18next';
 
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { FactoryRun } from '@/lib/api/factory';
 
 import { formatStepDuration, timeInCurrentStep } from './step-timings';
@@ -37,12 +38,18 @@ export function StageMedian({
   const { t } = useTranslation();
   if (medianMs === undefined) return null;
   return (
-    <span
-      className="text-muted-foreground text-xs tabular-nums"
-      title={t('factoryBoard.time.medianTitle', 'Median time in this stage, last 7 days')}
-      data-testid={`factory-board-median-${column}`}
-    >
-      ~{formatStepDuration(medianMs)}
-    </span>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className="text-muted-foreground text-xs tabular-nums"
+          data-testid={`factory-board-median-${column}`}
+        >
+          ~{formatStepDuration(medianMs)}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>
+        {t('factoryBoard.time.medianTitle', 'Median time in this stage, last 7 days')}
+      </TooltipContent>
+    </Tooltip>
   );
 }

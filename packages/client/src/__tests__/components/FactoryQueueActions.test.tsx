@@ -1,13 +1,14 @@
 /**
  * The factory view's queue controls and integration figures, moved there from
  * the project settings: Clear queue / Stop all act on the projects the project
- * filter keeps, Stop all asks first, and the figures fold under the header.
+ * filter keeps, both ask first, and the figures fold under the header.
  */
 import { beforeEach, describe, expect, mock, test, vi } from 'bun:test';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
 
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { buildFactoryRun } from '@/data/factory/testing';
 import type { FactoryQueueRun, FactoryRun } from '@/lib/api/factory';
 
@@ -79,10 +80,16 @@ describe('FactoryQueueActions', () => {
     expect(screen.queryByTestId('factory-stop-all')).toBeNull();
   });
 
-  test('clear queue empties the queue of each project in scope', () => {
+  test('clear queue asks first, then empties the queue of each project in scope', () => {
     const runs = [queueRun('a', 'p1', 'requested'), queueRun('b', 'p2', 'requested')];
-    render(<FactoryQueueActions runs={runs} projectFilter={new Set()} />);
+    render(<FactoryQueueActions runs={runs} projectFilter={new Set()} />, {
+      wrapper: TooltipProvider,
+    });
     fireEvent.click(screen.getByTestId('factory-clear-queue'));
+    expect(mocks.empty).not.toHaveBeenCalled();
+    expect(screen.getByText('Clear the queue?')).toBeInTheDocument();
+    expect(screen.getByText(/waiting in the queue \(2\)/)).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('confirm-dialog-confirm'));
     expect(mocks.empty).toHaveBeenCalledTimes(2);
     expect(mocks.empty).toHaveBeenCalledWith('clear-queue', 'p1');
     expect(mocks.empty).toHaveBeenCalledWith('clear-queue', 'p2');
@@ -90,7 +97,9 @@ describe('FactoryQueueActions', () => {
 
   test('stop all asks for a confirmation first, and keeps to the filtered project', () => {
     const runs = [queueRun('a', 'p1', 'working'), queueRun('b', 'p2', 'working')];
-    render(<FactoryQueueActions runs={runs} projectFilter={new Set(['p1'])} />);
+    render(<FactoryQueueActions runs={runs} projectFilter={new Set(['p1'])} />, {
+      wrapper: TooltipProvider,
+    });
     fireEvent.click(screen.getByTestId('factory-stop-all'));
     expect(mocks.empty).not.toHaveBeenCalled();
     fireEvent.click(screen.getByTestId('confirm-dialog-confirm'));

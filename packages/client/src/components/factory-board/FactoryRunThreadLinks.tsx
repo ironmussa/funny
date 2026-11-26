@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import { DropdownMenuItem, DropdownMenuLabel } from '@/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import type { FactoryQueueRun } from '@/lib/api/factory';
 import { useThreadById } from '@/lib/thread-selectors';
@@ -56,32 +57,39 @@ function factoryRunLastThread(
 
 /** The card's link to the run's last thread, named by its role; nothing without a thread. */
 export function FactoryRunLastThreadLink({ run }: { run: FactoryQueueRun }) {
+  const { t } = useTranslation();
   const navigate = useStableNavigate();
   const roles = useRoleLabels();
   const link = factoryRunLastThread(run);
   const thread = useThreadById(link?.threadId);
   if (!link) return null;
   return (
-    <Button
-      variant="muted"
-      size="2xs"
-      // `-my-0.5`: the button (`h-5`) must not make the footer line (`h-4`) taller.
-      className="-my-0.5 shrink-0"
-      title={thread?.title}
-      data-testid={`factory-board-last-thread-${run.id}`}
-      onClick={(event) => {
-        // The card itself opens the run's panel.
-        event.stopPropagation();
-        navigate(
-          buildPath(
-            getThreadRoute({ id: link.threadId, projectId: run.projectId, isScratch: false }),
-          ),
-        );
-      }}
-    >
-      <MessageSquare className="icon-xs" />
-      {roles[link.role]}
-    </Button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="muted"
+          size="2xs"
+          // `-my-0.5`: the button (`h-5`) must not make the footer line (`h-4`) taller.
+          className="-my-0.5 shrink-0"
+          data-testid={`factory-board-last-thread-${run.id}`}
+          onClick={(event) => {
+            // The card itself opens the run's panel.
+            event.stopPropagation();
+            navigate(
+              buildPath(
+                getThreadRoute({ id: link.threadId, projectId: run.projectId, isScratch: false }),
+              ),
+            );
+          }}
+        >
+          <MessageSquare className="icon-xs" />
+          {roles[link.role]}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>
+        {thread?.title ?? t('factoryBoard.openThread', 'Open the thread')}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 

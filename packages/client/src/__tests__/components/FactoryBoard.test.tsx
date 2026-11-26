@@ -129,7 +129,7 @@ beforeEach(() => {
   mocks.settings = null;
   mocks.navigate = vi.fn();
   mocks.control = vi.fn();
-  useFactoryViewStore.setState({ layout: 'list' });
+  useFactoryViewStore.setState({ layout: 'list', hiddenColumns: [] });
   localStorage.clear();
 });
 
@@ -148,6 +148,27 @@ describe('FactoryBoard', () => {
     expect(inColumn('pr', 'r2')).not.toBeNull();
     expect(inColumn('needs_person', 'r3')).not.toBeNull();
     expect(inColumn('review', 'r2')).toBeNull();
+  });
+
+  test('hides the columns the user hid, and the picker brings them back', async () => {
+    const { FactoryBoardColumnsMenu } =
+      await import('@/components/factory-board/FactoryViewToggles');
+    useFactoryViewStore.setState({ hiddenColumns: ['merge', 'waiting_parts'] });
+    renderBoard([queueRun('r1', 'reviewing')]);
+    expect(screen.queryByTestId('factory-board-column-merge')).toBeNull();
+    expect(screen.queryByTestId('factory-board-column-waiting_parts')).toBeNull();
+    expect(screen.getByTestId('factory-board-column-review')).toBeTruthy();
+
+    render(<FactoryBoardColumnsMenu />, { wrapper: TooltipProvider });
+    fireEvent.pointerDown(screen.getByTestId('factory-board-columns-menu'), {
+      button: 0,
+      ctrlKey: false,
+    });
+    fireEvent.click(await screen.findByTestId('factory-board-columns-toggle-merge'));
+    expect(useFactoryViewStore.getState().hiddenColumns).toEqual(['waiting_parts']);
+    expect(await screen.findByTestId('factory-board-column-merge')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('factory-board-columns-show-all'));
+    expect(useFactoryViewStore.getState().hiddenColumns).toEqual([]);
   });
 
   test('shows the factory limits only when one project is shown', () => {

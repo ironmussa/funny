@@ -10,8 +10,10 @@ import { useTranslation } from 'react-i18next';
 import { BoardColumn } from '@/components/board/BoardColumn';
 import { LoadMoreSentinel } from '@/components/LoadMoreSentinel';
 import type { FactoryRunReplacement } from '@/components/thread/FactoryRunControls';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useFactorySettings } from '@/data/factory/hooks';
 import type { FactoryQueueRun } from '@/lib/api/factory';
+import { useFactoryViewStore } from '@/stores/factory-view-store';
 
 import {
   FACTORY_BOARD_COLUMNS,
@@ -57,17 +59,21 @@ function StageLimit({
   if (!node) return null;
   const limit = settings.stageLimits[node] ?? settings.maxConcurrent;
   return (
-    <span
-      className="text-muted-foreground text-xs"
-      title={
-        node in settings.stageLimits
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className="text-muted-foreground text-xs"
+          data-testid={`factory-board-limit-${column}`}
+        >
+          {count}/{limit}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>
+        {node in settings.stageLimits
           ? t('factoryBoard.limit.stage', 'Stage limit of "{{node}}"', { node })
-          : t('factoryBoard.limit.max', "The factory's maximum concurrent runs")
-      }
-      data-testid={`factory-board-limit-${column}`}
-    >
-      {count}/{limit}
-    </span>
+          : t('factoryBoard.limit.max', "The factory's maximum concurrent runs")}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -81,18 +87,28 @@ function DoneTitle({
   collapsed: boolean;
   onToggle: () => void;
 }) {
+  const { t } = useTranslation();
   const Chevron = collapsed ? ChevronRight : ChevronDown;
   return (
-    <button
-      type="button"
-      className="flex items-center gap-1"
-      onClick={onToggle}
-      aria-expanded={!collapsed}
-      data-testid="factory-board-done-toggle"
-    >
-      <Chevron className="icon-xs" />
-      {title}
-    </button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          className="flex items-center gap-1"
+          onClick={onToggle}
+          aria-expanded={!collapsed}
+          data-testid="factory-board-done-toggle"
+        >
+          <Chevron className="icon-xs" />
+          {title}
+        </button>
+      </TooltipTrigger>
+      <TooltipContent>
+        {collapsed
+          ? t('factoryBoard.doneExpand', 'Expand the Done column')
+          : t('factoryBoard.doneCollapse', 'Collapse the Done column')}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -218,12 +234,10 @@ interface Props {
   onToggleSelected?: (runId: string) => void;
 }
 
-export function FactoryBoard({ runs, now, ...rest }: Props) {
+/** Each board column's title, shared by the board and its column picker. */
+export function useFactoryBoardColumnTitles(): Record<FactoryBoardColumnId, string> {
   const { t } = useTranslation();
-  const columns = layoutFactoryBoard(runs);
-  const medians = stageMedians(runs, now);
-  const replacements = factoryRunReplacements(runs);
-  const titles: Record<FactoryBoardColumnId, string> = {
+  return {
     queue: t('factoryBoard.column.queue', 'Queue'),
     triage: t('factoryBoard.column.triage', 'Triage'),
     implementing: t('factoryBoard.column.implementing', 'Implementing'),
@@ -234,9 +248,17 @@ export function FactoryBoard({ runs, now, ...rest }: Props) {
     waiting_parts: t('factoryBoard.column.waitingParts', 'Waiting on parts'),
     done: t('factoryBoard.column.done', 'Done'),
   };
+}
+
+export function FactoryBoard({ runs, now, ...rest }: Props) {
+  const columns = layoutFactoryBoard(runs);
+  const medians = stageMedians(runs, now);
+  const replacements = factoryRunReplacements(runs);
+  const titles = useFactoryBoardColumnTitles();
+  const hidden = useFactoryViewStore((state) => state.hiddenColumns);
   return (
     <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto p-3" data-testid="factory-board">
-      {FACTORY_BOARD_COLUMNS.map((id) => (
+      {FACTORY_BOARD_COLUMNS.filter((id) => !hidden.includes(id)).map((id) => (
         <FactoryBoardStage
           key={id}
           id={id}

@@ -1810,6 +1810,8 @@
     "retry": "Reintentar",
     "stop": "Detener",
     "clearQueue": "Vaciar cola",
+    "clearQueueTitle": "¿Vaciar la cola?",
+    "clearQueueDesc": "Quita todos los issues que esperan en la cola ({{count}}). Las runs en curso siguen.",
     "stopAll": "Detener todo",
     "stopAllTitle": "¿Detener el factory?",
     "stopAllDesc": "Vacía la cola y detiene todas las runs en curso y sus threads de agente.",
@@ -1988,7 +1990,10 @@
     "closeReplacedPr": "Cerrar pull request",
     "closeReplacedPrTitle": "¿Cerrar el pull request #{{pr}}?",
     "closeReplacedPrBody": "Una run más nueva del issue #{{issue}} reemplazó esta run con #{{newer}}. La factory comenta en #{{pr}} con un enlace a #{{newer}}, lo cierra y borra su rama.",
-    "closeReplacedPrBodyNoPr": "Una run más nueva del issue #{{issue}} reemplazó esta run. La factory comenta en #{{pr}}, lo cierra y borra su rama."
+    "closeReplacedPrBodyNoPr": "Una run más nueva del issue #{{issue}} reemplazó esta run. La factory comenta en #{{pr}}, lo cierra y borra su rama.",
+    "clearQueueTooltip": "Quitar los issues que esperan en la cola",
+    "stopAllTooltip": "Vaciar la cola y detener todas las runs en curso",
+    "runFlowTooltip": "Iniciar una run de un flow en un proyecto"
   },
   "projectSecrets": {
     "title": "Secretos",
@@ -2096,6 +2101,8 @@
     "layoutList": "Lista",
     "layoutBoard": "Tablero",
     "layoutAnalytics": "Analíticas",
+    "columns": "Columnas",
+    "showAllColumns": "Mostrar todas las columnas",
     "details": "Detalle del run",
     "health": {
       "inFlight": "En curso",
@@ -2109,7 +2116,11 @@
       "health": "Ahora mismo",
       "noIntegration": "Ningún run de los filtros empezó en este periodo",
       "empty": "No hay runs del factory que medir"
-    }
+    },
+    "columnsTooltip": "Mostrar u ocultar columnas",
+    "showAllTooltip": "Mostrar todas las runs, también las terminadas",
+    "showActiveTooltip": "Mostrar solo las runs que no han terminado",
+    "clearFiltersTooltip": "Quitar los filtros de proyecto y estado"
   },
   "factoryBoard": {
     "column": {
@@ -2204,7 +2215,10 @@
     },
     "replaced": "Reemplazada",
     "replacedBy": "Reemplazada por #{{pr}}",
-    "replacedDetail": "El issue #{{issue}} se volvió a mandar a la factory: una run más nueva trabaja en él."
+    "replacedDetail": "El issue #{{issue}} se volvió a mandar a la factory: una run más nueva trabaja en él.",
+    "doneExpand": "Expandir la columna Done",
+    "doneCollapse": "Contraer la columna Done",
+    "openThread": "Abrir el thread"
   },
   "factoryRunDetail": {
     "triageTab": "Triage",

@@ -42,13 +42,14 @@ const buttonVariants = cva(
         // An outlined action that needs attention (a server that needs auth).
         'outline-warning':
           'border border-status-warning/30 bg-background text-status-warning hover:bg-status-warning/10 hover:text-accent-foreground',
+        // An outlined action that destroys or stops something (stop all).
+        'outline-destructive':
+          'border border-destructive/40 bg-background text-destructive hover:bg-destructive/10 hover:text-destructive',
         // An outlined secondary action (cancel) that stays quiet until hovered.
         'outline-muted':
           'border border-input bg-background text-muted-foreground hover:bg-accent hover:text-foreground',
         // A run action tinted green, brightening on hover.
         'ghost-success-soft': 'text-status-success/80 hover:bg-accent hover:text-status-success',
-        // A red text action whose label turns neutral on hover (stop all).
-        'destructive-text': 'text-destructive hover:bg-accent hover:text-accent-foreground',
       },
       // Field heights / padding / text come from the shared control scale so a
       // text button lines up with an input or select of the same `size`. The

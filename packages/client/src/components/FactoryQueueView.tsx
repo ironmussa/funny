@@ -27,6 +27,7 @@ import { FactoryIncidentBanners } from '@/components/factory-board/FactoryHealth
 import { FactoryQueueActions } from '@/components/factory-board/FactoryQueueActions';
 import {
   FactoryActiveToggle,
+  FactoryBoardColumnsMenu,
   FactoryLayoutToggle,
 } from '@/components/factory-board/FactoryViewToggles';
 import { factoryRunDependencies } from '@/components/factory-board/run-dependencies';
@@ -41,6 +42,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchBar } from '@/components/ui/search-bar';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { useFactoryQueueRuns } from '@/data/factory/hooks';
 import { useProjects } from '@/data/projects/hooks';
@@ -237,16 +239,23 @@ function FactoryQueueHeader({
         </p>
       </div>
       {projects.length > 0 && (
-        <Button
-          variant="outline"
-          size="xs"
-          className="ml-auto"
-          onClick={() => setRunning(true)}
-          data-testid="factory-view-run-flow"
-        >
-          <Play className="icon-sm" />
-          {t('factory.runFlow.title', 'Run a flow')}
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="outline"
+              size="xs"
+              className="ml-auto"
+              onClick={() => setRunning(true)}
+              data-testid="factory-view-run-flow"
+            >
+              <Play className="icon-sm" />
+              {t('factory.runFlow.title', 'Run a flow')}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            {t('factory.runFlowTooltip', 'Start one run of a flow in a project')}
+          </TooltipContent>
+        </Tooltip>
       )}
       {running && <RunFactoryFlowDialog open onOpenChange={setRunning} projects={projects} />}
     </div>
@@ -265,14 +274,21 @@ function ClearFilters({ shown, onClear }: { shown: boolean; onClear: () => void 
   const { t } = useTranslation();
   if (!shown) return null;
   return (
-    <button
-      type="button"
-      data-testid="factory-view-clear-filters"
-      onClick={onClear}
-      className="text-muted-foreground hover:text-foreground px-2 py-1 text-xs whitespace-nowrap transition-colors"
-    >
-      {t('allThreads.clearFilters')}
-    </button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="muted-strong"
+          size="xs"
+          data-testid="factory-view-clear-filters"
+          onClick={onClear}
+        >
+          {t('allThreads.clearFilters')}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>
+        {t('factoryView.clearFiltersTooltip', 'Remove the project and state filters')}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -409,6 +425,7 @@ function FactoryQueueToolbar(props: ToolbarProps) {
       />
       <div className="ml-auto flex items-center gap-1">
         <FactoryQueueActions runs={props.runs} projectFilter={projectFilter} />
+        {props.layout === 'board' && <FactoryBoardColumnsMenu />}
         <FactoryLayoutToggle layout={props.layout} onChange={props.onLayoutChange} />
       </div>
     </div>

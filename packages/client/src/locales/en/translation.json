@@ -1817,6 +1817,8 @@
     "retry": "Retry",
     "stop": "Stop",
     "clearQueue": "Clear queue",
+    "clearQueueTitle": "Clear the queue?",
+    "clearQueueDesc": "This removes every issue waiting in the queue ({{count}}). Runs in progress keep going.",
     "stopAll": "Stop all",
     "stopAllTitle": "Stop the factory?",
     "stopAllDesc": "This clears the queue and stops every run in progress and its agent threads.",
@@ -1995,7 +1997,10 @@
     "closeReplacedPr": "Close pull request",
     "closeReplacedPrTitle": "Close pull request #{{pr}}?",
     "closeReplacedPrBody": "A newer run of issue #{{issue}} replaced this run with #{{newer}}. The factory comments on #{{pr}} with a link to #{{newer}}, closes it and deletes its branch.",
-    "closeReplacedPrBodyNoPr": "A newer run of issue #{{issue}} replaced this run. The factory comments on #{{pr}}, closes it and deletes its branch."
+    "closeReplacedPrBodyNoPr": "A newer run of issue #{{issue}} replaced this run. The factory comments on #{{pr}}, closes it and deletes its branch.",
+    "clearQueueTooltip": "Remove the issues waiting in the queue",
+    "stopAllTooltip": "Clear the queue and stop every run in progress",
+    "runFlowTooltip": "Start one run of a flow in a project"
   },
   "projectSecrets": {
     "title": "Secrets",
@@ -2103,6 +2108,8 @@
     "layoutList": "List",
     "layoutBoard": "Board",
     "layoutAnalytics": "Analytics",
+    "columns": "Columns",
+    "showAllColumns": "Show all columns",
     "details": "Run details",
     "health": {
       "inFlight": "In flight",
@@ -2116,7 +2123,11 @@
       "health": "Right now",
       "noIntegration": "No run the filters keep started in this period",
       "empty": "No factory runs to measure"
-    }
+    },
+    "columnsTooltip": "Show or hide columns",
+    "showAllTooltip": "Show every run, ended ones too",
+    "showActiveTooltip": "Show only the runs that have not ended",
+    "clearFiltersTooltip": "Remove the project and state filters"
   },
   "factoryBoard": {
     "column": {
@@ -2211,7 +2222,10 @@
     },
     "replaced": "Replaced",
     "replacedBy": "Replaced by #{{pr}}",
-    "replacedDetail": "Issue #{{issue}} was sent to the factory again: a newer run works on it."
+    "replacedDetail": "Issue #{{issue}} was sent to the factory again: a newer run works on it.",
+    "doneExpand": "Expand the Done column",
+    "doneCollapse": "Collapse the Done column",
+    "openThread": "Open the thread"
   },
   "factoryRunDetail": {
     "triageTab": "Triage",

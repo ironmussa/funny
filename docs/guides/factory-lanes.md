@@ -8,16 +8,21 @@ up to date with **Merge into**.
 To send an issue to a lane in automatic mode, the issue needs **two labels**:
 
 1. The factory's own label (for example `ready-for-agent`).
-2. A lane label matching the factory's **Lane label prefix** (default `feature:`, for example
-   `feature:billing`).
+2. A lane label matching the factory's **Lane label prefix** (default `lane:`, for example
+   `lane:billing`). A factory saved before this default changed keeps `feature:` / `feature/`.
 
-An issue with only `feature:billing` and without the factory's label is not picked up and creates no
-branch. In manual mode, sending an issue that carries `feature:billing` routes it to that lane.
+An issue with only `lane:billing` and without the factory's label is not picked up and creates no
+branch. In manual mode, sending an issue that carries `lane:billing` routes it to that lane.
 
-When the first issue for `feature:billing` is admitted, the factory creates the `feature/billing`
-branch from **Merge into** (using the **Lane branch prefix**, default `feature/`) and checks
-whether the repository's GitHub Actions workflows exclude that branch. Both prefixes and **Merge
-into** are fixed while the factory has lanes.
+When the first issue for `lane:billing` is admitted, the factory creates the `lane/billing` branch
+from **Merge into** (using the **Lane branch prefix**, default `lane/`) and checks whether the
+repository's GitHub Actions workflows exclude that branch. Both prefixes and **Merge into** are
+fixed while the factory has lanes.
+
+A lane never takes over a branch that another member's factory on the same project already uses as
+a lane: the issue stays queued with `lane-invalid` and says which branch. Change your factory's lane
+prefixes (or name the lane differently) to work in parallel. A branch no factory uses, such as one a
+person started by hand, is adopted.
 
 ## Frozen base branch
 

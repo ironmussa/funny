@@ -10,9 +10,9 @@ kept close to the factory's base branch so that merging a finished feature back 
 ### Requirement: A lane is named by a label on the issue
 
 An issue SHALL select a lane by carrying a label made of the factory's lane prefix and a name
-(`feature:payments`, with the default prefix `feature:`), compared without regard to case. The lane's
+(`feature:payments`, with the prefix `feature:`; the default is `lane:`, D11), compared without regard to case. The lane's
 branch SHALL be the factory's lane branch prefix followed by that name (`feature/payments`, with
-the default prefix `feature/`). A member with `steer` SHALL be able to change both prefixes in the
+the prefix `feature/`; the default is `lane/`). A member with `steer` SHALL be able to change both prefixes in the
 factory's settings while the factory has no lane. The label that admits issues to the factory
 SHALL still decide whether an issue is admitted; a lane label only selects the branch. Nobody
 registers a lane beforehand: the factory SHALL create it when it first admits an issue that names
@@ -208,3 +208,52 @@ the pairs that conflict and the conflicting paths.
 
 - **WHEN** `feature/a` and `feature/b` both change `src/router.ts` in ways that conflict
 - **THEN** the factory shows that the two lanes conflict on `src/router.ts`, and no branch is changed
+
+### Requirement: The board filters its runs by lane
+
+The factory board SHALL offer a lane filter listing every lane of the factories it shows, whether
+or not a run of that lane is loaded, and a "No lane" option, and SHALL show only the runs of the
+selected lanes. The filter SHALL be shown whenever one of those factories has a lane, and SHALL
+let a member find a lane by typing its name. Lanes of the same name in two projects SHALL be
+separate options. The board's search SHALL also match a run's lane name.
+
+#### Scenario: Seeing one feature's work
+
+- **WHEN** the member selects the lane `payments` in the board's lane filter
+- **THEN** the board shows only the runs admitted to `payments`, in every column
+
+#### Scenario: A lane without runs on screen
+
+- **WHEN** the factory has the lane `payments` and no loaded run belongs to it
+- **THEN** the lane filter is shown and lists `payments`, and selecting it shows an empty board
+
+#### Scenario: The same lane name in two projects
+
+- **WHEN** projects A and B each have a lane `auth` and the member selects A's
+- **THEN** the board shows the runs of A's `auth` only
+
+#### Scenario: A factory that never had a lane
+
+- **WHEN** no factory on the board has a lane and no loaded run has one
+- **THEN** the board shows no lane filter
+
+### Requirement: A lane's branch belongs to one factory
+
+Before making a lane, the factory SHALL refuse a branch that an active lane of another factory of
+the same project uses, keeping the issue queued with the reason. A branch that no factory uses as a
+lane MAY be adopted.
+
+#### Scenario: Two members name the same lane
+
+- **WHEN** Bob's factory has the lane `auth` on `lane/auth`, and Alice's factory on the same project admits its first issue labelled `lane:auth`
+- **THEN** Alice's issue stays queued with `lane-invalid`, saying that `lane/auth` is another factory's lane, and no lane is made
+
+### Requirement: Lane prefixes default to the factory's own convention
+
+A factory that never saved its lane prefixes SHALL use `lane:` for the label and `lane/` for the
+branch. A factory saved before this default changed SHALL keep `feature:` and `feature/`.
+
+#### Scenario: A team label that looks like a lane
+
+- **WHEN** a new factory admits an issue labelled `feature:billing`
+- **THEN** the issue runs on the factory's own branch and no lane is made

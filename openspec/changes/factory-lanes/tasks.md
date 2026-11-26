@@ -77,3 +77,14 @@ Phase 2 is groups 9–10. Phase 3 is group 11. Group 12 closes each phase.
 
 - [x] 12.1 Run `bun run lint`, `bun run typecheck` and the factory test suites; verify all pass
 - [x] 12.2 Run an end-to-end scenario on the fake GitHub: two lanes, an issue in each and one unlaned, a commit on `dev` syncing both lanes (one clean, one through the agent), a cross-lane blocker admitted only after its lane is finished and the other synced, and the finished lane removed; verify the run states, branches and closed issues match the specs
+
+## 13. Lane filter on the board (D10)
+
+- [x] 13.1 Return the lanes of the caller's factories (project, name, label, branch, state) next to the factory queue read (`factory.queueLanes`, `FactoryQueueLane` in `@funny/shared/contracts/factory`, `trpc/ports/factory-port-lanes.ts`); verify a port test that a lane with no run is returned and another user's lanes are not
+- [x] 13.2 Build the lane filter's options from those lanes plus the lanes of the loaded runs, keyed by project and lane, and show the filter whenever a shown factory has a lane, a loaded run has one, or a lane is selected; verify component tests for a lane with no run, for no lanes at all (filter hidden), and for two projects with a lane of the same name (two options, each filtering its own runs)
+- [x] 13.3 Add a search field to the filter's menu when it has more than eight options, show each option's label and branch, and name the lane in the board's search placeholder (en/es/pt); verify a component test that typing narrows the options and `bun run lint`
+
+## 14. Lane defaults and branch ownership (D11, D12)
+
+- [x] 14.1 Change `DEFAULT_LANE_LABEL_PREFIX` / `DEFAULT_LANE_BRANCH_PREFIX` to `lane:` / `lane/`, and add a migration that writes `feature:` / `feature/` into existing `factory_settings` rows whose prefixes are null; verify a migration test that an existing factory keeps `feature:` and a new one gets `lane:`
+- [x] 14.2 Before making a lane, refuse a branch that an active lane of another factory of the same project uses (`lane-invalid`, naming the branch); keep adopting a branch no factory uses; verify watcher tests for both cases

@@ -628,9 +628,11 @@ A factory can work on several long-lived feature branches in parallel (openspec 
 
 - **Convention and two labels**: an issue joins a lane when it carries **both** the factory's own
   label (for example `ready-for-agent`, in automatic mode, or when sent manually) **and** a lane
-  label matching `laneLabelPrefix` (default `feature:`, so `feature:<name>`). Carrying only
-  `feature:<name>` without the factory label never admits the issue or creates a lane. The lane's
-  branch is `<laneBranchPrefix><name>` (default `feature/<name>`). Both prefixes live on
+  label matching `laneLabelPrefix` (default `lane:`, so `lane:<name>`; factories saved before
+  migration 141 keep `feature:`). Carrying only `lane:<name>` without the factory label never
+  admits the issue or creates a lane. The lane's branch is `<laneBranchPrefix><name>` (default
+  `lane/<name>`); a branch that an active lane of another factory of the same project uses is
+  refused with `lane-invalid` (`branchOfAnotherFactory`). Both prefixes live on
   `factory_settings` and are fixed while the factory has lanes, as is **Merge into**. Two lane
   labels park the issue in the queue with `lane-ambiguous`; an invalid name, a branch matching
   **Merge into** or the repository's default branch, or a branch GitHub cannot create parks it with

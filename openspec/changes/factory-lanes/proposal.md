@@ -37,6 +37,12 @@ far from the base that the final merge hurts.
 - Later phases (in this change's tasks, not required for the first release): the red-base
   sentinel pauses only the runs on the red branch; a lane filter on the board; a dry-run merge
   between lane branches that warns early when two features conflict.
+- The board's **lane filter** lists the factory's lanes (not only the lanes of the runs on
+  screen), is shown whenever a factory has a lane, tells apart lanes of the same name in two
+  projects, and can be searched by name, so a member sees one lane's runs alone.
+- The lane prefixes default to `lane:` and `lane/` instead of `feature:` and `feature/`, so an
+  existing `feature:` label does not create a lane; factories saved before keep their prefixes.
+- A lane does not adopt a branch that another member's factory on the same project uses as a lane.
 - Not in this change: lanes chosen by milestone, a lane based on another lane, and a concurrency
   limit per lane (lanes share the factory's limits).
 

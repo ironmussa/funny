@@ -42,9 +42,9 @@ merge commit.
 
 ### D1. A lane is a label convention, and the factory label still admits
 
-A lane is named on the issue: a label `<lane prefix><name>` (default `feature:`), matched without
+A lane is named on the issue: a label `<lane prefix><name>` (default `lane:` since D11, `feature:` before), matched without
 regard to case, selects the lane `<name>`, whose branch is `<branch prefix><name>` (default
-`feature/`). The two prefixes are columns of `factory_settings`, changeable only while the factory
+`lane/`, `feature/` before). The two prefixes are columns of `factory_settings`, changeable only while the factory
 has no lane. A feature is one label the team creates in GitHub, with nothing to register in funny.
 _Alternative:_ a table of label → branch filled in by hand (the first draft). Rejected: a lane is
 per feature and short-lived, so each one would need a settings visit before its first issue.
@@ -213,6 +213,46 @@ to the work left, and D5 does not depend on it: a blocker with a factory run is 
 its merge is, never by its issue being closed. Runs without a lane are unchanged (a factory that
 merges into `dev` leaves its issues to GitHub, as today).
 
+### D10. The board's lane filter lists the factory's lanes, not the lanes of the loaded runs
+
+The first version built the filter's options from the runs on screen and hid the filter when none
+of them had a lane. A member who just made a lane, or whose lane's runs are outside the loaded
+page, saw no filter at all and could not tell whether lanes worked. The options now come from the
+lane rows of the factories shown (active and finished), joined with the lanes of the loaded runs
+(a removed lane's old runs stay filterable). The filter is shown whenever that list is not empty
+or a lane is selected, and hidden only when no shown factory has ever had a lane.
+
+The factory queue spans projects, and a lane is unique per factory only, so an option is keyed by
+project and lane: `auth` of project A and `auth` of project B are two options, each named with its
+project when more than one project is shown. "No lane" stays one option. With more than eight
+options the menu gets a search field, so a member reaches one lane by typing its name. The
+board's search box already matches the lane name; its placeholder says so.
+_Alternative:_ keep the options from the runs and only stop hiding the filter. Rejected: an empty
+"Lane" menu explains nothing, and a lane whose runs all ended would still be missing.
+
+### D11. The lane prefixes default to `lane:` and `lane/`, not `feature:` and `feature/`
+
+`feature:` is a common way to classify issues. A team that already labels issues `feature:billing`
+gets a lane, and a `feature/billing` branch, the first time such an issue also carries the factory
+label, without anyone asking for one. `feature/<name>` is also the branch a person most often makes
+by hand. The defaults become `lane:` and `lane/`, which name the factory's own convention. A
+factory saved before this keeps what it reads today: the migration writes `feature:` / `feature/`
+into the rows whose prefixes are null, so no existing label or lane changes meaning.
+_Alternative:_ a per-user default (`lane/<user>/`). Rejected: D12 already refuses the branch of
+another factory, and a user's name in every branch makes lanes harder to share.
+
+### D12. A lane does not adopt another factory's lane branch
+
+D1 lets a new lane adopt a branch that already exists, so a lane can start from work a person
+began by hand. Two members of the same project each have their own factory, and with the same
+prefixes both would adopt `lane/auth`: two factories syncing, merging into and finishing one
+branch. Before a lane is made, the factory looks for an active lane of another factory of the same
+project with that branch; when there is one, the issue stays queued with `lane-invalid` and the
+reason names the branch and says another member's factory uses it. A branch no factory uses is
+still adopted.
+_Alternative:_ compare repositories instead of projects. Rejected for now: a factory resolves its
+repository from GitHub at each tick and stores none, and two projects on one repository are rare.
+
 ## Risks / Trade-offs
 
 - [A lane lives long and its final merge is large] → Hourly syncs keep it containing the base, so
@@ -222,7 +262,7 @@ merges into `dev` leaves its issues to GitHub, as today).
 - [The repository disallows merge commits] → The sync goes to `needs_human` with that reason.
   Squash would drop ancestry and make every later sync conflict again, so it is never used.
 - [CI does not run for pull requests into a lane branch] → The save warns (D1). This repository's
-  own workflows filter on `branches: [master]` and need `feature/**` (or the lane branches) added
+  own workflows filter on `branches: [master]` and need `lane/**` (or the lane branches) added
   before its factory uses lanes.
 - [A sync makes every open pull request of the lane out of date] → At most one sync an hour per
   lane, and the merge lane already brings a pull request up to date before it merges.
@@ -251,5 +291,5 @@ would then follow the factory's branch, so stop or finish lane runs before rolli
 
 None. Decided in review: the factory label admits and the lane label only routes (D1); a sync is
 its own state machine with no reviewer (D4); a lane task's issue closes when it merges into the
-lane (D9); a lane is a `feature:<name>` label, created at first admission (D1); it is marked finished when its
+lane (D9); a lane is a `lane:<name>` label (default prefix, D11), created at first admission (D1); it is marked finished when its
 final pull request merges (D8).

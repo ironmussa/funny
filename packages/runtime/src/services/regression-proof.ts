@@ -190,6 +190,9 @@ async function runCommand(
       maxOutputBytes: MAX_OUTPUT_BYTES,
       // A test run takes minutes: it must not hold a slot git commands need.
       skipPool: true,
+      // Tests may start daemons (the PTY daemon) that would outlive the
+      // proof: the whole group dies when the command ends.
+      killProcessGroup: true,
     });
     return {
       kind: 'exited',

@@ -124,6 +124,30 @@ export interface ProcessOptions {
    * live (`git clone --progress`). The full stderr is still in the result.
    */
   onStderr?: (chunk: string) => void;
+  /**
+   * Run the command in its own process group (a new session, POSIX only) and
+   * SIGKILL the whole group when the command exits, times out, is aborted or
+   * overflows, so nothing it started in the background outlives it. For
+   * commands that run arbitrary project code (test suites); off by default.
+   */
+  killProcessGroup?: boolean;
+}
+
+/** Whether `options` asks for a process group this platform can give. */
+function wantsProcessGroup(options: ProcessOptions): boolean {
+  return options.killProcessGroup === true && process.platform !== 'win32';
+}
+
+/**
+ * SIGKILL the process group led by `pid`, a child spawned detached (so its
+ * group id is its own pid, never this process's group). A group already gone
+ * is fine.
+ */
+function killGroup(pid: number | undefined): void {
+  if (!pid || pid <= 1 || pid === process.pid) return;
+  try {
+    process.kill(-pid, 'SIGKILL');
+  } catch {}
 }
 
 /** 50MB default — protects against huge `git diff` outputs OOMing the runner. */
@@ -387,7 +411,21 @@ async function executeRawBun(
     stdout: 'pipe',
     stderr: 'pipe',
     stdin: options.stdin != null ? new Blob([options.stdin]) : undefined,
+    detached: wantsProcessGroup(options),
   });
+  const grouped = wantsProcessGroup(options);
+  const kill = () => {
+    if (grouped) killGroup(proc.pid);
+    else proc.kill();
+  };
+  // In a group, what the command left in the background dies with it: that
+  // also closes the pipes those children inherited, so the reads below end.
+  const exited = grouped
+    ? proc.exited.then((code) => {
+        killGroup(proc.pid);
+        return code;
+      })
+    : proc.exited;
 
   const timeoutMs = resolveTimeoutMs(options);
   const maxBytes = options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES;
@@ -398,18 +436,18 @@ async function executeRawBun(
     // A cap of 0 disables it.
     const cap = maxBytes > 0 ? maxBytes : Number.POSITIVE_INFINITY;
     const readCapped = (stream: ReadableStream<Uint8Array>, onText?: (text: string) => void) =>
-      readStreamWithCap(stream, cap, () => proc.kill(), onText);
+      readStreamWithCap(stream, cap, kill, onText);
 
     const [stdout, stderr, exitCode] = await runAsync(
       async (signal) => {
-        const abort = () => proc.kill();
+        const abort = kill;
         signal.addEventListener('abort', abort, { once: true });
         if (signal.aborted) abort();
         try {
           return await Promise.all([
             readCapped(proc.stdout),
             readCapped(proc.stderr, options.onStderr),
-            proc.exited,
+            exited,
           ]);
         } finally {
           signal.removeEventListener('abort', abort);
@@ -426,7 +464,8 @@ async function executeRawBun(
     return commandResult(command, args, options, { stdout, stderr, exitCode });
   } finally {
     // Also covers read failures and cancellation before the async body starts.
-    if (proc.exitCode === null) proc.kill();
+    if (grouped) killGroup(proc.pid);
+    else if (proc.exitCode === null) proc.kill();
   }
 }
 
@@ -438,6 +477,7 @@ async function executeRawNode(
 ): Promise<ProcessResult> {
   const timeoutMs = resolveTimeoutMs(options);
   const maxBytes = options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES;
+  const grouped = wantsProcessGroup(options);
 
   return waitFor(
     (resolve, reject) => {
@@ -445,7 +485,15 @@ async function executeRawNode(
         cwd: options.cwd,
         env: processEnvFor(command, options.env),
         stdio: ['pipe', 'pipe', 'pipe'],
+        detached: grouped,
       });
+      const kill = () => {
+        if (grouped) killGroup(proc.pid);
+        else proc.kill();
+      };
+      // Kill what the command left behind as soon as it exits, so the pipes
+      // its background children hold close and 'close' fires.
+      if (grouped) proc.on('exit', () => killGroup(proc.pid));
 
       if (options.stdin != null) {
         proc.stdin.write(options.stdin);
@@ -464,7 +512,7 @@ async function executeRawNode(
         totalBytes += chunk.byteLength;
         if (maxBytes > 0 && totalBytes > maxBytes) {
           overflowed = true;
-          proc.kill();
+          kill();
           reject(new ProcessOutputTooLargeError(`${command} ${args.join(' ')}`, maxBytes));
         }
       };
@@ -506,7 +554,8 @@ async function executeRawNode(
         reject(err);
       });
       return () => {
-        if (proc.exitCode === null && !proc.killed) proc.kill();
+        if (grouped) killGroup(proc.pid);
+        else if (proc.exitCode === null && !proc.killed) proc.kill();
       };
     },
     {

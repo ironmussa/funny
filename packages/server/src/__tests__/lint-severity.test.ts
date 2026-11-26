@@ -1,11 +1,18 @@
 import { describe, expect, test } from 'bun:test';
 import { join } from 'node:path';
 
-import config from '../../oxlint.config';
-
 // Issue #465: once the #447 cleanups cleared a rule, it became an error so its
 // findings cannot come back. A rule moves back to 'warn' only with a reason.
-const ROOT = join(import.meta.dir, '..', '..');
+const ROOT = join(import.meta.dir, '..', '..', '..', '..');
+
+type RuleSetting = string | [string, ...unknown[]];
+interface LintConfig {
+  rules: Record<string, RuleSetting>;
+  overrides: Array<{ files: string[]; rules: Record<string, RuleSetting> }>;
+}
+
+// Loaded at run time: the repository's config lives outside this package's rootDir.
+const config = ((await import(join(ROOT, 'oxlint.config.ts'))) as { default: LintConfig }).default;
 
 const PROMOTED = [
   'anti-slop/no-known-value-widening',
@@ -22,7 +29,6 @@ const PROMOTED = [
 /** Rules that still have findings (#465's pull request lists them with their counts). */
 const STILL_WARN = ['anti-slop/no-unsafe-dictionary-type'];
 
-type RuleSetting = string | [string, ...unknown[]];
 const rules: Record<string, RuleSetting> = config.rules;
 
 const level = (setting: RuleSetting | undefined) => (Array.isArray(setting) ? setting[0] : setting);

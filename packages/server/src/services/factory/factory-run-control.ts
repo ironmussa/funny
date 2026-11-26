@@ -48,7 +48,7 @@ import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import { db } from '../../db/index.js';
 import { threads } from '../../db/schema.js';
 import { log } from '../../lib/logger.js';
-import { NO_CHANGE_REASON } from './factory-action-provider.js';
+import { NO_CHANGE_REASON, NOT_PUSHED_REASON } from './factory-action-provider.js';
 import { forgetOwnerFollowUp, ownerFollowUpAt } from './factory-follow-ups.js';
 import type { FactoryCloseOutcome, FactoryPullRequestRef } from './factory-pull-requests.js';
 import { replacedPullRequest, type ReplacedPullRequest } from './factory-replaced-pr.js';
@@ -178,9 +178,11 @@ function lintCleanupWord(
  * Not for a "no change" run: its implement step ended without a commit, so
  * replaying that thread reaches "no change" again without running anything
  * (run #229 was retried four times this way). Its retry starts a new agent.
+ * Nor for a "not pushed" one: the step ended before the push, the same way.
  */
 async function keptOnRetry(run: FactoryRunView): Promise<string[]> {
-  if (run.state === 'no_change' || run.failureReason === NO_CHANGE_REASON) return [];
+  if (run.state === 'no_change') return [];
+  if (run.failureReason === NO_CHANGE_REASON || run.failureReason === NOT_PUSHED_REASON) return [];
   const first = run.threadIds[0];
   if (!first) return [];
   const [row] = await db

@@ -348,6 +348,18 @@ describe('factoryRunGateChips', () => {
     ]);
   });
 
+  test('a parked run whose commits were never pushed says Not pushed, not No commit (#542)', () => {
+    const run = buildFactoryRun({ state: 'waiting_human', failureReason: 'not pushed' });
+    expect(factoryRunGateChips(t, run)).toEqual([
+      expect.objectContaining({
+        id: 'problem',
+        tone: 'fail',
+        label: 'Not pushed',
+        detail: 'Committed in its checkout, but never pushed',
+      }),
+    ]);
+  });
+
   test('a step that failed names the step; a known merge hold gets its own label', () => {
     const failed = buildFactoryRun({
       state: 'waiting_human',

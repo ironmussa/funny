@@ -15,6 +15,7 @@ import {
   factoryRunReasonText,
   factoryRunReviewLabel,
   factoryWaitReasonText,
+  isFactoryRunNotPushed,
   isFactoryRunUnsavedWork,
 } from '@/lib/factory-run-labels';
 
@@ -80,6 +81,28 @@ function isFactoryRunReasonOnChip(run: Pick<FactoryRun, 'state' | 'failureReason
   return run.state === 'waiting_human' && run.failureReason !== null;
 }
 
+/** The problem chip's label: the parked run's kind of problem, else the step that failed. */
+function problemLabel(t: TFunction, run: GateRun, reason: string): string {
+  if (isFactoryRunUnsavedWork(run)) return t('factoryBoard.problem.noCommit', 'No commit');
+  if (isFactoryRunNotPushed(run)) return t('factoryBoard.problem.notPushed', 'Not pushed');
+  const labels = new Map([
+    ['no review', t('factoryBoard.problem.noReview', 'No review')],
+    ['branch history rewritten', t('factoryBoard.problem.rewritten', 'Branch rewritten')],
+    ['review gave no verdict', t('factoryBoard.problem.noVerdict', 'No verdict')],
+  ]);
+  return labels.get(reason) ?? stepFailedLabel(t, run, reason);
+}
+
+/** "<Step> failed" for the step that stopped the run, else a plain "Problem". */
+function stepFailedLabel(t: TFunction, run: GateRun, reason: string): string {
+  // A step's failure is recorded as `<step>[<action>] failed: …`.
+  const step = run.currentStep ?? /^([\w-]+)\[[^\]]*\] failed/.exec(reason)?.[1] ?? null;
+  if (!step) return t('factoryBoard.problem.other', 'Problem');
+  return sentenceCase(
+    t('factoryBoard.problem.stepFailed', '{{step}} failed', { step: step.replace(/[-_]+/g, ' ') }),
+  );
+}
+
 /**
  * What stopped a parked run, as a red chip whose tooltip is the full reason.
  * A risk hold and a failed review have their own chip, so they have none.
@@ -88,23 +111,7 @@ function problemChip(t: TFunction, run: GateRun): FactoryGateChip | null {
   const reason = run.failureReason;
   if (!isFactoryRunReasonOnChip(run) || !reason) return null;
   if (reason === 'high risk' || reason === 'review failed') return null;
-  const labels = new Map([
-    ['no review', t('factoryBoard.problem.noReview', 'No review')],
-    ['branch history rewritten', t('factoryBoard.problem.rewritten', 'Branch rewritten')],
-    ['review gave no verdict', t('factoryBoard.problem.noVerdict', 'No verdict')],
-  ]);
-  // A step's failure is recorded as `<step>[<action>] failed: …`.
-  const step = run.currentStep ?? /^([\w-]+)\[[^\]]*\] failed/.exec(reason)?.[1] ?? null;
-  const label = isFactoryRunUnsavedWork(run)
-    ? t('factoryBoard.problem.noCommit', 'No commit')
-    : (labels.get(reason) ??
-      (step
-        ? sentenceCase(
-            t('factoryBoard.problem.stepFailed', '{{step}} failed', {
-              step: step.replace(/[-_]+/g, ' '),
-            }),
-          )
-        : t('factoryBoard.problem.other', 'Problem')));
+  const label = problemLabel(t, run, reason);
   const detail = plainFactoryReason(
     factoryRunWaitingText(t, run) ?? factoryRunReasonText(t, reason),
   );

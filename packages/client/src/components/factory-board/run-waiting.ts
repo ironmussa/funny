@@ -9,6 +9,7 @@ import type { FactoryRun } from '@/lib/api/factory';
 import {
   factoryRunReasonText,
   factoryWaitReasonText,
+  isFactoryRunNotPushed,
   isFactoryRunUnsavedWork,
 } from '@/lib/factory-run-labels';
 
@@ -47,6 +48,9 @@ function failedText(t: TFunction, run: WaitingRun): string {
 function waitingHumanText(t: TFunction, run: WaitingRun): string {
   if (isFactoryRunUnsavedWork(run)) {
     return t('factoryBoard.waiting.unsaved', 'No commit, but unsaved work in its checkout');
+  }
+  if (isFactoryRunNotPushed(run)) {
+    return t('factoryBoard.waiting.notPushed', 'Committed in its checkout, but never pushed');
   }
   return run.failureReason
     ? factoryRunReasonText(t, run.failureReason)

@@ -828,6 +828,18 @@ describe('factory action provider "no change" outcome', () => {
     expect(released()).toBe(0);
   });
 
+  // Issue #542: the agent committed, then ended its turn before pushing.
+  test('a checkout with only unpushed commits waits as "not pushed"', async () => {
+    const { provider, comments, records, released } = noPr(
+      okAsync<boolean, GithubCallError>(false),
+      [{ threadId: 't1', worktreePath: '/srv/wt/t1', dirtyFileCount: 0, unpushedCommitCount: 1 }],
+    );
+    await provider.createPr({ cwd: '', title: 'Fix it' });
+    expect(comments[0]).toContain('1 unpushed commit(s)');
+    expect(records).toContainEqual({ state: 'waiting_human', failureReason: 'not pushed' });
+    expect(released()).toBe(0);
+  });
+
   test('no pull request but commits ahead: the agent did not open one (an error, no comment)', async () => {
     const { provider, comments, records } = noPr(okAsync<boolean, GithubCallError>(true));
     const result = await provider.createPr({ cwd: '', title: 'Fix it' });

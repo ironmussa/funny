@@ -174,6 +174,12 @@ const MOVING: ReadonlySet<FactoryRun['state']> = new Set([
  */
 const NO_CHANGE_REASON = 'no change';
 
+/**
+ * The reason a run waits for the member with when the agent committed but never
+ * pushed: the commits are in its kept checkout, not on GitHub (#542).
+ */
+const NOT_PUSHED_REASON = 'not pushed';
+
 /** The agent found nothing to change: the run ended, explained on the issue. Not a failure. */
 export function isFactoryRunNoChange(run: Pick<FactoryRun, 'state'>): boolean {
   return run.state === 'no_change';
@@ -182,6 +188,11 @@ export function isFactoryRunNoChange(run: Pick<FactoryRun, 'state'>): boolean {
 /** No commit and no pull request, but unsaved work in the run's checkout: a person looks. */
 export function isFactoryRunUnsavedWork(run: Pick<FactoryRun, 'state' | 'failureReason'>): boolean {
   return run.state === 'waiting_human' && run.failureReason === NO_CHANGE_REASON;
+}
+
+/** Commits in the run's checkout that the agent never pushed, so no pull request: a person looks. */
+export function isFactoryRunNotPushed(run: Pick<FactoryRun, 'state' | 'failureReason'>): boolean {
+  return run.state === 'waiting_human' && run.failureReason === NOT_PUSHED_REASON;
 }
 
 export function isFactoryRunFailed(run: Pick<FactoryRun, 'state' | 'failureReason'>): boolean {
@@ -350,6 +361,8 @@ export function factoryRunReasonText(t: TFunction, reason: string): string {
       );
     case 'review gave no verdict':
       return t('factory.reason.noVerdict', 'The review gave no verdict');
+    case NOT_PUSHED_REASON:
+      return t('factory.reason.notPushed', 'Committed, but never pushed: no pull request');
     default:
       return reason;
   }

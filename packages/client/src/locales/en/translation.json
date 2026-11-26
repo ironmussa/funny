@@ -1915,7 +1915,9 @@
     "noChange": {
       "title": "The agent made no change",
       "body": "It opened no pull request and committed nothing. Its explanation is posted on issue #{{issue}}, now marked for triage: close the issue, or retry the run.",
-      "unsavedBody": "It opened no pull request and committed nothing, but left unsaved work in its checkout, which was kept (its path is on issue #{{issue}}). Follow up on this thread to have it commit and open the pull request, or retry the run."
+      "unsavedBody": "It opened no pull request and committed nothing, but left unsaved work in its checkout, which was kept (its path is on issue #{{issue}}). Follow up on this thread to have it commit and open the pull request, or retry the run.",
+      "notPushedTitle": "The agent did not push its commits",
+      "notPushedBody": "It committed in its checkout but ended its turn before pushing, so there is no pull request. The checkout was kept (its path is on issue #{{issue}}). Follow up on this thread to have it push and open the pull request, or retry the run."
     },
     "risk": {
       "low": "Low risk",
@@ -1925,7 +1927,8 @@
       "noReview": "Not merged: this commit has no review",
       "reviewFailed": "Not merged: its review did not pass",
       "highRisk": "Not merged: high risk, it needs you",
-      "rewritten": "Not merged: the branch was rewritten"
+      "rewritten": "Not merged: the branch was rewritten",
+      "notPushed": "Committed, but never pushed: no pull request"
     },
     "reasonDetail": {
       "highRisk": "This factory merges only low-risk changes by itself, and this one is high risk: {{reasons}}. Review the pull request and merge it yourself, or set \"Merges by itself\" to \"All\" in the factory settings.",
@@ -2162,7 +2165,8 @@
       "noVerdict": "No verdict",
       "noCommit": "No commit",
       "stepFailed": "{{step}} failed",
-      "other": "Problem"
+      "other": "Problem",
+      "notPushed": "Not pushed"
     },
     "waiting": {
       "questions": "Triage asked {{count}} questions on the issue",
@@ -2172,7 +2176,11 @@
       "noChange": "Nothing to change: the issue needs a person",
       "failed": "Failed",
       "unsaved": "No commit, but unsaved work in its checkout",
-      "person": "Waiting for a person"
+      "person": "Waiting for a person",
+      "alreadyDone": "Already done: the factory closed the issue",
+      "alreadyDoneOpen": "Triage found it already done; close the issue if you agree",
+      "trackedBy": "Tracked by {{issues}}",
+      "notPushed": "Committed in its checkout, but never pushed"
     },
     "time": {
       "inStep": "In {{step}} {{duration}}",

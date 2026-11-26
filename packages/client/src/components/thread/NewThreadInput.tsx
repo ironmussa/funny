@@ -1,7 +1,7 @@
 import type { Project } from '@funny/shared';
 import { DEFAULT_PROVIDER } from '@funny/shared/models';
 import type { TFunction } from 'i18next';
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef, useEffect, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -120,7 +120,6 @@ export function NewThreadInput({
   const activeDesignId = useUIStore((s) => s.activeDesignId);
   const issueContext = useUIStore((s) => s.newThreadIssueContext);
   const clearIssueContext = useUIStore((s) => s.clearIssueContext);
-  const initialPrefill = useComposePrefill();
   const cancelNewThreadGlobal = useUIStore((s) => s.cancelNewThread);
   const cancelNewThread = onCancel ?? cancelNewThreadGlobal;
   const setReviewPaneOpen = useUIStore((s) => s.setReviewPaneOpen);
@@ -139,19 +138,14 @@ export function NewThreadInput({
     project?.name,
     setPreviewBranch,
   );
-  // Skip blocking when the user just submitted (created a thread successfully)
-  const justSubmittedRef = useRef(false);
-
-  const { blocker, savingBacklog, handleSaveToBacklog, handleDiscard, handleCancel } =
-    useSaveBacklogOnLeave({
-      effectiveProjectId: effectiveProjectId ?? undefined,
-      defaultThreadMode,
-      latestPromptTextRef,
-      hasContentRef,
-      justSubmittedRef,
-    });
-
-  const [restoredPrompt, setRestoredPrompt] = useState<string | null>(null);
+  const leave = useComposeLeaveGuard({
+    effectiveProjectId,
+    defaultThreadMode,
+    latestPromptTextRef,
+    hasContentRef,
+    issueContext,
+  });
+  const { justSubmittedRef, restoredPrompt, setRestoredPrompt } = leave;
   // The refs are read by the async onSuccess callback, which may close over a
   // stale render.
   const [submittedPrompt, setSubmittedPrompt, submittedPromptRef] = useStateWithRef('');
@@ -216,6 +210,7 @@ export function NewThreadInput({
       cancelNewThread,
       effectiveProjectId,
       isAbandoned,
+      justSubmittedRef,
       loadThreadsForProject,
       navigate,
       onCreated,
@@ -326,6 +321,7 @@ export function NewThreadInput({
       t,
       setSubmittedPrompt,
       setSubmittedMetadata,
+      setRestoredPrompt,
       submittedPromptRef,
       submittedMetadataRef,
     ],
@@ -371,14 +367,14 @@ export function NewThreadInput({
           <IssueContextBanner title={issueContext.title} onDismiss={clearIssueContext} />
         )}
         <PromptInput
-          key={composePromptKey(effectiveProjectId, !!issueContext, initialPrefill)}
+          key={leave.promptKey}
           onSubmit={handleCreate}
           loading={creating}
           isNewThread
           showBacklog
           newThreadContextBar={contextBar}
           projectId={effectiveProjectId || undefined}
-          initialPrompt={issueContext?.prompt ?? initialPrefill ?? restoredPrompt ?? undefined}
+          initialPrompt={leave.initialPrompt}
           onContentChange={handleContentChange}
           onWorktreeModeChange={setIsWorktreeMode}
           onProviderChange={setMcpProvider}
@@ -391,11 +387,11 @@ export function NewThreadInput({
       </div>
 
       <SaveBacklogDialog
-        open={blocker.state === 'blocked'}
-        loading={savingBacklog}
-        onSave={handleSaveToBacklog}
-        onDiscard={handleDiscard}
-        onCancel={handleCancel}
+        open={leave.blocker.state === 'blocked'}
+        loading={leave.savingBacklog}
+        onSave={leave.handleSaveToBacklog}
+        onDiscard={leave.handleDiscard}
+        onCancel={leave.handleCancel}
       />
     </div>
   );
@@ -419,9 +415,62 @@ function composePromptKey(
   projectId: string | null | undefined,
   fromIssue: boolean,
   prefill: string | null | undefined,
+  draftGeneration: number,
 ) {
-  if (fromIssue) return `${projectId}-issue`;
-  return prefill ? `${projectId}-prefill-${prefill.length}` : projectId;
+  if (fromIssue) return `${projectId}-issue-${draftGeneration}`;
+  return prefill
+    ? `${projectId}-prefill-${prefill.length}-${draftGeneration}`
+    : `${projectId}-${draftGeneration}`;
+}
+
+/**
+ * The unsaved-prompt guard (save to backlog / discard when leaving) plus the
+ * composer reset once the prompt left: this form stays mounted under overlays
+ * such as Settings, so the bumped generation remounts PromptInput empty;
+ * otherwise the old text, and the guard, would come back on the next navigation.
+ */
+function useComposeLeaveGuard({
+  effectiveProjectId,
+  defaultThreadMode,
+  latestPromptTextRef,
+  hasContentRef,
+  issueContext,
+}: {
+  effectiveProjectId: string | null | undefined;
+  defaultThreadMode: 'local' | 'worktree';
+  latestPromptTextRef: RefObject<string>;
+  hasContentRef: RefObject<boolean>;
+  issueContext: { prompt?: string } | null | undefined;
+}) {
+  const clearIssueContext = useUIStore((s) => s.clearIssueContext);
+  const initialPrefill = useComposePrefill();
+  // Skip blocking when the user just submitted (created a thread successfully)
+  const justSubmittedRef = useRef(false);
+  const [restoredPrompt, setRestoredPrompt] = useState<string | null>(null);
+  const [draftGeneration, setDraftGeneration] = useState(0);
+  const handleDraftLeft = useCallback(() => {
+    setRestoredPrompt(null);
+    clearIssueContext();
+    setDraftGeneration((n) => n + 1);
+  }, [clearIssueContext]);
+  const guard = useSaveBacklogOnLeave({
+    effectiveProjectId: effectiveProjectId ?? undefined,
+    defaultThreadMode,
+    latestPromptTextRef,
+    hasContentRef,
+    justSubmittedRef,
+    onDraftLeft: handleDraftLeft,
+  });
+  // A prefill is offered once: after a discard the composer starts empty.
+  const prefill = draftGeneration === 0 ? initialPrefill : null;
+  return {
+    ...guard,
+    justSubmittedRef,
+    restoredPrompt,
+    setRestoredPrompt,
+    promptKey: composePromptKey(effectiveProjectId, !!issueContext, prefill, draftGeneration),
+    initialPrompt: issueContext?.prompt ?? prefill ?? restoredPrompt ?? undefined,
+  };
 }
 function shouldNavigateAfterCreate(
   hasCallback: boolean,

@@ -13,6 +13,12 @@ interface Args {
   latestPromptTextRef: RefObject<string>;
   hasContentRef: RefObject<boolean>;
   justSubmittedRef: RefObject<boolean>;
+  /**
+   * Empties the composer once its prompt left it (discarded or saved to the
+   * backlog). The compose form stays mounted under overlays such as Settings,
+   * so without it the old text, and this guard, come back on every navigation.
+   */
+  onDraftLeft: () => void;
 }
 
 /**
@@ -29,10 +35,17 @@ export function useSaveBacklogOnLeave({
   latestPromptTextRef,
   hasContentRef,
   justSubmittedRef,
+  onDraftLeft,
 }: Args) {
   const { t } = useTranslation();
   const loadThreadsForProject = useThreadStore((s) => s.loadThreadsForProject);
   const [savingBacklog, setSavingBacklog] = useState(false);
+
+  const leaveDraft = useCallback(() => {
+    hasContentRef.current = false;
+    latestPromptTextRef.current = '';
+    onDraftLeft();
+  }, [hasContentRef, latestPromptTextRef, onDraftLeft]);
 
   const blocker = useNavigationBlock((currentPath, nextPath) => {
     if (justSubmittedRef.current) return false;
@@ -44,6 +57,7 @@ export function useSaveBacklogOnLeave({
     if (!effectiveProjectId) return;
     const text = latestPromptTextRef.current.trim();
     if (!text) {
+      leaveDraft();
       blocker.proceed?.();
       return;
     }
@@ -61,6 +75,7 @@ export function useSaveBacklogOnLeave({
       }
       await loadThreadsForProject(effectiveProjectId);
       toast.success(t('toast.threadCreated', { title: text.slice(0, 200) }));
+      leaveDraft();
       blocker.proceed?.();
     })().finally(() => setSavingBacklog(false));
   }, [
@@ -69,12 +84,14 @@ export function useSaveBacklogOnLeave({
     loadThreadsForProject,
     blocker,
     latestPromptTextRef,
+    leaveDraft,
     t,
   ]);
 
   const handleDiscard = useCallback(() => {
+    leaveDraft();
     blocker.proceed?.();
-  }, [blocker]);
+  }, [blocker, leaveDraft]);
 
   const handleCancel = useCallback(() => {
     blocker.reset?.();

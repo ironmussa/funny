@@ -35,6 +35,7 @@
     "packages/runtime/src/services/checks/run-cli.ts",
     "packages/client/src/__tests__/dom-environment.ts",
     "scripts/coverage-gate.ts",
+    "packages/chrome-extension/src/content.ts",
     "oxlint.config.ts"
   ]
 }

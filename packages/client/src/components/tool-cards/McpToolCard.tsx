@@ -5,17 +5,14 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { MediaPreview } from '@/components/MediaPreview';
-import { MessageContent } from '@/components/thread/MessageContent';
 import { Button } from '@/components/ui/button';
 import { CopyButton } from '@/components/ui/copy-button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { toRawFileSrc } from '@/lib/raw-file-src';
 import { cn } from '@/lib/utils';
 import { useBrowserPanelStore } from '@/stores/browser-panel-store';
 import { getUrlThreadId } from '@/stores/thread-store';
 
 import { getCodeInput } from './code-input';
-import { ToolValue } from './GenericToolCard';
 import { HighlightedCode } from './HighlightedCode';
 import {
   browserRecordingPath,
@@ -26,10 +23,11 @@ import {
   mcpToolTitle,
   parseMcpResult,
   type McpResult,
-  type McpResultPart,
   type McpToolName,
 } from './mcp-tool';
+import { FormattedMcpResult } from './McpResultParts';
 import { ToolContentArea } from './MobileContentPreview';
+import { ToolValue } from './ToolValue';
 
 interface Props {
   mcp: McpToolName;
@@ -371,42 +369,6 @@ function Section({
   );
 }
 
-function ResultPart({ part, isError }: { part: McpResultPart; isError: boolean }) {
-  if (part.kind === 'image') {
-    return <img src={part.src} alt={part.mimeType} className="max-h-80 max-w-full rounded" />;
-  }
-  if (part.kind === 'resource') {
-    return (
-      <div className="space-y-1">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div className="text-muted-foreground truncate font-mono text-xs">{part.uri}</div>
-          </TooltipTrigger>
-          <TooltipContent>{part.uri}</TooltipContent>
-        </Tooltip>
-        {part.text && <ToolValue value={part.text} />}
-      </div>
-    );
-  }
-  if (part.markdown && !isError) {
-    return (
-      <div className="text-foreground/80 text-sm">
-        <MessageContent content={part.text} />
-      </div>
-    );
-  }
-  return (
-    <pre
-      className={cn(
-        'font-mono text-xs leading-relaxed break-words whitespace-pre-wrap',
-        isError ? 'text-destructive/90' : 'text-foreground/80',
-      )}
-    >
-      {part.text}
-    </pre>
-  );
-}
-
 /** The output as parsed JSON, so it is shown highlighted; the text itself when it is not JSON. */
 function prettyJson(text: string): JsonValue {
   try {
@@ -463,22 +425,5 @@ function McpOutputSection({
         <ToolValue value={raw ? prettyJson(output) : output} />
       )}
     </Section>
-  );
-}
-
-function FormattedMcpResult({
-  result,
-  isError,
-}: {
-  result: NonNullable<ReturnType<typeof parseMcpResult>>;
-  isError: boolean;
-}) {
-  return (
-    <div className="space-y-2">
-      {result.parts.map((part, i) => (
-        <ResultPart key={i} part={part} isError={isError} />
-      ))}
-      {result.structured != null && <ToolValue value={result.structured} />}
-    </div>
   );
 }

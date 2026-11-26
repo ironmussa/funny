@@ -419,9 +419,16 @@ export function enrichTodoWriteInputFromOutput(
  * 1. rawOutput (string or object) — preferred
  * 2. content[] blocks (text, diff, terminal)
  * 3. fallbackTitle as last resort
+ *
+ * Content with an image or a non-text resource wins over both, as an MCP result
+ * envelope, so the client can show it instead of losing it.
  */
 export function extractACPToolOutput(result: ACPToolResultData, fallbackTitle: string): string {
   const { rawOutput, content } = result;
+  // Images and resources only reach the client as an MCP result envelope; as
+  // plain text they would be dropped, whatever rawOutput says.
+  const media = mcpEnvelopeFromAcpContent(content);
+  if (media) return media;
   if (rawOutput != null) {
     if (isString(rawOutput)) return rawOutput;
     // Cursor read_file returns `{ content: "<file text>" }`; unwrap so the
@@ -468,6 +475,78 @@ export function extractACPToolOutput(result: ACPToolResultData, fallbackTitle: s
   }
 
   return fallbackTitle || 'Done';
+}
+
+/** The MCP result block for one ACP ContentBlock, or null when it carries nothing to show. */
+function mcpBlockFromAcp(block: JsonObject): JsonObject | null {
+  if (block.type === 'text')
+    return isString(block.text) ? { type: 'text', text: block.text } : null;
+  if (block.type === 'image') {
+    if (!isString(block.data)) return null;
+    const mimeType = isString(block.mimeType) ? block.mimeType : 'image/png';
+    return { type: 'image', data: block.data, mimeType };
+  }
+  if (block.type === 'resource_link') {
+    return isString(block.uri) ? { type: 'resource_link', uri: block.uri } : null;
+  }
+  if (block.type === 'resource' && isJsonPayloadObject(block.resource)) {
+    const r = block.resource;
+    if (!isString(r.uri)) return null;
+    const resource: JsonObject = { uri: r.uri };
+    const mimeType = isString(r.mimeType) ? r.mimeType : undefined;
+    if (mimeType) resource.mimeType = mimeType;
+    const text = isString(r.text) ? r.text : decodeTextBlob(r.blob, mimeType);
+    if (text != null) resource.text = text;
+    return { type: 'resource', resource };
+  }
+  return null;
+}
+
+/** Whether an ACP ContentBlock is a resource carrying a blob instead of text. */
+function isBlobResource(block: JsonObject): boolean {
+  return (
+    block.type === 'resource' &&
+    isJsonPayloadObject(block.resource) &&
+    !isString(block.resource.text) &&
+    isString(block.resource.blob)
+  );
+}
+
+/** A base64 blob as text when its MIME type is textual (HTML, JSON, …); null otherwise. */
+function decodeTextBlob(blob: JsonValue | undefined, mimeType: string | undefined): string | null {
+  if (!isString(blob) || !mimeType) return null;
+  if (!/^text\/|^application\/(json|xml|javascript)|\+(json|xml)$/i.test(mimeType)) return null;
+  return Buffer.from(blob, 'base64').toString('utf8');
+}
+
+/**
+ * The ACP tool call content as an MCP result envelope (`{"content":[…]}`, what
+ * the client's MCP result renderer reads) when it holds an image or a resource
+ * that is not plain text; null otherwise, so text-only output keeps its old form.
+ */
+function mcpEnvelopeFromAcpContent(content: unknown[] | undefined): string | null {
+  if (!content?.length) return null;
+  const blocks: JsonObject[] = [];
+  let hasMedia = false;
+  for (const c of content) {
+    if (!isJsonPayloadObject(c)) continue;
+    if (c.type === 'diff' || c.type === 'terminal') {
+      const text = c.type === 'diff' ? (c.diff ?? c.newText) : c.output;
+      if (isString(text) && text) blocks.push({ type: 'text', text });
+      continue;
+    }
+    if (c.type !== 'content' || c.content == null) continue;
+    const items: unknown[] = Array.isArray(c.content) ? c.content : [c.content];
+    for (const item of items) {
+      if (!isJsonPayloadObject(item)) continue;
+      const b = mcpBlockFromAcp(item);
+      if (!b) continue;
+      blocks.push(b);
+      // A resource sent as a blob (HTML, binary) is lost by the plain-text path.
+      if (b.type === 'image' || b.type === 'resource_link' || isBlobResource(item)) hasMedia = true;
+    }
+  }
+  return hasMedia ? JSON.stringify({ content: blocks }) : null;
 }
 
 /**

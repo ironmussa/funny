@@ -12,8 +12,10 @@ import { cn } from '@/lib/utils';
 import { useSettingsStore, type Editor } from '@/stores/settings-store';
 
 import { codeFieldLanguage } from './code-input';
-import { HighlightedCode } from './HighlightedCode';
+import { parseMcpResult } from './mcp-tool';
+import { FormattedMcpResult } from './McpResultParts';
 import { ToolContentArea } from './MobileContentPreview';
+import { ToolValue } from './ToolValue';
 
 function isString(value: unknown): value is string {
   return typeof value === 'string';
@@ -67,6 +69,12 @@ export function GenericToolCard({
     () => (output ? ansiConverter.toHtml(output) : null),
     [ansiConverter, output],
   );
+  // ACP agents (Antigravity, Gemini, …) send images and resources as an MCP
+  // result envelope; show those parts instead of the raw JSON.
+  const mediaResult = useMemo(() => {
+    const result = parseMcpResult(output);
+    return result?.parts.some((p) => p.kind !== 'text') ? result : null;
+  }, [output]);
 
   const outputPreview = useMemo(() => {
     if (!output || expanded) return null;
@@ -187,7 +195,11 @@ export function GenericToolCard({
                   <div className="text-muted-foreground mb-1 text-xs font-semibold uppercase">
                     {t('tools.output')}
                   </div>
-                  {name === 'WebFetch' || name === 'WebSearch' ? (
+                  {mediaResult ? (
+                    <div className="border-border/40 bg-background/80 rounded border px-2.5 py-1.5">
+                      <FormattedMcpResult result={mediaResult} isError={mediaResult.isError} />
+                    </div>
+                  ) : name === 'WebFetch' || name === 'WebSearch' ? (
                     <div className="border-border/40 bg-background/80 text-foreground/80 rounded border px-2.5 py-1.5 text-sm">
                       <MessageContent content={output} />
                     </div>
@@ -218,40 +230,6 @@ export function GenericToolCard({
         </ToolContentArea>
       )}
     </div>
-  );
-}
-
-/**
- * One tool input value: JSON highlighted for objects, `language` highlighted
- * for code strings, and ANSI colors for any other string.
- */
-export function ToolValue({ value, language }: { value: unknown; language?: string | null }) {
-  const isJson = !isString(value);
-  const text = useMemo(() => {
-    if (isString(value)) return value;
-    try {
-      return JSON.stringify(value, null, 2) ?? String(value);
-    } catch {
-      return String(value);
-    }
-  }, [value]);
-  const codeLanguage = isJson ? 'json' : (language ?? null);
-  const ansiConverter = useMemo(
-    () => createAnsiConverter({ fg: '#a1a1aa', bg: 'transparent', newline: false }),
-    [],
-  );
-  const html = useMemo(
-    () => (codeLanguage ? null : ansiConverter.toHtml(text)),
-    [ansiConverter, codeLanguage, text],
-  );
-
-  if (codeLanguage) return <HighlightedCode code={text} language={codeLanguage} />;
-
-  return (
-    <pre
-      className="text-foreground/80 font-mono text-xs leading-relaxed break-all whitespace-pre-wrap"
-      dangerouslySetInnerHTML={{ __html: html! }}
-    />
   );
 }
 

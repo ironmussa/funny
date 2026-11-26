@@ -9,6 +9,91 @@ import {
 } from '../agents/acp-tool-input.js';
 
 describe('extractACPToolOutput', () => {
+  test('keeps an image block as an MCP result envelope instead of dropping it', () => {
+    const out = extractACPToolOutput(
+      {
+        rawOutput: 'rendered',
+        content: [
+          { type: 'content', content: { type: 'text', text: 'Chart:' } },
+          { type: 'content', content: { type: 'image', data: 'iVBORw0K', mimeType: 'image/png' } },
+        ],
+      },
+      'render',
+    );
+    expect(JSON.parse(out)).toEqual({
+      content: [
+        { type: 'text', text: 'Chart:' },
+        { type: 'image', data: 'iVBORw0K', mimeType: 'image/png' },
+      ],
+    });
+  });
+
+  test('decodes a textual resource blob (HTML) into the envelope', () => {
+    const html = '<h1>hi</h1>';
+    const out = extractACPToolOutput(
+      {
+        content: [
+          {
+            type: 'content',
+            content: {
+              type: 'resource',
+              resource: {
+                uri: 'ui://chart/1',
+                mimeType: 'text/html',
+                blob: Buffer.from(html).toString('base64'),
+              },
+            },
+          },
+        ],
+      },
+      '',
+    );
+    expect(JSON.parse(out)).toEqual({
+      content: [
+        { type: 'resource', resource: { uri: 'ui://chart/1', mimeType: 'text/html', text: html } },
+      ],
+    });
+  });
+
+  test('keeps a resource_link and a binary resource as their uri', () => {
+    const out = extractACPToolOutput(
+      {
+        content: [
+          { type: 'content', content: { type: 'resource_link', uri: 'file:///tmp/a.pdf' } },
+          {
+            type: 'content',
+            content: {
+              type: 'resource',
+              resource: {
+                uri: 'file:///tmp/b.bin',
+                mimeType: 'application/octet-stream',
+                blob: 'AAAA',
+              },
+            },
+          },
+        ],
+      },
+      '',
+    );
+    expect(JSON.parse(out)).toEqual({
+      content: [
+        { type: 'resource_link', uri: 'file:///tmp/a.pdf' },
+        {
+          type: 'resource',
+          resource: { uri: 'file:///tmp/b.bin', mimeType: 'application/octet-stream' },
+        },
+      ],
+    });
+  });
+
+  test('text-only content keeps its plain-text form', () => {
+    const out = extractACPToolOutput(
+      { content: [{ type: 'content', content: { type: 'text', text: 'plain' } }] },
+      '',
+    );
+    expect(out).toBe('plain');
+  });
+
   test('unwraps Cursor read_file `{ content: string }` rawOutput', () => {
     const out = extractACPToolOutput({ rawOutput: { content: 'hello world' } }, 'Read File');
     expect(out).toBe('hello world');

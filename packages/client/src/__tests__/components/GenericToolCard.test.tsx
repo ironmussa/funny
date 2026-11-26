@@ -15,6 +15,34 @@ mock.module('react-i18next', () => ({
 }));
 
 describe('GenericToolCard', () => {
+  test('shows an image from an ACP agent result instead of its JSON', () => {
+    const output = JSON.stringify({
+      content: [
+        { type: 'text', text: 'Rendered chart' },
+        { type: 'image', data: 'iVBORw0K', mimeType: 'image/png' },
+      ],
+    });
+    renderWithProviders(
+      <GenericToolCard
+        name="Tool"
+        parsed={{}}
+        output={output}
+        label="render_chart"
+        displayTime={null}
+        summary={null}
+        filePath={null}
+        displayPath={null}
+        isTodo={false}
+        todos={null}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Expand render_chart' }));
+    const img = screen.getByRole('img', { name: 'image/png' });
+    expect(img).toHaveAttribute('src', 'data:image/png;base64,iVBORw0K');
+    expect(screen.queryByText(/"type":"image"/)).toBeNull();
+  });
+
   test('keeps the WebFetch link separate from the expand button', () => {
     renderWithProviders(
       <GenericToolCard

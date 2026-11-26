@@ -810,7 +810,32 @@
     },
     "projectFactoryBaseBranch": "Fusionar en",
     "projectFactoryBaseBranchDesc": "La rama de la que parten las ejecuciones y a la que se fusionan sus pull requests. Los flujos se siguen leyendo de la rama por defecto",
-    "projectFactoryBaseBranchDefault": "Por defecto del repositorio"
+    "projectFactoryBaseBranchDefault": "Por defecto del repositorio",
+    "projectFactoryLaneLabelPrefix": "Prefijo de etiqueta de carril",
+    "projectFactoryLaneLabelPrefixDesc": "Un issue necesita tanto la etiqueta de la fábrica ({{label}}) como una etiqueta {{prefix}}<nombre> para ejecutarse en un carril. Fijo mientras existan carriles",
+    "projectFactoryLaneBranchPrefix": "Prefijo de rama de carril",
+    "projectFactoryLaneBranchPrefixDesc": "Prefijo para las ramas de carril creadas desde Fusionar en ({{prefix}}<nombre>). Fijo mientras existan carriles",
+    "projectFactoryLanes": "Carriles",
+    "projectFactoryLanesDesc": "Ramas de funcionalidad en paralelo creadas desde Fusionar en. Un issue necesita la etiqueta de la fábrica ({{label}}) y una etiqueta {{prefix}}<nombre> para unirse a un carril",
+    "projectFactoryLaneStateActive": "Activo",
+    "projectFactoryLaneStateFinished": "Finalizado",
+    "projectFactoryLaneConflict": "Choca con {{lane}} en {{paths}}",
+    "projectFactoryLaneConflictNote": "Chequeo de conflictos: {{note}}",
+    "projectFactoryLaneOpenRuns": "Ejecuciones abiertas: {{runs}}",
+    "projectFactoryLaneSyncIdle": "Inactivo",
+    "projectFactoryLaneSyncMerging": "Sincronizando",
+    "projectFactoryLaneSyncResolving": "Resolviendo conflictos",
+    "projectFactoryLaneSyncChecking": "Comprobando CI",
+    "projectFactoryLaneSyncNeedsHuman": "La sincronización requiere atención",
+    "projectFactoryLaneSyncNow": "Sincronizar ahora",
+    "projectFactoryLaneSyncRetry": "Reintentar sincronización",
+    "projectFactoryLaneSyncRequested": "Sincronización iniciada para el carril {{name}}",
+    "projectFactoryLaneSyncInFlight": "Ya hay una sincronización en curso para el carril {{name}}",
+    "projectFactoryLaneSyncPr": "PR de sincronización #{{number}}",
+    "projectFactoryLaneFinish": "Finalizar carril",
+    "projectFactoryLaneFinishPr": "PR final #{{number}}",
+    "projectFactoryLaneFinished": "PR final #{{number}} abierto para el carril {{name}}",
+    "projectFactoryLaneRemove": "Eliminar carril"
   },
   "skills": {
     "showingFor": "Mostrando skills para:",
@@ -1855,7 +1880,8 @@
       "noFreeSlot": "Esperando un slot libre: el factory ya corre todas las runs que puede a la vez",
       "laneAmbiguous": "Tiene las labels de varias features ({{lanes}}): deja una",
       "laneInvalid": "Su label de feature no se puede usar: {{why}}",
-      "otherBranch": "Esperando a que {{blockers}}, mezclada en otra rama, llegue a esta"
+      "otherBranch": "Esperando a que {{blockers}}, mezclada en otra rama, llegue a esta",
+      "baseIncident": "Esperando a {{branch}}: sus comprobaciones fallaron tras una mezcla de la fábrica"
     },
     "queuePosition": "{{label}} · #{{position}}",
     "issueInFactory": "En tu factory de issues",
@@ -2131,9 +2157,13 @@
     "columnsTooltip": "Mostrar u ocultar columnas",
     "showAllTooltip": "Mostrar todas las runs, también las terminadas",
     "showActiveTooltip": "Mostrar solo las runs que no han terminado",
-    "clearFiltersTooltip": "Quitar los filtros de proyecto y estado"
+    "clearFiltersTooltip": "Quitar los filtros de proyecto, estado y carril",
+    "filterLane": "Carril",
+    "noLane": "Sin carril"
   },
   "factoryBoard": {
+    "laneConflicts": "Choca con {{lanes}}",
+    "laneDetail": "Rama del carril: {{branch}}",
     "column": {
       "queue": "Cola",
       "triage": "Triage",
@@ -2181,7 +2211,8 @@
       "noFreeSlot": "Sin hueco libre",
       "laneAmbiguous": "Varias labels de feature",
       "laneInvalid": "Label de feature no utilizable",
-      "otherBranch": "Cuando {{issues}} llegue a esta rama"
+      "otherBranch": "Cuando {{issues}} llegue a esta rama",
+      "baseIncident": "{{branch}} está en rojo"
     },
     "problem": {
       "noReview": "Sin review",

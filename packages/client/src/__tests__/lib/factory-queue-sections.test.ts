@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { buildFactoryRun } from '@/data/factory/testing';
 import type { FactoryRun } from '@/lib/api/factory';
 import {
+  FACTORY_NO_LANE,
   factoryRunSteps,
   filterFactoryRuns,
   groupFactoryRuns,
@@ -112,5 +113,37 @@ describe('filterFactoryRuns (the factory view)', () => {
     expect(ids('', { projectIds: ['p2'] })).toEqual(['b']);
     expect(ids('', { projectIds: ['p1', 'p2'] })).toEqual(['b', 'c', 'a']);
     expect(ids('', { projectIds: ['p1'], states: ['merged'] })).toEqual(['a']);
+  });
+});
+
+describe('filterFactoryRuns lanes (openspec factory-lanes)', () => {
+  const runs = [
+    { ...buildFactoryRun({ id: 'pay', state: 'working', lane: 'payments' }), projectId: 'p1' },
+    { ...buildFactoryRun({ id: 'auth', state: 'working', lane: 'auth' }), projectId: 'p1' },
+    { ...buildFactoryRun({ id: 'main', state: 'working', lane: null }), projectId: 'p1' },
+  ];
+  const ids = (lanes: string[] | undefined, search = '') =>
+    filterFactoryRuns(runs, {
+      search,
+      caseSensitive: false,
+      states: new Set(),
+      projectIds: new Set(),
+      lanes: lanes && new Set(lanes),
+      projectNameById: new Map(),
+    }).map((run) => run.id);
+
+  test('keeps every lane without a lane filter', () => {
+    expect(ids(undefined)).toEqual(['pay', 'auth', 'main']);
+    expect(ids([])).toEqual(['pay', 'auth', 'main']);
+  });
+
+  test('keeps only the chosen lanes, and the unlaned runs under the no-lane value', () => {
+    expect(ids(['payments'])).toEqual(['pay']);
+    expect(ids([FACTORY_NO_LANE])).toEqual(['main']);
+    expect(ids(['auth', FACTORY_NO_LANE])).toEqual(['auth', 'main']);
+  });
+
+  test('the search matches the lane name', () => {
+    expect(ids(undefined, 'paym')).toEqual(['pay']);
   });
 });

@@ -5,6 +5,7 @@
 import { BarChart3, KanbanSquare, List, SlidersHorizontal } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import { FilterDropdown } from '@/components/all-threads/FilterDropdown';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -18,6 +19,7 @@ import {
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useTooltipMenu } from '@/hooks/use-tooltip-menu';
+import { FACTORY_NO_LANE } from '@/lib/factory-run-labels';
 import { type FactoryViewLayout, useFactoryViewStore } from '@/stores/factory-view-store';
 
 import { FACTORY_BOARD_COLUMNS } from './board-columns';
@@ -81,6 +83,36 @@ export function FactoryBoardColumnsMenu() {
         )}
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+export function FactoryLaneFilter({
+  lanes,
+  selected,
+  onToggle,
+  counts,
+}: {
+  /** Distinct lane names present in the runs, sorted. */
+  lanes: readonly string[];
+  selected: Set<string>;
+  onToggle: (lane: string) => void;
+  counts: Record<string, number>;
+}) {
+  const { t } = useTranslation();
+  if (lanes.length === 0 && selected.size === 0) return null;
+  const options = [
+    ...lanes.map((name) => ({ value: name, label: name })),
+    { value: FACTORY_NO_LANE, label: t('factoryView.noLane', 'No lane') },
+  ];
+  return (
+    <FilterDropdown
+      testId="factory-view-lane-filter"
+      label={t('factoryView.filterLane', 'Lane')}
+      options={options}
+      selected={selected}
+      onToggle={onToggle}
+      counts={counts}
+    />
   );
 }
 

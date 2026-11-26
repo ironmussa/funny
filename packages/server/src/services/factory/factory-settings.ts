@@ -43,8 +43,9 @@ import { z } from 'zod';
 
 import { db } from '../../db/index.js';
 import { factoryLanes, factoryRuns, factorySettings, projects } from '../../db/schema.js';
+import { serverActivities, type ServerActivities } from '../activities/server-activities.js';
 import { requireProjectAccess } from '../project-access.js';
-import { LANE_SYNC_TRANSITIONS } from './factory-lane-sync.js';
+import { LANE_SYNC_TRANSITIONS, syncActivityInput } from './factory-lane-sync.js';
 import { createFactoryLanesRepository, type FactoryLaneView } from './factory-lanes.js';
 import { TERMINAL_STATES } from './factory-runs-model.js';
 import { awaitsPullRequest } from './factory-runs.js';
@@ -629,7 +630,7 @@ export function createFactorySettingsService(
 const lanes = createFactoryLanesRepository();
 
 /** A lane of the caller's own factory by name, or `not-found`. */
-const ownLane = (
+export const ownLane = (
   userId: string,
   projectId: string,
   name: string,
@@ -655,6 +656,7 @@ export function requestLaneSync(
   userId: string,
   projectId: string,
   name: string,
+  activities: Pick<ServerActivities, 'recordServerActivity'> = serverActivities,
 ): ResultAsync<'retried' | 'requested' | 'in-flight', FactorySettingsError> {
   return ownLane(userId, projectId, name).andThen((lane) => {
     if (lane.state !== 'active') {
@@ -667,7 +669,30 @@ export function requestLaneSync(
       return lanes
         .moveSync(lane.id, LANE_SYNC_TRANSITIONS.retry, { syncError: null, syncAttempts: 0 })
         .mapErr(storageOf)
-        .map(() => 'retried' as const);
+        .andThen((moved) =>
+          ResultAsync.fromSafePromise(
+            moved
+              ? activities
+                  .recordServerActivity(
+                    {
+                      kind: 'factory.lane_sync',
+                      userId,
+                      projectId,
+                      title: `Lane ${lane.name} sync: retry -> merging`,
+                      input: syncActivityInput(
+                        lane,
+                        'retry',
+                        'merging',
+                        lane.syncPrNumber ?? undefined,
+                      ),
+                      origin: 'user',
+                    },
+                    { ok: true, effects: [] },
+                  )
+                  .then(() => 'retried' as const)
+              : Promise.resolve('retried' as const),
+          ),
+        );
     }
     if (lane.syncState !== 'idle') return okAsync('in-flight' as const);
     return lanes
@@ -697,7 +722,9 @@ const ownFactoryId = (
   ).map(([row]) => row?.id ?? null);
 
 /** The runs admitted to a lane that have not ended, named as the board names them. */
-const openRunsOfLane = (lane: FactoryLaneView): ResultAsync<string[], FactorySettingsError> =>
+export const openRunsOfLane = (
+  lane: FactoryLaneView,
+): ResultAsync<string[], FactorySettingsError> =>
   ResultAsync.fromPromise(
     db
       .select({ id: factoryRuns.id, issueNumber: factoryRuns.issueNumber })

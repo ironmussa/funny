@@ -812,7 +812,32 @@
     },
     "projectFactoryBaseBranch": "Merge into",
     "projectFactoryBaseBranchDesc": "The branch runs start from and their pull requests merge into. Flows are still read from the default branch",
-    "projectFactoryBaseBranchDefault": "Repository default"
+    "projectFactoryBaseBranchDefault": "Repository default",
+    "projectFactoryLaneLabelPrefix": "Lane label prefix",
+    "projectFactoryLaneLabelPrefixDesc": "An issue needs both the factory label ({{label}}) and a {{prefix}}<name> label to run in a lane. Fixed while lanes exist",
+    "projectFactoryLaneBranchPrefix": "Lane branch prefix",
+    "projectFactoryLaneBranchPrefixDesc": "Prefix for lane branches created from Merge into ({{prefix}}<name>). Fixed while lanes exist",
+    "projectFactoryLanes": "Lanes",
+    "projectFactoryLanesDesc": "Parallel feature branches created from Merge into. An issue needs the factory label ({{label}}) and a {{prefix}}<name> label to join a lane",
+    "projectFactoryLaneStateActive": "Active",
+    "projectFactoryLaneStateFinished": "Finished",
+    "projectFactoryLaneConflict": "Conflicts with {{lane}} on {{paths}}",
+    "projectFactoryLaneConflictNote": "Conflict check: {{note}}",
+    "projectFactoryLaneOpenRuns": "Open runs: {{runs}}",
+    "projectFactoryLaneSyncIdle": "Idle",
+    "projectFactoryLaneSyncMerging": "Syncing",
+    "projectFactoryLaneSyncResolving": "Resolving conflicts",
+    "projectFactoryLaneSyncChecking": "Checking CI",
+    "projectFactoryLaneSyncNeedsHuman": "Sync needs attention",
+    "projectFactoryLaneSyncNow": "Sync now",
+    "projectFactoryLaneSyncRetry": "Retry sync",
+    "projectFactoryLaneSyncRequested": "Sync started for lane {{name}}",
+    "projectFactoryLaneSyncInFlight": "Sync already in progress for lane {{name}}",
+    "projectFactoryLaneSyncPr": "Sync PR #{{number}}",
+    "projectFactoryLaneFinish": "Finish lane",
+    "projectFactoryLaneFinishPr": "Finish PR #{{number}}",
+    "projectFactoryLaneFinished": "Opened finish PR #{{number}} for lane {{name}}",
+    "projectFactoryLaneRemove": "Remove lane"
   },
   "skills": {
     "showingFor": "Showing skills for:",
@@ -1862,7 +1887,8 @@
       "noFreeSlot": "Waiting for a free slot: the factory is running as many runs as it may",
       "laneAmbiguous": "It carries the labels of several features ({{lanes}}): leave one",
       "laneInvalid": "Its feature label cannot be used: {{why}}",
-      "otherBranch": "Waiting for {{blockers}}, merged into another branch, to reach this one"
+      "otherBranch": "Waiting for {{blockers}}, merged into another branch, to reach this one",
+      "baseIncident": "Waiting for {{branch}}: its checks turned red after a factory merge"
     },
     "queuePosition": "{{label}} · #{{position}}",
     "issueInFactory": "In your issue factory",
@@ -2138,9 +2164,13 @@
     "columnsTooltip": "Show or hide columns",
     "showAllTooltip": "Show every run, ended ones too",
     "showActiveTooltip": "Show only the runs that have not ended",
-    "clearFiltersTooltip": "Remove the project and state filters"
+    "clearFiltersTooltip": "Remove the project, state and lane filters",
+    "filterLane": "Lane",
+    "noLane": "No lane"
   },
   "factoryBoard": {
+    "laneConflicts": "Conflicts with {{lanes}}",
+    "laneDetail": "Lane branch: {{branch}}",
     "column": {
       "queue": "Queue",
       "triage": "Triage",
@@ -2188,7 +2218,8 @@
       "noFreeSlot": "No free slot",
       "laneAmbiguous": "Several feature labels",
       "laneInvalid": "Feature label not usable",
-      "otherBranch": "After {{issues}} reaches this branch"
+      "otherBranch": "After {{issues}} reaches this branch",
+      "baseIncident": "{{branch}} is red"
     },
     "problem": {
       "noReview": "No review",

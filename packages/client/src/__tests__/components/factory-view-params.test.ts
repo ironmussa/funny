@@ -27,4 +27,15 @@ describe('factory view search parameters', () => {
     });
     expect(next.toString()).toBe('run=r1&project=p1%2Cp2&view=board');
   });
+
+  // openspec factory-lanes: the lane filter travels in the link like the others.
+  test('reads and writes the lane filter, the no-lane value included', () => {
+    const filters = parseFactoryViewParams(new URLSearchParams('lane=payments,~none'));
+    expect([...filters.lanes]).toEqual(['payments', '~none']);
+    const next = applyFactoryViewPatch(new URLSearchParams('lane=payments'), {
+      lanes: new Set(['auth']),
+    });
+    expect(next.get('lane')).toBe('auth');
+    expect(applyFactoryViewPatch(next, { lanes: new Set() }).has('lane')).toBe(false);
+  });
 });

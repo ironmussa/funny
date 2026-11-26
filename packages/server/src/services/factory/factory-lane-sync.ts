@@ -38,6 +38,7 @@
 import type { CiState } from '@funny/core/github-app';
 
 import { log } from '../../lib/logger.js';
+import type { ServerActivities } from '../activities/server-activities.js';
 import type { FactoryLaneBranches } from './factory-branch-reads.js';
 import type { FactoryRepoReader } from './factory-github.js';
 import type { FactoryLanesRepository, FactoryLaneView } from './factory-lanes.js';
@@ -148,6 +149,8 @@ export interface LaneSyncDeps {
     /** The thread's status and when its last turn ended, or null when it is gone. */
     turn(threadId: string): Promise<{ status: string; completedAt: string | null } | null>;
   };
+  /** Records each sync state transition (track-funny-actions). */
+  activities?: Pick<ServerActivities, 'recordServerActivity'>;
   now?: () => number;
 }
 
@@ -296,29 +299,74 @@ function createLaneSyncAgent({ deps, now, move, failed, contains }: LaneSyncAgen
   return { openSyncPullRequest, askAgent, whenResolving };
 }
 
+/** What a `factory.lane_sync` activity records. */
+export type LaneSyncActivityInput = {
+  lane: string;
+  branch: string;
+  event: string;
+  to: LaneSyncState;
+  prNumber?: number;
+};
+
+/** The `factory.lane_sync` activity's input; `prNumber` only when the sync has a pull request. */
+export function syncActivityInput(
+  lane: Pick<FactoryLaneView, 'name' | 'branch'>,
+  event: string,
+  to: LaneSyncState,
+  prNumber: number | undefined,
+): LaneSyncActivityInput {
+  const input: LaneSyncActivityInput = { lane: lane.name, branch: lane.branch, event, to };
+  if (prNumber !== undefined) input.prNumber = prNumber;
+  return input;
+}
+
+/** Move a lane's sync with `event` (compare-and-set); log and record the move when it won. */
+async function moveLaneSync(
+  deps: LaneSyncDeps,
+  target: LaneSyncTarget,
+  lane: FactoryLaneView,
+  event: LaneSyncEvent,
+  changes: Parameters<FactoryLanesRepository['moveSync']>[2] = {},
+): Promise<boolean> {
+  const moved = await deps.lanes.moveSync(lane.id, LANE_SYNC_TRANSITIONS[event], changes);
+  const won = moved.isOk() && moved.value;
+  if (won) {
+    const to = LANE_SYNC_TRANSITIONS[event].to;
+    log.info('Issue factory lane sync moved', {
+      namespace: 'factory',
+      factoryId: target.factoryId,
+      lane: lane.name,
+      event,
+      to,
+      error: changes.syncError ?? undefined,
+    });
+    const prNumber = changes.syncPrNumber ?? lane.syncPrNumber ?? undefined;
+    await deps.activities?.recordServerActivity(
+      {
+        kind: 'factory.lane_sync',
+        userId: target.reader.ownerId,
+        projectId: target.reader.projectId,
+        title: `Lane ${lane.name} sync: ${event} -> ${to}`,
+        input: syncActivityInput(lane, event, to, prNumber),
+        origin: 'system',
+      },
+      changes.syncError
+        ? { ok: false, error: changes.syncError, effects: [] }
+        : { ok: true, effects: [] },
+    );
+  }
+  return won;
+}
+
 export function createLaneSync(deps: LaneSyncDeps, target: LaneSyncTarget) {
   const now = deps.now ?? Date.now;
   const { repo } = target.reader;
 
-  async function move(
+  const move = (
     lane: FactoryLaneView,
     event: LaneSyncEvent,
     changes: Parameters<FactoryLanesRepository['moveSync']>[2] = {},
-  ): Promise<boolean> {
-    const moved = await deps.lanes.moveSync(lane.id, LANE_SYNC_TRANSITIONS[event], changes);
-    const won = moved.isOk() && moved.value;
-    if (won) {
-      log.info('Issue factory lane sync moved', {
-        namespace: 'factory',
-        factoryId: target.factoryId,
-        lane: lane.name,
-        event,
-        to: LANE_SYNC_TRANSITIONS[event].to,
-        error: changes.syncError ?? undefined,
-      });
-    }
-    return won;
-  }
+  ) => moveLaneSync(deps, target, lane, event, changes);
 
   const failed = (lane: FactoryLaneView, why: string) => move(lane, 'fail', { syncError: why });
 

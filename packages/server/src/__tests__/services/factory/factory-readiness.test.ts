@@ -6,9 +6,11 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   ciRunsOnQueueBranches,
+  laneCiWarning,
   lastMergeDriver,
   medianOf,
   readinessOf,
+  workflowRunsOnLaneBranch,
   workflowRunsOnQueueBranches,
 } from '../../../services/factory/factory-readiness.js';
 
@@ -147,5 +149,35 @@ describe('readiness inputs', () => {
     expect(lastMergeDriver([])).toBeNull();
     expect(lastMergeDriver([run(0, 0), run(2, 1)])).toBe('weave');
     expect(lastMergeDriver([run(1, 0), run(2, 2)])).toBe('git');
+  });
+});
+
+describe('CI on a lane branch (openspec factory-lanes 4.5)', () => {
+  test('pull_request or push filters that include the lane branch produce no warning', () => {
+    expect(
+      workflowRunsOnLaneBranch(
+        "on:\n  pull_request:\n    branches: [main, 'feature/**']\n",
+        'feature/auth',
+      ),
+    ).toBe(true);
+    expect(workflowRunsOnLaneBranch('on:\n  pull_request:\n', 'feature/auth')).toBe(true);
+    expect(
+      workflowRunsOnLaneBranch("on:\n  push:\n    branches: ['feature/*']\n", 'feature/auth'),
+    ).toBe(true);
+    expect(
+      laneCiWarning(["on:\n  pull_request:\n    branches: [main, 'feature/**']\n"], 'feature/auth'),
+    ).toBeNull();
+    expect(laneCiWarning([], 'feature/auth')).toBeNull();
+    expect(laneCiWarning(null, 'feature/auth')).toBeNull();
+  });
+
+  test('workflows whose pull_request and push filters exclude the lane branch produce a warning', () => {
+    const mainOnly = 'on:\n  pull_request:\n    branches: [main]\n  push:\n    branches: [main]\n';
+    expect(workflowRunsOnLaneBranch(mainOnly, 'feature/auth')).toBe(false);
+    expect(laneCiWarning([mainOnly], 'feature/auth')).toContain('feature/auth');
+
+    const ignored = "on:\n  pull_request:\n    branches-ignore: ['feature/**']\n";
+    expect(workflowRunsOnLaneBranch(ignored, 'feature/auth')).toBe(false);
+    expect(laneCiWarning([ignored], 'feature/auth')).toContain('feature/auth');
   });
 });

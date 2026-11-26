@@ -5,6 +5,7 @@ import type {
   FactoryFlowOption,
   FactoryIssueBlockers,
   FactoryIssuelessFlow,
+  FactoryLane,
   FactoryQueueRun,
   FactoryReadiness,
   FactoryRun,
@@ -288,6 +289,28 @@ export function factoryTriggersQuery(projectId: string) {
 export function refreshFactoryTriggers(projectId: string, layer: DataLayer = getDataLayer()): void {
   if (layer.disposed) return;
   void layer.queryClient.invalidateQueries({ queryKey: factoryTriggersKey(projectId) });
+}
+
+const factoryLanesKey = (projectId: string) => ['factory', 'lanes', projectId] as const;
+
+/**
+ * The lanes of the caller's factory (openspec factory-lanes). The watcher
+ * advances syncs and marks lanes finished without realtime events, so a reader
+ * polls while shown.
+ */
+export function factoryLanesQuery(projectId: string) {
+  return {
+    queryKey: factoryLanesKey(projectId),
+    queryFn: (): Promise<FactoryLane[]> => unwrapResult(factoryApi.listLanes(projectId)),
+    staleTime: 10_000,
+    refetchInterval: 15_000,
+  };
+}
+
+/** Read the lanes again after a sync, finish or removal. */
+export function refreshFactoryLanes(projectId: string, layer: DataLayer = getDataLayer()): void {
+  if (layer.disposed) return;
+  void layer.queryClient.invalidateQueries({ queryKey: factoryLanesKey(projectId) });
 }
 
 /**

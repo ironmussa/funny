@@ -34,7 +34,11 @@ import {
 import { type FactoryFlow, type FactoryFlowError } from './factory-flow.js';
 import { type FactoryGithubPort } from './factory-github.js';
 import { type FactoryIncidentsRepository } from './factory-incidents.js';
-import { createFactoryRunsRepository, IN_FLIGHT_STATES } from './factory-runs.js';
+import {
+  createFactoryRunsRepository,
+  IN_FLIGHT_STATES,
+  type FactoryRunView,
+} from './factory-runs.js';
 import { setFactoryBlocked, type WatchedFactory } from './factory-settings.js';
 import { closeSupersededPullRequests } from './factory-superseded.js';
 import {
@@ -170,6 +174,50 @@ export function cleanupMergedFor(
 }
 
 /**
+ * Close the issue of a run that merged into a lane's branch, with a comment
+ * naming the branch (openspec factory-lanes, D9). GitHub acts on `Closes #N`
+ * only when a pull request merges into the default branch, so a lane's task
+ * would stay open after its work merged. A run on the factory's own branch is
+ * left to GitHub, as before. An issue that is closed already gets no second
+ * comment. Best effort: a failure is logged, and the run stays merged.
+ */
+async function closeLaneIssue(
+  factory: WatchedFactory,
+  repo: string,
+  run: Pick<FactoryRunView, 'id' | 'lane' | 'baseBranch'> & { issueNumber: number },
+): Promise<void> {
+  if (!deps || !run.lane || !run.baseBranch || !deps.github.closeIssue) return;
+  const github = deps.github;
+  const reader = { repo, ownerId: factory.userId, projectId: factory.projectId };
+  const issue = await github.getIssue(reader, run.issueNumber);
+  if (issue.isOk() && issue.value.state === 'closed') return;
+  const base = factory.baseBranch || 'the base branch';
+  const told = await github.commentOnIssue(
+    reader,
+    run.issueNumber,
+    `Merged into \`${run.baseBranch}\`, the branch of the lane \`${run.lane}\`. It reaches \`${base}\` when the lane is finished.`,
+  );
+  const closed = await github.closeIssue!(reader, run.issueNumber);
+  const failure = closed.isErr() ? closed.error.message : told.isErr() ? told.error.message : null;
+  if (failure) {
+    log.warn('Issue factory could not close the issue of a run merged into a lane', {
+      namespace: 'factory',
+      runId: run.id,
+      issue: run.issueNumber,
+      lane: run.lane,
+      error: failure,
+    });
+    return;
+  }
+  log.info('Issue factory closed the issue of a run merged into a lane', {
+    namespace: 'factory',
+    runId: run.id,
+    issue: run.issueNumber,
+    lane: run.lane,
+  });
+}
+
+/**
  * The run `runId` merged: close the pull requests of the issue's earlier runs
  * that ended without merging (openspec factory-close-superseded-prs), as the
  * factory's enabler on `repo`. Best effort: it logs and never throws.
@@ -185,6 +233,7 @@ export async function closeSupersededFor(
   try {
     const merged = (await repository.get(runId)).unwrapOr(null);
     if (!merged || merged.state !== 'merged' || merged.issueNumber === null) return;
+    await closeLaneIssue(factory, repo, { ...merged, issueNumber: merged.issueNumber });
     const all = await repository.list(merged.factoryId);
     if (all.isErr()) return;
     const outcomes = await closeSupersededPullRequests(

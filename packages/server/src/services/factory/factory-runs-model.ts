@@ -86,6 +86,7 @@ const WAIT_REASON_SCHEMA = z.object({
     'lane-ambiguous',
     'lane-invalid',
     'blocker-on-other-branch',
+    'base-incident',
   ]),
   blockers: z.array(z.number().int()),
   detail: z.string().optional(),

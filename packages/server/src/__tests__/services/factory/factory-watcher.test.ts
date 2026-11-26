@@ -15,6 +15,7 @@ import { log } from '../../../lib/logger.js';
 import { NO_CHANGE_LINE } from '../../../services/factory/factory-action-provider.js';
 import { noteOwnerFollowUp } from '../../../services/factory/factory-follow-ups.js';
 import type { FactoryGithubPort, FactoryIssue } from '../../../services/factory/factory-github.js';
+import { createFactoryLanesRepository } from '../../../services/factory/factory-lanes.js';
 import type {
   FactoryMergeOutcome,
   FactoryProofCheck,
@@ -146,6 +147,8 @@ interface GithubScript {
   closed?: number[];
   /** The checks of the base branch (default: green). */
   baseCi?: CiState;
+  /** Per-branch CI checks override (falls back to `baseCi`, then green). */
+  baseCiByBranch?: Record<string, CiState>;
   /** The factory's "merge into" branch as GitHub reads resolve it now (default `main`). */
   mergeInto?: { branch: string };
   /** The commit each merged pull request made, by number. */
@@ -154,6 +157,8 @@ interface GithubScript {
   contains?: Record<string, string[]>;
   /** The repository as a lane sync sees it: branch heads. With it, the factory syncs its lanes. */
   laneSync?: { heads: Record<string, string>; conflict?: boolean };
+  /** GitHub refuses to close an issue. */
+  closeRefused?: boolean;
   /** GitHub refuses to make a branch. */
   branchesRefused?: boolean;
   /** Each issue's labels as GitHub reads the issue back. */
@@ -198,6 +203,8 @@ type FakeGithub = FactoryGithubPort & {
   mergeCommitReads: number;
   /** What a lane sync did to branches and pull requests, in order. */
   syncCalls: string[];
+  /** Issues the factory closed. */
+  closedIssues: number[];
 };
 
 function fakeGithub(
@@ -220,6 +227,12 @@ function fakeGithub(
     baseBranches: [],
     ensuredBranches: [],
     syncCalls: [],
+    closedIssues: [],
+    closeIssue: (_reader: unknown, number: number) => {
+      if (script.closeRefused) return errAsync({ message: 'GitHub answered 403', status: 403 });
+      port.closedIssues.push(number);
+      return okAsync(undefined);
+    },
     mergeCommitReads: 0,
     mergeCommit: (_reader: unknown, number: number) => {
       port.mergeCommitReads += 1;
@@ -268,7 +281,14 @@ function fakeGithub(
         ? errAsync({ message: 'GitHub answered 500', status: 500 })
         : okAsync(blockers);
     },
-    listDefaultBranchDir: () => okAsync([]),
+    listDefaultBranchDir: (_reader: unknown, path: string) => {
+      const prefix = path.endsWith('/') ? path : `${path}/`;
+      const names = Object.keys(script.files ?? {})
+        .filter((file) => file.startsWith(prefix))
+        .map((file) => file.slice(prefix.length))
+        .filter((name) => !name.includes('/'));
+      return okAsync(names);
+    },
     readDefaultBranchFile: (_reader: unknown, path: string) => {
       port.fileReads.push(path);
       const repoFlows = script.builtInFlow ? {} : proofReadyFlowFiles();
@@ -287,8 +307,11 @@ function fakeGithub(
       port.baseBranches.push(branch);
       return okAsync(branch);
     },
-    branchState: () =>
-      okAsync({ sha: 'base-sha', ci: script.baseCi ?? { kind: 'green' as const } }),
+    branchState: (_reader: unknown, branch: string) =>
+      okAsync({
+        sha: 'base-sha',
+        ci: script.baseCiByBranch?.[branch] ?? script.baseCi ?? { kind: 'green' as const },
+      }),
     // Merge commits whose checks are unknown: every recent merge stays a suspect.
     mergeCommitState: () => okAsync(null),
     issueText: (_reader: unknown, issue: number) =>
@@ -1070,6 +1093,60 @@ describe('factory watcher', () => {
       expect(run).toMatchObject({ baseBranch: 'dev', lane: null });
       expect(github.ensuredBranches).toEqual([]);
     });
+
+    test('creating a lane stores a CI warning when workflow branch filters exclude its branch (4.5)', async () => {
+      const factoryId = await enableFactory({ maxConcurrent: 5 });
+      const poll = fakePoll();
+      const github = fakeGithub('acme/repo', [three[0]!], {
+        mergeInto: { branch: 'dev' },
+        labels: { 1: ['feature:payments'] },
+        files: {
+          '.github/workflows/ci.yml':
+            'on:\n  pull_request:\n    branches: [main, dev]\n  push:\n    branches: [main, dev]\n',
+        },
+      });
+      await startWatcherWithProof({
+        ports,
+        github,
+        createPoll: poll.createPoll,
+        launch: fakeLauncher().launch,
+        resolveRuntime,
+        waitThread: pendingThreads,
+      });
+      await poll.ticks[0]!();
+
+      const lane = (
+        await createFactoryLanesRepository().find(factoryId, 'payments')
+      )._unsafeUnwrap();
+      expect(lane?.ciWarning).toContain('feature/payments');
+    });
+
+    test('creating a lane stores no CI warning when a workflow filter includes its branch (4.5)', async () => {
+      const factoryId = await enableFactory({ maxConcurrent: 5 });
+      const poll = fakePoll();
+      const github = fakeGithub('acme/repo', [three[0]!], {
+        mergeInto: { branch: 'dev' },
+        labels: { 1: ['feature:payments'] },
+        files: {
+          '.github/workflows/ci.yml':
+            "on:\n  pull_request:\n    branches: [main, dev, 'feature/**']\n",
+        },
+      });
+      await startWatcherWithProof({
+        ports,
+        github,
+        createPoll: poll.createPoll,
+        launch: fakeLauncher().launch,
+        resolveRuntime,
+        waitThread: pendingThreads,
+      });
+      await poll.ticks[0]!();
+
+      const lane = (
+        await createFactoryLanesRepository().find(factoryId, 'payments')
+      )._unsafeUnwrap();
+      expect(lane?.ciWarning).toBeNull();
+    });
   });
 
   test('a run sent back to the queue and admitted again keeps its first base branch', async () => {
@@ -1478,6 +1555,67 @@ describe('factory watcher', () => {
       await poll.ticks[0]!();
       expect(launcher.calls.filter(isImplementerLaunch)).toHaveLength(1);
       expect(sentinels()).toEqual([]);
+    });
+
+    // openspec factory-lanes, D6: an incident on one lane holds only that lane.
+    test('an incident on feature/a holds feature:a while admitting feature:b and unlaned issues', async () => {
+      const factoryId = await enableFactory({ maxConcurrent: 4 });
+      const runsRepo = createFactoryRunsRepository();
+      const merged = (
+        await runsRepo.start({
+          factoryId,
+          issueNumber: 1,
+          baseBranch: 'feature/a',
+          lane: 'a',
+        })
+      )._unsafeUnwrap();
+      await runsRepo.updateInFlight(merged.id, {
+        state: 'merged',
+        prUrl: 'https://github.com/acme/repo/pull/101',
+      });
+      const poll = fakePoll();
+      const launcher = fakeLauncher();
+      await startWatcherWithProof({
+        ports,
+        github: fakeGithub(
+          'acme/repo',
+          [
+            { number: 2, title: 'lane-a', url: 'u/2' },
+            { number: 3, title: 'lane-b', url: 'u/3' },
+            { number: 4, title: 'plain', url: 'u/4' },
+          ],
+          {
+            labels: { 2: ['feature:a'], 3: ['feature:b'], 4: [] },
+            baseCiByBranch: {
+              'feature/a': red,
+              'feature/b': { kind: 'green' },
+              main: { kind: 'green' },
+            },
+          },
+        ),
+        createPoll: poll.createPoll,
+        launch: launcher.launch,
+        resolveRuntime,
+        waitThread: pendingThreads,
+      });
+
+      await poll.ticks[0]!();
+
+      const startedTitles = launcher.calls
+        .filter(isImplementerLaunch)
+        .map((call) => call.body.title);
+      expect(startedTitles).toEqual(['[Factory] #3 lane-b', '[Factory] #4 plain']);
+
+      const runs = (await createFactoryRunsRepository().list(factoryId))._unsafeUnwrap();
+      const held = runs.find((r) => r.issueNumber === 2);
+      expect(held).toMatchObject({
+        state: 'requested',
+        waitReason: { kind: 'base-incident', blockers: [], detail: 'feature/a' },
+      });
+
+      // The factory's own `main` base is healthy, so its blockedReason is not set.
+      const settings = (await createFactorySettingsService().get('alice', 'p1'))._unsafeUnwrap();
+      expect(settings?.blockedReason).toBeNull();
     });
   });
 
@@ -2128,6 +2266,43 @@ describe('factory flow', () => {
       expect(rows('workflow_concurrency_waiters')).toHaveLength(0);
     });
 
+    test('two runs of different lanes reach merge at once, each taking its own merge lane (4.4)', async () => {
+      const hold = mergeHold();
+      const factoryId = await enableFactory({ maxConcurrent: 2 });
+      const poll = fakePoll();
+      const launcher = fakeLauncher();
+      const github = fakeGithub('o/r', twoIssues, {
+        labels: { 1: ['feature:a'], 2: ['feature:b'] },
+        files: { '.funny/workflows/issue-to-merge.yaml': GROUPED_FLOW },
+        mergeHold: hold.hold,
+      });
+      await startWatcherWithProof({
+        ports,
+        github,
+        createPoll: poll.createPoll,
+        launch: launcher.launch,
+        resolveRuntime,
+        waitThread: finishedThreads('completed'),
+        followUp: async () => ok(undefined),
+      });
+      await poll.ticks[0]!();
+
+      await until(() => github.merges === 2, 'both runs merging concurrently');
+      expect(rows('workflow_concurrency_waiters')).toHaveLength(0);
+      expect(
+        rows('workflow_concurrency_leases')
+          .map((row) => row.group_key)
+          .sort(),
+      ).toEqual(['merge:o/r:feature/a', 'merge:o/r:feature/b']);
+
+      hold.release();
+      await until(
+        async () => (await allRuns(factoryId)).every((r) => r.state === 'merged'),
+        'both lane runs merged',
+      );
+      expect(rows('workflow_concurrency_leases')).toHaveLength(0);
+    });
+
     test('a restart while one run merges and the other waits resumes both without a second agent thread', async () => {
       const hold = mergeHold();
       const { factoryId, github, launcher, poll, start } = await startGrouped(hold);
@@ -2311,10 +2486,76 @@ describe('factory flow', () => {
 
     const run = await eventually(factoryId, (r) => r.state === 'merged');
     expect(run.baseBranch).toBe('feature/a');
-    // Every read of the base made for the run answered its own branch. The one
-    // other read is the tick's sentinel, which watches the factory's own base.
+    // Every read of the base made for the run answered its own branch; with no
+    // recent merge into `main`, the sentinel did not read `main` either.
     expect(github.baseBranches).toContain('feature/a');
-    expect(github.baseBranches.filter((branch) => branch !== 'feature/a')).toEqual(['main']);
+    expect(github.baseBranches.filter((branch) => branch !== 'feature/a')).toEqual([]);
+  });
+
+  // openspec factory-lanes, D9: GitHub closes an issue only on a merge into the default branch.
+  describe('the issue of a run merged into a lane', () => {
+    async function mergeRun(
+      lane: { baseBranch: string; lane: string | null },
+      script: GithubScript = {},
+    ) {
+      seedThread(testDb.db, {
+        id: 't-done',
+        projectId: 'p1',
+        userId: 'alice',
+        status: 'completed',
+      });
+      const factoryId = await enableFactory();
+      await createFactoryRunsRepository().start({
+        factoryId,
+        issueNumber: 7,
+        threadIds: ['t-done'],
+        state: 'working',
+        currentStep: 'implement',
+        ...lane,
+      });
+      const poll = fakePoll();
+      const github = fakeGithub('o/r', [], { mergeInto: { branch: 'dev' }, ...script });
+      await startWatcherWithProof({
+        ports,
+        github,
+        createPoll: poll.createPoll,
+        launch: fakeLauncher().launch,
+        resolveRuntime,
+      });
+      await poll.ticks[0]!();
+      await eventually(factoryId, (r) => r.state === 'merged');
+      // The close follows the merge without holding the flow.
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      return { github, factoryId };
+    }
+
+    test('is closed by the factory, with a comment naming the branch', async () => {
+      const { github } = await mergeRun({ baseBranch: 'feature/a', lane: 'a' });
+      expect(github.closedIssues).toEqual([7]);
+      const told = github.comments.filter((comment) => comment.issue === 7).map((c) => c.body);
+      expect(told.some((body) => body.includes('feature/a'))).toBe(true);
+    });
+
+    test("a run on the factory's own branch leaves its issue to GitHub", async () => {
+      const { github } = await mergeRun({ baseBranch: 'dev', lane: null });
+      expect(github.closedIssues).toEqual([]);
+    });
+
+    test('a close GitHub refuses leaves the run merged', async () => {
+      const { github, factoryId } = await mergeRun(
+        { baseBranch: 'feature/a', lane: 'a' },
+        { closeRefused: true },
+      );
+      expect(github.closedIssues).toEqual([]);
+      const [run] = (await createFactoryRunsRepository().list(factoryId))._unsafeUnwrap();
+      expect(run!.state).toBe('merged');
+    });
+
+    test('an issue closed already gets no second comment', async () => {
+      const { github } = await mergeRun({ baseBranch: 'feature/a', lane: 'a' }, { closed: [7] });
+      expect(github.closedIssues).toEqual([]);
+      expect(github.comments.filter((c) => c.body.includes('feature/a'))).toEqual([]);
+    });
   });
 
   test('a run starting for the first time checkpoints its implement thread in the journal', async () => {
@@ -3681,5 +3922,46 @@ describe('factory capacity between admission and run controls (#328)', () => {
     expect(results.filter((r) => r.isOk())).toHaveLength(4);
     expect(await inFlightCount(factoryId)).toBe(2);
     expect((await runsRepo().queue(factoryId))._unsafeUnwrap()).toHaveLength(2);
+  });
+
+  test('when a lane finish pull request merges, the watcher marks the lane finished, stops syncing it, and records the activity (8.2)', async () => {
+    const factoryId = await enableFactory();
+    const lanes = createFactoryLanesRepository();
+    const lane = (
+      await lanes.ensure(factoryId, { name: 'auth', branch: 'feature/auth' })
+    )._unsafeUnwrap();
+    (await lanes.setFinishPullRequest(lane.id, 77))._unsafeUnwrap();
+
+    const poll = fakePoll();
+    const github = fakeGithub('acme/repo', [], {
+      prStates: { 77: 'merged' },
+      laneSync: { heads: { main: 'base-new-sha', 'feature/auth': 'lane-sha' } },
+    });
+    await startWatcherWithProof({
+      ports,
+      github,
+      createPoll: poll.createPoll,
+      launch: fakeLauncher().launch,
+      resolveRuntime,
+      waitThread: pendingThreads,
+      notify: async () => undefined,
+    });
+
+    await poll.ticks[0]!();
+
+    const after = (await lanes.list(factoryId))._unsafeUnwrap()[0]!;
+    expect(after.state).toBe('finished');
+    // Sync was not started because the lane finished first.
+    expect(after.syncState).toBe('idle');
+    expect(github.syncCalls).toEqual([]);
+    const activities = testDb.sqlite
+      .query<{ kind: string; title: string }, []>('SELECT kind, title FROM activities')
+      .all();
+    expect(
+      activities.some(
+        (a) =>
+          a.kind === 'factory.finish_lane' && a.title.includes('auth') && a.title.includes('#77'),
+      ),
+    ).toBe(true);
   });
 });

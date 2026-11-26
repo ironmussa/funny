@@ -622,6 +622,50 @@ The search, project and state filters and the **Active** filter (hides `merged`,
   execution once its slot is granted, so a slot wait shows only as the gap before the step, and a
   run reopened from scratch has its journal, and so its timings, cleared.
 
+## Lanes (parallel feature branches)
+
+A factory can work on several long-lived feature branches in parallel (openspec `factory-lanes`).
+
+- **Convention and two labels**: an issue joins a lane when it carries **both** the factory's own
+  label (for example `ready-for-agent`, in automatic mode, or when sent manually) **and** a lane
+  label matching `laneLabelPrefix` (default `feature:`, so `feature:<name>`). Carrying only
+  `feature:<name>` without the factory label never admits the issue or creates a lane. The lane's
+  branch is `<laneBranchPrefix><name>` (default `feature/<name>`). Both prefixes live on
+  `factory_settings` and are fixed while the factory has lanes, as is **Merge into**. Two lane
+  labels park the issue in the queue with `lane-ambiguous`; an invalid name, a branch matching
+  **Merge into** or the repository's default branch, or a branch GitHub cannot create parks it with
+  `lane-invalid`.
+- **Frozen base**: at admission, the server resolves the lane (`resolveLane`), creates the
+  `factory_lanes` row and missing branch from **Merge into** if needed, inspects repository
+  workflows for `pull_request` / `push` filters that exclude the lane branch (`ci_warning`), and
+  freezes the branch on the run (`factory_runs.base_branch` and `factory_runs.lane`). Each lane
+  holds its own merge concurrency group (`merge:<repo>:<lane branch>`), so two lanes merge in
+  parallel.
+- **Sync and merge-commit requirement**: `factory-lane-sync.ts` keeps active lanes up to date with
+  **Merge into** (`idle → merging → checking | resolving → checking → idle`, with `needs_human` on
+  unrecoverable errors or after three conflict-resolution attempts). The watcher starts a sync when
+  **Merge into** has moved and at least an hour has passed since the last sync start (and **Merge
+  into** has no open sentinel incident); a member can also trigger **Sync now** or **Retry sync**
+  (`factory.lanes.sync`). Clean syncs open a `factory/sync/<name>` pull request into the lane and
+  merge it with the **`merge`** method (holding `merge:<repo>:<lane branch>`) so git records both
+  parents; if the repository disables merge commits, the sync moves to `needs_human` with the
+  reason. Syncs do not consume issue-stage concurrency slots, and every transition records a
+  `factory.lane_sync` activity.
+- **Cross-branch dependencies**: `factory-dependencies.ts` checks whether a blocker merged on
+  another branch (its `merge_sha`, read once from GitHub and stored on `factory_runs.merge_sha`) is
+  already contained in the candidate's base branch. Until it is, the candidate waits with
+  `blocker-on-other-branch`, and `factory-stacking.ts` never stacks across different base branches.
+- **Closing a lane run's issue**: GitHub only auto-closes issues on merges into the default branch.
+  When a run whose base is a lane branch merges, the server closes its issue and posts a comment
+  naming the lane branch (unlaned runs are untouched; a refused close is recorded without failing
+  the merged run).
+- **Finishing a lane**: `factory.lanes.finish` (Settings > project > Factory > **Finish lane**)
+  refuses while any run of the lane is in flight, starts a sync if the lane is behind, and opens a
+  pull request from the lane branch into **Merge into** listing the lane's merged issues with a note
+  that a person merges it (`finish_pr_number`, `factory.finish_lane` activity). When the watcher
+  sees that pull request merged, it marks the lane `finished` (compare-and-set from `active`),
+  stops its syncs, and routes any later issue naming that lane to **Merge into**.
+
 ## Security boundaries
 
 - Every thread, follow-up and stop is the enabler's, on their own runner or sandbox

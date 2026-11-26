@@ -28,6 +28,13 @@ export {
 
 export { isSafeGitRefArg } from './ref-guard.js';
 
+export {
+  checkBranchConflicts,
+  parseGitVersion,
+  type BranchConflictPair,
+  type BranchConflictReport,
+} from './branch-conflicts.js';
+
 export { getNativeGit, getNativeGitStatus, type NativeGitStatus } from './native.js';
 export { baseBranchRefs, getRefFingerprint } from './ref-fingerprint.js';
 

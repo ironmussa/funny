@@ -11,6 +11,7 @@
 
 import { parseStoredJson } from '@funny/shared/json-validation';
 import type {
+  laneConflictsSchema,
   startFactoryStepSchema,
   startRegressionProofSchema,
 } from '@ironmussa/funny-runtime/validation/schemas';
@@ -30,8 +31,11 @@ export type RegressionProofJobBody = z.input<typeof startRegressionProofSchema>;
 /** The runner's `POST /api/threads/:id/factory-steps` body (its `startFactoryStepSchema`). */
 export type FactoryStepJobBody = z.input<typeof startFactoryStepSchema>;
 
-/** What starts a job on the runner of a run's thread: a regression proof or a factory step. */
-export type RunnerJobBody = RegressionProofJobBody | FactoryStepJobBody;
+/** The runner's `POST /api/projects/:id/lane-conflicts` body (its `laneConflictsSchema`). */
+export type LaneConflictsBody = z.input<typeof laneConflictsSchema>;
+
+/** What a factory request to a runner carries: a proof, a step, or the cross-lane check. */
+export type RunnerJobBody = RegressionProofJobBody | FactoryStepJobBody | LaneConflictsBody;
 
 const runnerErrorBody = z.object({ error: z.string() }).passthrough();
 
@@ -125,4 +129,32 @@ export async function cancelRunnerJob(
   if (sent.isOk() && (sent.value.status < 400 || sent.value.status === 404)) return;
   const error = sent.isErr() ? sent.error : `runner answered ${sent.value.status}`;
   log.warn(`Issue factory could not stop ${what}`, { namespace: 'factory', path, error });
+}
+
+const LANE_CONFLICTS_ANSWER = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('unavailable'), reason: z.string() }),
+  z.object({
+    kind: z.literal('checked'),
+    conflicts: z.array(z.object({ a: z.string(), b: z.string(), paths: z.array(z.string()) })),
+    missing: z.array(z.string()),
+    fetched: z.boolean(),
+  }),
+]);
+
+/** What the runner's cross-lane conflict check found (`checkBranchConflicts` in core). */
+export type LaneConflictsAnswer = z.infer<typeof LANE_CONFLICTS_ANSWER>;
+
+/**
+ * Ask the project's runner, as `userId`, whether each pair of `branches`
+ * merges without a conflict (openspec factory-lanes D7). Read-only there.
+ */
+export async function checkLaneConflictsOnRunner(
+  ports: RunnerPorts,
+  userId: string,
+  projectId: string,
+  branches: string[],
+): Promise<Result<LaneConflictsAnswer, string>> {
+  const path = `/api/projects/${encodeURIComponent(projectId)}/lane-conflicts`;
+  const sent = await send(ports, userId, 'POST', path, { branches });
+  return sent.andThen((value) => answer(value, LANE_CONFLICTS_ANSWER, 'lane conflict check'));
 }

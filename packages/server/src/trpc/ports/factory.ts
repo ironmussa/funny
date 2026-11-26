@@ -21,6 +21,7 @@ import {
   type FactoryRunView,
 } from '../../services/factory/factory-runs.js';
 import { createFactorySettingsService } from '../../services/factory/factory-settings.js';
+import { lanePortMethods } from './factory-port-lanes.js';
 import { queuePortMethods } from './factory-port-queue.js';
 import { createRunControl, runPortMethods } from './factory-port-runs.js';
 import { factoryScope, type FactoryPortDeps } from './factory-port-shared.js';
@@ -45,6 +46,7 @@ function createFactoryParts(
   const port: FactoryPort = {
     ...runPortMethods(deps, scope, controlled),
     ...queuePortMethods(deps, scope),
+    ...lanePortMethods(deps),
   };
 
   return {

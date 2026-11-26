@@ -220,6 +220,7 @@ const BLOCKING_WAITS: ReadonlySet<FactoryWaitReason['kind']> = new Set([
   'proof-not-configured',
   'lane-ambiguous',
   'lane-invalid',
+  'base-incident',
 ]);
 
 function waitLabel(t: TFunction, reason: FactoryWaitReason): string {
@@ -251,6 +252,10 @@ function waitLabel(t: TFunction, reason: FactoryWaitReason): string {
       return t('factoryBoard.wait.laneInvalid', 'Feature label not usable');
     case 'blocker-on-other-branch':
       return t('factoryBoard.wait.otherBranch', 'After {{issues}} reaches this branch', { issues });
+    case 'base-incident':
+      return t('factoryBoard.wait.baseIncident', '{{branch}} is red', {
+        branch: reason.detail ?? '',
+      });
   }
 }
 

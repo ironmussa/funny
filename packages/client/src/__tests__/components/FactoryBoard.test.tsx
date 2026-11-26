@@ -263,14 +263,68 @@ describe('FactoryBoard', () => {
     expect(screen.getByTestId('factory-board-pr-r2-icon-MERGED')).toBeTruthy();
   });
 
+  test("a run's issue number sits in the footer beside the PR, not repeated in the title", () => {
+    mocks.threads['t-impl'] = buildThread({ id: 't-impl', title: '[Factory] #556 Lint rule' });
+    renderBoard([
+      queueRun('r1', 'merged', {
+        issueNumber: 556,
+        issueTitle: 'Add lint rule for exports',
+        threadIds: ['t-impl'],
+        stepOptions: [implementStep('t-impl')],
+        prUrl: 'https://github.com/o/r/pull/557',
+        completedAt: recent(),
+      }),
+      queueRun('r2', 'requested', {
+        issueNumber: 558,
+        issueTitle: 'Queued issue title',
+      }),
+    ]);
+
+    const mergedCard = screen.getByTestId('factory-board-card-r1');
+    expect(mergedCard.textContent).toContain('Add lint rule for exports');
+    expect(mergedCard.textContent).not.toContain('#556 Add lint rule for exports');
+    const mergedFooter = within(mergedCard).getByTestId('factory-board-card-r1-footer');
+    const linkedIssue = within(mergedFooter).getByTestId('factory-board-issue-r1');
+    expect(linkedIssue.textContent).toBe('#556');
+    expect(linkedIssue.getAttribute('href')).toBe('https://github.com/o/r/issues/556');
+    fireEvent.click(linkedIssue);
+    expect(mocks.navigate).not.toHaveBeenCalled();
+
+    const queuedCard = screen.getByTestId('factory-board-card-r2');
+    expect(within(queuedCard).getByTestId('factory-board-open-r2').textContent).toBe(
+      'Queued issue title',
+    );
+    const queuedIssue = within(
+      within(queuedCard).getByTestId('factory-board-card-r2-footer'),
+    ).getByTestId('factory-board-issue-r2');
+    expect(queuedIssue.textContent).toBe('#558');
+    expect(queuedIssue.getAttribute('href')).toBeNull();
+  });
+
   // openspec factory-lanes: a run in a lane merges into the lane's branch.
-  test("a run in a lane shows the lane's branch, and a run on the factory's own branch shows none", () => {
+  test("a run in a lane shows its lane, and a run on the factory's own branch shows none", () => {
     renderBoard([
       queueRun('r1', 'working', { lane: 'payments', baseBranch: 'feature/payments' }),
       queueRun('r2', 'working', { lane: null, baseBranch: 'dev' }),
     ]);
-    expect(screen.getByTestId('factory-board-lane-r1').textContent).toContain('feature/payments');
+    expect(screen.getByTestId('factory-board-lane-r1').textContent).toBe('payments');
     expect(screen.queryByTestId('factory-board-lane-r2')).toBeNull();
+  });
+
+  // openspec factory-lanes D7: the daily cross-lane conflict check shows on the board.
+  test('a run whose lane conflicts with another lane says so on its card', () => {
+    renderBoard([
+      queueRun('r1', 'working', {
+        lane: 'payments',
+        baseBranch: 'feature/payments',
+        laneConflicts: [{ lane: 'search', paths: ['src/router.ts'] }],
+      }),
+      queueRun('r2', 'working', { lane: 'search', baseBranch: 'feature/search' }),
+    ]);
+    expect(screen.getByTestId('factory-board-lane-conflicts-r1').textContent).toBe(
+      'Conflicts with search',
+    );
+    expect(screen.queryByTestId('factory-board-lane-conflicts-r2')).toBeNull();
   });
 
   test('a queued issue whose feature labels cannot be used says so on its card', () => {
@@ -342,7 +396,9 @@ describe('FactoryBoard', () => {
     expect(within(card).queryByTestId('factory-board-thread-link-t-impl')).toBeNull();
     expect(within(footer).queryByTestId('kanban-card-powerline-t-impl')).toBeNull();
     expect(within(footer).getByTestId('kanban-card-pr-t-impl').textContent).toBe('#443');
-    expect(within(card).queryByTestId('factory-board-issue-r1')).toBeNull();
+    const issue = within(footer).getByTestId('factory-board-issue-r1');
+    expect(issue.textContent).toBe(`#${run.issueNumber}`);
+    expect(issue.getAttribute('href')).toBe(`https://github.com/o/r/issues/${run.issueNumber}`);
     expect(screen.queryByTestId('factory-board-pr-r1')).toBeNull();
     expect(within(card).getByTestId('kanban-card-more-t-impl')).toBeTruthy();
     expect(card.getAttribute('draggable')).toBe('false');
@@ -617,16 +673,20 @@ describe('FactoryBoard', () => {
 });
 
 describe('state dot and selection', () => {
-  test('a run waiting on a person shows a state dot, not a clock or the thread pin; a finished run shows none', () => {
+  test('a run waiting on a person shows a state dot, not a clock or the thread pin; a finished run shows a muted gray dot', () => {
     mocks.threads = { t1: buildThread({ id: 't1', projectId: 'p1', status: 'completed' }) };
     renderBoard([
       queueRun('stopped', 'stopped', { threadIds: [] }),
       queueRun('merged', 'merged', { threadIds: ['t1'], completedAt: recent() }),
       queueRun('waiting', 'waiting_human', { threadIds: ['t1'] }),
     ]);
-    // Done's chip (Stopped, Merged) already says how the run ended.
-    expect(screen.queryByTestId('factory-board-dot-stopped')).toBeNull();
-    expect(screen.queryByTestId('factory-board-dot-merged')).toBeNull();
+    // Finished runs show a neutral gray dot; Done's chip (Stopped, Merged) says how they ended.
+    const stoppedDot = screen.getByTestId('factory-board-dot-stopped');
+    expect(stoppedDot.getAttribute('data-state')).toBe('stopped');
+    expect(stoppedDot.className).toContain('bg-muted-foreground');
+    const mergedDot = screen.getByTestId('factory-board-dot-merged');
+    expect(mergedDot.getAttribute('data-state')).toBe('merged');
+    expect(mergedDot.className).toContain('bg-muted-foreground');
     expect(screen.getByTestId('factory-board-dot-waiting').getAttribute('data-state')).toBe(
       'waiting_human',
     );
@@ -646,10 +706,10 @@ describe('state dot and selection', () => {
       </MemoryRouter>,
     );
     expect(screen.queryByTestId('factory-bulk-actions')).toBeNull();
-    // A finished run has no dot, so it keeps no blank slot before its title:
-    // only the hover checkbox, until a run is picked.
-    const mergedBox = () => screen.getByTestId('factory-board-select-merged');
-    expect(mergedBox().closest('[data-collapsed]')).toBeTruthy();
+    // Every card (including finished runs) keeps its dot slot without collapsing.
+    expect(
+      screen.getByTestId('factory-board-select-merged').closest('[data-collapsed]'),
+    ).toBeNull();
     expect(
       screen.getByTestId('factory-board-select-broken').closest('[data-collapsed]'),
     ).toBeNull();

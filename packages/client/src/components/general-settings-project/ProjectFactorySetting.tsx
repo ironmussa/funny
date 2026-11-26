@@ -19,6 +19,7 @@ import { toastError } from '@/lib/toast-error';
 
 import { ProjectFactoryBaseBranch } from './ProjectFactoryBaseBranch';
 import { ProjectFactoryIncident } from './ProjectFactoryIncident';
+import { ProjectFactoryLanes } from './ProjectFactoryLanes';
 import { ProjectFactoryMergeRows } from './ProjectFactoryMergeRows';
 import { ProjectFactoryStepOptions } from './ProjectFactoryStepOptions';
 import { ProjectFactoryTriggers } from './ProjectFactoryTriggers';
@@ -47,6 +48,8 @@ type FactoryForm = Pick<
   | 'tooBig'
   | 'holdPathsAwaitingApproval'
   | 'baseBranch'
+  | 'laneLabelPrefix'
+  | 'laneBranchPrefix'
 >;
 
 /** The server's defaults: what the form shows before the first save. */
@@ -69,6 +72,8 @@ const DEFAULT_FORM: FactoryForm = {
   tooBig: 'ask',
   holdPathsAwaitingApproval: false,
   baseBranch: '',
+  laneLabelPrefix: 'feature:',
+  laneBranchPrefix: 'feature/',
 };
 
 /** What the form shows: the saved settings, or the defaults before the first save. */
@@ -78,6 +83,7 @@ function formValues(settings: FactorySettings | null | undefined): FactoryForm {
   const { autoMerge, sensitivePaths, stageLimits, stepOverrides, batch, dependencies } = settings;
   const { maxLowRiskLines, sizeIgnoredPaths, tooBig, approvalAdjustMaxLines } = settings;
   const { holdPathsAwaitingApproval, baseBranch, sizeGateEnabled } = settings;
+  const { laneLabelPrefix, laneBranchPrefix } = settings;
   return {
     enabled,
     mode,
@@ -97,6 +103,8 @@ function formValues(settings: FactorySettings | null | undefined): FactoryForm {
     tooBig,
     holdPathsAwaitingApproval,
     baseBranch,
+    laneLabelPrefix,
+    laneBranchPrefix,
   };
 }
 
@@ -314,6 +322,17 @@ function ProjectFactorySettingRows({ projectId }: { projectId: string }) {
 
       {/* Listed while paused too: a paused factory keeps its schedules and starts none. */}
       {settings && <ProjectFactoryTriggers projectId={projectId} />}
+
+      {settings && (
+        <ProjectFactoryLanes
+          projectId={projectId}
+          label={label}
+          laneLabelPrefix={form.laneLabelPrefix}
+          laneBranchPrefix={form.laneBranchPrefix}
+          rowKey={rowKey}
+          onSave={(input) => void save({ enabled, ...input })}
+        />
+      )}
 
       {settings?.incident && (
         <ProjectFactoryIncident projectId={projectId} incident={settings.incident} />

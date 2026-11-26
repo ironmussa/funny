@@ -63,6 +63,20 @@ export function factoryRunTitle(
   return threadTitle || factoryRunFallbackTitle(t, run);
 }
 
+/**
+ * A run's title on a board card, where the issue number sits in the card's
+ * footer: the issue's title without the `#N` prefix when known, else the
+ * thread's title, else the fallback (`Issue #N` or the schedule name).
+ */
+export function factoryRunCardTitle(
+  t: TFunction,
+  run: Pick<FactoryRun, 'issueNumber' | 'issueTitle' | 'triggerName' | 'flowName'>,
+  threadTitle?: string,
+): string {
+  if (run.issueTitle) return run.issueTitle;
+  return threadTitle || factoryRunFallbackTitle(t, run);
+}
+
 /** "Factory · #225", or "Factory · Nightly audit" for a run without an issue. */
 export function factoryRunBanner(
   t: TFunction,
@@ -160,6 +174,12 @@ export function factoryWaitReasonText(t: TFunction, reason: FactoryWaitReason): 
         'factory.wait.otherBranch',
         'Waiting for {{blockers}}, merged into another branch, to reach this one',
         { blockers },
+      );
+    case 'base-incident':
+      return t(
+        'factory.wait.baseIncident',
+        'Waiting for {{branch}}: its checks turned red after a factory merge',
+        { branch: reason.detail ?? '' },
       );
     case 'proof-not-configured':
       return t(
@@ -319,15 +339,20 @@ export function groupFactoryRuns<R extends FactoryRun>(
   return groups;
 }
 
+/** Sentinel lane filter value matching runs that have no lane (target the factory's main branch). */
+export const FACTORY_NO_LANE = '~none';
+
 /** What the factory view filters its runs by. */
 export interface FactoryRunFilter {
-  /** Matches the issue number (a leading `#` is ignored), the project name or the current step. */
+  /** Matches the issue number (a leading `#` is ignored), the project name, the lane or the current step. */
   search: string;
   caseSensitive: boolean;
   /** The states to keep; empty keeps every state. */
   states: ReadonlySet<string>;
   /** The projects to keep; empty keeps every project. */
   projectIds: ReadonlySet<string>;
+  /** The lanes to keep (`FACTORY_NO_LANE` matches unlaned runs); empty keeps every lane. */
+  lanes?: ReadonlySet<string>;
   projectNameById: ReadonlyMap<string, string>;
   /** Hide the runs that finished without needing anyone (merged, no change, stopped). */
   activeOnly?: boolean;
@@ -339,7 +364,15 @@ const SETTLED: ReadonlySet<FactoryRun['state']> = new Set(['merged', 'no_change'
 /** The runs the factory view shows, in its order (waiting, in progress, queue, failed, ended). */
 export function filterFactoryRuns<R extends FactoryRun & { projectId: string }>(
   runs: R[],
-  { search, caseSensitive, states, projectIds, projectNameById, activeOnly }: FactoryRunFilter,
+  {
+    search,
+    caseSensitive,
+    states,
+    projectIds,
+    lanes,
+    projectNameById,
+    activeOnly,
+  }: FactoryRunFilter,
 ): R[] {
   const fold = (text: string) => (caseSensitive ? text : text.toLowerCase());
   const needle = fold(search.trim().replace(/^#/, ''));
@@ -348,12 +381,16 @@ export function filterFactoryRuns<R extends FactoryRun & { projectId: string }>(
     String(run.issueNumber ?? '').includes(needle) ||
     fold(run.triggerName ?? '').includes(needle) ||
     fold(projectNameById.get(run.projectId) ?? '').includes(needle) ||
+    fold(run.lane ?? '').includes(needle) ||
     fold(run.currentStep ?? '').includes(needle);
+  const matchesLane = (run: R) =>
+    !lanes || lanes.size === 0 || lanes.has(run.lane ?? FACTORY_NO_LANE);
   const kept = runs.filter(
     (run) =>
       !(activeOnly && SETTLED.has(run.state)) &&
       (states.size === 0 || states.has(run.state)) &&
       (projectIds.size === 0 || projectIds.has(run.projectId)) &&
+      matchesLane(run) &&
       matchesSearch(run),
   );
   const groups = groupFactoryRuns(kept);

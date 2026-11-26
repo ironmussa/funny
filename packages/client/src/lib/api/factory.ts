@@ -16,6 +16,11 @@ export type {
   FactoryFlowProblem,
   FactoryFlowValidation,
   FactoryIssuelessFlow,
+  FactoryLane,
+  FactoryLaneFinishResult,
+  FactoryLaneState,
+  FactoryLaneSyncResult,
+  FactoryLaneSyncState,
   FactoryMode,
   FactoryQueueCiProposal,
   FactoryQueueClearResult,
@@ -87,4 +92,12 @@ export const factoryApi = {
   getIssuelessFlow: (projectId: string, flowName: string) =>
     trpcCall(() => procedures.issuelessFlow.query({ projectId, flowName })),
   runFlow: (input: RunFactoryFlowInput) => trpcCall(() => procedures.runFlow.mutate(input)),
+  // Lanes (openspec factory-lanes).
+  listLanes: (projectId: string) => trpcCall(() => procedures.lanes.list.query({ projectId })),
+  removeLane: (projectId: string, name: string) =>
+    trpcCall(() => procedures.lanes.remove.mutate({ projectId, name })),
+  syncLane: (projectId: string, name: string) =>
+    trpcCall(() => procedures.lanes.sync.mutate({ projectId, name })),
+  finishLane: (projectId: string, name: string) =>
+    trpcCall(() => procedures.lanes.finish.mutate({ projectId, name })),
 };

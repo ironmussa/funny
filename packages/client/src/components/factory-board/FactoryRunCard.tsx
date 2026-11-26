@@ -9,6 +9,7 @@ import type { GitStatusInfo } from '@funny/shared';
 import { approvalGapFor, implementingThreadOf } from '@funny/shared/contracts/factory';
 import {
   Check,
+  CircleDot,
   Folder,
   GitPullRequestClosed,
   MoreVertical,
@@ -23,7 +24,7 @@ import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { BOARD_CARD_TITLE_CLASS, BoardCard } from '@/components/board/BoardCard';
-import { BranchBadge } from '@/components/BranchBadge';
+import { GIT_STAT_CHIP_CLASS, GIT_STAT_ICON_CLASS } from '@/components/git/GitStatChip';
 import { KanbanCard } from '@/components/kanban/KanbanCard';
 import { PRBadge } from '@/components/PRBadge';
 import {
@@ -33,6 +34,7 @@ import {
   pullRequestNumber,
   useFactoryRunActions,
 } from '@/components/thread/FactoryRunControls';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -40,17 +42,15 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { usePendingApprovalRequestOfRun } from '@/data/factory/hooks';
 import { useGitStatusForThread } from '@/data/git-status/hooks';
 import type { FactoryQueueRun } from '@/lib/api/factory';
-import {
-  factoryRunFallbackTitle,
-  factoryRunTitle,
-  isFactoryRunAwaitingMergeApproval,
-} from '@/lib/factory-run-labels';
+import { factoryRunCardTitle, isFactoryRunAwaitingMergeApproval } from '@/lib/factory-run-labels';
 import type { PRState } from '@/lib/git-icons';
 import { useThreadById } from '@/lib/thread-selectors';
 import { timeAgo } from '@/lib/thread-utils';
+import { cn } from '@/lib/utils';
 
 import { factoryRunActivityAt } from './board-columns';
 import { FactoryBoardChip } from './FactoryBoardChip';
@@ -76,6 +76,61 @@ function FactoryRunProject({ name }: { name: string | undefined }) {
       <Folder className="icon-xs shrink-0" />
       <span className="truncate">{name}</span>
     </span>
+  );
+}
+
+/** The run's issue number on the card footer, beside the PR; nothing for runs without an issue. */
+function FactoryRunIssueChip({
+  run,
+}: {
+  run: Pick<FactoryQueueRun, 'id' | 'issueNumber' | 'prUrl'>;
+}) {
+  const { t } = useTranslation();
+  if (run.issueNumber === null) return null;
+  const label = t('factoryView.issueTitle', 'Issue #{{number}}', { number: run.issueNumber });
+  const issueUrl = run.prUrl
+    ? run.prUrl.replace(/\/pull\/\d+(?:\/.*)?$/, `/issues/${run.issueNumber}`)
+    : undefined;
+  const linked = Boolean(issueUrl && issueUrl !== run.prUrl);
+  const content = (
+    <>
+      <CircleDot className={GIT_STAT_ICON_CLASS} aria-hidden="true" />
+      <span className="font-mono">#{run.issueNumber}</span>
+    </>
+  );
+
+  return (
+    <Badge variant="subtle" size="stat-group" weight="normal" corners="square">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          {linked ? (
+            <a
+              href={issueUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(event) => event.stopPropagation()}
+              onKeyDown={(event) => event.stopPropagation()}
+              className={cn(
+                GIT_STAT_CHIP_CLASS,
+                'text-muted-foreground hover:text-foreground focus-visible:ring-ring rounded-sm hover:underline focus-visible:ring-1 focus-visible:outline-none',
+              )}
+              data-testid={`factory-board-issue-${run.id}`}
+              aria-label={label}
+            >
+              {content}
+            </a>
+          ) : (
+            <span
+              className={cn(GIT_STAT_CHIP_CLASS, 'text-muted-foreground')}
+              data-testid={`factory-board-issue-${run.id}`}
+            >
+              {content}
+            </span>
+          )}
+        </TooltipTrigger>
+        <TooltipContent side="top">{label}</TooltipContent>
+      </Tooltip>
+    </Badge>
   );
 }
 
@@ -238,11 +293,31 @@ function FactoryRunCardBody({
           />
         )}
         {/* A run in a lane merges into the lane's branch, not the factory's own (openspec factory-lanes). */}
-        {run.lane && run.baseBranch && (
-          <BranchBadge
-            branch={run.baseBranch}
-            size="xs"
-            data-testid={`factory-board-lane-${run.id}`}
+        {run.lane && (
+          <FactoryBoardChip
+            label={run.lane}
+            tone="info"
+            detail={
+              run.baseBranch
+                ? t('factoryBoard.laneDetail', 'Lane branch: {{branch}}', {
+                    branch: run.baseBranch,
+                  })
+                : undefined
+            }
+            testId={`factory-board-lane-${run.id}`}
+          />
+        )}
+        {/* The daily cross-lane check found this lane's branch conflicting with others (D7). */}
+        {run.lane && run.laneConflicts && run.laneConflicts.length > 0 && (
+          <FactoryBoardChip
+            label={t('factoryBoard.laneConflicts', 'Conflicts with {{lanes}}', {
+              lanes: run.laneConflicts.map((conflict) => conflict.lane).join(', '),
+            })}
+            tone="warning"
+            detail={run.laneConflicts
+              .map((conflict) => `${conflict.lane}: ${conflict.paths.join(', ')}`)
+              .join('\n')}
+            testId={`factory-board-lane-conflicts-${run.id}`}
           />
         )}
         <ReplacedMarker run={run} replacedBy={replacedBy} />
@@ -354,13 +429,14 @@ function QueuedFactoryRunCard({
       status={status}
       title={
         <span className={BOARD_CARD_TITLE_CLASS} data-testid={`factory-board-open-${run.id}`}>
-          {factoryRunFallbackTitle(t, run)}
+          {factoryRunCardTitle(t, run)}
         </span>
       }
       footer={
         <>
           <FactoryRunProject name={projectName} />
           <FactoryRunLastThreadLink run={run} />
+          <FactoryRunIssueChip run={run} />
           {/* A run with no thread has no git status to carry its pull request. */}
           {prNumber !== null && (
             <PRBadge
@@ -500,7 +576,7 @@ export const FactoryRunCard = memo(function FactoryRunCard({
         menuItems={menuItems}
         menuEndItems={threadItems}
         time={stepTime}
-        title={factoryRunTitle(t, run, thread.title)}
+        title={factoryRunCardTitle(t, run, thread.title)}
         status={status}
         // No powerline: each of the run's threads has its own worktree and diff,
         // so the card links the threads (under its chips) instead of one branch.
@@ -508,6 +584,7 @@ export const FactoryRunCard = memo(function FactoryRunCard({
           <>
             <FactoryRunProject name={projectName} />
             <FactoryRunLastThreadLink run={run} />
+            <FactoryRunIssueChip run={run} />
           </>
         }
         below={below}

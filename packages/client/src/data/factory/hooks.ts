@@ -5,6 +5,7 @@ import type {
   FactoryFlowOption,
   FactoryIssueBlockers,
   FactoryIssuelessFlow,
+  FactoryLane,
   FactoryQueueRun,
   FactoryReadiness,
   FactoryRun,
@@ -28,6 +29,7 @@ import {
   factoryFlowValidationQuery,
   factoryFlowsQuery,
   factoryIssuelessFlowQuery,
+  factoryLanesQuery,
   factoryTriggersQuery,
   factoryQueueRunsQuery,
   factoryReadinessQuery,
@@ -181,6 +183,11 @@ export function useFactoryBlockers(
 /** The schedule triggers of the caller's factory; `undefined` while loading. */
 export function useFactoryTriggers(projectId: string): FactoryTrigger[] | undefined {
   return useDataQuery(factoryTriggersQuery(projectId)).data;
+}
+
+/** The lanes of the caller's factory; `undefined` while loading. */
+export function useFactoryLanes(projectId: string): FactoryLane[] | undefined {
+  return useDataQuery(factoryLanesQuery(projectId)).data;
 }
 
 /** What `useFactoryIssuelessFlow` returns. */

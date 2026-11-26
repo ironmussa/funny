@@ -48,11 +48,13 @@ import { integrateEarly, integrateStacked } from './factory-early-watch.js';
 import { createFactoryFlowRuns } from './factory-flow-runs.js';
 import { type FactoryGithubPort } from './factory-github.js';
 import { createFactoryIncidentsRepository } from './factory-incidents.js';
+import { checkLaneConflicts } from './factory-lane-conflicts.js';
+import { watchFinishedLanes } from './factory-lane-finish.js';
 import { createLaneSync } from './factory-lane-sync.js';
 import { createFactoryLanesRepository } from './factory-lanes.js';
 import { closeFinishedParents } from './factory-parent-close.js';
 import { prNumberOf } from './factory-pull-requests.js';
-import type { FactoryStepJobBody } from './factory-runner-jobs.js';
+import { checkLaneConflictsOnRunner, type FactoryStepJobBody } from './factory-runner-jobs.js';
 import {
   createFactoryRunsRepository,
   IN_FLIGHT_STATES,
@@ -331,22 +333,45 @@ async function fire(id: string): Promise<void> {
   if (!target) return;
   // Reached the repository as the enabler: nothing blocks the factory (until
   // the listing or a launch below says otherwise), unless its base branch is
-  // broken after a factory merge: then no factory on the repository admits.
-  const incident = await superviseBase(factory, target.repo, target.mode);
-  await reportBlocked(factory.id, incident);
+  // broken after a factory merge: then only that base pauses (openspec
+  // factory-lanes, D6).
+  const incidents = await superviseBases(factory, target.repo, target.mode);
+  const ownBase =
+    incidents.size > 0
+      ? (
+          await deps.github.defaultBranch({
+            repo: target.repo,
+            ownerId: factory.userId,
+            projectId: factory.projectId,
+          })
+        ).unwrapOr(null)
+      : null;
+  const ownIncident = ownBase
+    ? (incidents.get(ownBase) ?? null)
+    : (incidents.values().next().value ?? null);
+  await reportBlocked(factory.id, ownIncident);
   await reconcileParked(factory, target.repo);
   await retriageAnswered(factory, target.repo);
   await closeParentsOf(factory, target.repo);
   await resumeRuns(factory, target.repo, target.mode);
   await watchEarlyIntegration(factory, target.repo);
-  if (incident) return;
-  // After the incident check: a broken base is not carried into the lanes.
-  if (factory.enabled) await syncLanes(factory, target.repo, target.mode);
+  // A lane whose final pull request merged is finished before its sync is looked at.
+  await watchFinishedLanes(
+    { github: deps.github, lanes: laneRows, activities: deps.activities ?? serverActivities },
+    {
+      factoryId: factory.id,
+      reader: { repo: target.repo, ownerId: factory.userId, projectId: factory.projectId },
+    },
+  );
+  // A broken "Merge into" branch is not carried into the lanes (D6).
+  if (factory.enabled && !ownIncident) await syncLanes(factory, target.repo, target.mode);
+  // Once a day, the lanes are tried against each other on the enabler's runner (D7).
+  if (factory.enabled) await checkLanesAgainstEachOther(factory);
   // A paused factory finishes its runs but admits nothing new; its queue waits,
   // and its schedules start nothing.
   if (!factory.enabled) return;
-  await queueDueTriggers(factory);
-  await admitWork(factory, target.repo, target.mode);
+  if (!ownIncident) await queueDueTriggers(factory);
+  await admitWork(factory, target.repo, target.mode, incidents);
 }
 
 /**
@@ -365,6 +390,7 @@ async function syncLanes(factory: WatchedFactory, repo: string, mode: LaunchMode
       branches: github.laneBranches!(reader),
       pullRequests: github.pullRequests,
       baseBranch: async () => (await github.defaultBranch(reader)).unwrapOr(null),
+      activities: deps.activities ?? serverActivities,
       mergeTurn: {
         holders: async (group) => {
           // A lease whose server stopped is not a holder.
@@ -412,6 +438,24 @@ async function syncLanes(factory: WatchedFactory, repo: string, mode: LaunchMode
 }
 
 const laneRows = createFactoryLanesRepository();
+
+/** Factory id → when its cross-lane conflict check last failed (retried after an hour). */
+const laneConflictFailures = new Map<string, number>();
+
+/** The daily cross-lane conflict check (D7), on the enabler's runner, as the enabler. */
+async function checkLanesAgainstEachOther(factory: WatchedFactory): Promise<void> {
+  if (!deps) return;
+  const ports = deps.ports;
+  await checkLaneConflicts(
+    {
+      lanes: laneRows,
+      check: (branches) =>
+        checkLaneConflictsOnRunner(ports, factory.userId, factory.projectId, branches),
+      failedAt: laneConflictFailures,
+    },
+    factory.id,
+  );
+}
 
 /**
  * Queue one run for each schedule trigger whose occurrence has come (change
@@ -566,15 +610,16 @@ async function watchEarlyIntegration(factory: WatchedFactory, repo: string): Pro
 }
 
 /**
- * The sentinel's look at the repository's base branch for this tick (change
- * factory-agent-roles, D10): why the factory admits nothing now, or null.
+ * The sentinel's look at every base branch with a recent factory merge or open
+ * incident for this tick (change factory-lanes, D6): maps each broken base
+ * branch to its incident reason.
  */
-async function superviseBase(
+async function superviseBases(
   factory: WatchedFactory,
   repo: string,
   mode: LaunchMode,
-): Promise<string | null> {
-  if (!runs || !deps) return null;
+): Promise<Map<string, string>> {
+  if (!runs || !deps) return new Map();
   const d = deps;
   const repository = runs;
   const reader = { repo, ownerId: factory.userId, projectId: factory.projectId };
@@ -592,6 +637,7 @@ async function superviseBase(
                   prUrl: run.prUrl,
                   mergedAt: run.completedAt ?? run.startedAt,
                   userId: run.userId,
+                  baseBranch: run.baseBranch,
                 },
               ]
             : [],
@@ -630,7 +676,7 @@ async function superviseBase(
     factory,
     repo,
   );
-  return sentinel.superviseBase();
+  return sentinel.superviseBases();
 }
 
 /**

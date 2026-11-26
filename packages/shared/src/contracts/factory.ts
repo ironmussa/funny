@@ -686,6 +686,12 @@ export type FactoryRegressionProof = z.infer<typeof factoryRegressionProofSchema
 /** A run of the caller's factories as the factory view lists it: with its project. */
 export interface FactoryQueueRun extends FactoryRun {
   projectId: string;
+  /**
+   * The other lanes the run's lane conflicts with, from the daily cross-lane
+   * check (openspec factory-lanes D7); absent for a run outside a lane or a
+   * lane without conflicts.
+   */
+  laneConflicts?: FactoryLaneConflict[];
 }
 
 /**
@@ -791,7 +797,9 @@ export interface FactoryWaitReason {
     /** Its lane label names no usable branch, or the lane's branch could not be made. */
     | 'lane-invalid'
     /** A blocker merged into another branch, and that merge is not in this run's base yet. */
-    | 'blocker-on-other-branch';
+    | 'blocker-on-other-branch'
+    /** The run's base branch has an open sentinel incident (change factory-lanes, D6). */
+    | 'base-incident';
   blockers: number[];
   /** What a lane reason is about: the lanes it matches, or why its lane cannot be used. */
   detail?: string;
@@ -1349,6 +1357,66 @@ export interface FactoryApprovalRequest {
 /** Declining one request of the caller's factory. */
 export const factoryApprovalRequestInput = z
   .object({ projectId, requestId: z.string().min(1) })
+  .strict();
+
+export type FactoryLaneState = 'active' | 'finished';
+
+export type FactoryLaneSyncState = 'idle' | 'merging' | 'resolving' | 'checking' | 'needs_human';
+
+/** One lane of a member's issue factory (openspec factory-lanes). */
+export interface FactoryLane {
+  id: string;
+  name: string;
+  /** The label an issue carries to select this lane (`<laneLabelPrefix><name>`). */
+  label: string;
+  branch: string;
+  state: FactoryLaneState;
+  /** Runs admitted to this lane that have not ended (`#12` or `run-xxxx`). */
+  openRuns: string[];
+  /** Why the repository's workflows may not run for the lane's branch, or null. */
+  ciWarning: string | null;
+  createdAt: string;
+  syncState: FactoryLaneSyncState;
+  syncPrNumber: number | null;
+  syncPrUrl: string | null;
+  syncThreadId: string | null;
+  syncAttempts: number;
+  syncStartedAt: string | null;
+  syncError: string | null;
+  lastSyncedBaseSha: string | null;
+  finishPrNumber: number | null;
+  finishPrUrl: string | null;
+  /**
+   * The other lanes whose branch conflicts with this one's, and the paths
+   * (openspec factory-lanes D7); null until the daily check has run.
+   */
+  conflicts: FactoryLaneConflict[] | null;
+  conflictsCheckedAt: string | null;
+  /** Why the last check could not run (an old git on the runner), or null. */
+  conflictsNote: string | null;
+}
+
+/** Another lane this one's merge conflicts with, and where. */
+export interface FactoryLaneConflict {
+  lane: string;
+  paths: string[];
+}
+
+export interface FactoryLaneSyncResult {
+  outcome: 'retried' | 'requested' | 'in-flight';
+}
+
+export interface FactoryLaneFinishResult {
+  lane: string;
+  branch: string;
+  /** The branch the pull request merges into. */
+  base: string;
+  prNumber: number;
+  prUrl: string;
+}
+
+export const factoryLaneInput = z
+  .object({ projectId, name: z.string().trim().min(1).max(128) })
   .strict();
 
 export const factoryIncidentCandidateSchema = z.object({

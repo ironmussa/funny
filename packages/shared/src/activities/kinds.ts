@@ -277,6 +277,44 @@ export const ACTIVITY_KINDS = {
       due: z.string().max(64),
     }),
   },
+  // factory-lanes (D4): one transition of a lane's sync state machine.
+  'factory.lane_sync': {
+    scope: 'project',
+    destructive: false,
+    record: 'always',
+    input: z.object({
+      lane: z.string().max(128),
+      branch: z.string().max(256),
+      event: z.enum([
+        'start',
+        'clean',
+        'nothing',
+        'merged',
+        'conflict',
+        'red',
+        'again',
+        'resolved',
+        'fail',
+        'retry',
+        'settle',
+      ]),
+      to: z.enum(['idle', 'merging', 'resolving', 'checking', 'needs_human']),
+      prNumber: z.number().int().optional(),
+    }),
+  },
+  // factory-lanes (D8): a lane's final pull request opened, or marked finished once merged.
+  'factory.finish_lane': {
+    scope: 'project',
+    destructive: false,
+    record: 'always',
+    input: z.object({
+      lane: z.string().max(128),
+      branch: z.string().max(256),
+      base: z.string().max(256).optional(),
+      prNumber: z.number().int(),
+      stage: z.enum(['opened', 'finished']),
+    }),
+  },
   'agents.stopped': {
     scope: 'project',
     destructive: true,

@@ -61,6 +61,9 @@ import type {
   FactoryReadiness,
   FactoryIssueBlockers,
   FactoryIssuelessFlow,
+  FactoryLane,
+  FactoryLaneFinishResult,
+  FactoryLaneSyncResult,
   FactoryQueueClearResult,
   FactoryQueueRun,
   FactoryApprovalRequest,
@@ -607,6 +610,14 @@ export interface FactoryPort {
     projectId: string,
     input: { flowName: string; inputs: Record<string, string> },
   ): PortResult<FactoryRun>;
+  /** Parallel feature lanes of the caller's factory (openspec factory-lanes); empty without one. */
+  lanes(userId: string, projectId: string): PortResult<FactoryLane[]>;
+  /** Remove a lane of the caller's factory (refused while a run or sync is in flight). Audited. */
+  removeLane(userId: string, projectId: string, name: string): PortResult<{ ok: true }>;
+  /** Ask for a lane's sync now (or retry one waiting for a person). Audited. */
+  syncLane(userId: string, projectId: string, name: string): PortResult<FactoryLaneSyncResult>;
+  /** Open the final pull request that merges a lane into the factory's base branch. Audited. */
+  finishLane(userId: string, projectId: string, name: string): PortResult<FactoryLaneFinishResult>;
 }
 
 /** The server's authorization decisions that are not about one thread. */

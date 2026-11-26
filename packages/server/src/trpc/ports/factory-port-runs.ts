@@ -17,6 +17,7 @@ import { publicApprovalRequest } from '../../services/factory/factory-approval-r
 import { publicIncident } from '../../services/factory/factory-incidents.js';
 import { factoryRunLabel, type FactoryRunView } from '../../services/factory/factory-runs.js';
 import { setFactoryBlocked } from '../../services/factory/factory-settings.js';
+import { withLaneConflicts } from './factory-port-lanes.js';
 import {
   controlFailure,
   reschedule,
@@ -484,7 +485,11 @@ export function runPortMethods(
     },
 
     async queueRuns(userId) {
-      return runs.queueForOwner(userId).mapErr(storageFailure);
+      // A run in a lane carries the lanes its lane conflicts with (factory-lanes D7).
+      return runs
+        .queueForOwner(userId)
+        .mapErr(storageFailure)
+        .andThen((rows) => ResultAsync.fromSafePromise(withLaneConflicts(rows)));
     },
 
     async runs(userId, projectId) {

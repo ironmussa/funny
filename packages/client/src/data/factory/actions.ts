@@ -7,6 +7,8 @@ import type { ResultAsync } from 'neverthrow';
 
 import {
   factoryApi,
+  type FactoryLaneFinishResult,
+  type FactoryLaneSyncResult,
   type FactoryQueueCiProposal,
   type FactoryQueueClearResult,
   type FactoryRun,
@@ -22,6 +24,7 @@ import { getDataLayer } from '../runtime';
 import {
   refetchFactorySettings,
   refreshFactoryApprovalRequests,
+  refreshFactoryLanes,
   refreshFactoryReadiness,
   refreshFactoryRuns,
   refreshFactoryTriggers,
@@ -307,5 +310,41 @@ export function runFactoryFlow(
   return factoryApi.runFlow({ projectId, flowName, inputs }).map((run) => {
     refreshFactoryRuns(projectId, layer);
     return run;
+  });
+}
+
+/** Remove a lane of the caller's factory (refused while a run or sync is in flight). */
+export function removeFactoryLane(
+  projectId: string,
+  name: string,
+  layer: DataLayer = getDataLayer(),
+): ResultAsync<{ ok: true }, DomainError> {
+  return factoryApi.removeLane(projectId, name).map((result) => {
+    refreshFactoryLanes(projectId, layer);
+    return result;
+  });
+}
+
+/** Ask the server to sync a lane now, or retry a sync that needs a person. */
+export function syncFactoryLane(
+  projectId: string,
+  name: string,
+  layer: DataLayer = getDataLayer(),
+): ResultAsync<FactoryLaneSyncResult, DomainError> {
+  return factoryApi.syncLane(projectId, name).map((result) => {
+    refreshFactoryLanes(projectId, layer);
+    return result;
+  });
+}
+
+/** Open the finish pull request from a lane into the factory's base branch. */
+export function finishFactoryLane(
+  projectId: string,
+  name: string,
+  layer: DataLayer = getDataLayer(),
+): ResultAsync<FactoryLaneFinishResult, DomainError> {
+  return factoryApi.finishLane(projectId, name).map((result) => {
+    refreshFactoryLanes(projectId, layer);
+    return result;
   });
 }

@@ -51,7 +51,9 @@ const json = (value: unknown) => ['```json', JSON.stringify(value), '```'].join(
 
 interface World {
   ci: CiState | null;
-  merges: FactoryIncidentCandidate[];
+  /** Per-branch CI override (falls back to `ci` when absent). */
+  ciByBranch?: Record<string, CiState | null>;
+  merges: Array<FactoryIncidentCandidate & { baseBranch?: string | null }>;
   /** What the sentinel's thread says, and how it ended. */
   says: string | null;
   threadStatus: string | null;
@@ -80,9 +82,11 @@ function sentinelFor(world: World, factory = { id: 'f-alice', userId: 'alice', p
     recentMerges: async (_repo, since) =>
       world.merges.filter((candidate) => candidate.mergedAt >= since),
     defaultBranch: async () => 'main',
-    branchState: async () => {
+    branchState: async (branch) => {
       branchReads += 1;
-      return world.ci ? { sha: 'red-sha-0123456789', ci: world.ci } : null;
+      const ci =
+        world.ciByBranch && branch in world.ciByBranch ? world.ciByBranch[branch] : world.ci;
+      return ci ? { sha: 'red-sha-0123456789', ci } : null;
     },
     mergeState: async (pr) => {
       mergeReads.push(pr);
@@ -261,6 +265,28 @@ describe('a base branch red after a factory merge', () => {
     await sentinel.superviseBase();
     shared.ci = null;
     expect(await sentinel.superviseBase()).toContain('Incident');
+  });
+
+  // openspec factory-lanes, D6: each base branch with recent factory merges has its own incident.
+  test('a lane branch turning red opens an incident for that lane only, not main', async () => {
+    const shared = world({
+      ci: GREEN,
+      ciByBranch: { main: GREEN, 'feature/a': RED },
+      merges: [
+        { ...merge(12), baseBranch: 'main' },
+        { ...merge(13), baseBranch: 'feature/a' },
+      ],
+    });
+    const { sentinel, launches } = sentinelFor(shared);
+    const blocked = await sentinel.superviseBases();
+
+    expect([...blocked.keys()]).toEqual(['feature/a']);
+    expect(blocked.get('feature/a')).toContain('Incident: the base branch feature/a of o/r is red');
+    expect(incidents()).toMatchObject([
+      { repo: 'o/r', base_branch: 'feature/a', state: 'investigating' },
+    ]);
+    expect(launches).toHaveLength(1);
+    expect(launches[0]?.baseBranch).toBe('feature/a');
   });
 });
 

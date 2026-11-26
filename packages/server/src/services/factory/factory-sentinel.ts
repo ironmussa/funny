@@ -80,10 +80,15 @@ interface BaseBranchState {
   ci: CiState;
 }
 
+/** A recent factory merge, carrying the base branch it merged into (null before factory-lanes). */
+export interface SentinelMerge extends FactoryIncidentCandidate {
+  baseBranch?: string | null;
+}
+
 export interface SentinelDeps {
   incidents: FactoryIncidentsRepository;
   /** The factory merges into `repo` since `since`, of every factory, newest first. */
-  recentMerges(repo: string, since: string): Promise<FactoryIncidentCandidate[]>;
+  recentMerges(repo: string, since: string): Promise<SentinelMerge[]>;
   /** The repository's default branch (the base the factory merges into), or null when unreadable. */
   defaultBranch(): Promise<string | null>;
   /** The commit `branch` is at and its checks, or null when unreadable. */
@@ -214,30 +219,65 @@ async function suspectsOf(
   return suspects;
 }
 
-export function createFactorySentinel(deps: SentinelDeps, factory: SentinelFactory, repo: string) {
-  const now = deps.now ?? Date.now;
-  const count = (event: string) =>
-    metric('factory.integration_event', 1, { type: 'sum', attributes: { event, repo } });
+/**
+ * Who hears how an incident ended: a named merge's enabler, otherwise the
+ * factory's enabler and everyone whose merge is a candidate.
+ */
+function recipientsOf(
+  factory: SentinelFactory,
+  incident: FactoryIncidentRecord,
+  result: FactoryIncidentResult,
+  culpritUserId: string | undefined,
+): string[] {
+  if (culpritUserId && result.revertPrUrl) return [culpritUserId];
+  return [...new Set([factory.userId, ...incident.candidates.map((c) => c.userId)])];
+}
 
-  const enablers = (incident: FactoryIncidentRecord) => [
-    ...new Set([factory.userId, ...incident.candidates.map((candidate) => candidate.userId)]),
-  ];
-
-  const tell = (userId: string, incident: FactoryIncidentRecord, body: string) =>
-    Promise.resolve(
-      deps.notify(userId, {
-        title: `${incident.repo}: ${incident.baseBranch} is broken`,
-        body: body.length > 200 ? `${body.slice(0, 199)}…` : body,
-        url: `/projects/${factory.projectId}`,
-        tag: `factory-incident-${incident.id}`,
-      }),
-    ).catch((cause: unknown) =>
+/** Tell `userId` that the incident's branch is broken; a failed notification is logged. */
+function notifyIncident(
+  deps: Pick<SentinelDeps, 'notify'>,
+  factory: SentinelFactory,
+  userId: string,
+  incident: FactoryIncidentRecord,
+  body: string,
+): Promise<void> {
+  return Promise.resolve(
+    deps.notify(userId, {
+      title: `${incident.repo}: ${incident.baseBranch} is broken`,
+      body: body.length > 200 ? `${body.slice(0, 199)}…` : body,
+      url: `/projects/${factory.projectId}`,
+      tag: `factory-incident-${incident.id}`,
+    }),
+  ).then(
+    () => undefined,
+    (cause: unknown) => {
       log.warn('Issue factory incident notification failed', {
         namespace: 'factory',
         incidentId: incident.id,
         error: errorMessage(cause),
-      }),
-    );
+      });
+    },
+  );
+}
+
+/** A red base branch that was green after the factory's last merge: no incident. */
+function noteGreenAfterMerge(repo: string, baseBranch: string, redSha: string): void {
+  metric('factory.integration_event', 1, {
+    type: 'sum',
+    attributes: { event: 'incident_skipped_green_after_merge', repo },
+  });
+  log.info('Issue factory: a base branch is red, but it was green after the last factory merge', {
+    namespace: 'factory',
+    repo,
+    baseBranch,
+    redSha,
+  });
+}
+
+export function createFactorySentinel(deps: SentinelDeps, factory: SentinelFactory, repo: string) {
+  const now = deps.now ?? Date.now;
+  const count = (event: string) =>
+    metric('factory.integration_event', 1, { type: 'sum', attributes: { event, repo } });
 
   /** Store what the incident ended up with and tell who must know. */
   async function report(
@@ -251,9 +291,10 @@ export function createFactorySentinel(deps: SentinelDeps, factory: SentinelFacto
     // Nobody was told it opened, and nothing of theirs is paused any more.
     if (result.decision === 'unrelated') return;
     const told = { ...incident, result };
-    // A named merge: its enabler. Otherwise everyone whose merge is a candidate.
-    const users = culpritUserId && result.revertPrUrl ? [culpritUserId] : enablers(incident);
-    await Promise.all(users.map((userId) => tell(userId, incident, incidentReason(told))));
+    const users = recipientsOf(factory, incident, result, culpritUserId);
+    await Promise.all(
+      users.map((userId) => notifyIncident(deps, factory, userId, incident, incidentReason(told))),
+    );
   }
 
   const escalate = (incident: FactoryIncidentRecord, reason: string) =>
@@ -369,19 +410,22 @@ export function createFactorySentinel(deps: SentinelDeps, factory: SentinelFacto
   }
 
   /**
-   * The factory merges made since the sentinel last found the branch broken by
-   * something else: one of those is not reopened for the merges it cleared.
+   * The factory merges into `baseBranch` made since the sentinel last found
+   * that branch broken by something else: one of those is not reopened for the
+   * merges it cleared.
    */
-  async function mergesToWatch(baseBranch: string): Promise<FactoryIncidentCandidate[]> {
-    const merges = await deps.recentMerges(
-      repo,
-      new Date(now() - INCIDENT_WINDOW_MS).toISOString(),
+  async function mergesToWatch(
+    baseBranch: string,
+    branchMerges: readonly SentinelMerge[],
+  ): Promise<FactoryIncidentCandidate[]> {
+    if (branchMerges.length === 0) return [];
+    const candidates: FactoryIncidentCandidate[] = branchMerges.map(
+      ({ baseBranch: _base, ...candidate }) => candidate,
     );
-    if (merges.length === 0) return merges;
     const last = await deps.incidents.lastClosed(repo, baseBranch);
-    if (last.isErr() || last.value?.closedBy !== 'unrelated') return merges;
+    if (last.isErr() || last.value?.closedBy !== 'unrelated') return candidates;
     const clearedAt = last.value.openedAt;
-    return merges.filter((candidate) => candidate.mergedAt > clearedAt);
+    return candidates.filter((candidate) => candidate.mergedAt > clearedAt);
   }
 
   /** An incident already open: close it on green, else keep collecting. */
@@ -413,16 +457,7 @@ export function createFactorySentinel(deps: SentinelDeps, factory: SentinelFacto
     if (suspects.length === 0) {
       // Green after the factory's last merge: whatever broke it came later.
       deps.cleared?.add(clearedKey);
-      count('incident_skipped_green_after_merge');
-      log.info(
-        'Issue factory: a base branch is red, but it was green after the last factory merge',
-        {
-          namespace: 'factory',
-          repo,
-          baseBranch,
-          redSha: state.sha,
-        },
-      );
+      noteGreenAfterMerge(repo, baseBranch, state.sha);
       return null;
     }
     const opened = await deps.incidents.open({
@@ -455,13 +490,16 @@ export function createFactorySentinel(deps: SentinelDeps, factory: SentinelFacto
     return theirs.value;
   }
 
-  /** The incident of the base branch, opening one when it just turned red after a merge. */
-  async function watch(baseBranch: string): Promise<FactoryIncidentRecord | null> {
+  /** The incident of `baseBranch`, opening one when it just turned red after a merge. */
+  async function watch(
+    baseBranch: string,
+    branchMerges: readonly SentinelMerge[],
+  ): Promise<FactoryIncidentRecord | null> {
     const active = await deps.incidents.active(repo, baseBranch);
     if (active.isErr()) return null;
     const incident = active.value;
     // Without an incident, only a recent factory merge makes the branch worth reading.
-    const merges = incident ? [] : await mergesToWatch(baseBranch);
+    const merges = incident ? [] : await mergesToWatch(baseBranch, branchMerges);
     if (!incident && merges.length === 0) return null;
     const state = await deps.branchState(baseBranch);
     if (!state) return incident;
@@ -470,23 +508,68 @@ export function createFactorySentinel(deps: SentinelDeps, factory: SentinelFacto
     return openFor(baseBranch, state, merges);
   }
 
-  return {
-    /**
-     * Look at the repository's base branch for this factory's tick. Resolves why
-     * the factory admits nothing now (an incident is not closed), or null.
-     */
-    async superviseBase(): Promise<string | null> {
-      const baseBranch = await deps.defaultBranch();
-      if (!baseBranch) {
-        // The repository cannot be read now: an incident already known still pauses.
-        const known = await deps.incidents.activeForFactory(factory.id);
-        return known.isOk() && known.value ? incidentReason(known.value) : null;
+  /**
+   * Look at every base branch with a recent factory merge or an open incident
+   * (openspec factory-lanes, D6). Resolves a map of `baseBranch -> reason` for
+   * each base whose incident is not closed.
+   */
+  async function superviseBases(): Promise<Map<string, string>> {
+    const merges = await deps.recentMerges(
+      repo,
+      new Date(now() - INCIDENT_WINDOW_MS).toISOString(),
+    );
+    const activeRows = await deps.incidents.activeForRepo(repo);
+    const openIncidents = activeRows.isOk() ? activeRows.value : [];
+
+    // Resolve the factory's own base only when a merge has no recorded base or
+    // we need to check whether the repository is reachable.
+    const needsFallback = merges.some((merge) => !merge.baseBranch);
+    const fallbackBase = needsFallback ? await deps.defaultBranch() : null;
+
+    const byBranch = new Map<string, SentinelMerge[]>();
+    for (const merge of merges) {
+      const branch = merge.baseBranch || fallbackBase;
+      if (!branch) continue;
+      const list = byBranch.get(branch);
+      if (list) list.push(merge);
+      else byBranch.set(branch, [merge]);
+    }
+
+    const branches = new Set<string>(byBranch.keys());
+    for (const incident of openIncidents) branches.add(incident.baseBranch);
+
+    const blocked = new Map<string, string>();
+    if (branches.size === 0 && needsFallback && !fallbackBase) {
+      // The repository cannot be read now: an incident already known still pauses.
+      const known = await deps.incidents.activeForFactory(factory.id);
+      if (known.isOk() && known.value) {
+        blocked.set(known.value.baseBranch, incidentReason(known.value));
       }
-      const incident = await watch(baseBranch);
-      if (!incident) return null;
+      return blocked;
+    }
+
+    for (const baseBranch of branches) {
+      const incident = await watch(baseBranch, byBranch.get(baseBranch) ?? []);
+      if (!incident) continue;
       const latest = await deps.incidents.get(incident.id);
       const current = latest.isOk() && latest.value ? latest.value : incident;
-      return current.state === 'closed' ? null : incidentReason(current);
+      if (current.state !== 'closed') blocked.set(baseBranch, incidentReason(current));
+    }
+    return blocked;
+  }
+
+  return {
+    superviseBases,
+    /**
+     * Look at the repository's base branches for this factory's tick. Resolves
+     * why the factory's default branch (or any watched base) is paused, or null.
+     */
+    async superviseBase(): Promise<string | null> {
+      const blocked = await superviseBases();
+      if (blocked.size === 0) return null;
+      const fallback = await deps.defaultBranch();
+      if (fallback && blocked.has(fallback)) return blocked.get(fallback)!;
+      return blocked.values().next().value ?? null;
     },
   };
 }

@@ -465,7 +465,10 @@ export function createTestDb() {
       sync_started_at TEXT,
       sync_error TEXT,
       last_synced_base_sha TEXT,
-      finish_pr_number INTEGER
+      finish_pr_number INTEGER,
+      conflicts TEXT,
+      conflicts_checked_at TEXT,
+      conflicts_note TEXT
     )
   `);
   testDb.run(

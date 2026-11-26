@@ -19,6 +19,7 @@
  *   - config-routes: .funny.json read/write
  *   - hooks-routes: husky-backed project hooks CRUD
  *   - weave-routes: semantic-merge driver status / configure
+ *   - lane-conflicts-routes: the factory's read-only cross-lane conflict check
  */
 
 import { Hono } from 'hono';
@@ -29,6 +30,7 @@ import { projectConfigRoutes } from './projects/config-routes.js';
 import { projectCreateRoutes } from './projects/create-route.js';
 import { projectGitRoutes } from './projects/git-routes.js';
 import { projectHooksRoutes } from './projects/hooks-routes.js';
+import { projectLaneConflictRoutes } from './projects/lane-conflicts-routes.js';
 import { projectWeaveRoutes } from './projects/weave-routes.js';
 
 export const projectRoutes = new Hono<HonoEnv>();
@@ -39,3 +41,4 @@ projectRoutes.route('/', projectCommandsRoutes);
 projectRoutes.route('/', projectConfigRoutes);
 projectRoutes.route('/', projectHooksRoutes);
 projectRoutes.route('/', projectWeaveRoutes);
+projectRoutes.route('/', projectLaneConflictRoutes);

@@ -2641,6 +2641,17 @@ const migrations: Migration[] = [
       await ctx().addColumn('factory_lanes', 'sync_turn_at', 'TEXT');
     },
   },
+  {
+    // Change factory-lanes, D7: the daily cross-lane conflict check. `conflicts`
+    // is a JSON list of `{ lane, paths }` (the other lanes this one conflicts
+    // with); `conflicts_note` says why the last check could not run.
+    name: '140_factory_lanes_conflicts',
+    async up() {
+      await ctx().addColumn('factory_lanes', 'conflicts', 'TEXT');
+      await ctx().addColumn('factory_lanes', 'conflicts_checked_at', 'TEXT');
+      await ctx().addColumn('factory_lanes', 'conflicts_note', 'TEXT');
+    },
+  },
 ];
 
 /**

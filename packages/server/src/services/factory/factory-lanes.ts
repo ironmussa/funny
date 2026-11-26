@@ -13,10 +13,12 @@
  * `resolveLane` is the one place that reads a lane out of an issue's labels.
  * The repository below only stores what it decided.
  */
-import { factoryBaseBranchSchema } from '@funny/shared/contracts/factory';
+import { factoryBaseBranchSchema, type FactoryLaneConflict } from '@funny/shared/contracts/factory';
 import { errorMessage } from '@funny/shared/errors';
+import { parseStoredJson } from '@funny/shared/json-validation';
 import { and, asc, eq, inArray } from 'drizzle-orm';
 import { ResultAsync } from 'neverthrow';
+import { z } from 'zod';
 
 import { db } from '../../db/index.js';
 import { factoryLanes } from '../../db/schema.js';
@@ -93,6 +95,27 @@ export interface FactoryLaneView {
   syncError: string | null;
   lastSyncedBaseSha: string | null;
   finishPrNumber: number | null;
+  /** The other lanes this one conflicts with (D7); null until the daily check has run. */
+  conflicts: FactoryLaneConflict[] | null;
+  conflictsCheckedAt: string | null;
+  /** Why the last cross-lane check could not run, or null. */
+  conflictsNote: string | null;
+}
+
+/** What the cross-lane conflict check stores on one lane. */
+export interface LaneConflictRecord {
+  conflicts: FactoryLaneConflict[] | null;
+  checkedAt: string;
+  note: string | null;
+}
+
+const storedConflicts = z.array(z.object({ lane: z.string(), paths: z.array(z.string()) }));
+
+/** The stored conflict list; null when absent or unreadable (the next check rewrites it). */
+function readConflicts(raw: string | null): FactoryLaneConflict[] | null {
+  if (!raw) return null;
+  const parsed = parseStoredJson(storedConflicts, raw, 'factory lane conflicts');
+  return parsed.ok ? parsed.value : null;
 }
 
 export type FactoryLanesError = { kind: 'storage'; message: string };
@@ -122,6 +145,9 @@ const toView = (row: Row): FactoryLaneView => ({
   syncError: row.syncError ?? null,
   lastSyncedBaseSha: row.lastSyncedBaseSha ?? null,
   finishPrNumber: row.finishPrNumber ?? null,
+  conflicts: readConflicts(row.conflicts ?? null),
+  conflictsCheckedAt: row.conflictsCheckedAt ?? null,
+  conflictsNote: row.conflictsNote ?? null,
 });
 
 const byName = (factoryId: string, name: string) =>
@@ -218,6 +244,47 @@ export function createFactoryLanesRepository(
       ).map((rows) => rows.length > 0);
     },
 
+    /** Store what the cross-lane conflict check found for one lane (D7). */
+    setConflicts(laneId: string, record: LaneConflictRecord): ResultAsync<void, FactoryLanesError> {
+      return ResultAsync.fromPromise(
+        db
+          .update(factoryLanes)
+          .set({
+            conflicts: record.conflicts ? JSON.stringify(record.conflicts) : null,
+            conflictsCheckedAt: record.checkedAt,
+            conflictsNote: record.note,
+          })
+          .where(eq(factoryLanes.id, laneId)),
+        storage,
+      ).map(() => undefined);
+    },
+
+    /** Record (or clear) the pull request that merges the lane into the factory's branch. */
+    setFinishPullRequest(
+      laneId: string,
+      number: number | null,
+    ): ResultAsync<void, FactoryLanesError> {
+      return ResultAsync.fromPromise(
+        db.update(factoryLanes).set({ finishPrNumber: number }).where(eq(factoryLanes.id, laneId)),
+        storage,
+      ).map(() => undefined);
+    },
+
+    /**
+     * `active → finished`, as a compare-and-set: the lane's final pull request
+     * merged. Resolves whether this call made the move.
+     */
+    markFinished(laneId: string): ResultAsync<boolean, FactoryLanesError> {
+      return ResultAsync.fromPromise(
+        db
+          .update(factoryLanes)
+          .set({ state: 'finished' })
+          .where(and(eq(factoryLanes.id, laneId), eq(factoryLanes.state, 'active')))
+          .returning({ id: factoryLanes.id }),
+        storage,
+      ).map((rows) => rows.length > 0);
+    },
+
     /** Delete the lane's row; its branch is left on GitHub. Resolves whether a row was deleted. */
     remove(laneId: string): ResultAsync<boolean, FactoryLanesError> {
       return ResultAsync.fromPromise(
@@ -245,6 +312,9 @@ const EMPTY_LANE = {
   syncError: null,
   lastSyncedBaseSha: null,
   finishPrNumber: null,
+  conflicts: null,
+  conflictsCheckedAt: null,
+  conflictsNote: null,
 } satisfies Partial<Row>;
 
 export type FactoryLanesRepository = ReturnType<typeof createFactoryLanesRepository>;

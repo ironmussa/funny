@@ -24,6 +24,7 @@ import { flowReadsOf, loadFactoryFlow } from './factory-flow.js';
 import { READY_ISSUES_PAGE, type FactoryIssue, type FactoryRepoReader } from './factory-github.js';
 import { createFactoryLanesRepository, resolveLane } from './factory-lanes.js';
 import { prNumberOf } from './factory-pull-requests.js';
+import { laneCiWarning, readWorkflowFiles } from './factory-readiness.js';
 import {
   factoryRunBranch,
   NO_FREE_SLOT,
@@ -58,6 +59,8 @@ interface AdmissionContext {
   runs: FactoryRunView[];
   /** Set when the factory keeps the paths of a run parked for a member's approval. */
   approvalHold: { now: number } | null;
+  /** Open sentinel incidents on this repository, keyed by base branch (D6). */
+  incidents: ReadonlyMap<string, string>;
 }
 
 /**
@@ -73,6 +76,7 @@ function admissionContext(
   factory: WatchedFactory,
   repo: string,
   all: FactoryRunView[],
+  incidents: ReadonlyMap<string, string>,
 ): AdmissionContext {
   // `list` is newest first: the first run seen for an issue is its latest.
   const latestRuns = new Map<number, FactoryRunState>();
@@ -96,6 +100,7 @@ function admissionContext(
     blockers: new Map(),
     runs: all,
     approvalHold: factory.holdPathsAwaitingApproval ? { now: Date.now() } : null,
+    incidents,
   };
 }
 
@@ -233,6 +238,7 @@ export async function admitWork(
   factory: WatchedFactory,
   repo: string,
   mode: LaunchMode,
+  incidents: ReadonlyMap<string, string> = new Map(),
 ): Promise<void> {
   if (!runs) return;
   await syncLabelledQueue(factory, repo);
@@ -241,7 +247,7 @@ export async function admitWork(
   const all = await runs.list(factory.id);
   const queue = await runs.queue(factory.id);
   if (all.isErr() || queue.isErr()) return;
-  const ctx = admissionContext(factory, repo, all.value);
+  const ctx = admissionContext(factory, repo, all.value, incidents);
   await admitQueue(factory, repo, mode, queue.value, slots, ctx);
 }
 
@@ -317,7 +323,14 @@ async function admitQueued(
   ctx: AdmissionContext,
 ): Promise<Launch | false | typeof NO_FREE_SLOT> {
   if (!runs || !deps) return false;
-  if (run.issueNumber === null) return admitAndStart(factory, repo, mode, null, run);
+  if (run.issueNumber === null) {
+    const branch = run.baseBranch ?? (await baseBranchFor(factory, repo));
+    if (branch && ctx.incidents.has(branch)) {
+      await noteWaitReason(run, { kind: 'base-incident', blockers: [], detail: branch });
+      return false;
+    }
+    return admitAndStart(factory, repo, mode, null, run);
+  }
   if (await heldWithoutProofRules(factory, run, ctx)) return false;
   // The issue first: one closed since it was sent leaves the queue even while
   // something still blocks it.
@@ -329,6 +342,11 @@ async function admitQueued(
   const base = await baseFor(factory, repo, issue, run);
   if ('wait' in base) {
     await noteWaitReason(run, base.wait);
+    return false;
+  }
+  // A sentinel incident on this base branch holds only runs targeting it (D6).
+  if (base.branch && ctx.incidents.has(base.branch)) {
+    await noteWaitReason(run, { kind: 'base-incident', blockers: [], detail: base.branch });
     return false;
   }
 
@@ -404,12 +422,16 @@ async function baseFor(
   }
   const lane = await lanes.ensure(factory.id, choice);
   if (lane.isErr()) return { wait: laneUnusable(lane.error.message) };
+  const workflows = await readWorkflowFiles(deps!.github, reader);
+  const ciWarning = laneCiWarning(workflows, lane.value.branch);
+  if (ciWarning !== null) await lanes.setCiWarning(lane.value.id, ciWarning);
   log.info('Issue factory lane created', {
     namespace: 'factory',
     factoryId: factory.id,
     lane: lane.value.name,
     branch: lane.value.branch,
     branchCreated: made.value === 'created',
+    ciWarning: ciWarning ?? undefined,
     issue: issue.number,
   });
   return { branch: lane.value.branch, lane: lane.value.name };

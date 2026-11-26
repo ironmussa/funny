@@ -55,27 +55,31 @@ function passesBranches(branch: string, patterns: string[]): boolean {
   return passes;
 }
 
-/** The filters of a workflow's `push` trigger this check reads. */
-interface PushFilters {
+/** The filters of a workflow's `push` or `pull_request` trigger this check reads. */
+interface BranchFilters {
   readonly branches?: unknown;
   readonly 'branches-ignore'?: unknown;
   readonly tags?: unknown;
 }
 
-/** Whether a `push` trigger's branch filters let a push to a queue branch run it. */
-function pushFiltersRunOnQueueBranch(filters: PushFilters): boolean {
+/** Whether a trigger's branch filters let an event on `branch` run it. */
+function branchFiltersRunOn(branch: string, filters: BranchFilters): boolean {
   const ignored = branchFilterList.parse(
     'branches-ignore' in filters ? filters['branches-ignore'] : undefined,
   );
-  if (ignored.some((pattern) => matchesFilter(QUEUE_BRANCH, pattern))) return false;
+  if (ignored.some((pattern) => matchesFilter(branch, pattern))) return false;
   const branches = branchFilterList.parse('branches' in filters ? filters.branches : undefined);
-  // Only tags: no branch push runs it.
+  // Only tags: no branch event runs it.
   if (branches.length === 0) return !('tags' in filters) || 'branches-ignore' in filters;
-  return passesBranches(QUEUE_BRANCH, branches);
+  return passesBranches(branch, branches);
 }
 
-/** Whether one workflow file runs on a push to a queue branch. */
-export function workflowRunsOnQueueBranches(text: string): boolean {
+/** Whether one workflow file runs on `branch` for any of `triggers`. */
+function workflowRunsOnBranch(
+  text: string,
+  branch: string,
+  triggers: readonly ('push' | 'pull_request')[],
+): boolean {
   let workflow: unknown;
   try {
     workflow = parseYaml(text);
@@ -87,18 +91,50 @@ export function workflowRunsOnQueueBranches(text: string): boolean {
   const on =
     ('on' in workflow ? workflow.on : undefined) ??
     ('true' in workflow ? workflow.true : undefined);
-  if (on === 'push') return true;
-  if (Array.isArray(on)) return on.includes('push');
+  if (isString(on)) return triggers.some((trigger) => trigger === on);
+  if (Array.isArray(on)) return triggers.some((trigger) => on.includes(trigger));
   if (!isObject(on)) return false;
-  if (!('push' in on)) return false;
-  const filters = on.push;
-  if (!isObject(filters)) return true;
-  return pushFiltersRunOnQueueBranch(filters);
+  for (const trigger of triggers) {
+    const listed = trigger === 'push' ? 'push' in on : 'pull_request' in on;
+    if (!listed) continue;
+    const filters =
+      trigger === 'push'
+        ? 'push' in on
+          ? on.push
+          : undefined
+        : 'pull_request' in on
+          ? on.pull_request
+          : undefined;
+    if (!isObject(filters)) return true;
+    if (branchFiltersRunOn(branch, filters)) return true;
+  }
+  return false;
+}
+
+/** Whether one workflow file runs on a push to a queue branch. */
+export function workflowRunsOnQueueBranches(text: string): boolean {
+  return workflowRunsOnBranch(text, QUEUE_BRANCH, ['push']);
 }
 
 /** Whether any of the repository's workflows runs on a push to a queue branch. */
 export function ciRunsOnQueueBranches(workflows: string[]): boolean {
   return workflows.some(workflowRunsOnQueueBranches);
+}
+
+/** Whether one workflow file runs on a pull request into or push to `branch`. */
+export function workflowRunsOnLaneBranch(text: string, branch: string): boolean {
+  return workflowRunsOnBranch(text, branch, ['pull_request', 'push']);
+}
+
+/**
+ * Warning stored on a lane when the repository's workflows exclude its branch
+ * from both `pull_request` and `push` triggers; null when workflows match it,
+ * there are none, or they cannot be read.
+ */
+export function laneCiWarning(workflows: string[] | null, branch: string): string | null {
+  if (!workflows || workflows.length === 0) return null;
+  if (workflows.some((text) => workflowRunsOnLaneBranch(text, branch))) return null;
+  return `No workflow's pull_request or push branch filter includes "${branch}": pull requests into this lane may get no CI checks.`;
 }
 
 /** Where a repository's GitHub Actions workflows live. */

@@ -5,6 +5,7 @@
  *
  * - `project` — project ids, comma separated
  * - `status` — run states, comma separated
+ * - `lane` — lane names (or `~none` for runs without a lane), comma separated
  * - `search` / `cs=1` — the text filter and its case sensitivity
  * - `active=1` — only runs that have not ended
  * - `view=list|board|analytics` — the layout; without it the view uses the saved one
@@ -21,6 +22,7 @@ export interface FactoryViewFilters {
   caseSensitive: boolean;
   states: Set<string>;
   projectIds: Set<string>;
+  lanes: Set<string>;
   activeOnly: boolean;
   /** The layout the link names, or null when it names none. */
   layout: FactoryViewLayout | null;
@@ -39,6 +41,7 @@ export function parseFactoryViewParams(params: URLSearchParams): FactoryViewFilt
     caseSensitive: params.get('cs') === '1',
     states: readList(params, 'status'),
     projectIds: readList(params, 'project'),
+    lanes: readList(params, 'lane'),
     activeOnly: params.get('active') === '1',
     layout: view === 'list' || view === 'board' || view === 'analytics' ? view : null,
   };
@@ -59,6 +62,7 @@ export function applyFactoryViewPatch(
   if (patch.caseSensitive !== undefined) writeValue(next, 'cs', patch.caseSensitive ? '1' : null);
   if (patch.states !== undefined) writeValue(next, 'status', [...patch.states].join(','));
   if (patch.projectIds !== undefined) writeValue(next, 'project', [...patch.projectIds].join(','));
+  if (patch.lanes !== undefined) writeValue(next, 'lane', [...patch.lanes].join(','));
   if (patch.activeOnly !== undefined) writeValue(next, 'active', patch.activeOnly ? '1' : null);
   if (patch.layout !== undefined) writeValue(next, 'view', patch.layout);
   return next;

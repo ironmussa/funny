@@ -676,6 +676,33 @@ const ENTRIES = [
     description: 'settings.projectFactoryTriggersDesc',
     keywords: ['schedule', 'cron', 'trigger', 'nightly', 'run a flow', 'without an issue'],
   },
+  {
+    id: 'factory.laneLabelPrefix',
+    scope: 'project',
+    page: 'factory',
+    kind: 'row',
+    title: 'settings.projectFactoryLaneLabelPrefix',
+    description: 'settings.projectFactoryLaneLabelPrefixDesc',
+    keywords: ['lane', 'feature', 'label', 'prefix', 'parallel', 'branch'],
+  },
+  {
+    id: 'factory.laneBranchPrefix',
+    scope: 'project',
+    page: 'factory',
+    kind: 'row',
+    title: 'settings.projectFactoryLaneBranchPrefix',
+    description: 'settings.projectFactoryLaneBranchPrefixDesc',
+    keywords: ['lane', 'feature', 'branch', 'prefix', 'parallel'],
+  },
+  {
+    id: 'factory.lanes',
+    scope: 'project',
+    page: 'factory',
+    kind: 'row',
+    title: 'settings.projectFactoryLanes',
+    description: 'settings.projectFactoryLanesDesc',
+    keywords: ['lane', 'lanes', 'feature', 'parallel', 'sync', 'finish'],
+  },
 ] as const satisfies readonly SettingsIndexEntry[];
 
 export type SettingId = (typeof ENTRIES)[number]['id'];

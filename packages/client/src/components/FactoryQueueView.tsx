@@ -28,6 +28,7 @@ import { FactoryQueueActions } from '@/components/factory-board/FactoryQueueActi
 import {
   FactoryActiveToggle,
   FactoryBoardColumnsMenu,
+  FactoryLaneFilter,
   FactoryLayoutToggle,
 } from '@/components/factory-board/FactoryViewToggles';
 import { factoryRunDependencies } from '@/components/factory-board/run-dependencies';
@@ -50,6 +51,7 @@ import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import type { FactoryQueueRun, FactoryRun } from '@/lib/api/factory';
 import {
+  FACTORY_NO_LANE,
   factoryRunStateLabel,
   factoryRunStateVariant,
   factoryWaitReasonText,
@@ -292,7 +294,7 @@ function ClearFilters({ shown, onClear }: { shown: boolean; onClear: () => void 
   );
 }
 
-/** How many runs each state and project has, and the project options (only those with runs). */
+/** How many runs each state, project and lane has, and the project/lane options. */
 function useFactoryQueueCounts(
   runs: FactoryQueueRun[] | undefined,
   projectNameById: ReadonlyMap<string, string>,
@@ -300,14 +302,20 @@ function useFactoryQueueCounts(
   return useMemo(() => {
     const stateCounts: Record<string, number> = {};
     const projectCounts: Record<string, number> = {};
+    const laneCounts: Record<string, number> = {};
     for (const run of runs ?? []) {
       stateCounts[run.state] = (stateCounts[run.state] ?? 0) + 1;
       projectCounts[run.projectId] = (projectCounts[run.projectId] ?? 0) + 1;
+      const laneKey = run.lane ?? FACTORY_NO_LANE;
+      laneCounts[laneKey] = (laneCounts[laneKey] ?? 0) + 1;
     }
     const projectOptions = Object.keys(projectCounts)
       .map((id) => ({ value: id, label: projectNameById.get(id) ?? id }))
       .sort((a, b) => a.label.localeCompare(b.label));
-    return { stateCounts, projectCounts, projectOptions };
+    const laneNames = Object.keys(laneCounts)
+      .filter((key) => key !== FACTORY_NO_LANE)
+      .sort((a, b) => a.localeCompare(b));
+    return { stateCounts, projectCounts, projectOptions, laneCounts, laneNames };
   }, [runs, projectNameById]);
 }
 
@@ -320,10 +328,15 @@ interface ToolbarProps {
   onStateFilterChange: (states: Set<string>) => void;
   projectFilter: Set<string>;
   onProjectFilterChange: (projectIds: Set<string>) => void;
+  laneFilter: Set<string>;
+  onLaneFilterChange: (lanes: Set<string>) => void;
   onClearFilters: () => void;
   /** The projects that have runs, by name. */
   projectOptions: { value: string; label: string }[];
   projectCounts: Record<string, number>;
+  /** Distinct lane names present in the runs, sorted. */
+  laneNames: string[];
+  laneCounts: Record<string, number>;
   /** How many runs the filters keep, of how many. */
   shown: number;
   total: number;
@@ -372,8 +385,12 @@ function FactoryQueueFilters({
   onStateFilterChange,
   projectFilter,
   onProjectFilterChange,
+  laneFilter,
+  onLaneFilterChange,
   projectOptions,
   projectCounts,
+  laneNames,
+  laneCounts,
   stateCounts,
 }: Pick<
   ToolbarProps,
@@ -381,8 +398,12 @@ function FactoryQueueFilters({
   | 'onStateFilterChange'
   | 'projectFilter'
   | 'onProjectFilterChange'
+  | 'laneFilter'
+  | 'onLaneFilterChange'
   | 'projectOptions'
   | 'projectCounts'
+  | 'laneNames'
+  | 'laneCounts'
   | 'stateCounts'
 >) {
   const { t } = useTranslation();
@@ -407,12 +428,18 @@ function FactoryQueueFilters({
         onToggle={(state) => onStateFilterChange(toggled(stateFilter, state))}
         counts={stateCounts}
       />
+      <FactoryLaneFilter
+        lanes={laneNames}
+        selected={laneFilter}
+        onToggle={(lane) => onLaneFilterChange(toggled(laneFilter, lane))}
+        counts={laneCounts}
+      />
     </>
   );
 }
 
 function FactoryQueueToolbar(props: ToolbarProps) {
-  const { stateFilter, projectFilter } = props;
+  const { stateFilter, projectFilter, laneFilter } = props;
   return (
     <div className="border-border/50 flex items-center gap-2 border-b px-4 py-2">
       <FactoryQueueSearch {...props} />
@@ -420,7 +447,7 @@ function FactoryQueueToolbar(props: ToolbarProps) {
       <FactoryQueueFilters {...props} />
       <FactoryActiveToggle activeOnly={props.activeOnly} onChange={props.onActiveOnlyChange} />
       <ClearFilters
-        shown={stateFilter.size > 0 || projectFilter.size > 0}
+        shown={stateFilter.size > 0 || projectFilter.size > 0 || laneFilter.size > 0}
         onClear={props.onClearFilters}
       />
       <div className="ml-auto flex items-center gap-1">
@@ -438,7 +465,7 @@ function useFactoryQueueFilters(
   projectNameById: ReadonlyMap<string, string>,
 ) {
   const { filters, layout, update } = useFactoryViewParams();
-  const { search, caseSensitive, states, projectIds, activeOnly } = filters;
+  const { search, caseSensitive, states, projectIds, lanes, activeOnly } = filters;
   const filtered = useMemo(
     () =>
       runs &&
@@ -447,10 +474,11 @@ function useFactoryQueueFilters(
         caseSensitive,
         states,
         projectIds,
+        lanes,
         projectNameById,
         activeOnly,
       }),
-    [runs, search, caseSensitive, states, projectIds, projectNameById, activeOnly],
+    [runs, search, caseSensitive, states, projectIds, lanes, projectNameById, activeOnly],
   );
   const toolbar = useMemo(
     () => ({
@@ -462,13 +490,15 @@ function useFactoryQueueFilters(
       onStateFilterChange: (value: Set<string>) => update({ states: value }),
       projectFilter: projectIds,
       onProjectFilterChange: (value: Set<string>) => update({ projectIds: value }),
-      onClearFilters: () => update({ states: new Set(), projectIds: new Set() }),
+      laneFilter: lanes,
+      onLaneFilterChange: (value: Set<string>) => update({ lanes: value }),
+      onClearFilters: () => update({ states: new Set(), projectIds: new Set(), lanes: new Set() }),
       activeOnly,
       onActiveOnlyChange: (value: boolean) => update({ activeOnly: value }),
       layout,
       onLayoutChange: (value: FactoryViewLayout) => update({ layout: value }),
     }),
-    [search, caseSensitive, states, projectIds, activeOnly, layout, update],
+    [search, caseSensitive, states, projectIds, lanes, activeOnly, layout, update],
   );
   return {
     filtered,

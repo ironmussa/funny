@@ -693,6 +693,14 @@ const factoryCommitSchema = z.string().regex(/^[0-9a-f]{7,64}$/, 'Invalid commit
 const factoryTimeoutSchema = z.number().int().positive().max(3_600_000).default(600_000);
 
 /** A factory step the runner runs in the thread's checkout (openspec factory-integration). */
+/**
+ * The factory's cross-lane conflict check (openspec factory-lanes D7): the
+ * lane branches to compare pairwise. Read-only on the runner.
+ */
+export const laneConflictsSchema = z.object({
+  branches: z.array(factoryBranchSchema).min(2).max(20),
+});
+
 export const startFactoryStepSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('command'),

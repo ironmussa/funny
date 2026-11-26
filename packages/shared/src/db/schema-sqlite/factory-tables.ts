@@ -193,6 +193,12 @@ export const factoryLanes = sqliteTable(
     lastSyncedBaseSha: text('last_synced_base_sha'),
     /** The pull request that merges the lane into the factory's base, once asked. */
     finishPrNumber: integer('finish_pr_number'),
+    /** JSON `{ lane, paths }[]`: the other lanes whose merge with this one conflicts (D7). */
+    conflicts: text('conflicts'),
+    /** When the cross-lane conflict check last ran for this lane. */
+    conflictsCheckedAt: text('conflicts_checked_at'),
+    /** Why the last cross-lane check could not run (an old git on the runner), or null. */
+    conflictsNote: text('conflicts_note'),
   },
   (t) => [uniqueIndex('factory_lanes_factory_name').on(t.factoryId, t.name)],
 );

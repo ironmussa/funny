@@ -800,7 +800,32 @@
     },
     "projectFactoryBaseBranch": "Mesclar em",
     "projectFactoryBaseBranchDesc": "A branch de onde as execuções partem e na qual seus pull requests são mesclados. Os fluxos continuam sendo lidos da branch padrão",
-    "projectFactoryBaseBranchDefault": "Padrão do repositório"
+    "projectFactoryBaseBranchDefault": "Padrão do repositório",
+    "projectFactoryLaneLabelPrefix": "Prefixo de etiqueta de faixa",
+    "projectFactoryLaneLabelPrefixDesc": "Uma issue precisa tanto da etiqueta da fábrica ({{label}}) quanto de uma etiqueta {{prefix}}<nome> para rodar em uma faixa. Fixo enquanto houver faixas",
+    "projectFactoryLaneBranchPrefix": "Prefixo de branch de faixa",
+    "projectFactoryLaneBranchPrefixDesc": "Prefixo para as branches de faixa criadas a partir de Mesclar em ({{prefix}}<nome>). Fixo enquanto houver faixas",
+    "projectFactoryLanes": "Faixas",
+    "projectFactoryLanesDesc": "Branches de funcionalidade em paralelo criadas a partir de Mesclar em. Uma issue precisa da etiqueta da fábrica ({{label}}) e de uma etiqueta {{prefix}}<nome> para entrar em uma faixa",
+    "projectFactoryLaneStateActive": "Ativa",
+    "projectFactoryLaneStateFinished": "Finalizada",
+    "projectFactoryLaneConflict": "Conflita com {{lane}} em {{paths}}",
+    "projectFactoryLaneConflictNote": "Verificação de conflitos: {{note}}",
+    "projectFactoryLaneOpenRuns": "Execuções abertas: {{runs}}",
+    "projectFactoryLaneSyncIdle": "Ociosa",
+    "projectFactoryLaneSyncMerging": "Sincronizando",
+    "projectFactoryLaneSyncResolving": "Resolvendo conflitos",
+    "projectFactoryLaneSyncChecking": "Verificando CI",
+    "projectFactoryLaneSyncNeedsHuman": "Sincronização precisa de atenção",
+    "projectFactoryLaneSyncNow": "Sincronizar agora",
+    "projectFactoryLaneSyncRetry": "Tentar sincronizar novamente",
+    "projectFactoryLaneSyncRequested": "Sincronização iniciada para a faixa {{name}}",
+    "projectFactoryLaneSyncInFlight": "Sincronização já em andamento para a faixa {{name}}",
+    "projectFactoryLaneSyncPr": "PR de sincronização #{{number}}",
+    "projectFactoryLaneFinish": "Finalizar faixa",
+    "projectFactoryLaneFinishPr": "PR final #{{number}}",
+    "projectFactoryLaneFinished": "PR final #{{number}} aberto para a faixa {{name}}",
+    "projectFactoryLaneRemove": "Remover faixa"
   },
   "skills": {
     "showingFor": "Mostrando skills para:",
@@ -1821,7 +1846,8 @@
       "noFreeSlot": "Esperando um slot livre: o factory já roda todas as runs que pode ao mesmo tempo",
       "laneAmbiguous": "Tem as labels de várias features ({{lanes}}): deixe uma",
       "laneInvalid": "A label de feature não pode ser usada: {{why}}",
-      "otherBranch": "Aguardando {{blockers}}, mesclada em outra branch, chegar a esta"
+      "otherBranch": "Aguardando {{blockers}}, mesclada em outra branch, chegar a esta",
+      "baseIncident": "Aguardando {{branch}}: suas verificações falharam após um merge da fábrica"
     },
     "queuePosition": "{{label}} · #{{position}}",
     "issueInFactory": "No seu factory de issues",
@@ -2097,9 +2123,13 @@
     "columnsTooltip": "Mostrar ou ocultar colunas",
     "showAllTooltip": "Mostrar todas as runs, inclusive as terminadas",
     "showActiveTooltip": "Mostrar só as runs que não terminaram",
-    "clearFiltersTooltip": "Remover os filtros de projeto e estado"
+    "clearFiltersTooltip": "Remover os filtros de projeto, estado e faixa",
+    "filterLane": "Faixa",
+    "noLane": "Sem faixa"
   },
   "factoryBoard": {
+    "laneConflicts": "Conflita com {{lanes}}",
+    "laneDetail": "Branch da faixa: {{branch}}",
     "column": {
       "queue": "Fila",
       "triage": "Triagem",
@@ -2147,7 +2177,8 @@
       "noFreeSlot": "Sem vaga livre",
       "laneAmbiguous": "Várias labels de feature",
       "laneInvalid": "Label de feature não utilizável",
-      "otherBranch": "Quando {{issues}} chegar a esta branch"
+      "otherBranch": "Quando {{issues}} chegar a esta branch",
+      "baseIncident": "{{branch}} está vermelha"
     },
     "problem": {
       "noReview": "Sem review",

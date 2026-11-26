@@ -165,6 +165,17 @@ export function createFactoryIncidentsRepository(
       ).map((rows) => (rows[0] ? toRecord(rows[0]) : null));
     },
 
+    /** Every not-closed incident of a repository (one per base branch). */
+    activeForRepo(repo: string): ResultAsync<FactoryIncidentRecord[], FactoryIncidentsError> {
+      return ResultAsync.fromPromise(
+        db
+          .select()
+          .from(factoryIncidents)
+          .where(and(eq(factoryIncidents.repo, repo), notClosed)),
+        storage,
+      ).map((rows) => rows.map(toRecord));
+    },
+
     /** The newest closed incident of a repository's base branch, or null. */
     lastClosed(
       repo: string,

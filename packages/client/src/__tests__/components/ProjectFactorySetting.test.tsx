@@ -37,6 +37,7 @@ mock.module('@/data/projects/hooks', () => ({ useCanSteerProject: () => mocks.ca
 mock.module('@/data/factory/hooks', () => ({
   useFactoryReadiness: () => mocks.readiness,
   useFactorySettings: () => mocks.settings,
+  useFactoryLanes: () => [],
   useFactoryFlowDefinition: (_projectId: string, name: string) => ({
     definition: {
       name,

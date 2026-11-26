@@ -1,8 +1,9 @@
 /**
  * The status glyph of a factory board card: a dot in the run's state color
  * (the thread's own pin while its agent or the factory is still working on
- * it), none once the run is finished. It turns into a checkbox on hover, or on every card once one is
- * selected, so several runs can be picked for a bulk action.
+ * it), or a muted gray dot once the run is finished. It turns into a checkbox
+ * on hover, or on every card once one is selected, so several runs can be
+ * picked for a bulk action.
  */
 import type { Thread } from '@funny/shared';
 import type { ReactNode } from 'react';
@@ -39,11 +40,11 @@ function showsThreadPin(run: FactoryQueueRun, thread: Thread | undefined): threa
   return Boolean(thread) && !ENDED_FACTORY_STATES.has(run.state) && !WAITS_ON_PERSON.has(run.state);
 }
 
-/** A dot in the run's state color, its state on hover. */
-function FactoryRunStateDot({ run }: { run: FactoryQueueRun }) {
+/** A dot in the run's state color (or neutral gray when finished), its state on hover. */
+function FactoryRunStateDot({ run, muted = false }: { run: FactoryQueueRun; muted?: boolean }) {
   const { t } = useTranslation();
   const state = factoryRunStateChip(t, run);
-  const color = DOT_CLASS[state.tone];
+  const color = muted ? DOT_CLASS.neutral : DOT_CLASS[state.tone];
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -78,9 +79,11 @@ export function FactoryRunStatus({
   onToggleSelected,
 }: { run: FactoryQueueRun; thread: Thread | undefined } & FactoryRunSelectionProps) {
   const { t } = useTranslation();
-  // A finished run needs no dot: its chip (Merged, Stopped) already says how it ended.
+  // A finished run shows a muted gray dot: its chip (Merged, Stopped) says how it ended.
   const finished = factoryBoardColumn(run.state) === 'done';
-  const glyph: ReactNode = finished ? null : showsThreadPin(run, thread) ? (
+  const glyph: ReactNode = finished ? (
+    <FactoryRunStateDot run={run} muted />
+  ) : showsThreadPin(run, thread) ? (
     <ThreadStatusPin thread={thread} hoverGroup="card" />
   ) : (
     <FactoryRunStateDot run={run} />
@@ -88,11 +91,7 @@ export function FactoryRunStatus({
   if (!onToggleSelected) return glyph;
   const showBox = selected || selecting;
   return (
-    <span
-      className="relative inline-flex size-3.5 shrink-0"
-      // Nothing to show but the hover checkbox: the card keeps no blank slot.
-      data-collapsed={finished && !showBox ? '' : undefined}
-    >
+    <span className="relative inline-flex size-3.5 shrink-0">
       <span
         className={cn(
           'absolute inset-0 flex items-center justify-center',

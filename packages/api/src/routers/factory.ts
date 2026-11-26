@@ -4,6 +4,7 @@ import {
   factoryApprovalRequestInput,
   factoryApproveMergeInput,
   factoryHoldRunInput,
+  factoryLaneInput,
   factoryLintCleanupInput,
   factoryProjectInput,
   factoryRunInput,
@@ -228,4 +229,27 @@ export const factoryRouter = router({
     .mutation(async ({ ctx, input }) =>
       unwrap(await ctx.ports.factory.closeIncident(ctx.userId, input.projectId)),
     ),
+  /** Parallel feature lanes of the caller's factory (openspec factory-lanes). */
+  lanes: router({
+    list: projectProcedure('view')
+      .input(factoryProjectInput)
+      .query(async ({ ctx, input }) =>
+        unwrap(await ctx.ports.factory.lanes(ctx.userId, input.projectId)),
+      ),
+    remove: projectProcedure('steer', CONTROL_FORBIDDEN)
+      .input(factoryLaneInput)
+      .mutation(async ({ ctx, input }) =>
+        unwrap(await ctx.ports.factory.removeLane(ctx.userId, input.projectId, input.name)),
+      ),
+    sync: projectProcedure('steer', CONTROL_FORBIDDEN)
+      .input(factoryLaneInput)
+      .mutation(async ({ ctx, input }) =>
+        unwrap(await ctx.ports.factory.syncLane(ctx.userId, input.projectId, input.name)),
+      ),
+    finish: projectProcedure('steer', CONTROL_FORBIDDEN)
+      .input(factoryLaneInput)
+      .mutation(async ({ ctx, input }) =>
+        unwrap(await ctx.ports.factory.finishLane(ctx.userId, input.projectId, input.name)),
+      ),
+  }),
 });

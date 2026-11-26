@@ -7,6 +7,7 @@
  * the thread. Renders the buttons only; the caller lays them out.
  */
 import {
+  canMarkFactoryRunDone,
   lintCleanupSource,
   lintCleanupVetoed,
   displayRiskReason,
@@ -26,11 +27,7 @@ import {
 } from '@/data/factory/actions';
 import { useCanSteerProject } from '@/data/projects/hooks';
 import type { FactoryRun } from '@/lib/api/factory';
-import {
-  ENDED_FACTORY_STATES,
-  isFactoryRunAwaitingMergeApproval,
-  isFactoryRunNoChange,
-} from '@/lib/factory-run-labels';
+import { ENDED_FACTORY_STATES, isFactoryRunAwaitingMergeApproval } from '@/lib/factory-run-labels';
 import type { PRState } from '@/lib/git-icons';
 import { toastError } from '@/lib/toast-error';
 
@@ -215,12 +212,12 @@ function useLintCleanupAction(projectId: string, run: FactoryRun): OfferedAction
 }
 
 /**
- * The agent found nothing to change and the run stayed on the board for a
- * person: the member agrees, and the run is done.
+ * A run that ended with no change, or was stopped, stayed on the board for a
+ * person: the member says nothing more is needed, and the run is done.
  */
 function useMarkDoneAction(projectId: string, run: FactoryRun): FactoryRunAction | null {
   const { t } = useTranslation();
-  if (!isFactoryRunNoChange(run)) return null;
+  if (!canMarkFactoryRunDone(run.state)) return null;
   return {
     id: 'mark-done',
     label: t('factory.markDone', 'Mark as done'),

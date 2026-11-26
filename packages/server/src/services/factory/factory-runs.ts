@@ -16,7 +16,10 @@
  * every state a flow writes after that (`FLOW_TRANSITIONS`, `STAGE_TRANSITIONS`):
  * no method writes a run's state by its id alone.
  */
-import type { FactoryRiskWaiver } from '@funny/shared/contracts/factory';
+import {
+  FACTORY_RUN_MARK_DONE_STATES,
+  type FactoryRiskWaiver,
+} from '@funny/shared/contracts/factory';
 import { and, eq, inArray } from 'drizzle-orm';
 import { okAsync, ResultAsync } from 'neverthrow';
 
@@ -196,16 +199,21 @@ export function createFactoryRunsRepository(
     },
 
     /**
-     * A member agreed there is nothing to change: the `no_change` run becomes
-     * `done`. A compare-and-set on the stored state; resolves whether it was
-     * still `no_change`.
+     * A member agreed there is nothing more to do: a `no_change` or `stopped`
+     * run becomes `done` (`FACTORY_RUN_MARK_DONE_STATES`). A compare-and-set
+     * on the stored state; resolves whether it was still in one of them.
      */
     markDone(runId: string): ResultAsync<boolean, FactoryRunsError> {
       return ResultAsync.fromPromise(
         db
           .update(factoryRuns)
           .set({ state: 'done', waitReason: null })
-          .where(and(eq(factoryRuns.id, runId), eq(factoryRuns.state, 'no_change')))
+          .where(
+            and(
+              eq(factoryRuns.id, runId),
+              inArray(factoryRuns.state, [...FACTORY_RUN_MARK_DONE_STATES]),
+            ),
+          )
           .returning({ id: factoryRuns.id }),
         storage,
       ).map((rows) => rows.length > 0);

@@ -477,7 +477,7 @@ async function dropLabelled(
 
 /**
  * A labelled issue may be queued when it has no run open (waiting, in
- * progress or parked for a person), none that ended with no change, and has
+ * progress or parked for a person), none that merged or ended with no change, and has
  * failed fewer than `MAX_ATTEMPTS` times. A lookup that fails skips the issue this tick rather
  * than risk a second run.
  */
@@ -485,8 +485,8 @@ async function isAdmissible(factoryId: string, issueNumber: number): Promise<boo
   if (!runs) return false;
   const existing = await runs.activeByIssue(factoryId, issueNumber);
   if (existing.isErr() || existing.value) return false;
-  const unchanged = await runs.endedWithoutChange(factoryId, issueNumber);
-  if (unchanged.isErr() || unchanged.value) return false;
+  const settled = await runs.settledByEarlierRun(factoryId, issueNumber);
+  if (settled.isErr() || settled.value) return false;
   const failures = await runs.failedCount(factoryId, issueNumber);
   return failures.isOk() && failures.value < MAX_ATTEMPTS;
 }

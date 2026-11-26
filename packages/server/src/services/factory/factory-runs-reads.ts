@@ -148,10 +148,12 @@ export function runReadOperations() {
     },
 
     /**
-     * Whether a run of the issue ended with no change: the label does not admit
-     * it again (the agent would only say the same). A person sends or retries it.
+     * Whether a run of the issue already settled it: it merged (the issue may
+     * keep its label and stay open for a moment after the merge), or it ended
+     * with no change (the agent would only say the same). The label does not
+     * admit it again; a person sends or retries it.
      */
-    endedWithoutChange(
+    settledByEarlierRun(
       factoryId: string,
       issueNumber: number,
     ): ResultAsync<boolean, FactoryRunsError> {
@@ -163,7 +165,7 @@ export function runReadOperations() {
             and(
               eq(factoryRuns.factoryId, factoryId),
               eq(factoryRuns.issueNumber, issueNumber),
-              eq(factoryRuns.state, 'no_change'),
+              inArray(factoryRuns.state, ['merged', 'no_change']),
             ),
           )
           .limit(1),

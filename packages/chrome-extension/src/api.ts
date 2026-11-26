@@ -276,12 +276,14 @@ export interface ConnectionFailure {
 }
 
 /** A failed call as the message the settings UI receives. */
-export function connectionFailure(err: unknown): ConnectionFailure {
-  if (err instanceof ApiError) return { success: false, reason: err.reason, error: err.message };
+export function connectionFailure(cause: unknown): ConnectionFailure {
+  if (cause instanceof ApiError) {
+    return { success: false, reason: cause.reason, error: cause.message };
+  }
   return {
     success: false,
     reason: 'unreachable',
-    error: String((hasMessage(err) ? err.message : undefined) ?? err),
+    error: String((hasMessage(cause) ? cause.message : undefined) ?? cause),
   };
 }
 

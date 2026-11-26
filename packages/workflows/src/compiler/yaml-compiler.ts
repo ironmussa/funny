@@ -255,7 +255,7 @@ function compileConcurrency(
   };
 }
 
-function isObject(value: unknown): value is object {
+function isObject<Value>(value: Value): value is Value & object {
   return typeof value === 'object' && value !== null;
 }
 
@@ -264,7 +264,7 @@ function isString(value: unknown): value is string {
 }
 
 /** The output a batch leader settled for a member, as this node's output. */
-function asNodeOutput(output: unknown): NodeOutput {
+function asNodeOutput<Output>(output: Output): NodeOutput {
   if (isObject(output) && 'output' in output) {
     return output;
   }

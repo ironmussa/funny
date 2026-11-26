@@ -61,8 +61,8 @@ const FORWARDED_SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'] as const;
  * the launcher (`kill`, a closed terminal) orphans the child, which keeps running.
  */
 export function forwardTerminationSignals(
-  launcher: { on(signal: NodeJS.Signals, listener: () => void): unknown },
-  child: { kill(signal: NodeJS.Signals): unknown },
+  launcher: { on(signal: NodeJS.Signals, listener: () => void): void },
+  child: { kill(signal: NodeJS.Signals): void },
 ): void {
   for (const signal of FORWARDED_SIGNALS) launcher.on(signal, () => child.kill(signal));
 }

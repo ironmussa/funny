@@ -4,6 +4,7 @@ import {
   type ThreadCommandPorts,
   type ThreadWorkspaceState,
 } from '@funny/client-core';
+import type { JsonValue } from '@funny/shared/json';
 
 import type { NativeClientComposition } from '../platform/composition';
 import { nativeJsonRequest } from './native-api';
@@ -12,7 +13,7 @@ export function createNativeThreadCommands(options: {
   composition: NativeClientComposition;
   workspace: StoreApi<ThreadWorkspaceState>;
 }) {
-  const request = <T>(path: string, body?: unknown): Promise<T> =>
+  const request = <T>(path: string, body?: JsonValue): Promise<T> =>
     nativeJsonRequest<T>({
       platform: options.composition.platform,
       path,

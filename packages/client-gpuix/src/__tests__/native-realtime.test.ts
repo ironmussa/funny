@@ -89,6 +89,7 @@ function setup() {
   const socket = new SocketStub();
   let reconnects = 0;
   let focusRefreshes = 0;
+  let sessionRejections = 0;
   const service = new NativeRealtimeService({
     platform: composition.platform,
     cookies: composition.cookies,
@@ -107,7 +108,9 @@ function setup() {
     refreshForReconnect: () => {
       reconnects += 1;
     },
-    onSessionRejected: () => undefined,
+    onSessionRejected: () => {
+      sessionRejections += 1;
+    },
     clock: (() => {
       let now = 10_000;
       return () => (now += 3_000);
@@ -120,7 +123,7 @@ function setup() {
     gitStatus,
     socket,
     service,
-    counts: () => ({ reconnects, focusRefreshes }),
+    counts: () => ({ reconnects, focusRefreshes, sessionRejections }),
   };
 }
 
@@ -219,5 +222,54 @@ describe('native realtime', () => {
     expect(socket.listenerCount()).toBeGreaterThan(0);
     service.disconnect();
     expect(socket.listenerCount()).toBe(0);
+  });
+
+  test('ignores malformed socket payloads at the boundary', () => {
+    const { workspace, gitStatus, socket, service, counts } = setup();
+    service.connect();
+    socket.fire('connect');
+
+    // Envelopes and payloads that are not objects carry no fields.
+    socket.receive('agent:message', 'not an envelope');
+    socket.receive('agent:message', { threadId: 42, data: { messageId: 'm1', content: 'x' } });
+    socket.receive('agent:message', { threadId: 't1', data: null });
+    socket.receive('agent:message', { threadId: 't1', data: { messageId: 7, content: 'x' } });
+    expect(workspace.getState().byThreadId.t1?.messagesById ?? {}).toEqual({});
+
+    // A payload without `data` is read as the event's own fields.
+    socket.receive('agent:message', {
+      threadId: 't1',
+      eventId: 'e2',
+      messageId: 'm2',
+      role: 'assistant',
+      content: 'flat',
+    });
+    expect(workspace.getState().byThreadId.t1.messagesById.m2.content).toBe('flat');
+
+    // A permission request missing a required string field is dropped.
+    socket.receive('agent:status', {
+      threadId: 't1',
+      data: {
+        status: 'waiting',
+        pendingPermissionRequest: { requestId: 'q1', threadId: 't1', runId: 'r1' },
+      },
+    });
+    expect(workspace.getState().byThreadId.t1.permission ?? null).toBeNull();
+
+    // `statuses` must be an array of complete entries.
+    socket.receive('git:status', { threadId: 't1', data: { statuses: { threadId: 't1' } } });
+    socket.receive('git:status', {
+      threadId: 't1',
+      data: { statuses: [{ threadId: 't1', branchKey: 'b', state: 'unknown-state' }] },
+    });
+    expect(gitStatus.getState().byThreadId.t1).toBeUndefined();
+
+    // Only a string disconnect reason is shown; the server's own disconnect rejects the session.
+    socket.fire('disconnect', { reason: 'object' });
+    expect(service.current()).toEqual({ phase: 'disconnected', error: null });
+    expect(counts().sessionRejections).toBe(0);
+    socket.fire('disconnect', 'io server disconnect');
+    expect(service.current()).toEqual({ phase: 'disconnected', error: 'io server disconnect' });
+    expect(counts().sessionRejections).toBe(1);
   });
 });

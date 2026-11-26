@@ -59,10 +59,7 @@ export async function loadLongMemEvalDataset(
     console.log(`Cached LongMemEval-${size} at ${cachePath}`);
   }
 
-  const raw = await readFile(cachePath, 'utf-8');
-  const data = JSON.parse(raw);
-
-  return parseLongMemEvalData(data, size);
+  return parseLongMemEvalData(await readFile(cachePath, 'utf-8'), size);
 }
 
 /** A turn as a LongMemEval file writes it; the loader never validates it. */
@@ -107,7 +104,9 @@ interface RawLongMemEvalFile {
   qa_pairs?: RawLongMemQuestion[];
 }
 
-function parseLongMemEvalData(data: unknown, size: 'S' | 'M' | 'L'): LongMemEvalDataset {
+/** A LongMemEval file's text → the dataset. */
+function parseLongMemEvalData(text: string, size: 'S' | 'M' | 'L'): LongMemEvalDataset {
+  const data: unknown = JSON.parse(text);
   // SAFETY: a LongMemEval file is a JSON object of sessions and questions, whose fields the loader
   // passes through unvalidated; a malformed file fails below while reading it, as it always has.
   const root = data as RawLongMemEvalFile;

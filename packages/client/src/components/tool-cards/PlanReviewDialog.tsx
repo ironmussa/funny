@@ -119,10 +119,7 @@ function PlanOutline({
   if (titled.length < 2) return null;
 
   return (
-    <ScrollArea
-      className="border-border/40 w-56 shrink-0 border-r py-3"
-      data-testid="plan-review-outline"
-    >
+    <ScrollArea variant="outline" className="w-56 shrink-0" data-testid="plan-review-outline">
       <nav>
         <ul className="space-y-0.5 px-2">
           {titled.map((section) => (

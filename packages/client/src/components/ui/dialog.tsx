@@ -153,22 +153,27 @@ const DialogFooter = ({
   className,
   bordered = false,
   spaced = false,
+  stacked = false,
   ...props
 }: React.HTMLAttributes<HTMLDivElement> & {
   /**
    * A footer section of a flush dialog: padded, with a rule above it (DialogHeader's `bordered`).
-   * `roomy` pads 16px on every side.
+   * `roomy` pads 16px on every side; `wide` pads 24px on the sides of a `p-6` dialog.
    */
-  bordered?: boolean | 'roomy';
+  bordered?: boolean | 'roomy' | 'wide';
   /** An 8px gap between the buttons, on top of the desktop `space-x-2`. */
   spaced?: boolean;
+  /** Full-width buttons stacked 6px apart on every screen size. */
+  stacked?: boolean;
 }) => (
   <div
     className={cn(
       'flex flex-col-reverse pt-4 sm:flex-row sm:justify-end sm:space-x-2',
       bordered === true && 'shrink-0 gap-2 border-t border-border px-4 py-3 sm:space-x-0',
       bordered === 'roomy' && 'border-t border-border p-4',
+      bordered === 'wide' && 'border-t border-border px-6 py-4',
       spaced && 'gap-2 sm:gap-2',
+      stacked && 'flex-col gap-1.5 sm:flex-col sm:justify-stretch sm:space-x-0',
       className,
     )}
     {...props}

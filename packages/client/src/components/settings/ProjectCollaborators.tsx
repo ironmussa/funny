@@ -272,14 +272,15 @@ export function ProjectCollaborators() {
                         onValueChange={(v) => void handleChangeRole(m, v as ProjectMemberRole)}
                       >
                         <SelectTrigger
-                          className="h-6 w-24 text-xs"
+                          textSize="xs"
+                          className="h-6 w-24"
                           data-testid={`collaborators-role-${m.userId}`}
                         >
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
                           {PROJECT_ROLES.map((r) => (
-                            <SelectItem key={r.value} value={r.value} className="text-xs">
+                            <SelectItem key={r.value} value={r.value} textSize="xs">
                               {r.label}
                             </SelectItem>
                           ))}

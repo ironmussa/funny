@@ -45,9 +45,10 @@ export function SidebarFooter() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
-                variant="ghost"
+                variant="ghost-sidebar"
+                size="row"
                 data-testid="sidebar-user-menu"
-                className="hover:bg-sidebar-accent h-auto min-w-0 flex-1 justify-start px-1 py-1"
+                className="min-w-0 flex-1 justify-start"
               >
                 <Avatar size="sm">
                   <AvatarFallback textSize="xs" name={authUser.displayName || undefined}>

@@ -18,6 +18,7 @@ describe('ThreadSearchBar', () => {
 
     renderWithProviders(
       <ThreadSearchBar
+        variant="floating"
         threadId="thread-1"
         open
         onClose={vi.fn()}

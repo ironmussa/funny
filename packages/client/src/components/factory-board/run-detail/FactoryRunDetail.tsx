@@ -205,7 +205,7 @@ function RunDetailTabs({ run }: { run: FactoryQueueRun }) {
   };
   return (
     // Keyed by run: another run opens on its first tab.
-    <Tabs key={run.id} defaultValue={tabs[0]} className="flex min-w-0 flex-col gap-3">
+    <Tabs key={run.id} defaultValue={tabs[0]} className="flex min-w-0 flex-col">
       <TabsList
         variant="underline"
         size="sm"
@@ -225,7 +225,7 @@ function RunDetailTabs({ run }: { run: FactoryQueueRun }) {
         ))}
       </TabsList>
       {tabs.map((tab) => (
-        <TabsContent key={tab} value={tab} className="mt-0">
+        <TabsContent key={tab} value={tab} className="mt-3">
           <RunDetailTabContent run={run} tab={tab} />
         </TabsContent>
       ))}

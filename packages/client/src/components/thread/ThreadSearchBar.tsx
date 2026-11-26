@@ -36,8 +36,8 @@ interface ThreadSearchBarProps {
   onClearHighlights: () => void;
   /** data-testid prefix for the underlying SearchBar. Default: "thread-search". */
   testIdPrefix?: string;
-  /** Override container className (positioning). Default: chat-view absolute style. */
-  className?: string;
+  /** `floating` hangs from the chat view's top edge; `column-overlay` floats inside a live column. */
+  variant: 'floating' | 'column-overlay';
 }
 
 function countOccurrences(haystack: string, needle: string, caseSensitive: boolean): number {
@@ -64,7 +64,7 @@ export function ThreadSearchBar({
   onNavigateToMessage,
   onClearHighlights,
   testIdPrefix = 'thread-search',
-  className = 'absolute top-0 right-4 z-30',
+  variant,
 }: ThreadSearchBarProps) {
   const { t } = useTranslation();
   const [query, setQuery] = useState('');
@@ -276,10 +276,8 @@ export function ThreadSearchBar({
       placeholder={t('thread.searchPlaceholder', 'Search in thread...')}
       showIcon={false}
       testIdPrefix={testIdPrefix}
-      // The find bar hanging from the top edge of the chat view; a caller's
-      // className repositions or reshapes it.
-      variant="floating"
-      className={className}
+      // The caller positions the bar with a wrapper over its container.
+      variant={variant}
     />
   );
 }

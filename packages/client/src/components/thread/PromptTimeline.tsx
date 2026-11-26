@@ -275,7 +275,7 @@ function TimelineMilestone({
             </div>
           </button>
         </TooltipTrigger>
-        <TooltipContent side="left" align="start" className="max-w-[300px] p-3">
+        <TooltipContent side="left" align="start" variant="padded" className="max-w-[300px]">
           <div className="space-y-1.5">
             <div className="text-muted-foreground text-2xs font-mono">
               {formatRelativeTime(milestone.timestamp, now)}

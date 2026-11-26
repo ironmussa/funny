@@ -75,7 +75,8 @@ export function WaitingActions({ onSend }: { onSend: (text: string) => void }) {
             }
           }}
           placeholder={t('thread.waitingInputPlaceholder')}
-          className="h-auto flex-1 py-1.5"
+          size="form"
+          className="flex-1"
         />
         <button
           data-testid="waiting-send"

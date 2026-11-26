@@ -66,8 +66,8 @@ packages/server/src/services/runner-manager.ts	#1	activeThreadCount: (JSON.parse
 packages/server/src/services/runner-manager.ts	#1	payload: JSON.parse(r.payload) as RunnerTaskPayload,	direct JSON.parse without boundary parser helper
 packages/server/src/services/thread-event-repository.ts	#1	data: JSON.parse(row.data),	direct JSON.parse without boundary parser helper
 packages/shared/src/lib/crypto.ts	#1	const parsed = JSON.parse(readFileSync(KEYS_PATH, 'utf-8')) as {	direct JSON.parse without boundary parser helper
-packages/shared/src/repositories/message-repository.ts	#1	? (JSON.parse(thread.initSlashCommands) as string[])	direct JSON.parse without boundary parser helper
-packages/shared/src/repositories/message-repository.ts	#1	images: msg.images ? JSON.parse(msg.images) : undefined,	direct JSON.parse without boundary parser helper
-packages/shared/src/repositories/message-repository.ts	#1	tools: JSON.parse(thread.initTools) as string[],	direct JSON.parse without boundary parser helper
+packages/shared/src/repositories/message-repository/thread-with-messages.ts	#1	? (JSON.parse(thread.initSlashCommands) as string[])	direct JSON.parse without boundary parser helper
+packages/shared/src/repositories/message-repository/rows.ts	#1	images: msg.images ? JSON.parse(msg.images) : undefined,	direct JSON.parse without boundary parser helper
+packages/shared/src/repositories/message-repository/thread-with-messages.ts	#1	tools: JSON.parse(thread.initTools) as string[],	direct JSON.parse without boundary parser helper
 packages/shared/src/repositories/tool-call-repository.ts	#1	const parsed = JSON.parse(row.input);	direct JSON.parse without boundary parser helper
 packages/shared/src/session-changed-files.ts	#1	input = JSON.parse(input);	direct JSON.parse without boundary parser helper

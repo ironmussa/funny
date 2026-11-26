@@ -16,7 +16,6 @@ export type {
 } from './primitives.js';
 
 // ─── Thread (interface lives in ./types/thread.js to avoid cycles) ──
-import type { JsonObject } from './json.js';
 import type {
   AgentProvider,
   EffortLevel,
@@ -25,14 +24,7 @@ import type {
   ThreadMode,
   ThreadRuntime,
   ThreadSource,
-  ThreadStage,
-  ThreadStatus,
-  WaitingReason,
 } from './primitives.js';
-import type {
-  PendingPermissionRequest,
-  PermissionApprovalCapability,
-} from './types/permission-approvals.js';
 import type { Thread, PaginatedThreadsResponse } from './types/thread.js';
 export type { Thread, PaginatedThreadsResponse };
 
@@ -551,715 +543,83 @@ export interface AgentDefinition {
   disallowedTools?: string[];
 }
 
-// ─── Thread Comments ────────────────────────────────────
-
-export type CommentSource = 'user' | 'system' | 'agent';
-
-/** Author display info, joined onto a comment for rendering. */
-export interface CommentAuthor {
-  id: string;
-  name: string | null;
-  image: string | null;
-  username: string | null;
-}
-
-export interface ThreadComment {
-  id: string;
-  threadId: string;
-  userId: string;
-  source: CommentSource;
-  content: string;
-  createdAt: string;
-  /** Joined author display info (name/image). Populated by the comment routes. */
-  user?: CommentAuthor | null;
-}
-
-// ─── Messages ────────────────────────────────────────────
-
-export type MessageRole = 'user' | 'assistant' | 'system';
-
-export interface ImageAttachment {
-  type: 'image';
-  source: {
-    type: 'base64';
-    media_type: 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
-    data: string;
-  };
-}
-
-export interface Message {
-  id: string;
-  threadId: string;
-  role: MessageRole;
-  content: string;
-  images?: ImageAttachment[];
-  timestamp: string;
-  /** Model used when this user message was sent */
-  model?: AgentModel;
-  /** Permission mode used when this user message was sent */
-  permissionMode?: PermissionMode;
-  /** Reasoning/effort level used when this user message was sent */
-  effort?: EffortLevel;
-  /** Agent name, pipeline name, or user identifier that produced this message */
-  author?: string;
-}
-
-/**
- * `Message.author` of the prompt the runner sends on its own when it resumes a
- * thread its restart interrupted. The UI shows it as a resume marker, not as a
- * message the user wrote.
- */
-export const AUTO_RESUME_MESSAGE_AUTHOR = 'funny:auto-resume';
-
-// ─── Thread with Messages ────────────────────────────────
-
-export interface ThreadWithMessages extends Thread {
-  messages: (Message & { toolCalls?: ToolCall[] })[];
-  hasMore?: boolean;
-  hasMoreAfter?: boolean;
-  /** Full message count for the thread; paired with windowStart to describe
-   *  the loaded message window within the full history. */
-  total?: number;
-  /** Number of messages before the loaded window. */
-  windowStart?: number;
-  initInfo?: { tools: string[]; cwd: string; model: string; slashCommands?: string[] };
-  /** Last user message — always included even when messages are paginated,
-   *  so the UI can show the sticky prompt without loading all messages. */
-  lastUserMessage?: Message & { toolCalls?: ToolCall[] };
-  /** User message that owns the first loaded section when it sits before the
-   *  paginated window. Used as sticky section context without extending
-   *  `messages`. */
-  leadingUserMessage?: Message & { toolCalls?: ToolCall[] };
-  /** Number of messages currently queued for this thread. */
-  queuedCount?: number;
-  /** Preview/content of the next queued message. */
-  queuedNextMessage?: string;
-  /** Waiting subtype reconstructed from persisted tool calls when status is waiting. */
-  waitingReason?: WaitingReason;
-  /** Pending tool approval reconstructed from persisted tool calls. */
-  pendingPermission?: { toolName: string; toolInput?: string };
-  /** A live, structured approval request when the transport supports it. */
-  pendingPermissionRequest?: PendingPermissionRequest;
-  /** The effective permission interaction capability for this thread. */
-  permissionApprovalCapability?: PermissionApprovalCapability;
-}
-
-export interface PaginatedMessages {
-  messages: (Message & { toolCalls?: ToolCall[] })[];
-  hasMore: boolean;
-  hasMoreAfter?: boolean;
-  /** Full message count for the thread. */
-  total?: number;
-  /** Number of messages before the loaded window. */
-  windowStart?: number;
-  /** User message that owns the first loaded section when it sits before the
-   *  paginated window. Used as sticky section context without extending
-   *  `messages`. */
-  leadingUserMessage?: Message & { toolCalls?: ToolCall[] };
-}
-
-// ─── Tool Calls ──────────────────────────────────────────
-
-export interface ToolCall {
-  id: string;
-  messageId: string;
-  name: string;
-  input: string;
-  output?: string;
-  /** Event timestamp used by the client to interleave tool cards chronologically. */
-  timestamp?: string;
-  /** Agent name that executed this tool call (for pipeline threads) */
-  author?: string;
-  /** Links subagent tool calls to their parent Task tool call */
-  parentToolCallId?: string;
-}
-
-// ─── WebSocket Events ────────────────────────────────────
-
-export interface WSInitData {
-  tools: string[];
-  cwd: string;
-  model: string;
-  // Slash commands the SDK reports for this session (names without leading
-  // slash), e.g. ['compact', 'clear', 'context', ...]. Drives the client's
-  // slash-command autocomplete and the send-boundary guard.
-  slashCommands?: string[];
-}
-
-export interface WSMessageData {
-  messageId?: string;
-  role: string;
-  content: string;
-  author?: string;
-}
-
-export interface WSToolCallData {
-  toolCallId?: string;
-  messageId?: string;
-  name: string;
-  input: unknown;
-  author?: string;
-  parentToolCallId?: string;
-}
-
-export interface WSToolOutputData {
-  toolCallId: string;
-  output: string;
-}
-
-/** A `funny_run_checks` run started: where its progress file is. */
-export interface WSCheckRunData {
-  runId: string;
-  kind: string;
-  /** Absolute path of the test-progress / task-progress file. */
-  path: string;
-  /** `checkInputKey` of the tool call's input. */
-  inputKey: string;
-  startedAt: number;
-}
-
-export interface WSStatusData {
-  status: ThreadStatus;
-  waitingReason?: WaitingReason;
-  permissionRequest?: { toolName: string; toolInput?: string };
-  /** Provider-native request; unlike permissionRequest this is directly actionable. */
-  pendingPermissionRequest?: PendingPermissionRequest;
-  permissionApprovalCapability?: PermissionApprovalCapability;
-  /** The live process disappeared while it owned a structured request. */
-  permissionRecoveryReason?: import('./types/permission-approvals.js').PermissionRecoveryReason;
-  permissionMode?: PermissionMode;
-}
-
-export interface WSResultData {
-  status?: ThreadStatus;
-  waitingReason?: WaitingReason;
-  permissionRequest?: { toolName: string; toolInput?: string };
-  pendingPermissionRequest?: PendingPermissionRequest;
-  permissionApprovalCapability?: PermissionApprovalCapability;
-  cost?: number;
-  duration?: number;
-  result?: string;
-  stage?: ThreadStage;
-  errorReason?: string;
-}
-
-export interface WSErrorData {
-  error: string;
-}
-
-export interface WSCompactBoundaryData {
-  trigger: 'manual' | 'auto';
-  preTokens: number;
-  /** Context size AFTER compaction (0 when the SDK doesn't report it). */
-  postTokens?: number;
-  timestamp: string;
-}
-
-/** Row classification of a {@link ContextBreakdown} category (mirrors the Claude Agent SDK). */
-export type ContextBreakdownKind = 'used' | 'free' | 'buffer' | 'deferred';
-
-/**
- * Per-category context window breakdown — the data behind Claude Code's
- * `/context` report. Only the Claude SDK provider reports it; it is a
- * snapshot taken at the end of each turn.
- */
-export interface ContextBreakdown {
-  model: string;
-  totalTokens: number;
-  maxTokens: number;
-  percentage: number;
-  categories: {
-    /** Stable row id (e.g. `messages`, `mcp_tools`); absent on older CLIs. */
-    id?: string;
-    name: string;
-    tokens: number;
-    kind: ContextBreakdownKind;
-  }[];
-  /** MCP tool tokens aggregated per server. */
-  mcpServers: { name: string; tools: number; tokens: number }[];
-  memoryFiles: { path: string; type: string; tokens: number }[];
-  /** ISO timestamp of when the snapshot was taken. */
-  capturedAt: string;
-}
-
-export interface WSContextUsageData {
-  inputTokens: number;
-  outputTokens: number;
-  cumulativeInputTokens: number;
-  /** Present on the end-of-turn snapshot from providers that report it (Claude SDK). */
-  breakdown?: ContextBreakdown;
-}
-
-export interface WSCommandOutputData {
-  commandId: string;
-  data: string;
-}
-
-export interface WSCommandStatusData {
-  commandId: string;
-  projectId: string;
-  label: string;
-  status: 'running' | 'exited' | 'stopped';
-  exitCode?: number;
-}
-
-export interface WSAutomationRunStartedData {
-  automationId: string;
-  runId: string;
-}
-
-export interface WSAutomationRunCompletedData {
-  automationId: string;
-  runId: string;
-  hasFindings: boolean;
-  summary?: string;
-}
-
-export interface WSPtyDataData {
-  ptyId: string;
-  /**
-   * Terminal output bytes. The hot path (PTY → coalescer → WS) sends raw
-   * UTF-8 bytes as Uint8Array so Socket.IO uses a binary frame instead of
-   * JSON-escaping the string — this is the largest performance win for
-   * heavy stdout (npm install, cat, yes). String form is still accepted
-   * for restore/capture/adopt paths that don't go through the coalescer.
-   */
-  data: string | Uint8Array;
-}
-
-export interface WSPtyExitData {
-  ptyId: string;
-  exitCode: number;
-}
-
-export interface WSPtyErrorData {
-  ptyId: string;
-  error: string;
-}
-
-export interface WSPtyEnvActivatedData {
-  ptyId: string;
-  activations: Array<{ kind: 'python-venv' | 'node-version'; detail: string }>;
-}
-
-export interface WSQueueUpdateData {
-  threadId: string;
-  queuedCount: number;
-  nextMessage?: string;
-  /** Content of the message that was just dequeued and is now being processed */
-  dequeuedMessage?: string;
-  /** Images attached to the dequeued message */
-  dequeuedImages?: ImageAttachment[];
-}
-
-export interface WSWorkflowStepData {
-  runId: string;
-  workflowName: string;
-  stepName: string;
-  status: 'pending' | 'running' | 'completed' | 'failed';
-  output?: JsonObject;
-}
-
-export interface WSWorkflowStatusData {
-  runId: string;
-  workflowName: string;
-  status: 'triggered' | 'running' | 'completed' | 'failed';
-  qualityScores?: Record<string, { status: string; details: string }>;
-}
-
-export interface WSThreadCreatedData {
-  projectId: string;
-  title: string;
-  source?: string;
-}
-
-export interface WSCommentDeletedData {
-  commentId: string;
-}
-
-export interface WSThreadUpdatedData {
-  status?: string;
-  /** Forces clients to reload durable state after a recoverable stream gap. */
-  resync?: boolean;
-  archived?: number;
-  branch?: string | null;
-  worktreePath?: string | null;
-  mode?: string;
-  mergedAt?: string;
-}
-
-export interface WSThreadDeletedData {
-  projectId: string;
-}
-
-export interface WSThreadStageChangedData {
-  fromStage: ThreadStage | null;
-  toStage: ThreadStage;
-  projectId: string;
-}
-
-export interface WSRateLimitInfo {
-  status: 'allowed' | 'allowed_warning' | 'rejected';
-  resetsAt?: number;
-  rateLimitType?: 'five_hour' | 'seven_day' | 'seven_day_opus' | 'seven_day_sonnet' | 'overage';
-  utilization?: number;
-  overageStatus?: 'allowed' | 'allowed_warning' | 'rejected';
-  overageResetsAt?: number;
-  isUsingOverage?: boolean;
-  surpassedThreshold?: number;
-}
-
-export interface WSRateLimitData {
-  info: WSRateLimitInfo;
-}
-
-/** The provider account a run is logged in with (Claude SDK `accountInfo()`). */
-export interface AgentAccountInfo {
-  email?: string;
-  organization?: string;
-  subscriptionType?: string;
-  /** `firstParty` for an Anthropic login; Bedrock / Vertex / … otherwise. */
-  apiProvider?: string;
-}
-
-/** One plan rate-limit window: `utilization` is 0-100, `resetsAt` ISO 8601. */
-export interface AgentPlanUsageWindow {
-  /** `five_hour`, `seven_day`, `seven_day_opus`, … or `model:<display name>`. */
-  key: string;
-  /** Server-supplied label (per-model windows only). */
-  label?: string;
-  utilization: number | null;
-  resetsAt: string | null;
-}
-
-/** Claude.ai plan usage of the account (Claude SDK `/usage`). */
-export interface AgentPlanUsage {
-  windows: AgentPlanUsageWindow[];
-  extraUsage?: {
-    usedCredits: number | null;
-    monthlyLimit: number | null;
-    utilization: number | null;
-    currency?: string | null;
-  };
-}
-
-/**
- * The account a run uses, sent at session start and after every turn.
- * `profileId` / `profileName` name the funny execution profile
- * (CLAUDE_CONFIG_DIR); both null for the runner's default Claude login.
- * `usage` is absent when plan limits do not apply (API key, Bedrock, …) or the
- * request failed.
- */
-export interface WSAgentAccountData {
-  profileId: string | null;
-  profileName: string | null;
-  account: AgentAccountInfo;
-  usage?: AgentPlanUsage;
-}
-
-export interface WSAutomationRunUpdatedData {
-  automationId: string;
-  runId: string;
-  triageStatus?: string;
-  status?: string;
-}
-
-export interface WSThreadEventData {
-  event: ThreadEvent;
-}
-
-export interface WSWorktreeSetupData {
-  step: string;
-  label: string;
-  status: 'running' | 'completed' | 'failed';
-  error?: string;
-}
-
-// ─── Agent watchers (deferred-wake "snooze") ─────────────────────────────────
-
-export type WatcherStatus = 'pending' | 'fired' | 'done' | 'cancelled' | 'expired';
-
-export interface Watcher {
-  id: string;
-  threadId: string;
-  userId: string;
-  /** Stable dedupe key per logical thing the agent is watching. */
-  key: string;
-  label: string;
-  /** Epoch-ms when the watcher next fires. */
-  nextWakeAt: number;
-  /** The most recent delay the agent requested, in ms (for display). */
-  lastDelayMs: number;
-  wakeCount: number;
-  maxWakes: number;
-  /** Epoch-ms hard lifetime ceiling; null = no deadline. */
-  deadline: number | null;
-  status: WatcherStatus;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface WSWatcherData {
-  watcher: Watcher;
-}
-
-// ─── Agent jobs (funny-owned detached background processes) ───────────────────
-
-export type JobStatus = 'running' | 'exited' | 'failed' | 'killed' | 'cancelled';
-
-export interface Job {
-  id: string;
-  threadId: string;
-  userId: string;
-  command: string;
-  cwd: string | null;
-  label: string | null;
-  /** OS pid of the detached session leader; null until known. */
-  pid: number | null;
-  logPath: string;
-  exitPath: string;
-  status: JobStatus;
-  exitCode: number | null;
-  startedAt: string;
-  updatedAt: string;
-}
-
-export interface JobLogChunk {
-  output: string;
-  offset: number;
-  size: number;
-  status: JobStatus;
-  exitCode: number | null;
-}
-
-export interface WSJobData {
-  job: Job;
-}
-
-// ─── Background activities (operations a user starts and actions funny takes on its own) ──
-
-export type ActivityStatus = 'running' | 'succeeded' | 'failed' | 'interrupted';
-
-/**
- * Who started an activity (track-funny-actions): the user asked for it, it
- * followed from another action of the user, or funny started it on its own.
- */
-export type ActivityOrigin = 'user' | 'implicit' | 'system';
-
-/** The things an activity can remove, stop or change (`ACTIVITY_EFFECTS`). */
-export type ActivityEffectType =
-  | 'worktree-removed'
-  | 'branch-deleted'
-  | 'command-stopped'
-  | 'terminal-closed'
-  | 'directory-removed'
-  | 'branch-checked-out'
-  | 'changes-stashed'
-  | 'sandbox-stopped'
-  | 'sandbox-destroyed'
-  | 'pr-merged'
-  | 'pr-closed'
-  | 'remote-branch-deleted'
-  | 'agent-stopped'
-  | 'factory-disabled'
-  | 'repo-published'
-  | 'issue-deleted'
-  | 'file-reverted'
-  | 'changes-discarded'
-  | 'commits-reset'
-  | 'stash-dropped'
-  | 'code-rewound'
-  | 'snapshot-saved'
-  | 'commit-created';
-
-/** One thing an activity changed, with the name of the thing (a path, a branch, a PR). */
-export interface ActivityEffect {
-  effect: ActivityEffectType;
-  target: string;
-}
-
-/** A reference to what a finished activity produced. */
-export interface ActivityResultRef {
-  projectId?: string;
-  prUrl?: string;
-  /** The undo snapshot the operation saved (`refs/funny/undo/<activity id>`). */
-  snapshot?: string;
-}
-
-export interface Activity {
-  id: string;
-  userId: string;
-  /** The runner that ran it; null for a server-run activity. */
-  runnerId: string | null;
-  /** A key of the kind registry (`@funny/shared/activities`). */
-  kind: string;
-  projectId: string | null;
-  threadId: string | null;
-  title: string;
-  status: ActivityStatus;
-  step: string | null;
-  error: string | null;
-  /** The kind's input, validated and stripped of undeclared fields. */
-  input: JsonObject;
-  resultRef: ActivityResultRef | null;
-  origin: ActivityOrigin;
-  /** What it removed, stopped or changed; null when it reported nothing. */
-  effects: ActivityEffect[] | null;
-  startedAt: string;
-  endedAt: string | null;
-}
-
-export interface WSActivityUpdatedData {
-  activity: Activity;
-}
-
-export interface WSActivityRemovedData {
-  ids: string[];
-}
-
-/** Transient progress of a running activity; never persisted. */
-export interface WSActivityProgressData {
-  id: string;
-  percent: number;
-}
-
-export type WSEvent =
-  | { type: 'agent:init'; threadId: string; data: WSInitData }
-  | { type: 'agent:message'; threadId: string; data: WSMessageData }
-  | { type: 'agent:tool_call'; threadId: string; data: WSToolCallData }
-  | { type: 'agent:tool_output'; threadId: string; data: WSToolOutputData }
-  | { type: 'agent:check_run'; threadId: string; data: WSCheckRunData }
-  | { type: 'agent:status'; threadId: string; data: WSStatusData }
-  | { type: 'agent:result'; threadId: string; data: WSResultData }
-  | { type: 'agent:error'; threadId: string; data: WSErrorData }
-  | { type: 'agent:compact_boundary'; threadId: string; data: WSCompactBoundaryData }
-  | { type: 'agent:context_usage'; threadId: string; data: WSContextUsageData }
-  | { type: 'agent:rate_limit'; threadId: string; data: WSRateLimitData }
-  | { type: 'agent:account'; threadId: string; data: WSAgentAccountData }
-  | { type: 'command:output'; threadId: string; data: WSCommandOutputData }
-  | { type: 'command:status'; threadId: string; data: WSCommandStatusData }
-  | { type: 'automation:run_started'; threadId: string; data: WSAutomationRunStartedData }
-  | { type: 'automation:run_completed'; threadId: string; data: WSAutomationRunCompletedData }
-  | { type: 'automation:run_updated'; threadId: string; data: WSAutomationRunUpdatedData }
-  | { type: 'watcher:created'; threadId: string; data: WSWatcherData }
-  | { type: 'watcher:fired'; threadId: string; data: WSWatcherData }
-  | { type: 'watcher:rescheduled'; threadId: string; data: WSWatcherData }
-  | { type: 'watcher:completed'; threadId: string; data: WSWatcherData }
-  | { type: 'watcher:cancelled'; threadId: string; data: WSWatcherData }
-  | { type: 'job:created'; threadId: string; data: WSJobData }
-  | { type: 'job:exited'; threadId: string; data: WSJobData }
-  | { type: 'job:killed'; threadId: string; data: WSJobData }
-  | { type: 'job:cancelled'; threadId: string; data: WSJobData }
-  | { type: 'git:status'; threadId: string; data: WSGitStatusData }
-  | { type: 'git:refs-updated'; threadId: string; data: WSGitRefsUpdatedData }
-  | { type: 'pty:data'; threadId: string; data: WSPtyDataData }
-  | { type: 'pty:exit'; threadId: string; data: WSPtyExitData }
-  | { type: 'pty:error'; threadId: string; data: WSPtyErrorData }
-  | { type: 'pty:env_activated'; threadId: string; data: WSPtyEnvActivatedData }
-  | { type: 'thread:created'; threadId: string; data: WSThreadCreatedData }
-  | { type: 'thread:deleted'; threadId: string; data: WSThreadDeletedData }
-  | { type: 'thread:stage-changed'; threadId: string; data: WSThreadStageChangedData }
-  | { type: 'thread:comment_deleted'; threadId: string; data: WSCommentDeletedData }
-  | { type: 'thread:updated'; threadId: string; data: WSThreadUpdatedData }
-  | { type: 'thread:queue_update'; threadId: string; data: WSQueueUpdateData }
-  | { type: 'workflow:step'; threadId: string; data: WSWorkflowStepData }
-  | { type: 'workflow:status'; threadId: string; data: WSWorkflowStatusData }
-  | { type: 'workflow:node_state'; threadId: string; data: WorkflowNodeRunState }
-  | { type: 'thread:event'; threadId: string; data: WSThreadEventData }
-  | { type: 'git:workflow_progress'; threadId: string; data: WSGitWorkflowProgressData }
-  | { type: 'worktree:setup'; threadId: string; data: WSWorktreeSetupData }
-  | { type: 'worktree:setup_complete'; threadId: string; data: WSWorktreeSetupCompleteData }
-  | { type: 'clone:progress'; threadId: string; data: WSCloneProgressData }
-  | { type: 'activity:updated'; threadId: ''; data: WSActivityUpdatedData }
-  | { type: 'activity:removed'; threadId: ''; data: WSActivityRemovedData }
-  | { type: 'activity:progress'; threadId: ''; data: WSActivityProgressData }
-  | { type: 'pipeline:run_started'; threadId: string; data: WSPipelineRunStartedData }
-  | { type: 'pipeline:stage_update'; threadId: string; data: WSPipelineStageUpdateData }
-  | { type: 'pipeline:run_completed'; threadId: string; data: WSPipelineRunCompletedData }
-  | {
-      type: 'pipeline:approval_requested';
-      threadId: string;
-      data: WSPipelineApprovalRequestedData;
-    }
-  | {
-      type: 'pipeline:approval_resolved';
-      threadId: string;
-      data: WSPipelineApprovalResolvedData;
-    }
-  | { type: 'org:member_added'; threadId: ''; data: WSOrgMemberData }
-  | { type: 'org:member_removed'; threadId: ''; data: WSOrgMemberData }
-  | { type: 'org:invitation_received'; threadId: ''; data: WSOrgInvitationData }
-  | { type: 'test:frame'; threadId: string; data: WSTestFrameData }
-  | { type: 'test:output'; threadId: string; data: WSTestOutputData }
-  | { type: 'test:status'; threadId: string; data: WSTestStatusData }
-  | { type: 'test:console'; threadId: string; data: WSTestConsoleData }
-  | { type: 'test:network'; threadId: string; data: WSTestNetworkData }
-  | { type: 'test:error'; threadId: string; data: WSTestErrorData }
-  | { type: 'test:action'; threadId: string; data: WSTestActionData }
-  // ─── Browser annotator panel (CDP-driven Chromium sessions) ─────────────
-  | { type: 'browser-session:open'; threadId: ''; data: WSBrowserSessionOpenData }
-  | { type: 'browser-session:navigate'; threadId: ''; data: WSBrowserSessionNavigateData }
-  | { type: 'browser-session:nav'; threadId: ''; data: WSBrowserSessionNavData }
-  | { type: 'browser-session:input'; threadId: ''; data: WSBrowserSessionInputData }
-  | { type: 'browser-session:inspect-at'; threadId: ''; data: WSBrowserSessionInspectAtData }
-  | { type: 'browser-session:inspect-rect'; threadId: ''; data: WSBrowserSessionInspectRectData }
-  | { type: 'browser-session:screenshot'; threadId: ''; data: WSBrowserSessionScreenshotData }
-  | { type: 'browser-session:execute'; threadId: ''; data: WSBrowserSessionExecuteData }
-  | { type: 'browser-session:heartbeat'; threadId: ''; data: WSBrowserSessionHeartbeatData }
-  | { type: 'browser-session:close'; threadId: ''; data: WSBrowserSessionCloseData }
-  | { type: 'browser-session:ready'; threadId: ''; data: WSBrowserSessionReadyData }
-  | { type: 'browser-session:frame'; threadId: ''; data: WSBrowserSessionFrameData }
-  | { type: 'browser-session:result'; threadId: ''; data: WSBrowserSessionResultData }
-  | { type: 'browser-session:console'; threadId: ''; data: WSBrowserSessionConsoleData }
-  | { type: 'browser-session:error'; threadId: ''; data: WSBrowserSessionErrorData }
-  | { type: 'browser-session:closed'; threadId: ''; data: WSBrowserSessionClosedData }
-  | {
-      type: 'browser-session:agent-opened';
-      threadId: '';
-      data: WSBrowserSessionAgentOpenedData;
-    }
-  | { type: 'browser-session:viewport'; threadId: ''; data: WSBrowserSessionViewportData }
-  | { type: 'browser-session:controller'; threadId: ''; data: WSBrowserSessionControllerData }
-  | { type: 'browser-session:dialog'; threadId: ''; data: WSBrowserSessionDialogData }
-  | { type: 'browser-session:pointer'; threadId: ''; data: WSBrowserSessionPointerData }
-  | {
-      type: 'browser-session:agent-action';
-      threadId: '';
-      data: WSBrowserSessionAgentActionData;
-    }
-  | { type: 'browser-session:navigated'; threadId: ''; data: WSBrowserSessionNavigatedData }
-  | { type: 'browser-session:audio'; threadId: ''; data: WSBrowserSessionAudioData };
-
-export interface WSOrgMemberData {
-  organizationId: string;
-  userId: string;
-  role: TeamRole;
-}
-
-export interface WSOrgInvitationData {
-  invitationId: string;
-  organizationId: string;
-  organizationName: string;
-  role: TeamRole;
-}
-
-export interface WSWorktreeSetupCompleteData {
-  branch: string;
-  worktreePath?: string;
-}
-
-export interface WSCloneProgressData {
-  cloneId: string;
-  phase: string;
-  percent?: number;
-  /** `done` and `failed` are the clone's last event. */
-  status?: 'running' | 'done' | 'failed';
-  /** The created project, on the `done` event. */
-  projectId?: string;
-  error?: string;
-}
-
-export type WSEventType = WSEvent['type'];
+// ─── Messages, background work and WebSocket events (split modules) ──
+export type {
+  CommentSource,
+  CommentAuthor,
+  ThreadComment,
+  MessageRole,
+  ImageAttachment,
+  Message,
+  ThreadWithMessages,
+  PaginatedMessages,
+  ToolCall,
+} from './types/messages.js';
+export { AUTO_RESUME_MESSAGE_AUTHOR } from './types/messages.js';
+export type {
+  WatcherStatus,
+  Watcher,
+  WSWatcherData,
+  JobStatus,
+  Job,
+  JobLogChunk,
+  WSJobData,
+  ActivityStatus,
+  ActivityOrigin,
+  ActivityEffectType,
+  ActivityEffect,
+  ActivityResultRef,
+  Activity,
+  WSActivityUpdatedData,
+  WSActivityRemovedData,
+  WSActivityProgressData,
+} from './types/background.js';
+export type {
+  WSInitData,
+  WSMessageData,
+  WSToolCallData,
+  WSToolOutputData,
+  WSCheckRunData,
+  WSStatusData,
+  WSResultData,
+  WSErrorData,
+  WSCompactBoundaryData,
+  ContextBreakdownKind,
+  ContextBreakdown,
+  WSContextUsageData,
+  WSCommandOutputData,
+  WSCommandStatusData,
+  WSAutomationRunStartedData,
+  WSAutomationRunCompletedData,
+  WSPtyDataData,
+  WSPtyExitData,
+  WSPtyErrorData,
+  WSPtyEnvActivatedData,
+  WSQueueUpdateData,
+  WSWorkflowStepData,
+  WSWorkflowStatusData,
+  WSThreadCreatedData,
+  WSCommentDeletedData,
+  WSThreadUpdatedData,
+  WSThreadDeletedData,
+  WSThreadStageChangedData,
+  WSRateLimitInfo,
+  WSRateLimitData,
+  AgentAccountInfo,
+  AgentPlanUsageWindow,
+  AgentPlanUsage,
+  WSAgentAccountData,
+  WSAutomationRunUpdatedData,
+  WSThreadEventData,
+  WSWorktreeSetupData,
+  WSEvent,
+  WSOrgMemberData,
+  WSOrgInvitationData,
+  WSWorktreeSetupCompleteData,
+  WSCloneProgressData,
+  WSEventType,
+} from './types/ws-events.js';
+import type { ImageAttachment } from './types/messages.js';
 
 // ─── Startup Commands ────────────────────────────────────
 
@@ -1342,55 +702,3 @@ export interface CreatePRRequest {
   title: string;
   body: string;
 }
-
-// Imports needed by local type aliases — pulled in from split modules.
-import type { TeamRole } from './types/auth.js';
-import type {
-  WSBrowserSessionOpenData,
-  WSBrowserSessionNavigateData,
-  WSBrowserSessionNavData,
-  WSBrowserSessionInputData,
-  WSBrowserSessionInspectAtData,
-  WSBrowserSessionInspectRectData,
-  WSBrowserSessionScreenshotData,
-  WSBrowserSessionExecuteData,
-  WSBrowserSessionHeartbeatData,
-  WSBrowserSessionCloseData,
-  WSBrowserSessionReadyData,
-  WSBrowserSessionFrameData,
-  WSBrowserSessionResultData,
-  WSBrowserSessionConsoleData,
-  WSBrowserSessionErrorData,
-  WSBrowserSessionClosedData,
-  WSBrowserSessionAgentOpenedData,
-  WSBrowserSessionViewportData,
-  WSBrowserSessionControllerData,
-  WSBrowserSessionDialogData,
-  WSBrowserSessionPointerData,
-  WSBrowserSessionAgentActionData,
-  WSBrowserSessionNavigatedData,
-  WSBrowserSessionAudioData,
-} from './types/browser-session.js';
-import type {
-  WSGitStatusData,
-  WSGitRefsUpdatedData,
-  WSGitWorkflowProgressData,
-} from './types/git.js';
-import type {
-  WSPipelineRunStartedData,
-  WSPipelineStageUpdateData,
-  WSPipelineRunCompletedData,
-  WSPipelineApprovalRequestedData,
-  WSPipelineApprovalResolvedData,
-} from './types/pipelines.js';
-import type {
-  WSTestActionData,
-  WSTestFrameData,
-  WSTestOutputData,
-  WSTestStatusData,
-  WSTestConsoleData,
-  WSTestNetworkData,
-  WSTestErrorData,
-} from './types/test.js';
-import type { ThreadEvent } from './types/thread-events.js';
-import type { WorkflowNodeRunState } from './types/workflows.js';

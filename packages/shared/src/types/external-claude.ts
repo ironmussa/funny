@@ -1,5 +1,5 @@
 /** External Claude Code sessions discovered on a runner (`~/.claude/projects`). */
-import type { ImageAttachment } from '../types.js';
+import type { ImageAttachment } from './messages.js';
 
 export interface ExternalClaudeSession {
   id: string;

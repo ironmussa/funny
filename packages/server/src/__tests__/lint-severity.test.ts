@@ -68,19 +68,33 @@ describe('lint severity (#465)', () => {
     expect(level(client['shadcn/no-restyle'])).toBe('warn');
   });
 
-  test('createFactoryTriage fits max-lines-per-function', () => {
-    const run = Bun.spawnSync(
-      [
-        process.execPath,
-        join(ROOT, 'scripts', 'bun-lint.ts'),
-        '--format',
-        'agent',
-        join('packages', 'server', 'src', 'services', 'factory', 'factory-triage.ts'),
-      ],
-      { cwd: ROOT, stdout: 'pipe', stderr: 'pipe' },
+  // Counted here, the way max-lines-per-function counts with skipBlankLines and
+  // skipComments, rather than by running `bun lint`: the test jobs pin a Bun
+  // without the lint command (only the lint job runs canary).
+  test('createFactoryTriage fits max-lines-per-function', async () => {
+    const path = join(
+      ROOT,
+      'packages',
+      'server',
+      'src',
+      'services',
+      'factory',
+      'factory-triage.ts',
     );
-    const out = `${run.stdout.toString()}${run.stderr.toString()}`;
-    expect(out).not.toContain('max-lines-per-function');
-    expect(run.exitCode).toBe(0);
-  }, 60_000);
+    const lines = (await Bun.file(path).text()).split('\n');
+    const start = lines.findIndex((line) =>
+      line.startsWith('export function createFactoryTriage('),
+    );
+    const end = lines.findIndex((line, index) => index > start && line === '}');
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    const counted = lines.slice(start, end + 1).filter((line) => {
+      const text = line.trim();
+      return (
+        text !== '' && !text.startsWith('//') && !text.startsWith('/*') && !text.startsWith('*')
+      );
+    });
+    const [, { max }] = rules['max-lines-per-function'] as [string, { max: number }];
+    expect(counted.length).toBeLessThanOrEqual(max);
+  });
 });

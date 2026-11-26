@@ -61,10 +61,15 @@ interface LockFile {
   skills: Record<string, LockFileSkill>;
 }
 
+interface SkillFrontmatter {
+  name?: string;
+  description?: string;
+}
+
 /**
  * Parse YAML frontmatter from a SKILL.md file to extract name and description.
  */
-function parseSkillFrontmatter(skillMdPath: string): { name?: string; description?: string } {
+function parseSkillFrontmatter(skillMdPath: string): SkillFrontmatter {
   if (!existsSync(skillMdPath)) return {};
 
   try {
@@ -158,10 +163,12 @@ function parseThreadMode(value: string | undefined): 'local' | 'worktree' | unde
   return normalized === 'local' || normalized === 'worktree' ? normalized : undefined;
 }
 
-function parseCommandFrontmatter(mdPath: string): {
+interface CommandFrontmatter {
   description?: string;
   threadMode?: 'local' | 'worktree';
-} {
+}
+
+function parseCommandFrontmatter(mdPath: string): CommandFrontmatter {
   if (!existsSync(mdPath)) return {};
 
   try {
@@ -340,11 +347,14 @@ function readPluginLayout(installPath: string, pluginKey: string): PluginLayout 
   };
 }
 
+interface PluginManifest {
+  name: string;
+  commands: string[];
+  skills: string[];
+}
+
 /** `.claude-plugin/plugin.json`, or the fallback name and no extra paths when absent or invalid. */
-function readPluginManifest(
-  installPath: string,
-  pluginKey: string,
-): { name: string; commands: string[]; skills: string[] } {
+function readPluginManifest(installPath: string, pluginKey: string): PluginManifest {
   // fallback: "commit-commands" from "commit-commands@claude-plugins-official"
   const fallback = { name: pluginKey.split('@')[0], commands: [], skills: [] };
   const pluginJsonPath = join(installPath, '.claude-plugin', 'plugin.json');

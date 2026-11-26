@@ -98,12 +98,14 @@ interface StartState {
   ownerId: string | undefined;
 }
 
-/** Project-level run flags forwarded to the orchestrator. */
-function projectRunFlags(project: StartProject): {
+interface ProjectRunFlags {
   fastMode: boolean;
   steerable: boolean;
   redirectChecks: boolean;
-} {
+}
+
+/** Project-level run flags forwarded to the orchestrator. */
+function projectRunFlags(project: StartProject): ProjectRunFlags {
   return {
     fastMode: project?.fastMode ?? false,
     // On unless the project turned it off; scratch threads (no project) too.

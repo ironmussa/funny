@@ -78,8 +78,13 @@ export function queryList<TSchema extends ZodTypeAny>(itemSchema: TSchema) {
   }, z.array(itemSchema));
 }
 
-function queryValues(c: Context): Record<string, string | string[]> {
-  const values: Record<string, string | string[]> = { ...c.req.query() };
+/** Every query parameter, one value or all of a repeated one. */
+interface QueryValues {
+  [name: string]: string | string[];
+}
+
+function queryValues(c: Context): QueryValues {
+  const values: QueryValues = { ...c.req.query() };
   for (const [key, allValues] of Object.entries(c.req.queries())) {
     if (allValues.length > 1) values[key] = allValues;
     else if (allValues[0] !== undefined) values[key] = allValues[0];

@@ -16,116 +16,37 @@
  * Prints one `file:line:col` per finding and exits 1 when there is any.
  */
 
-import { readdirSync, readFileSync } from 'node:fs';
-import { join, relative } from 'node:path';
-
-import { parseSync } from 'oxc-parser';
-
 import { noRuntimeTypeofRule } from '../../tools/oxlint/anti-slop/rules/no-runtime-typeof.ts';
+import { runRuleCheck, walkProgram, type AstNode, type RuleFinding } from './oxc-rule-check.ts';
 
-const ROOT = join(import.meta.dir, '..', '..');
 const RULE_OPTIONS = [{ allowInTypeGuards: true }];
-const SOURCE_FILE = /\.(ts|tsx|mts|cts)$/;
-const TEST_FILE = /(^|\/)__tests__\/|\.(test|spec)\./;
 
-interface AstNode {
-  type: string;
-  start: number;
-  parent?: AstNode | null;
-}
-
-function isAstNode(value: unknown): value is AstNode {
-  return typeof value === 'object' && value !== null && 'type' in value && 'start' in value;
-}
-
-/** The AST nodes directly under `node` (its parent link excluded). */
-function childNodes(node: AstNode): AstNode[] {
-  return Object.entries(node)
-    .filter(([key]) => key !== 'parent')
-    .flatMap(([, value]) => (Array.isArray(value) ? value : [value]))
-    .filter(isAstNode);
-}
-
-/** Offsets of the `typeof` expressions the rule reports in `source`. */
-function findRuntimeTypeof(fileName: string, source: string): number[] {
-  const { program, errors } = parseSync(fileName, source);
-  if (errors.length > 0) throw new Error(`${fileName}: ${errors[0].message}`);
-  if (!isAstNode(program)) throw new Error(`${fileName}: the parser returned no program`);
-  const reported: number[] = [];
+/** The `typeof` expressions the rule reports in `source`. */
+function findRuntimeTypeof(fileName: string, source: string): RuleFinding[] {
+  const reported: RuleFinding[] = [];
   // SAFETY: the rule reads only `context.options` and calls `context.report({ node })`
   // (tools/oxlint/anti-slop/rules/no-runtime-typeof.ts); this object provides both.
   const context = {
     options: RULE_OPTIONS,
-    report: ({ node }: { node: AstNode }) => reported.push(node.start),
+    report: ({ node }: { node: AstNode }) => reported.push({ offset: node.start }),
   } as never;
   const onUnary = noRuntimeTypeofRule.createOnce(context).UnaryExpression;
   if (!onUnary) throw new Error('no-runtime-typeof has no UnaryExpression visitor');
-
-  const walk = (node: AstNode, parent: AstNode | null) => {
-    node.parent = parent;
-    if (node.type === 'UnaryExpression') {
-      // SAFETY: oxc-parser builds the ESTree oxlint gives its JS plugins, and `walk`
-      // set `parent` on this node and every ancestor, which is all the rule reads.
-      onUnary(node as never);
-    }
-    for (const child of childNodes(node)) walk(child, node);
-  };
-  walk(program, null);
+  walkProgram(fileName, source, (node) => {
+    if (node.type !== 'UnaryExpression') return;
+    // SAFETY: oxc-parser builds the ESTree oxlint gives its JS plugins, and
+    // `walkProgram` set `parent` on this node and every ancestor, which is all the rule reads.
+    onUnary(node as never);
+  });
   return reported;
 }
 
-function sourceFiles(dir: string): string[] {
-  return readdirSync(dir, { recursive: true, encoding: 'utf8' })
-    .filter((path) => SOURCE_FILE.test(path) && !path.endsWith('.d.ts'))
-    .map((path) => join(dir, path))
-    .filter((path) => !TEST_FILE.test(relative(ROOT, path)) && !path.includes('node_modules'));
-}
-
-function lineAndColumn(source: string, offset: number): string {
-  const before = source.slice(0, offset).split('\n');
-  return `${before.length}:${before[before.length - 1].length + 1}`;
-}
-
-function selfTest(): void {
-  const cases: Array<[string, number]> = [
+if (import.meta.main) {
+  runRuleCheck('no-runtime-typeof', findRuntimeTypeof, [
     ['const a = (v: unknown) => typeof v === "string";', 1],
     ['function g(v: unknown): v is string { return typeof v === "string"; }', 0],
     ['const ok = typeof window === "undefined";', 0],
     ['function g(v: unknown): v is string { return [v].some((x) => typeof x === "string"); }', 1],
     ['type T = typeof import("x");', 0],
-  ];
-  for (const [source, expected] of cases) {
-    const found = findRuntimeTypeof('fixture.ts', source).length;
-    if (found !== expected) {
-      console.error(`self-test: expected ${expected}, found ${found}: ${source}`);
-      process.exit(1);
-    }
-  }
-  console.log(`self-test: ${cases.length} fixtures ok`);
-}
-
-if (import.meta.main) {
-  const args = process.argv.slice(2);
-  if (args.includes('--self-test')) {
-    selfTest();
-  } else {
-    if (args.length === 0) {
-      console.error('usage: check-runtime-typeof.ts <dir> [...] | --self-test');
-      process.exit(2);
-    }
-    const findings: string[] = [];
-    for (const dir of args) {
-      for (const path of sourceFiles(join(ROOT, dir))) {
-        const source = readFileSync(path, 'utf8');
-        for (const offset of findRuntimeTypeof(path, source)) {
-          findings.push(
-            `${relative(ROOT, path)}:${lineAndColumn(source, offset)}: no-runtime-typeof`,
-          );
-        }
-      }
-    }
-    for (const finding of findings) console.log(finding);
-    console.log(`${findings.length} no-runtime-typeof finding(s) in ${args.join(', ')}`);
-    process.exit(findings.length > 0 ? 1 : 0);
-  }
+  ]);
 }

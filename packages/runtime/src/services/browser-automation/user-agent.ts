@@ -8,7 +8,12 @@
  * This is identity normalisation only, not fingerprint spoofing.
  */
 
-const PLATFORM_TOKENS: Record<string, string> = {
+/** `process.platform` values to the platform token of a Chrome user agent. */
+interface PlatformTokens {
+  readonly [platform: string]: string;
+}
+
+const PLATFORM_TOKENS: PlatformTokens = {
   linux: 'X11; Linux x86_64',
   darwin: 'Macintosh; Intel Mac OS X 10_15_7',
   win32: 'Windows NT 10.0; Win64; x64',

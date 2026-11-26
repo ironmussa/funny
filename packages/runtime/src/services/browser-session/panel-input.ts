@@ -36,7 +36,10 @@ function mouse(type: 'mouseMoved' | 'mousePressed' | 'mouseReleased'): PanelInpu
 }
 
 /** Text a key produces when the panel did not send one (Enter submits forms). */
-const KEY_TEXT: Record<string, string> = { Enter: '\r' };
+interface KeyText {
+  readonly [key: string]: string;
+}
+const KEY_TEXT: KeyText = { Enter: '\r' };
 
 /**
  * Panel keystroke → CDP. Chrome acts on non-text keys (arrows, Shift,

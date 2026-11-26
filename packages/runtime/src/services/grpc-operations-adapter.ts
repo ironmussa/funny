@@ -156,7 +156,7 @@ function normalizeProtobufString(value: string): string {
  * decimal strings, non-finite numbers `null`, lone surrogates U+FFFD, and
  * `undefined` (or any other non-JSON value) is dropped.
  */
-function normalizeProtobufJson(value: unknown): JsonValue | undefined {
+function normalizeProtobufJson<Value>(value: Value): JsonValue | undefined {
   if (value === undefined) return undefined;
   if (value === null || isBoolean(value)) return value;
   if (isString(value)) return normalizeProtobufString(value);

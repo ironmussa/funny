@@ -86,6 +86,8 @@ export interface FactoryLaneView {
   syncBaseSha: string | null;
   syncPrNumber: number | null;
   syncThreadId: string | null;
+  /** When the agent turn the sync last judged ended. */
+  syncTurnAt: string | null;
   syncAttempts: number;
   syncStartedAt: string | null;
   syncError: string | null;
@@ -114,6 +116,7 @@ const toView = (row: Row): FactoryLaneView => ({
   syncBaseSha: row.syncBaseSha ?? null,
   syncPrNumber: row.syncPrNumber ?? null,
   syncThreadId: row.syncThreadId ?? null,
+  syncTurnAt: row.syncTurnAt ?? null,
   syncAttempts: row.syncAttempts,
   syncStartedAt: row.syncStartedAt ?? null,
   syncError: row.syncError ?? null,
@@ -197,6 +200,7 @@ export function createFactoryLanesRepository(
           | 'syncBaseSha'
           | 'syncPrNumber'
           | 'syncThreadId'
+          | 'syncTurnAt'
           | 'syncAttempts'
           | 'syncStartedAt'
           | 'syncError'
@@ -235,6 +239,7 @@ const EMPTY_LANE = {
   syncBaseSha: null,
   syncPrNumber: null,
   syncThreadId: null,
+  syncTurnAt: null,
   syncAttempts: 0,
   syncStartedAt: null,
   syncError: null,

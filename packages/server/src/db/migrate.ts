@@ -2632,6 +2632,15 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    // Change factory-lanes, D4: the end of the agent turn a lane sync last
+    // judged, so a turn is judged once and the follow-up's turn is told apart
+    // from it by a compare, not a clock.
+    name: '139_factory_lanes_sync_turn_at',
+    async up() {
+      await ctx().addColumn('factory_lanes', 'sync_turn_at', 'TEXT');
+    },
+  },
 ];
 
 /**

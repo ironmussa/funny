@@ -341,7 +341,7 @@ async function fire(id: string): Promise<void> {
   await watchEarlyIntegration(factory, target.repo);
   if (incident) return;
   // After the incident check: a broken base is not carried into the lanes.
-  if (factory.enabled) await syncLanes(factory, target.repo);
+  if (factory.enabled) await syncLanes(factory, target.repo, target.mode);
   // A paused factory finishes its runs but admits nothing new; its queue waits,
   // and its schedules start nothing.
   if (!factory.enabled) return;
@@ -354,8 +354,9 @@ async function fire(id: string): Promise<void> {
  * into by one step (openspec factory-lanes, D4), as the enabler. The reader
  * carries no run's base: "the base" here is the factory's own branch.
  */
-async function syncLanes(factory: WatchedFactory, repo: string): Promise<void> {
+async function syncLanes(factory: WatchedFactory, repo: string, mode: LaunchMode): Promise<void> {
   if (!deps?.github.laneBranches) return;
+  const d = deps;
   const reader = { repo, ownerId: factory.userId, projectId: factory.projectId };
   const github = deps.github;
   await createLaneSync(
@@ -372,6 +373,38 @@ async function syncLanes(factory: WatchedFactory, repo: string): Promise<void> {
         },
         take: (group, holder, until) => putLease(group, holder, Date.now(), until),
         release: (group, holder) => deleteLease(group, holder),
+      },
+      agent: {
+        start: async (input) => {
+          const launched = await launchFor(d)({
+            userId: factory.userId,
+            body: {
+              projectId: factory.projectId,
+              title: input.title,
+              mode,
+              // The scratch branch is the lane's head: the thread works on it and pushes it.
+              baseBranch: input.baseBranch,
+              baseFromRemote: mode === 'worktree',
+              branch: input.branch,
+              requireBranch: true,
+              source: 'factory',
+              permissionMode: 'autoEdit',
+              prompt: input.prompt,
+            },
+          });
+          if (launched.isErr()) return { error: launched.error.message };
+          return launched.value.threadId
+            ? { threadId: launched.value.threadId }
+            : { error: 'the runner returned no thread' };
+        },
+        followUp: async (threadId, content, branch) => {
+          const send =
+            d.followUp ??
+            ((userId: string, id: string, text: string, expected?: string) =>
+              sendFactoryFollowUp(d.ports, userId, id, text, expected));
+          return (await send(factory.userId, threadId, content, branch)).isOk();
+        },
+        turn: syncThreadTurn,
       },
     },
     { factoryId: factory.id, reader },
@@ -613,6 +646,17 @@ const clearedRedCommits = new (class extends Set<string> {
     return super.add(key);
   }
 })();
+
+/** A sync agent's thread: its stored status and when its last turn ended, or null when it is gone. */
+async function syncThreadTurn(
+  threadId: string,
+): Promise<{ status: string; completedAt: string | null } | null> {
+  const [row] = await db
+    .select({ status: threads.status, completedAt: threads.completedAt })
+    .from(threads)
+    .where(eq(threads.id, threadId));
+  return row ? { status: row.status, completedAt: row.completedAt ?? null } : null;
+}
 
 /** A thread's stored status, or null when it is gone. */
 async function sentinelThreadStatus(threadId: string): Promise<string | null> {

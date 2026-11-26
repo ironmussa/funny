@@ -52,6 +52,8 @@ function world(
     ci?: CiState;
     outcome?: FactoryMergeOutcome;
     holders?: string[];
+    /** The factory has an agent for the syncs it cannot settle itself. */
+    agent?: boolean;
   } = {},
 ) {
   const state = {
@@ -67,6 +69,10 @@ function world(
     calls: [] as string[],
     merges: [] as Array<{ number: number; sha?: string; method?: string }>,
     turns: [] as string[],
+    /** The agent's thread: its status and when its last turn ended. */
+    thread: null as { status: string; completedAt: string | null } | null,
+    started: [] as Array<{ branch: string; baseBranch: string; prompt: string }>,
+    followUps: [] as string[],
   };
   const deps: LaneSyncDeps = {
     lanes,
@@ -113,6 +119,20 @@ function world(
       },
     },
   };
+  if (over.agent) {
+    deps.agent = {
+      start: async (input) => {
+        state.started.push(input);
+        state.thread = { status: 'running', completedAt: null };
+        return { threadId: 't-sync' };
+      },
+      followUp: async (_threadId, content) => {
+        state.followUps.push(content);
+        return true;
+      },
+      turn: async () => state.thread,
+    };
+  }
   const sync = createLaneSync(deps, {
     factoryId,
     reader: { repo: 'o/r', ownerId: 'alice', projectId: 'p1' },
@@ -128,6 +148,11 @@ describe('the lane sync transitions', () => {
     ['merging', 'clean', 'checking'],
     ['merging', 'nothing', 'idle'],
     ['checking', 'merged', 'idle'],
+    ['merging', 'conflict', 'resolving'],
+    ['checking', 'red', 'resolving'],
+    ['resolving', 'again', 'resolving'],
+    ['resolving', 'resolved', 'checking'],
+    ['resolving', 'fail', 'needs_human'],
     ['merging', 'fail', 'needs_human'],
     ['checking', 'fail', 'needs_human'],
     ['needs_human', 'retry', 'merging'],
@@ -320,5 +345,128 @@ describe('a lane sync', () => {
     );
     await sync.tick();
     expect((await lane()).syncState).toBe('idle');
+  });
+});
+
+describe('a lane sync the server cannot settle', () => {
+  const failing: CiState = {
+    kind: 'failing',
+    checks: [{ name: 'test', conclusion: 'failure', excerpt: 'expected 3, got 2' }],
+  };
+
+  test('a conflict starts one agent on the scratch branch, and its pushed merge goes to the checks', async () => {
+    const { state, sync } = world({ merge: 'conflict', agent: true });
+    await sync.tick();
+
+    expect(state.started).toHaveLength(1);
+    expect(state.started[0]).toMatchObject({ branch: 'factory/sync/a', baseBranch: 'feature/a' });
+    expect(state.started[0]!.prompt).toContain('origin/dev');
+    expect(state.started[0]!.prompt).toContain('never a rebase');
+    expect(await lane()).toMatchObject({
+      syncState: 'resolving',
+      syncThreadId: 't-sync',
+      syncAttempts: 1,
+    });
+
+    // Still working: nothing happens.
+    await sync.tick();
+    expect((await lane()).syncState).toBe('resolving');
+
+    // Its turn ended with the merge pushed.
+    state.thread = { status: 'completed', completedAt: '2026-11-26T10:05:00Z' };
+    state.contains['dev-2'] = ['factory/sync/a'];
+    await sync.tick();
+    expect(await lane()).toMatchObject({ syncState: 'checking', syncPrNumber: 77 });
+
+    await sync.tick();
+    expect(state.merges).toEqual([{ number: 77, sha: 'sync-head', method: 'merge' }]);
+    expect((await lane()).syncState).toBe('idle');
+  });
+
+  test('a turn that ended without the merge pushed is asked again, once per turn', async () => {
+    const { state, sync } = world({ merge: 'conflict', agent: true });
+    await sync.tick();
+    state.thread = { status: 'completed', completedAt: '2026-11-26T10:05:00Z' };
+    await sync.tick();
+    expect(state.followUps).toHaveLength(1);
+    expect(state.followUps[0]).toContain('was not pushed');
+    expect(await lane()).toMatchObject({ syncState: 'resolving', syncAttempts: 2 });
+
+    // The same ended turn, looked at again before the follow-up's turn ends: not counted twice.
+    await sync.tick();
+    await sync.tick();
+    expect(state.followUps).toHaveLength(1);
+    expect((await lane()).syncAttempts).toBe(2);
+  });
+
+  test('after three turns without the merge, a person is asked', async () => {
+    const { state, sync } = world({ merge: 'conflict', agent: true });
+    await sync.tick();
+    for (const minute of [5, 10, 15]) {
+      state.thread = { status: 'completed', completedAt: `2026-11-26T10:${minute}:00Z` };
+      await sync.tick();
+    }
+    const stuck = await lane();
+    expect(stuck.syncState).toBe('needs_human');
+    expect(stuck.syncError).toContain('3 attempts');
+    expect(state.followUps).toHaveLength(2);
+  });
+
+  test('failing checks after a clean merge go to the agent, then back to the checks', async () => {
+    const { state, sync } = world({ ci: failing, agent: true });
+    await sync.tick();
+    await sync.tick();
+
+    expect(state.started).toHaveLength(1);
+    expect(state.started[0]!.prompt).toContain('expected 3, got 2');
+    expect(await lane()).toMatchObject({ syncState: 'resolving', syncPrNumber: 77 });
+
+    // The clean merge is on the scratch branch already; the agent pushed a fix.
+    state.thread = { status: 'completed', completedAt: '2026-11-26T10:05:00Z' };
+    state.contains['dev-2'] = ['factory/sync/a'];
+    state.ci = { kind: 'green' };
+    await sync.tick();
+    expect((await lane()).syncState).toBe('checking');
+    await sync.tick();
+    expect((await lane()).syncState).toBe('idle');
+  });
+
+  test('checks still failing after the agent fixed them use up its attempts', async () => {
+    const { state, sync } = world({ ci: failing, agent: true });
+    state.contains['dev-2'] = ['factory/sync/a'];
+    await sync.tick();
+    for (const minute of [5, 10, 15]) {
+      await sync.tick(); // checking: red, asks the agent
+      state.thread = { status: 'completed', completedAt: `2026-11-26T10:${minute}:00Z` };
+      await sync.tick(); // resolving: pushed, back to the checks
+    }
+    await sync.tick();
+    const stuck = await lane();
+    expect(stuck.syncState).toBe('needs_human');
+    expect(stuck.syncError).toContain('3 attempts');
+  });
+
+  test('an agent that cannot start, or whose thread is gone, leaves it to a person', async () => {
+    const first = world({ merge: 'conflict', agent: true });
+    first.deps.agent!.start = async () => ({ error: 'the runner is offline' });
+    await first.sync.tick();
+    expect((await lane()).syncError).toContain('the runner is offline');
+
+    testDb.sqlite.run(
+      `UPDATE factory_lanes SET sync_state = 'resolving', sync_thread_id = 't-gone', sync_base_sha = 'dev-2'`,
+    );
+    const second = world({ agent: true });
+    await second.sync.tick();
+    expect(await lane()).toMatchObject({ syncState: 'needs_human' });
+  });
+
+  test('an agent that never finishes is given up on', async () => {
+    const { state, sync } = world({ merge: 'conflict', agent: true });
+    await sync.tick();
+    state.now = T0 + 4 * 60 * 60 * 1000;
+    await sync.tick();
+    const stuck = await lane();
+    expect(stuck.syncState).toBe('needs_human');
+    expect(stuck.syncError).toContain('in time');
   });
 });

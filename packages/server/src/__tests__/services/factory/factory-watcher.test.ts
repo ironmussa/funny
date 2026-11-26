@@ -153,7 +153,7 @@ interface GithubScript {
   /** The branches that contain each commit. */
   contains?: Record<string, string[]>;
   /** The repository as a lane sync sees it: branch heads. With it, the factory syncs its lanes. */
-  laneSync?: { heads: Record<string, string> };
+  laneSync?: { heads: Record<string, string>; conflict?: boolean };
   /** GitHub refuses to make a branch. */
   branchesRefused?: boolean;
   /** Each issue's labels as GitHub reads the issue back. */
@@ -359,7 +359,7 @@ function fakeGithub(
       },
       mergeInto: (branch: string, sha: string) => {
         port.syncCalls.push(`merge ${sha} into ${branch}`);
-        return okAsync('merged' as const);
+        return okAsync(laneSync.conflict ? ('conflict' as const) : ('merged' as const));
       },
       openPullRequest: (input: { head: string; base: string }) => {
         port.syncCalls.push(`pr ${input.head} -> ${input.base}`);
@@ -982,6 +982,52 @@ describe('factory watcher', () => {
         await poll.ticks[0]!();
         expect(github.merges).toBe(1);
         expect(syncState()).toEqual({ sync_state: 'idle', last_synced_base_sha: 'dev-2' });
+      });
+
+      test("a conflicting sync starts an agent on the enabler's runtime, on the scratch branch", async () => {
+        const launcher = fakeLauncher();
+        const factoryId = await enableFactory();
+        testDb.sqlite.run(
+          `INSERT INTO factory_lanes (id, factory_id, name, branch, created_at)
+           VALUES ('l1', '${factoryId}', 'a', 'feature/a', '2026-01-01')`,
+        );
+        const poll = fakePoll();
+        await startWatcherWithProof({
+          ports,
+          github: fakeGithub('acme/repo', [], {
+            mergeInto: { branch: 'dev' },
+            laneSync: { heads: { dev: 'dev-2', 'feature/a': 'a-1' }, conflict: true },
+          }),
+          createPoll: poll.createPoll,
+          launch: launcher.launch,
+          resolveRuntime,
+          waitThread: pendingThreads,
+        });
+        await poll.ticks[0]!();
+
+        expect(launcher.calls).toHaveLength(1);
+        expect(launcher.calls[0]!.userId).toBe('alice');
+        expect(launcher.calls[0]!.body).toMatchObject({
+          projectId: 'p1',
+          mode: 'worktree',
+          source: 'factory',
+          branch: 'factory/sync/a',
+          requireBranch: true,
+          baseBranch: 'feature/a',
+          baseFromRemote: true,
+        });
+        expect(String(launcher.calls[0]!.body.prompt)).toContain('origin/dev');
+        const row = present(
+          testDb.sqlite
+            .query<{ sync_state: string; sync_thread_id: string | null }, []>(
+              'SELECT sync_state, sync_thread_id FROM factory_lanes',
+            )
+            .get(),
+          'the lane',
+        );
+        expect(row).toEqual({ sync_state: 'resolving', sync_thread_id: 't-1' });
+        // A sync takes no slot of the factory's issue stages: no run was made for it.
+        expect((await createFactoryRunsRepository().list(factoryId))._unsafeUnwrap()).toEqual([]);
       });
 
       test('no sync starts while the base branch has an incident', async () => {

@@ -460,6 +460,7 @@ export function createTestDb() {
       sync_base_sha TEXT,
       sync_pr_number INTEGER,
       sync_thread_id TEXT,
+      sync_turn_at TEXT,
       sync_attempts INTEGER NOT NULL DEFAULT 0,
       sync_started_at TEXT,
       sync_error TEXT,

@@ -463,6 +463,8 @@ export const factoryLanes = pgTable(
     syncBaseSha: text('sync_base_sha'),
     syncPrNumber: integer('sync_pr_number'),
     syncThreadId: text('sync_thread_id'),
+    /** When the agent turn the sync last judged ended: a later turn has another value. */
+    syncTurnAt: text('sync_turn_at'),
     syncAttempts: integer('sync_attempts').notNull().default(0),
     syncStartedAt: text('sync_started_at'),
     syncError: text('sync_error'),

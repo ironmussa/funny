@@ -9,6 +9,21 @@ The issue was triaged before you. Your change must meet this contract:
 
 {{triage.json.contract}}
 {{/triage.json.contract}}
+{{#spec}}
+
+The team approved this spec for the issue before you started. Its
+decisions are not yours to change: implement them as written, even where
+you would have chosen otherwise. A choice the spec leaves open is yours:
+decide it and list it under **Decisions** in the pull request. Do not
+implement what it puts out of scope.
+
+{{spec}}
+{{#spec_commit_path}}
+
+Commit this spec, as written above, to `{{spec_commit_path}}` in the same
+pull request.
+{{/spec_commit_path}}
+{{/spec}}
 
 How to work:
 

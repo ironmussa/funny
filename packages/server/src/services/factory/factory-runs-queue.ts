@@ -250,7 +250,12 @@ export function queueOperations(newId: () => string) {
             waitReason: null,
             currentStep: threadIds.length > 0 ? REOPENED_STEP : null,
             threadIds: JSON.stringify(threadIds),
-            triage: run.triage ? JSON.stringify({ ...run.triage, superseded: true }) : null,
+            // An approved spec's contract is the team's: it is kept, not triaged again.
+            triage: run.triage
+              ? JSON.stringify(
+                  run.triage.fromSpec ? run.triage : { ...run.triage, superseded: true },
+                )
+              : null,
           }),
         )
         .andThen((moved) =>

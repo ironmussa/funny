@@ -42,12 +42,13 @@ export function pullRequestNumber(url: string): number | null {
   return match ? Number(match) : null;
 }
 
-/** A run parked on its issue (`needs_info`) is triaged again by a retry. */
+/** A run parked on its issue (`needs_info`) or its spec (`needs_spec`) is triaged again by a retry. */
 const RETRYABLE = new Set<FactoryRun['state']>([
   'failed',
   'waiting_human',
   'no_change',
   'needs_info',
+  'needs_spec',
 ]);
 
 /** Whether a retry is offered: a high-risk change waits for the member's approval, which a retry would not give. */
@@ -478,8 +479,8 @@ export function FactoryRunControls({
           prNumber={prNumber}
           prState={run.state === 'merged' ? 'MERGED' : 'OPEN'}
           prUrl={run.prUrl}
+          projectId={projectId}
           variant="plain"
-          showExternalIcon={false}
           data-testid={testId('pr')}
         />
       )}

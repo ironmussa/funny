@@ -79,6 +79,33 @@ describe('factory settings service', () => {
     expect(rows.n).toBe(0);
   });
 
+  test('the Spec stage is off by default, and its settings round-trip (factory-spec-stage)', async () => {
+    const svc = settings();
+    const first = (await svc.save('alice', 'p1', { enabled: true }))._unsafeUnwrap();
+    expect(first).toMatchObject({ specStage: false, commitSpecPath: '' });
+    (
+      await svc.save('alice', 'p1', {
+        enabled: true,
+        specStage: true,
+        commitSpecPath: 'docs/specs/',
+      })
+    )._unsafeUnwrap();
+    expect((await svc.get('alice', 'p1'))._unsafeUnwrap()).toMatchObject({
+      specStage: true,
+      commitSpecPath: 'docs/specs',
+    });
+    // A save that does not carry them leaves them alone.
+    (await svc.save('alice', 'p1', { enabled: false }))._unsafeUnwrap();
+    expect((await svc.get('alice', 'p1'))._unsafeUnwrap()).toMatchObject({ specStage: true });
+  });
+
+  test('a commit spec path outside the repository is refused', async () => {
+    const svc = settings();
+    for (const commitSpecPath of ['/etc/specs', '../specs', 'docs/../../x', '~/specs']) {
+      expect((await svc.save('alice', 'p1', { enabled: true, commitSpecPath })).isErr()).toBe(true);
+    }
+  });
+
   test('each user keeps their own factory for the same project', async () => {
     const svc = settings();
     seedProjectMember(testDb.db, { projectId: 'p1', userId: 'bob', role: 'member' });

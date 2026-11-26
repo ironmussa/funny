@@ -33,6 +33,8 @@ type AuditAction =
   | 'factory.run_retried'
   | 'factory.run_split'
   | 'factory.merge_approved'
+  | 'factory.spec_approved'
+  | 'factory.spec_reopened'
   | 'factory.lint_cleanup_marked'
   | 'factory.run_marked_done'
   | 'factory.run_put_on_hold'

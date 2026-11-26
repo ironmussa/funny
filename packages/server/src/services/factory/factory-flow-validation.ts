@@ -286,6 +286,8 @@ export const FACTORY_FLOW_INPUTS: ReadonlySet<string> = new Set([
   'base_branch',
   'factory_id',
   'stack_branch',
+  'spec',
+  'spec_commit_path',
 ]);
 
 /** The flow's inputs a run must be given a value for: required, and without a default. */

@@ -407,7 +407,9 @@ describe('factory agent tools', () => {
     expect(listed.runs[0].approvalRequest).toEqual({
       id: first.requestId,
       state: 'pending',
+      kind: 'merge',
       sha: A,
+      specRevision: null,
     });
   });
 
@@ -429,7 +431,9 @@ describe('factory agent tools', () => {
     expect(listed.runs[0].approvalRequest).toEqual({
       id: asked.requestId,
       state: 'expired',
+      kind: 'merge',
       sha: A,
+      specRevision: null,
     });
   });
 });

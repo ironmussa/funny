@@ -7,6 +7,7 @@ import {
   factoryRunHoldSchema,
   factoryRiskSchema,
   factoryRoleThreadSchema,
+  factoryRunSpecSchema,
   factoryStackedOnSchema,
   factoryStepOptionsRecordSchema,
   factoryTriageSchema,
@@ -19,6 +20,7 @@ import {
   type FactoryReviewVerdict,
   type FactoryRisk,
   type FactoryRoleThread,
+  type FactoryRunSpec,
   type FactoryRunMetrics,
   type FactoryStackedOn,
   type FactoryStepOptionsRecord,
@@ -98,6 +100,8 @@ export type FactoryRunState =
   | 'queued'
   | 'triaging'
   | 'needs_info'
+  /** Triage found open product decisions: parked while a spec is written (openspec factory-spec-stage). */
+  | 'needs_spec'
   | 'working'
   | 'pr_open'
   | 'waiting_ci'
@@ -127,7 +131,11 @@ export const TERMINAL: ReadonlySet<FactoryRunState> = new Set(TERMINAL_STATES);
  * Non-terminal states that do NOT hold a concurrency slot: the agent is done and
  * the run waits for a person. It still blocks re-admitting its issue.
  */
-export const PARKED_STATES = ['waiting_human', 'needs_info'] as const satisfies FactoryRunState[];
+export const PARKED_STATES = [
+  'waiting_human',
+  'needs_info',
+  'needs_spec',
+] as const satisfies FactoryRunState[];
 
 const PARKED: ReadonlySet<FactoryRunState> = new Set(PARKED_STATES);
 
@@ -140,6 +148,7 @@ export const HELD_STATES = ['on_hold'] as const satisfies FactoryRunState[];
 /** The states a member may put on hold (`FACTORY_RUN_HOLDABLE_STATES`). */
 export const HOLDABLE_STATES = [
   'needs_info',
+  'needs_spec',
   'waiting_human',
   'failed',
   'no_change',
@@ -185,8 +194,24 @@ export const QUEUE_TRANSITIONS = {
    * line without a slot, keeping its contract, until that run is done.
    */
   hold: { from: ['triaging'], to: 'requested' },
-  /** The issue changed (or a member retried): a `needs_info` run is triaged again. */
-  retriage: { from: ['needs_info'], to: 'requested' },
+  /**
+   * The issue changed (or a member retried): a `needs_info` run is triaged
+   * again; a member chose to triage a `needs_spec` run again.
+   */
+  retriage: { from: ['needs_info', 'needs_spec'], to: 'requested' },
+  /**
+   * A member approved the run's spec (openspec factory-spec-stage): back in
+   * line at its earlier place, with the spec's contract.
+   */
+  approveSpec: { from: ['needs_spec'], to: 'requested' },
+  /**
+   * A member reopened the run's spec: approved but not admitted yet, or parked
+   * after it ran. A run in flight is stopped first.
+   */
+  reopenSpec: {
+    from: ['requested', 'waiting_human', 'failed', 'no_change', 'stopped'],
+    to: 'needs_spec',
+  },
   /**
    * A retry, merge approval or take-over found every slot taken: the run
    * waits at the head of the queue, with the steps it keeps, until one frees.
@@ -256,6 +281,8 @@ export const FLOW_TRANSITIONS = {
   triaging: ['queued', 'triaging'],
   /** Triage asked questions on the issue. */
   needs_info: ['triaging'],
+  /** Triage found open product decisions: the spec stage starts. */
+  needs_spec: ['triaging'],
   working: IN_FLIGHT_STATES,
   pr_open: IN_FLIGHT_STATES,
   waiting_ci: IN_FLIGHT_STATES,
@@ -410,6 +437,8 @@ export interface FactoryRunView {
   stepOptions: FactoryStepOptionsRecord[];
   /** The role threads (triage, review) it started, as each one started. */
   roleThreads: FactoryRoleThread[];
+  /** Its spec stage: the spec writer's thread, latest result and approval; null without one. */
+  spec: FactoryRunSpec | null;
   /** Each flow node execution, in start order; only the run lists read it (openspec factory-step-timings). */
   stepTimings?: FactoryStepTiming[];
 }
@@ -429,12 +458,13 @@ const sourceOf = (stored: string): FactoryRunSource =>
  */
 export function threadsOf(
   run: Pick<FactoryRunView, 'threadIds' | 'reviews' | 'triage'> &
-    Partial<Pick<FactoryRunView, 'roleThreads'>>,
+    Partial<Pick<FactoryRunView, 'roleThreads' | 'spec'>>,
 ): string[] {
   const reviewers = run.reviews.flatMap((review) => (review.threadId ? [review.threadId] : []));
   const triage = run.triage?.threadId ? [run.triage.threadId] : [];
   const roles = (run.roleThreads ?? []).map((role) => role.threadId);
-  return [...new Set([...run.threadIds, ...triage, ...reviewers, ...roles])];
+  const spec = run.spec?.threadId ? [run.spec.threadId] : [];
+  return [...new Set([...run.threadIds, ...triage, ...spec, ...reviewers, ...roles])];
 }
 
 export type FactoryRunsError =
@@ -529,7 +559,15 @@ const jsonFieldsOf = (row: Row) => ({
   triage: parseTriage(row.triage ?? null),
   stepOptions: parseStepOptions(row.stepOptions ?? null),
   roleThreads: parseRoleThreads(row.roleThreads ?? null),
+  spec: parseRunSpec(row.spec ?? null),
 });
+
+/** The stored spec record, or null (none, or no longer readable). */
+export function parseRunSpec(raw: string | null): FactoryRunSpec | null {
+  if (!raw) return null;
+  const parsed = parseStoredJson(factoryRunSpecSchema, raw, 'factory_runs.spec');
+  return parsed.ok ? parsed.value : null;
+}
 
 export const toView = (row: Row): FactoryRunView => ({
   ...plainFieldsOf(row),
@@ -565,7 +603,8 @@ export function parseStoredInputs(raw: string | null, column: string): Record<st
   return parsed.ok ? parsed.value : {};
 }
 
-function parseTriage(raw: string | null): FactoryTriage | null {
+/** The stored triage answer, or null (none, or no longer readable). */
+export function parseTriage(raw: string | null): FactoryTriage | null {
   if (!raw) return null;
   const parsed = parseStoredJson(factoryTriageSchema, raw, 'factory_runs.triage');
   return parsed.ok ? parsed.value : null;
@@ -678,6 +717,8 @@ export interface UpdateRunInput {
   stepOptions?: FactoryStepOptionsRecord[];
   /** Every role thread so far (the run appends and writes the whole list). */
   roleThreads?: FactoryRoleThread[];
+  /** Its spec stage (the whole record; approval is written only by `approveSpec`). */
+  spec?: FactoryRunSpec | null;
   /** The node its `merge` regenerates the change with (D9), or null. */
   regenerateNode?: string | null;
   /** When an early integration started waiting for the step holding the checkout (D8), or null. */
@@ -712,6 +753,7 @@ const JSON_FIELDS = [
   'stepOptions',
   'roleThreads',
   'stackedOn',
+  'spec',
 ] as const;
 
 export function changesFor(input: UpdateRunInput): Partial<Row> | null {
@@ -764,6 +806,7 @@ export function newRunRow(
     riskWaiver: null,
     hold: null,
     roleThreads: null,
+    spec: null,
     issueTitle: null,
     triggerId: null,
     triggerName: null,

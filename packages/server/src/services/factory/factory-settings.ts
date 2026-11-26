@@ -16,6 +16,7 @@ import {
   type FactorySettings,
   type FactoryStepOverrides,
   factoryBaseBranchSchema,
+  factoryCommitSpecPathSchema,
   factoryLaneBranchPrefixSchema,
   factoryLaneLabelPrefixSchema,
   type FactoryTooBig,
@@ -170,6 +171,8 @@ const configOf = (row: Row): FactoryConfig => ({
   batch: batchOf(row),
   dependencies: dependenciesOf(row),
   tooBig: tooBigOf(row),
+  specStage: row.specStage === 1,
+  commitSpecPath: row.commitSpecPath ?? '',
   holdPathsAwaitingApproval: row.holdPathsAwaitingApproval === 1,
   baseBranch: row.baseBranch ?? '',
   laneLabelPrefix: row.laneLabelPrefix ?? DEFAULT_LANE_LABEL_PREFIX,
@@ -206,6 +209,10 @@ const SAVE_RULES: readonly SaveRule[] = [
     laneBranchPrefix !== undefined &&
     !factoryLaneBranchPrefixSchema.safeParse(laneBranchPrefix).success
       ? 'laneBranchPrefix is not the start of a valid branch name'
+      : null,
+  ({ commitSpecPath }) =>
+    commitSpecPath !== undefined && !factoryCommitSpecPathSchema.safeParse(commitSpecPath).success
+      ? 'commitSpecPath must be a folder inside the repository, without ..'
       : null,
   ({ label }) => (label !== undefined && label.trim() === '' ? 'Label must not be empty' : null),
   ({ mode }) =>
@@ -300,6 +307,8 @@ const DEFAULTS: FactoryConfig = {
   batch: DEFAULT_FACTORY_BATCH,
   dependencies: 'wait',
   tooBig: 'ask',
+  specStage: false,
+  commitSpecPath: '',
   holdPathsAwaitingApproval: false,
   baseBranch: '',
   laneLabelPrefix: DEFAULT_LANE_LABEL_PREFIX,
@@ -326,6 +335,8 @@ function mergeConfig(input: SaveFactorySettingsInput, base: FactoryConfig): Fact
     batch: pick('batch'),
     dependencies: pick('dependencies'),
     tooBig: pick('tooBig'),
+    specStage: pick('specStage'),
+    commitSpecPath: pick('commitSpecPath').trim().replace(/\/+$/, ''),
     holdPathsAwaitingApproval: pick('holdPathsAwaitingApproval'),
     baseBranch: pick('baseBranch').trim(),
     laneLabelPrefix: pick('laneLabelPrefix').trim(),
@@ -364,6 +375,8 @@ function buildRow(
     batchWaitMs: config.batch.waitSeconds * 1000,
     dependencies: config.dependencies,
     tooBig: config.tooBig,
+    specStage: config.specStage ? 1 : 0,
+    commitSpecPath: config.commitSpecPath || null,
     holdPathsAwaitingApproval: config.holdPathsAwaitingApproval ? 1 : 0,
     baseBranch: config.baseBranch || null,
     laneLabelPrefix: config.laneLabelPrefix,
@@ -477,6 +490,8 @@ const COLUMNS_OF: Record<keyof FactoryConfig, readonly (keyof Row)[]> = {
   batch: ['batchSize', 'batchWaitMs'],
   dependencies: ['dependencies'],
   tooBig: ['tooBig'],
+  specStage: ['specStage'],
+  commitSpecPath: ['commitSpecPath'],
   holdPathsAwaitingApproval: ['holdPathsAwaitingApproval'],
   baseBranch: ['baseBranch'],
   laneLabelPrefix: ['laneLabelPrefix'],

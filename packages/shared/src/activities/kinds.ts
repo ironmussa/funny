@@ -236,6 +236,23 @@ export const ACTIVITY_KINDS = {
       sha: z.string().max(64).optional(),
     }),
   },
+  // A member approved a run's spec draft (openspec factory-spec-stage): the run goes back to the queue.
+  'factory.spec_approved': {
+    scope: 'project',
+    destructive: false,
+    record: 'always',
+    input: z.object({
+      issueNumber: z.number().int().optional(),
+      revision: z.number().int().nonnegative().optional(),
+    }),
+  },
+  // A member reopened a run's spec: the approval is dropped and the spec writer revises it.
+  'factory.spec_reopened': {
+    scope: 'project',
+    destructive: false,
+    record: 'always',
+    input: z.object({ issueNumber: z.number().int().optional() }),
+  },
   // A member's merge approval moved to another commit of the pull request
   // (openspec factory-approval-survives-integration): recorded for the approver.
   'factory.approval-moved': {

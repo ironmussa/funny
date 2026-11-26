@@ -91,6 +91,7 @@ export function factoryRunStateLabel(t: TFunction, state: FactoryRun['state']): 
     queued: t('factory.state.queued', 'Queued'),
     triaging: t('factory.state.triaging', 'Triaging'),
     needs_info: t('factory.state.needsInfo', 'Needs info'),
+    needs_spec: t('factory.state.needsSpec', 'Needs a spec'),
     working: t('factory.state.working', 'Working'),
     pr_open: t('factory.state.prOpen', 'PR open'),
     waiting_ci: t('factory.state.waitingCi', 'Waiting for CI'),
@@ -297,6 +298,8 @@ const SECTION_OF: Record<FactoryRun['state'], FactoryQueueSection> = {
   waiting_human: 'waiting',
   // Parked on its issue: it needs an answer there, from whoever wrote the issue.
   needs_info: 'waiting',
+  // Waits on the team: the spec writer's questions, or a draft to approve.
+  needs_spec: 'waiting',
   queued: 'active',
   triaging: 'active',
   working: 'active',

@@ -134,6 +134,8 @@ describe('parseActivityInput for the new kinds', () => {
     'factory.mark-done': { issueNumber: 12 },
     'factory.hold': { issueNumber: 12 },
     'factory.release': { issueNumber: 12 },
+    'factory.spec_approved': { issueNumber: 12, revision: 2 },
+    'factory.spec_reopened': { issueNumber: 12 },
     'factory.lane_sync': {
       lane: 'payments',
       branch: 'feature/payments',

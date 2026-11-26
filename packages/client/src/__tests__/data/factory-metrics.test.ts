@@ -42,6 +42,7 @@ function run(over: Partial<FactoryRun> = {}): FactoryRun {
     flowCommit: null,
     stepOptions: [],
     roleThreads: [],
+    spec: null,
     mergeApproval: null,
     riskWaiver: null,
     hold: null,

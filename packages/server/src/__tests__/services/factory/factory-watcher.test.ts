@@ -97,7 +97,12 @@ let reviewerThreads = 0;
  * it says. Kept out of `calls`, which count the implementing agent's launches.
  */
 function launchReviewer(input: StartThreadInput): LaunchResult {
-  const kind = String(input.body.title).startsWith('[Factory triage]') ? 'tri' : 'rev';
+  const title = String(input.body.title);
+  const kind = title.startsWith('[Factory triage]')
+    ? 'tri'
+    : title.startsWith('[Factory spec]')
+      ? 'spec'
+      : 'rev';
   const id = `${kind}-${++reviewerThreads}`;
   seedThread(testDb.db, {
     id,
@@ -115,7 +120,7 @@ const isImplementerLaunch = (input: StartThreadInput) =>
   String(input.body.title).startsWith('[Factory] ');
 
 const isReviewerLaunch = (input: StartThreadInput) =>
-  /^\[Factory (review|triage)\]/.test(String(input.body.title));
+  /^\[Factory (review|triage|spec)\]/.test(String(input.body.title));
 
 /** Fake launcher recording calls; succeeds with a thread id per call. */
 function fakeLauncher(result: 'ok' | 'offline' = 'ok') {
@@ -445,6 +450,7 @@ async function enableFactory(
     dependencies?: 'wait' | 'stack';
     laneLabelPrefix?: string;
     laneBranchPrefix?: string;
+    specStage?: boolean;
   } = {},
 ) {
   const settings = createFactorySettingsService();
@@ -4177,5 +4183,150 @@ describe('factory capacity between admission and run controls (#328)', () => {
           a.kind === 'factory.finish_lane' && a.title.includes('auth') && a.title.includes('#77'),
       ),
     ).toBe(true);
+  });
+});
+
+// Openspec factory-spec-stage, task 8.1: the spec stage through the real
+// watcher, flow runner, spec writer, approval, implementer prompt and review loop.
+describe('the spec stage, end to end', () => {
+  const json = (value: unknown) => ['```json', JSON.stringify(value), '```'].join('\n');
+  const CHECK = 'Log out ends the session';
+  const DRAFT = {
+    summary: 'Add a logout button to the user menu',
+    decisions: [{ question: 'Where does Log out live?', answer: 'In the user menu' }],
+    behavior: ['The user menu shows Log out'],
+    validation: [CHECK],
+    contract: { acceptanceCriteria: ['A user can log out from the user menu'] },
+  };
+  const NEEDS_SPEC = json({
+    decision: 'needs_spec',
+    decisions: [{ question: 'Where does Log out live?', options: ['User menu', 'Header'] }],
+    findings: ['The session store is src/auth/session.ts'],
+  });
+  const SPEC_TURNS = [
+    json({ status: 'questions', questions: [{ question: 'Where does Log out live?' }] }),
+    json({ status: 'draft', spec: DRAFT }),
+  ];
+  const review = (sha: string, met: boolean) =>
+    json({ sha, verdict: 'pass', checklist: [{ item: CHECK, met }] });
+
+  test('triage → questions → answer → draft → approve → implementer holds the spec → unmet item loops back → merged', async () => {
+    const factoryId = await enableFactory({ specStage: true });
+    const poll = fakePoll();
+    const launcher = fakeLauncher();
+    // The implementer's fix moves the pull request to a new commit, which gets its own review.
+    const script: GithubScript = {};
+    const head = () => script.head?.sha ?? 'sha-head';
+    const github = fakeGithub('o/r', [{ number: 7, title: 'Logout', url: 'u/7' }], script);
+    const launched: StartThreadInput[] = [];
+    const followUps: Array<{ threadId: string; content: string }> = [];
+    const notices: Array<{ title: string; body: string }> = [];
+    let specTurn = 0;
+    const reviewers: string[] = [];
+
+    await startWatcherWithProof({
+      ports,
+      github,
+      createPoll: poll.createPoll,
+      launch: async (input) => {
+        launched.push(input);
+        return launcher.launch(input);
+      },
+      resolveRuntime,
+      waitThread: finishedThreads('completed'),
+      lastThreadMessage: async (id) => {
+        if (id.startsWith('tri-')) return NEEDS_SPEC;
+        if (id.startsWith('spec-')) return SPEC_TURNS[specTurn] ?? null;
+        if (id.startsWith('rev-')) {
+          if (!reviewers.includes(id)) reviewers.push(id);
+          // The first reviewer finds the item unmet; the next one, after the fix, passes it.
+          return review(head(), reviewers.indexOf(id) > 0);
+        }
+        return passingReview(id);
+      },
+      notify: async (_userId, notice) => notices.push(notice),
+      followUp: async (_userId, threadId, content) => {
+        followUps.push({ threadId, content });
+        if (content.includes('Validation item not met'))
+          script.head = { sha: 'sha-fixed', autoMerge: false };
+        return ok(undefined);
+      },
+      // The regression proof holds for whatever commit is the head now.
+      proof: () => ({
+        startProof: async () => ok({ proofId: 'proof-1', state: 'done' }),
+        pollProof: async () =>
+          ok({
+            state: 'done',
+            result: {
+              verdict: 'pass',
+              headSha: head(),
+              files: [],
+              commands: [],
+              baseSha: 'abc',
+              outputTail: '',
+            },
+          }),
+      }),
+    });
+
+    // 1. Triage parks the run on its spec: no comment, no slot, a read-only spec writer.
+    await poll.ticks[0]!();
+    const parked = await eventually(
+      factoryId,
+      (run) => run.state === 'needs_spec' && Boolean(run.spec?.threadId),
+    );
+    expect(github.comments).toEqual([]);
+    expect((await createFactoryRunsRepository().countActive(factoryId))._unsafeUnwrap()).toBe(0);
+    const writer = launched.find((input) => String(input.body.title).startsWith('[Factory spec]'));
+    expect(writer?.body).toMatchObject({ readOnly: true, title: '[Factory spec] #7 Logout' });
+    expect(Object.keys(writer?.body.roleInputs ?? {})).toContain('spec-decisions.md');
+    const specThread = parked.spec!.threadId!;
+
+    // 2. The writer's first turn asks the team.
+    await onFactoryThreadTerminal(specThread, 'completed');
+    let run = await eventually(factoryId, (r) => r.spec?.latest?.status === 'questions');
+    expect(run.spec?.revision).toBe(1);
+    expect(notices.map((notice) => notice.body)).toContain('The spec has 1 open question.');
+
+    // 3. A member answers in the thread; the next turn is a draft.
+    specTurn = 1;
+    await onFactoryThreadTerminal(specThread, 'completed');
+    run = await eventually(factoryId, (r) => r.spec?.latest?.status === 'draft');
+    expect(run).toMatchObject({ state: 'needs_spec', spec: { revision: 2 } });
+
+    // 4. A member approves the draft they saw: back in the queue with its contract.
+    const approved = await createFactoryRunControl().approveSpec('alice', factoryId, run.id, 2);
+    expect(approved._unsafeUnwrap()).toMatchObject({
+      triage: { decision: 'ready', fromSpec: true },
+      spec: { approved: { revision: 2, by: 'alice' } },
+    });
+
+    // 5. Admitted again: no new triage, and the implementer's prompt holds the spec.
+    await poll.ticks[0]!();
+    const merged = await eventually(factoryId, (r) => r.state === 'merged');
+    const triages = launched.filter((input) =>
+      String(input.body.title).startsWith('[Factory triage]'),
+    );
+    expect(triages).toHaveLength(1);
+    const implementer = launched.find(isImplementerLaunch);
+    const prompt = String(implementer?.body.prompt);
+    expect(prompt).toContain('decisions are not yours to change');
+    expect(prompt).toContain('Where does Log out live? — In the user menu');
+    expect(prompt).toContain(CHECK);
+
+    // 6. The first review found the item unmet: it went to the implementer as a high finding.
+    const fix = followUps.find((f) => f.content.includes('Validation item not met'));
+    expect(fix?.content).toContain(`[high] Validation item not met: ${CHECK}`);
+    expect(fix?.threadId).toBe('t-1');
+    const reviewPrompt = launched.find((input) =>
+      String(input.body.title).startsWith('[Factory review]'),
+    );
+    expect(String(reviewPrompt?.body.prompt)).toContain(`- ${CHECK}`);
+    expect(reviewers.length).toBeGreaterThanOrEqual(2);
+    expect(github.merges).toBe(1);
+    expect(merged.reviews.map((r) => [r.sha, r.verdict])).toEqual([
+      ['sha-head', 'fail'],
+      ['sha-fixed', 'pass'],
+    ]);
   });
 });

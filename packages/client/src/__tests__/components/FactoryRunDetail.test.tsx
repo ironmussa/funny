@@ -19,7 +19,8 @@ const mocks = ((): {
   navigate: ReturnType<typeof vi.fn>;
   incidents: Record<string, FactoryIncident>;
   threads: Record<string, { id: string; title: string }>;
-} => ({ queue: [], navigate: vi.fn(), incidents: {}, threads: {} }))();
+  approveSpec: ReturnType<typeof vi.fn>;
+} => ({ queue: [], navigate: vi.fn(), incidents: {}, threads: {}, approveSpec: vi.fn() }))();
 
 mock.module('@/data/factory/hooks', () => ({
   useFactoryQueueRuns: () => mocks.queue,
@@ -39,6 +40,11 @@ mock.module('@/data/factory/actions', () => ({
   markFactoryRunDone: () => ({ orTee: () => undefined }),
   controlFactoryRun: () => okAsync(null),
   closeFactoryIncident: () => okAsync(null),
+  approveFactorySpec: (...args: unknown[]) => {
+    mocks.approveSpec(...args);
+    return okAsync(null);
+  },
+  reopenFactorySpec: () => okAsync(null),
 }));
 mock.module('@/hooks/use-stable-navigate', () => ({ useStableNavigate: () => mocks.navigate }));
 mock.module('@/hooks/use-minute-tick', () => ({ useMinuteTick: () => Date.now() }));
@@ -304,6 +310,75 @@ describe('the panel content', () => {
     for (const section of ['triage', 'reviews', 'risk-ci', 'threads', 'flow']) {
       expect(screen.queryByTestId(`factory-run-detail-${section}`)).toBeNull();
     }
+  });
+});
+
+describe('the spec tab (openspec factory-spec-stage)', () => {
+  const DRAFT = {
+    summary: 'Add a logout button',
+    decisions: [{ question: 'Where does it live?', answer: 'In the user menu' }],
+    behavior: ['The user menu shows Log out'],
+    approach: [],
+    outOfScope: [],
+    validation: ['Log out ends the session'],
+    contract: { acceptanceCriteria: ['A user can log out'], likelyPaths: [], riskHints: [] },
+  };
+
+  test('open questions with a link to the spec thread', () => {
+    renderBody(
+      queueRun({
+        state: 'needs_spec',
+        spec: {
+          threadId: 't-spec',
+          revision: 1,
+          latest: {
+            status: 'questions',
+            questions: [{ question: 'Which menu?', options: ['User', 'Header'] }],
+          },
+        },
+      }),
+    );
+    fireEvent.mouseDown(screen.getByTestId('factory-run-detail-tab-spec'), { button: 0 });
+    expect(screen.getByTestId('factory-spec-questions')).toHaveTextContent(
+      'Which menu? (User / Header)',
+    );
+    fireEvent.click(screen.getByTestId('factory-spec-thread-link'));
+    expect(mocks.navigate).toHaveBeenCalledWith(expect.stringContaining('t-spec'));
+    expect(screen.queryByTestId('factory-spec-approve')).toBeNull();
+  });
+
+  test('a draft is approved naming the revision shown', () => {
+    mocks.approveSpec = vi.fn();
+    renderBody(
+      queueRun({
+        state: 'needs_spec',
+        spec: { threadId: 't-spec', revision: 3, latest: { status: 'draft', spec: DRAFT } },
+      }),
+    );
+    fireEvent.mouseDown(screen.getByTestId('factory-run-detail-tab-spec'), { button: 0 });
+    expect(screen.getByTestId('factory-spec-decisions')).toHaveTextContent(
+      'Where does it live? — In the user menu',
+    );
+    fireEvent.click(screen.getByTestId('factory-spec-approve'));
+    expect(mocks.approveSpec).toHaveBeenCalledWith('p1', expect.any(String), 3);
+  });
+
+  test('an approved spec shows when, and can be reopened once the run parked', () => {
+    renderBody(
+      queueRun({
+        state: 'waiting_human',
+        spec: {
+          threadId: 't-spec',
+          revision: 3,
+          latest: { status: 'draft', spec: DRAFT },
+          approved: { spec: DRAFT, revision: 3, by: 'someone', at: new Date().toISOString() },
+        },
+      }),
+    );
+    fireEvent.mouseDown(screen.getByTestId('factory-run-detail-tab-spec'), { button: 0 });
+    expect(screen.getByTestId('factory-spec-approved')).toHaveTextContent('Approved by a member');
+    expect(screen.getByTestId('factory-spec-reopen')).toBeInTheDocument();
+    expect(screen.queryByTestId('factory-spec-approve')).toBeNull();
   });
 });
 

@@ -379,6 +379,8 @@ export function createTestDb() {
       batch_wait_ms INTEGER,
       dependencies TEXT,
       too_big TEXT,
+      spec_stage INTEGER,
+      commit_spec_path TEXT,
       step_overrides TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
@@ -437,6 +439,7 @@ export function createTestDb() {
       merge_approval TEXT,
       risk_waiver TEXT,
       role_threads TEXT,
+      spec TEXT,
       hold TEXT,
       issue_title TEXT,
       trigger_id TEXT,

@@ -35,6 +35,7 @@ import {
   blockingReviewFindings,
   factoryReviewResultSchema,
   reviewAllowsMerge,
+  type FactoryReviewResult,
   type FactoryContract,
   type FactoryReviewFinding,
   type FactoryReviewVerdict,
@@ -160,6 +161,8 @@ interface ReviewPromptInput {
   issue?: FactoryIssueText | null;
   /** The run's contract (what the change must do), when triage wrote one. */
   contract?: FactoryContract | null;
+  /** The validation checklist of the run's approved spec (openspec factory-spec-stage); empty without one. */
+  validation?: readonly string[];
   prUrl: string;
   branch: string;
   sha: string;
@@ -247,9 +250,70 @@ function reviewPrompt(input: ReviewPromptInput): string {
     'Severity: `critical` breaks the default branch, loses data or opens a security hole; `high` is a bug or a requirement of the issue that is not met; `medium` and `low` are improvements that do not block the merge.',
     'Answer `fail` when you have a `critical` or `high` finding, `pass` otherwise.',
     '',
+    ...checklistSection(input.validation ?? []),
     'End your final message with exactly one fenced json block in this format, and nothing after it:',
-    RESULT_FORMAT,
+    (input.validation ?? []).length > 0 ? RESULT_FORMAT_WITH_CHECKLIST : RESULT_FORMAT,
   ].join('\n');
+}
+
+const RESULT_FORMAT_WITH_CHECKLIST = RESULT_FORMAT.replace(
+  '  ]\n}',
+  '  ],\n  "checklist": [\n    { "item": "<the validation item, as written>", "met": true | false, "note": "<what shows it>" }\n  ]\n}',
+);
+
+/**
+ * The approved spec's validation checklist, for a run with one: every item
+ * is answered met or not, and an item not met blocks like a `high` finding.
+ */
+function checklistSection(validation: readonly string[]): string[] {
+  if (validation.length === 0) return [];
+  return [
+    'The team approved a spec for this issue. Check the change against each item of its validation checklist and answer every one, met or not, in `checklist`, writing the item as it is here. An item you cannot verify is not met.',
+    ...validation.map((item) => `- ${item}`),
+    '',
+  ];
+}
+
+const sameItem = (a: string, b: string): boolean =>
+  a.trim().toLowerCase() === b.trim().toLowerCase();
+
+/** The validation items a reviewer's checklist leaves unanswered. */
+export function unansweredChecklistItems(
+  validation: readonly string[],
+  checklist: FactoryReviewResult['checklist'],
+): string[] {
+  return validation.filter(
+    (item) => !(checklist ?? []).some((answer) => sameItem(answer.item, item)),
+  );
+}
+
+/** An unmet validation item as the `high` finding the implementer gets. */
+function checklistFinding(item: string, note: string | undefined): FactoryReviewFinding {
+  const finding: FactoryReviewFinding = {
+    severity: 'high',
+    title: `Validation item not met: ${item}`.slice(0, 300),
+  };
+  if (note) finding.detail = note;
+  return finding;
+}
+
+/**
+ * A reviewer's result with each validation item it found not met added as a
+ * `high` finding (openspec factory-spec-stage): the change goes back to the
+ * implementer like any high finding, and a `pass` that left one unmet is a
+ * `fail`.
+ */
+export function withChecklistFindings(result: FactoryReviewResult): FactoryReviewResult {
+  const unmet = (result.checklist ?? []).filter((answer) => !answer.met);
+  if (unmet.length === 0) return result;
+  return {
+    ...result,
+    verdict: 'fail',
+    findings: [
+      ...result.findings,
+      ...unmet.map((answer) => checklistFinding(answer.item, answer.note)),
+    ].slice(0, 50),
+  };
 }
 
 /** The contract as the implementing agent and the reviewer read it. */
@@ -331,10 +395,15 @@ export function reviewComment(verdict: FactoryReviewVerdict): string {
     const detail = finding.detail ? `\n  ${finding.detail}` : '';
     return `- **${finding.severity}**${where}: ${finding.title}${detail}`;
   });
+  const checklist = (verdict.checklist ?? []).map(
+    (answer) =>
+      `- [${answer.met ? 'x' : ' '}] ${answer.item}${answer.note ? ` — ${answer.note}` : ''}`,
+  );
   const parts = [
     `**funny review of \`${verdict.sha.slice(0, 12)}\`: ${reviewHeadline(verdict)}**`,
     verdict.summary,
     findings.length > 0 ? findings.join('\n') : null,
+    checklist.length > 0 ? ['Spec validation checklist:', ...checklist].join('\n') : null,
     "_Automated review by the issue factory's reviewer agent, for this commit only. It does not approve the pull request._",
   ];
   return withoutMentions(parts.filter(Boolean).join('\n\n'));
@@ -366,6 +435,8 @@ export interface FactoryReviewerDeps {
   issueText?(): Promise<FactoryIssueText | null>;
   /** The run's contract now, when triage wrote one: the reviewer judges against it. */
   contract?(): FactoryContract | null;
+  /** The validation checklist of the run's approved spec; empty (or absent) without one. */
+  validation?(): readonly string[];
   /** The verdicts the run already has (a resumed run). */
   reviews: readonly FactoryReviewVerdict[];
   /** Review threads of this run started before this are not adopted (the run's admission). */
@@ -470,6 +541,7 @@ export function createFactoryReviewer(deps: FactoryReviewerDeps) {
       issueNumber: scope.issueNumber,
       issueUrl: deps.issueUrl,
       contract: deps.contract?.() ?? null,
+      validation: deps.validation?.() ?? [],
       issue,
       prUrl: pr,
       branch: scope.branch,
@@ -486,10 +558,17 @@ export function createFactoryReviewer(deps: FactoryReviewerDeps) {
 
   /** The reviewer's validated result for `sha`, asking once more on its thread when it is invalid. */
   function resultOf(sha: string, threadId: string) {
-    const forCommit = factoryReviewResultSchema.refine(
-      (result) => result.sha.toLowerCase() === sha.toLowerCase(),
-      { path: ['sha'], message: `must be ${sha}, the commit you were asked to review` },
-    );
+    const validation = deps.validation?.() ?? [];
+    const forCommit = factoryReviewResultSchema
+      .refine((result) => result.sha.toLowerCase() === sha.toLowerCase(), {
+        path: ['sha'],
+        message: `must be ${sha}, the commit you were asked to review`,
+      })
+      // A run with an approved spec: every validation item answered, met or not.
+      .refine((result) => unansweredChecklistItems(validation, result.checklist).length === 0, {
+        path: ['checklist'],
+        message: `must answer every validation item of the spec: ${validation.join(' / ')}`,
+      });
     return readRoleResult(forCommit, {
       finalMessage: () => deps.finalMessage(threadId),
       askAgain: async (prompt) => {
@@ -555,7 +634,7 @@ export function createFactoryReviewer(deps: FactoryReviewerDeps) {
       };
     }
     const verdict = await keep({
-      ...result.value,
+      ...withChecklistFindings(result.value),
       threadId,
       reviewedAt: new Date().toISOString(),
     });

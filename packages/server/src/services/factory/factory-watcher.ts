@@ -68,6 +68,8 @@ import {
   listWatchedFactories,
   type WatchedFactory,
 } from './factory-settings.js';
+import { createSpecHost } from './factory-spec-host.js';
+import { setFactorySpecHost } from './factory-spec.js';
 import {
   type BrowserEventsPort,
   cleanupFactoryWorktrees,
@@ -199,6 +201,7 @@ export async function startFactoryWatcher(d: FactoryWatcherDeps): Promise<void> 
           sendFactoryFollowUp(d.ports, userId, threadId, content, expectedBranch, options)),
     }),
   });
+  setFactorySpecHost(createSpecHost(d, repository, (factory) => checkFactoryTarget(factory)));
   for (const factory of await listWatchedFactories([...IN_FLIGHT_STATES])) schedule(factory);
   log.info('Issue factory watcher started', { namespace: 'factory', jobs: jobs.size });
 }
@@ -212,6 +215,7 @@ export function stopFactoryWatcher(): void {
   reproving.clear();
   setWatcherState({ proofs: null });
   flows?.stopAll();
+  setFactorySpecHost(null);
   setWatcherState({ flows: null, deps: null, runs: null });
 }
 

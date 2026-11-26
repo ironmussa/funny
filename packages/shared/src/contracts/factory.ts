@@ -6,6 +6,17 @@
 
 import { z } from 'zod';
 
+import {
+  factoryChecklistAnswerSchema,
+  factoryCommitSpecPathSchema,
+  contractOf,
+  type FactoryContract,
+  type FactoryTriage,
+  type FactoryRunSpec,
+} from './factory-spec.js';
+
+export * from './factory-spec.js';
+
 const projectId = z.string().min(1);
 
 /**
@@ -333,6 +344,10 @@ export const saveFactorySettingsInput = z
     dependencies: z.enum(['wait', 'stack']).optional(),
     /** An issue triage finds too large: propose the split on it, or open its parts as issues. */
     tooBig: z.enum(['ask', 'split']).optional(),
+    /** Whether triage may answer `needs_spec` and park a run for a spec (openspec factory-spec-stage). */
+    specStage: z.boolean().optional(),
+    /** Where the implementer commits an approved spec; empty: it is not committed. */
+    commitSpecPath: factoryCommitSpecPathSchema.optional(),
     /** Whether a run parked for a member's approval keeps its likely paths (at most 12 hours). */
     holdPathsAwaitingApproval: z.boolean().optional(),
     /** The branch the factory's pull requests merge into; empty: the repository's default branch. */
@@ -380,6 +395,10 @@ export interface FactorySettings {
    * waits for a person; `split` opens each part as an issue the factory admits.
    */
   tooBig: FactoryTooBig;
+  /** Whether triage may answer `needs_spec` (openspec factory-spec-stage); off by default. */
+  specStage: boolean;
+  /** Where the implementer commits an approved spec (`docs/specs`); empty: not committed. */
+  commitSpecPath: string;
   /** Whether a run parked for a member's approval of a high-risk change keeps its likely paths. */
   holdPathsAwaitingApproval: boolean;
   /**
@@ -413,6 +432,12 @@ export type FactoryRunState =
   | 'triaging'
   /** Triage asked questions on the issue: parked, no slot, until the issue changes. */
   | 'needs_info'
+  /**
+   * Triage found open product decisions (openspec factory-spec-stage): parked,
+   * no slot, while a spec writer and the team settle them, until a member
+   * approves the spec.
+   */
+  | 'needs_spec'
   | 'working'
   | 'pr_open'
   | 'waiting_ci'
@@ -450,6 +475,7 @@ export type FactoryRunState =
  */
 export const FACTORY_RUN_HOLDABLE_STATES = [
   'needs_info',
+  'needs_spec',
   'waiting_human',
   'failed',
   'no_change',
@@ -551,6 +577,8 @@ export interface FactoryRun {
   mergeApproval: FactoryMergeApproval | null;
   /** A member's statement that the run is a lint cleanup, or null. */
   riskWaiver: FactoryRiskWaiver | null;
+  /** The spec stage (openspec factory-spec-stage): its thread, latest result and approval; null without one. */
+  spec: FactoryRunSpec | null;
   /** Why the run is on hold (`on_hold`), or null. Kept from its last hold otherwise. */
   hold: FactoryRunHold | null;
   /**
@@ -1071,6 +1099,12 @@ export const factoryReviewResultSchema = z.object({
   verdict: z.enum(['pass', 'fail']),
   summary: z.string().max(4000).optional(),
   findings: z.array(factoryReviewFindingSchema).max(50).default([]),
+  /**
+   * For a run with an approved spec: every item of its validation checklist,
+   * met or not (openspec factory-spec-stage). An unmet item counts as a
+   * `high` finding; the reader refuses a result that leaves one out.
+   */
+  checklist: z.array(factoryChecklistAnswerSchema).max(20).optional(),
 });
 export type FactoryReviewResult = z.infer<typeof factoryReviewResultSchema>;
 
@@ -1148,101 +1182,6 @@ export type FactoryRisk = z.infer<typeof factoryRiskSchema>;
  * and answers whether it can be worked unattended. `ready` carries the run's
  * contract; the other answers carry what to ask on the issue.
  */
-const contractLine = z.string().trim().min(1).max(500);
-
-/** What the run must do, written by triage and read by the implementer and the reviewer. */
-export const factoryContractSchema = z.object({
-  /** What must be true for the issue to be done. */
-  acceptanceCriteria: z.array(contractLine).min(1).max(20),
-  /** Globs of the files the change will probably touch (a prediction). */
-  likelyPaths: z.array(z.string().trim().min(1).max(200)).max(50).default([]),
-  /** Why the change may be risky; any hint makes it high risk. */
-  riskHints: z.array(contractLine).max(10).default([]),
-  /**
-   * Triage read the issue as asking only to clear lint or type-check warnings,
-   * with no change in behavior. A proposal: it counts only when every rule in
-   * `lintRules` is one whose fix cannot change behavior
-   * (`BEHAVIOR_NEUTRAL_LINT_RULES`), the factory still checks the diff
-   * (`lintCleanupRefusals`), and a member can say otherwise.
-   */
-  lintCleanup: z.boolean().optional(),
-  /** The lint rules the issue asks to clear, as the linter names them (`eslint/max-lines`). */
-  lintRules: z.array(z.string().trim().min(1).max(100)).max(20).optional(),
-});
-export type FactoryContract = z.infer<typeof factoryContractSchema>;
-
-/** At most this many questions (or parts) go on the issue, each this long. */
-export const MAX_TRIAGE_ITEMS = 5;
-export const MAX_TRIAGE_ITEM_CHARS = 300;
-
-const triageItems = z.array(z.string().trim().min(1).max(2000)).min(1).max(20);
-
-export const factoryTriageResultSchema = z.discriminatedUnion('decision', [
-  z.object({ decision: z.literal('ready'), contract: factoryContractSchema }),
-  z.object({ decision: z.literal('needs_info'), questions: triageItems }),
-  /**
-   * `parts`: the new issues to open. `existing`: issues that already cover
-   * part of the work (a tracking issue's sub-issues, the parts of an earlier
-   * split); they are named, never opened again. At least one of the two.
-   */
-  z
-    .object({
-      decision: z.literal('too_big'),
-      parts: z.array(z.string().trim().min(1).max(2000)).max(20).default([]),
-      existing: z.array(z.number().int().positive()).max(50).default([]),
-    })
-    .refine((answer) => answer.parts.length + answer.existing.length > 0, {
-      message: 'name at least one part or one existing issue',
-      path: ['parts'],
-    }),
-  /**
-   * What the issue asks is already true of the code (a duplicate already
-   * merged, a fix that landed): the factory says so on the issue, closes it
-   * and ends the run `done`. `evidence`: what shows it (the commit or pull
-   * request, the check that passes now).
-   */
-  z.object({ decision: z.literal('already_done'), evidence: triageItems }),
-]);
-export type FactoryTriageResult = z.infer<typeof factoryTriageResultSchema>;
-
-/**
- * What the run stores of its triage. `none`: triage gave no valid result
- * twice, and the run went on without a contract.
- */
-export const factoryTriageSchema = z.object({
-  decision: z.enum(['ready', 'needs_info', 'too_big', 'already_done', 'none']),
-  /** When triage answered; an issue changed after it is triaged again. */
-  at: z.string(),
-  /** The triage agent's thread. */
-  threadId: z.string().optional(),
-  /** The contract, for `ready`. */
-  contract: factoryContractSchema.optional(),
-  /** What was asked on the issue (`needs_info`), the proposed split (`too_big`), or the evidence (`already_done`). */
-  items: z.array(z.string()).optional(),
-  /**
-   * The issue changed since (or a member retried): this answer is kept to show
-   * what was asked, and triage runs again on a new thread, not `threadId`.
-   */
-  superseded: z.boolean().optional(),
-  /** For `too_big`: the existing issues triage said already cover part of the work. */
-  existing: z.array(z.number().int().positive()).optional(),
-  /**
-   * For `too_big` with the factory's `split` setting: the issues opened for
-   * the parts, in the order of `items` (filled as each one is opened).
-   */
-  splitInto: z.array(z.number().int().positive()).optional(),
-  /**
-   * For a run that handed its issue's work to other issues (`splitInto`,
-   * `existing`): when the factory saw every one of them closed and closed the
-   * issue (or found it closed already). Its work is finished from then on.
-   */
-  partsClosedAt: z.string().optional(),
-});
-export type FactoryTriage = z.infer<typeof factoryTriageSchema>;
-
-/** The run's contract, when triage wrote one. */
-export const contractOf = (run: { triage: FactoryTriage | null }): FactoryContract | null =>
-  run.triage?.decision === 'ready' ? (run.triage.contract ?? null) : null;
 
 /**
  * The lint rules whose fix moves or reorders code without changing what it
@@ -1335,6 +1274,7 @@ export type FactorySentinelResult = z.infer<typeof factorySentinelResultSchema>;
 
 /** A factory merge the sentinel may name. */
 export type FactoryApprovalRequestState = 'pending' | 'approved' | 'declined' | 'expired';
+export type FactoryApprovalRequestKind = 'merge' | 'spec';
 
 /**
  * An agent's request that the member approve merging a held high-risk change
@@ -1348,7 +1288,12 @@ export interface FactoryApprovalRequest {
   projectId: string;
   /** The thread whose agent asked. */
   threadId: string;
+  /** `merge`: a held high-risk commit (`sha`); `spec`: a spec draft (`revision`). */
+  kind: FactoryApprovalRequestKind;
+  /** The commit, for a merge request; empty for a spec request. */
   sha: string;
+  /** The draft's revision, for a spec request; null otherwise. */
+  specRevision: number | null;
   state: FactoryApprovalRequestState;
   createdAt: string;
   resolvedAt: string | null;

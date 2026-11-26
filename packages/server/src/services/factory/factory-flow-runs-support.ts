@@ -44,6 +44,7 @@ import {
   type UpdateRunInput,
 } from './factory-runs.js';
 import type { WatchedFactory } from './factory-settings.js';
+import { specMarkdown } from './factory-spec.js';
 import type { FactoryStepDeps } from './factory-step-runner.js';
 import type { KeptWorktree } from './factory-thread-requests.js';
 import type { ThreadOutcome, WaitAfter } from './factory-thread-waits.js';
@@ -172,7 +173,7 @@ export interface FlowTrace {
   parked: boolean;
   /**
    * Triage took the run out of flight itself: it waits on its issue
-   * (`needs_info`) or in the queue behind other work on the same files. The
+   * (`needs_info`), on its spec (`needs_spec`), or in the queue behind other work on the same files. The
    * end changes nothing about it.
    */
   held: boolean;
@@ -184,7 +185,8 @@ export interface FlowTrace {
 export function traceRecorded(trace: FlowTrace, input: UpdateRunInput): boolean {
   if (input.prUrl) trace.prOpen = true;
   if (input.state === 'waiting_human') trace.parked = true;
-  if (input.state === 'needs_info') trace.held = true;
+  // Parked by triage on its issue, or on its spec (openspec factory-spec-stage).
+  if (input.state === 'needs_info' || input.state === 'needs_spec') trace.held = true;
   if (input.state === 'no_change' || input.state === 'done') trace.ended = true;
   if (!input.threadIds) return false;
   trace.agentsRan = true;
@@ -284,8 +286,8 @@ interface FlowInputs {
  */
 export function flowInputsOf(
   job: Pick<FactoryRunJob, 'repo' | 'issue'> & {
-    factory: Pick<WatchedFactory, 'id'>;
-    run: Pick<FactoryRunView, 'inputs'>;
+    factory: Pick<WatchedFactory, 'id'> & Partial<Pick<WatchedFactory, 'commitSpecPath'>>;
+    run: Pick<FactoryRunView, 'inputs'> & Partial<Pick<FactoryRunView, 'spec'>>;
   },
   // What the host's concurrency groups are named by (the merge lane, stage limits),
   // and a stacked run's blocker branch (empty otherwise).
@@ -305,6 +307,34 @@ export function flowInputsOf(
     base_branch: at.baseBranch,
     factory_id: job.factory.id,
     stack_branch: at.stackBranch ?? '',
+    ...specInputsOf(job),
+  };
+}
+
+/** The flow inputs that carry a run's approved spec (`specInputsOf`). */
+export interface SpecInputs {
+  spec: string;
+  spec_commit_path: string;
+}
+
+/**
+ * A run's approved spec for its prompts (openspec factory-spec-stage):
+ * `spec`, the spec as Markdown, and `spec_commit_path`, where the factory's
+ * Commit spec setting wants it committed. Both empty without an approved
+ * spec, so `{{#spec}}…{{/spec}}` renders nothing.
+ */
+export function specInputsOf(job: {
+  issue?: { number: number } | null;
+  factory: Partial<Pick<WatchedFactory, 'commitSpecPath'>>;
+  run: Partial<Pick<FactoryRunView, 'spec'>>;
+}): SpecInputs {
+  const approved = job.run.spec?.approved?.spec;
+  if (!approved) return { spec: '', spec_commit_path: '' };
+  const dir = job.factory.commitSpecPath ?? '';
+  const name = job.issue ? `issue-${job.issue.number}.md` : 'spec.md';
+  return {
+    spec: specMarkdown(approved, '# Approved spec'),
+    spec_commit_path: dir ? `${dir}/${name}` : '',
   };
 }
 

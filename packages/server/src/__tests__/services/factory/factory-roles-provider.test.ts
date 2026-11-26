@@ -713,6 +713,68 @@ describe("the factory's review limit", () => {
   });
 });
 
+describe('a review held to an approved spec (openspec factory-spec-stage)', () => {
+  const VALIDATION = ['Log out ends the session', 'The menu shows Log out'];
+  const withChecklist = (sha: string, met: [boolean, boolean], items = VALIDATION) =>
+    json({
+      sha,
+      verdict: 'pass',
+      summary: 'Looks right.',
+      checklist: items.map((item, index) => ({ item, met: met[index], note: `checked ${index}` })),
+    });
+  const spec = { extra: { specValidation: VALIDATION } };
+
+  test('the reviewer is given every validation item and asked to answer each', async () => {
+    const { provider, bodies } = reviewing({
+      says: [[withChecklist(SHA_A, [true, true])]],
+      ...spec,
+    });
+    await provider.review!({});
+    const prompt = String(bodies[0]?.prompt);
+    for (const item of VALIDATION) expect(prompt).toContain(`- ${item}`);
+    expect(prompt).toContain('"checklist"');
+  });
+
+  test('every item met: the pass stands, and the comment lists the checklist', async () => {
+    const { provider, published } = reviewing({
+      says: [[withChecklist(SHA_A, [true, true])]],
+      ...spec,
+    });
+    expect(await provider.review!({})).toMatchObject({ output: 'pass' });
+    expect(published[0]?.body).toContain('Spec validation checklist:');
+    expect(published[0]?.body).toContain('- [x] Log out ends the session');
+  });
+
+  test('an item not met is a high finding that goes back to the implementer', async () => {
+    const { provider, stored } = reviewing({
+      says: [[withChecklist(SHA_A, [true, false])]],
+      ...spec,
+    });
+    const result = await provider.review!({});
+    expect(result).toMatchObject({ output: 'fail', metadata: { allowsMerge: false } });
+    expect(String(result.metadata?.feedback)).toContain(
+      '[high] Validation item not met: The menu shows Log out',
+    );
+    expect(stored()).toMatchObject([{ verdict: 'fail' }]);
+  });
+
+  test('an item left out is an invalid result: asked once, then no verdict', async () => {
+    const partial = withChecklist(SHA_A, [true, true], [VALIDATION[0]!]);
+    const { provider, followUps, stored } = reviewing({ says: [[partial, partial]], ...spec });
+    const result = await provider.review!({});
+    expect(result.ok).toBe(false);
+    expect(followUps).toHaveLength(1);
+    expect(followUps[0]?.content).toContain('The menu shows Log out');
+    expect(stored()).toEqual([]);
+  });
+
+  test('a run without a spec is reviewed as before, with no checklist asked', async () => {
+    const { provider, bodies } = reviewing({ says: [[passOf(SHA_A)]] });
+    expect(await provider.review!({})).toMatchObject({ output: 'pass' });
+    expect(String(bodies[0]?.prompt)).not.toContain('"checklist"');
+  });
+});
+
 describe('a verdict on the pull request', () => {
   test('a pass is posted as a comment and a success status, and the run remembers both', async () => {
     const { provider, published, stored } = reviewing({ says: [[passOf(SHA_A)]] });

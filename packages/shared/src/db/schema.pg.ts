@@ -329,6 +329,10 @@ export const factorySettings = pgTable(
     dependencies: text('dependencies'),
     /** `split` (open a too-large issue's parts as issues) or `ask` (null): comment the split. */
     tooBig: text('too_big'),
+    /** 1: triage may answer `needs_spec` and runs get a spec stage (null / 0: off). */
+    specStage: integer('spec_stage'),
+    /** Where the implementer commits an approved spec (relative directory), or null. */
+    commitSpecPath: text('commit_spec_path'),
     /** 1: a run parked for a member's approval keeps its likely paths (null / 0: it holds none). */
     holdPathsAwaitingApproval: integer('hold_paths_awaiting_approval'),
     /** The branch the factory merges into; null: the repository's default branch. */
@@ -417,6 +421,8 @@ export const factoryRuns = pgTable('factory_runs', {
   hold: text('hold'),
   /** JSON array of the role threads (triage, review) the run started (`FactoryRoleThread[]`). */
   roleThreads: text('role_threads'),
+  /** JSON `FactoryRunSpec`: the spec writer's thread, latest result and approval; null without one. */
+  spec: text('spec'),
   /** The schedule trigger that started the run (change flow-triggers); null otherwise. */
   triggerId: text('trigger_id'),
   /** The trigger's name when the run started, kept for display after an edit or a delete. */

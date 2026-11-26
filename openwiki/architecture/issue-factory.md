@@ -361,6 +361,49 @@ runs with its own options (change `factory-flow-step-options`). One pure rule de
   resolved options and thread, the overrides that name no agent step, and context-replay
   warnings. It starts nothing.
 
+## The spec stage
+
+Openspec `factory-spec-stage`, off by default (**Spec stage** in the factory's settings,
+`factory_settings.spec_stage`). With it on, triage may answer a fifth way, `needs_spec`: the issue
+is workable but leaves **product decisions** open that a wrong guess would waste (where an
+affordance lives, what it applies to, its edges). Its answer names the open decisions and what
+triage learned in the code. Off, the answer is invalid (`triageResultSchemaFor`), so a factory
+never parks on an answer it did not opt into.
+
+- **Park and start a writer.** The run is written `needs_spec` (from `triaging` only; no slot,
+  holdable, stoppable) and nothing is posted on the issue. The server starts a **spec writer**
+  (`factory-spec.ts`): a read-only role thread of the enabler titled `[Factory spec] #N <title>`
+  (adopted by title on resume), given the issue, triage's decisions and findings, and on a reopen
+  the spec approved before, as role inputs (never inlined in its prompt). Its thread is recorded
+  as `factory_runs.spec.threadId` and is among `threadsOf`, so a stop reaches it. Its worktree is
+  kept while the run is `needs_spec` and released on approval, retriage, hold and stop.
+- **The conversation is a funny thread.** Members answer by following up on the spec thread.
+  Each completed turn (`onFactoryThreadTerminal` → `onFactorySpecTurn`; no flow runs) is read with
+  `readRoleResult(factorySpecResultSchema)`: `questions`, or a `draft` (summary, decisions with
+  their answers, behavior, approach, out of scope, a validation checklist of at least one item,
+  and the contract). The latest valid result is stored with the next `revision` and the enabler
+  gets a Web Push; no valid result after one re-emit request stores `problem` and the run stays
+  parked. A follow-up on the spec thread never takes the run over.
+- **A member approves.** `factory.approveSpec({ runId, revision })` (`steer`, browser session
+  only; `factory-runs-spec.ts`) writes, in one compare-and-set from `needs_spec` and the spec as
+  read, `spec.approved` (who, when, revision), a `ready` triage with the draft's contract and
+  `fromSpec: true`, and `requested` with the run's earlier `queue_order`. A newer draft or a run
+  that moved answers 409 and the board reads the runs again. Audited (`factory.spec_approved`) and
+  recorded as an activity. `factory.reopenSpec` drops the approval, writes `needs_spec` from
+  `requested` or a parked state (refused in flight) and asks the kept thread for a revision, or
+  starts a new writer given the approved spec when that thread takes no follow-up.
+- **The spec binds the implementer and the reviewer.** A `fromSpec` triage is replayed, never
+  superseded by an issue edit (`issueChangedSince`), and kept on a release from hold. The flow gets
+  `{{spec}}` (the approved spec as Markdown) and `{{spec_commit_path}}` (`<Commit spec>/issue-N.md`
+  when the factory's **Commit spec** setting names a folder) as inputs (`specInputsOf`); the
+  built-in `implement.md` says the spec's decisions are fixed and open choices go under
+  **Decisions** in the pull request. Validate flow warns when the Spec stage is on and a
+  repository flow's first agent prompt never uses `{{spec}}`. The reviewer gets the validation
+  items and must answer each in `checklist` (an item left out is an invalid result); each item
+  not met is added as a `high` finding and turns the verdict into a `fail`
+  (`withChecklistFindings`), so it loops back to the implementer; the pull request's review
+  comment lists the checklist.
+
 ## Role results
 
 A read-only factory role (the reviewer; later triage and the sentinel, change
@@ -398,6 +441,8 @@ reads the role's prose as a decision:
   issues end `stopped`; runs in progress go on.
 - **Stop all** (`factory.stopAll`, confirmed in the UI): clears the queue and stops every run in
   flight.
+- **Approve / Reopen spec** (`factory.approveSpec`, `factory.reopenSpec`): see
+  [The spec stage](#the-spec-stage). Retry on a `needs_spec` run triages it again.
 - **Stop** (`factory.stopRun`): the run is `stopped`, its flow stops and its running threads are
   stopped on the enabler's runner. A thread whose launch raced the stop is stopped when recorded.
   A run the factory took by its label has that label taken off its issue (`releaseStoppedIssue`
@@ -539,7 +584,12 @@ MCP server (openspec `factory-agent-tools`, `runtime/services/agent-factory-tool
 (`data:factory_list_runs`, `data:factory_control_run`, `data:factory_request_approval`, rule
 `refs`). The server takes the actor and the project from the thread's row
 (`factory-agent-tools.ts` in `server/services/factory/`), re-checks the owner's `steer`, and has
-no path from this channel to `approveMerge`: the control's action type is `'retry' | 'stop'`.
+no path from this channel to `approveMerge` or `approveSpec`: the control's action type never
+names an approval. On a `needs_spec` run with a draft, `funny_factory_request_approval` creates a
+request of kind `spec` for that draft's revision (stored as `spec:<revision>` in the request's
+`sha` column), which expires when the revision changes or the run leaves `needs_spec`; the member
+answers it with `approveSpec`. `funny_factory_run` returns the run's spec (questions, draft,
+problem) and its approval.
 
 `factoryToolAccess` decides where the tools are refused: a sandbox thread or runner (also refused
 by type in `data-scope.ts`, `NEVER_FROM_SANDBOX_TYPES`), a read-only thread, a scratch thread, and
@@ -568,7 +618,7 @@ The search, project and state filters and the **Active** filter (hides `merged`,
 - **Columns** (`components/factory-board/board-columns.ts`) come from the run's `state`, never from
   its thread's stage (which folds every active step into `in_progress`): Queue (`requested`,
   `queued`), Triage, Implementing (`working`, `fixing`), PR · Proof · CI (`pr_open`, `waiting_ci`),
-  Review, Merge, Needs a person (`needs_info`, `waiting_human`, `failed`, `no_change`, and any state
+  Review, Merge, Needs a person (`needs_info`, `needs_spec`, `waiting_human`, `failed`, `no_change`, and any state
   the client does not know) and Done (`merged`, `stopped`, only the last 24 hours; older ones are
   counted and left to the list).
 - **Read-only**: there is no drag and drop. Only the server moves a run; the card carries the same

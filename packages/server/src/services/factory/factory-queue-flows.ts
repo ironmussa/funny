@@ -171,6 +171,7 @@ export function createFactoryQueueFlows(ctx: FactoryQueueFlowsContext) {
       overrides: factory?.stepOverrides ?? {},
       project: await projectAgentDefaults(projectId),
       dependencies: factory?.dependencies,
+      specStage: factory?.specStage,
     };
     const where = factoryId ? await readerOf(factoryId) : null;
     const reads = where

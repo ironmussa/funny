@@ -310,6 +310,8 @@ const factorySettings = (over: Partial<FactorySettings> = {}): FactorySettings =
   batch: { size: 5, waitSeconds: 60 },
   dependencies: 'wait',
   tooBig: 'ask',
+  specStage: false,
+  commitSpecPath: '',
   holdPathsAwaitingApproval: false,
   baseBranch: '',
   laneLabelPrefix: 'feature:',

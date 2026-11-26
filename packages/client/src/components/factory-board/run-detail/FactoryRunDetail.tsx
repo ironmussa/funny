@@ -30,6 +30,7 @@ import {
   plainFactoryReason,
 } from '../run-dependencies';
 import { factoryRunWaitingText } from '../run-waiting';
+import { RunSpec, hasFactoryRunSpec } from './RunSpec';
 import { RunTimeline } from './RunTimeline';
 import { DetailSection, RunReviews, RunRiskCi, RunThreads, RunTriage } from './sections';
 import { factoryRunThreadLinks } from './thread-links';
@@ -144,7 +145,7 @@ function RunOutcome({ run, dependencies, onSelect }: { run: FactoryQueueRun } & 
   );
 }
 
-type RunDetailTab = 'flow' | 'triage' | 'proof' | 'reviews' | 'risk' | 'threads';
+type RunDetailTab = 'flow' | 'triage' | 'spec' | 'proof' | 'reviews' | 'risk' | 'threads';
 
 /**
  * The tabs a run has, in pipeline order: one per section with something to
@@ -160,6 +161,7 @@ function runDetailTabs(run: FactoryQueueRun): RunDetailTab[] {
         Object.keys(run.inputs).length > 0,
     ],
     ['triage', judged && Boolean(run.triage)],
+    ['spec', judged && hasFactoryRunSpec(run)],
     ['proof', judged && Boolean(run.regressionProof)],
     ['reviews', judged && run.reviews.length > 0],
     ['risk', Boolean(run.risk || run.mergeApproval) || run.metrics.ciRounds > 0],
@@ -179,6 +181,8 @@ function RunDetailTabContent({ run, tab }: { run: FactoryQueueRun; tab: RunDetai
       );
     case 'triage':
       return <RunTriage run={run} />;
+    case 'spec':
+      return <RunSpec run={run} />;
     case 'proof':
       return run.regressionProof ? <RegressionProofDetails proof={run.regressionProof} /> : null;
     case 'reviews':
@@ -198,6 +202,7 @@ function RunDetailTabs({ run }: { run: FactoryQueueRun }) {
   const labels: Record<RunDetailTab, string> = {
     flow: t('factoryRunDetail.flow', 'Flow'),
     triage: t('factoryRunDetail.triageTab', 'Triage'),
+    spec: t('factoryRunDetail.specTab', 'Spec'),
     proof: t('factoryRunDetail.proofTab', 'Proof'),
     reviews: t('factoryRunDetail.reviewsTab', 'Reviews'),
     risk: t('factoryRunDetail.riskTab', 'Risk · CI'),

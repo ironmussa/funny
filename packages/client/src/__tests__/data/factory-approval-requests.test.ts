@@ -31,6 +31,8 @@ const pending: FactoryApprovalRequest = {
   runId: 'r1',
   projectId: 'p1',
   threadId: 't1',
+  kind: 'merge',
+  specRevision: null,
   sha: 'a'.repeat(40),
   state: 'pending',
   createdAt: '2026-11-24T23:00:00.000Z',

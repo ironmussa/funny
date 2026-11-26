@@ -49,6 +49,7 @@ describe('factoryBoardColumn', () => {
     reviewing: 'review',
     merging: 'merge',
     needs_info: 'needs_person',
+    needs_spec: 'needs_person',
     waiting_human: 'needs_person',
     failed: 'needs_person',
     no_change: 'needs_person',
@@ -654,6 +655,46 @@ describe('factoryRunWaitingText', () => {
         }),
       ),
     ).toBe('Triage asked 2 questions on the issue');
+  });
+
+  test('a spec writer asked three questions (factory-spec-stage)', () => {
+    const questions = ['Which menu?', 'Undo?', 'Every device?'].map((question) => ({
+      question,
+      options: [],
+    }));
+    const run = buildFactoryRun({
+      state: 'needs_spec',
+      spec: { threadId: 't-spec', revision: 1, latest: { status: 'questions', questions } },
+    });
+    expect(factoryRunWaitingText(t, run)).toBe('The spec has 3 open questions');
+    expect(factoryBoardColumn(run.state)).toBe('needs_person');
+  });
+
+  test('a spec draft waits for approval', () => {
+    const run = buildFactoryRun({
+      state: 'needs_spec',
+      spec: {
+        threadId: 't-spec',
+        revision: 2,
+        latest: {
+          status: 'draft',
+          spec: {
+            summary: 'Add a logout button',
+            decisions: [],
+            behavior: [],
+            approach: [],
+            outOfScope: [],
+            validation: ['Log out ends the session'],
+            contract: {
+              acceptanceCriteria: ['A user can log out'],
+              likelyPaths: [],
+              riskHints: [],
+            },
+          },
+        },
+      },
+    });
+    expect(factoryRunWaitingText(t, run)).toBe('A spec waits for approval');
   });
 
   test('a proposed split, and an issue the factory split', () => {

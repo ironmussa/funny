@@ -1167,4 +1167,125 @@ describe('factory over tRPC', () => {
       ]);
     });
   });
+  describe('the spec stage (openspec factory-spec-stage)', () => {
+    const DRAFT = {
+      summary: 'Add a logout button',
+      decisions: [{ question: 'Where does it live?', answer: 'In the user menu' }],
+      behavior: [],
+      approach: [],
+      outOfScope: [],
+      validation: ['Log out ends the session'],
+      contract: { acceptanceCriteria: ['A user can log out'], likelyPaths: [], riskHints: [] },
+    };
+
+    /** A run parked on its spec, with a draft at revision 1. */
+    async function draftRun() {
+      const { createFactoryRunsRepository } =
+        await import('../../services/factory/factory-runs.js');
+      const runs = createFactoryRunsRepository();
+      const run = await seededRun('triaging');
+      await runs.updateInFlight(run.id, {
+        state: 'needs_spec',
+        triage: { decision: 'needs_spec', at: new Date().toISOString() },
+      });
+      await runs.updateSpec(run.id, () => ({
+        threadId: 't-spec',
+        revision: 1,
+        latest: { status: 'draft', spec: DRAFT },
+      }));
+      return { run, runs };
+    }
+
+    test('a member approves the draft shown; the run goes back to the queue with its contract', async () => {
+      const { run } = await draftRun();
+      const approved = await mutate('alice', 'approveSpec', {
+        projectId: 'p1',
+        runId: run.id,
+        revision: 1,
+      });
+      expect(approved).toMatchObject({
+        status: 200,
+        body: {
+          state: 'requested',
+          triage: { decision: 'ready', fromSpec: true, contract: DRAFT.contract },
+          spec: { approved: { revision: 1, by: 'alice' } },
+        },
+      });
+    });
+
+    test('a stale revision, or a run no longer on its spec, is refused with 409', async () => {
+      const { run, runs } = await draftRun();
+      await runs.updateSpec(run.id, (current) => ({ ...current!, revision: 2 }));
+      const stale = await mutate('alice', 'approveSpec', {
+        projectId: 'p1',
+        runId: run.id,
+        revision: 1,
+      });
+      expect(stale.status).toBe(409);
+      const ok = await mutate('alice', 'approveSpec', {
+        projectId: 'p1',
+        runId: run.id,
+        revision: 2,
+      });
+      expect(ok.status).toBe(200);
+      const again = await mutate('alice', 'approveSpec', {
+        projectId: 'p1',
+        runId: run.id,
+        revision: 2,
+      });
+      expect(again.status).toBe(409);
+    });
+
+    test('a viewer may not approve or reopen a spec', async () => {
+      const { run } = await draftRun();
+      seedProjectMember(t.db, { projectId: 'p1', userId: 'vic', role: 'viewer' });
+      const input = { projectId: 'p1', runId: run.id, revision: 1 };
+      expect((await mutate('vic', 'approveSpec', input)).status).toBe(403);
+      expect((await mutate('vic', 'reopenSpec', { projectId: 'p1', runId: run.id })).status).toBe(
+        403,
+      );
+    });
+
+    test('reopening a parked run drops the approval; one in flight is refused', async () => {
+      const { run } = await draftRun();
+      await mutate('alice', 'approveSpec', { projectId: 'p1', runId: run.id, revision: 1 });
+      const reopened = await mutate('alice', 'reopenSpec', { projectId: 'p1', runId: run.id });
+      expect(reopened).toMatchObject({ status: 200, body: { state: 'needs_spec' } });
+      expect(reopened.body.spec.approved).toBeUndefined();
+
+      const { runs } = await import('../../services/factory/factory-runs.js').then((m) => ({
+        runs: m.createFactoryRunsRepository(),
+      }));
+      // Another issue: one open run per issue.
+      const working = (
+        await runs.start({ factoryId: run.factoryId, issueNumber: 8, state: 'working' })
+      )._unsafeUnwrap();
+      const refused = await mutate('alice', 'reopenSpec', { projectId: 'p1', runId: working.id });
+      expect(refused.status).toBe(409);
+    });
+
+    test('an agent can only ask: the request is for the draft, and nothing is approved', async () => {
+      const { factoryAgentTools } = await import('../../trpc/ports/factory.js');
+      const { seedThread } = await import('../helpers/test-db.js');
+      const { run } = await draftRun();
+      seedThread(t.db, { id: 't-ask', projectId: 'p1', userId: 'alice' });
+      const fromThread = { threadId: 't-ask', runnerId: 'laptop', runnerOwnerId: 'alice' };
+      const asked = (await factoryAgentTools.requestApproval(fromThread, run.id))._unsafeUnwrap();
+      expect(asked).toMatchObject({ state: 'pending', created: true });
+      const listed = (await query('alice', 'approvalRequests', { projectId: 'p1' })).body;
+      expect(listed).toEqual([
+        expect.objectContaining({ kind: 'spec', specRevision: 1, state: 'pending' }),
+      ]);
+      const detail = (await factoryAgentTools.getRun(fromThread, run.id))._unsafeUnwrap();
+      expect(detail.spec).toMatchObject({ status: 'draft', revision: 1, approved: null });
+      expect((await query('alice', 'runs', { projectId: 'p1' })).body[0]).toMatchObject({
+        state: 'needs_spec',
+      });
+
+      // The member approves the draft: the request closes as approved.
+      await mutate('alice', 'approveSpec', { projectId: 'p1', runId: run.id, revision: 1 });
+      const after = (await query('alice', 'approvalRequests', { projectId: 'p1' })).body;
+      expect(after).toEqual([expect.objectContaining({ id: asked.requestId, state: 'approved' })]);
+    });
+  });
 });

@@ -18,6 +18,7 @@ const TONE_OF = {
   queued: 'neutral',
   triaging: 'info',
   needs_info: 'warning',
+  needs_spec: 'warning',
   working: 'info',
   pr_open: 'info',
   waiting_ci: 'info',
@@ -97,6 +98,7 @@ const SHOWN_BY_THREAD_ICON: ReadonlySet<FactoryRun['state']> = new Set(['working
 /** States whose explanation is the state chip's tooltip; a queued run's wait has its own chip. */
 const EXPLAINED_BY_STATE: ReadonlySet<FactoryRun['state']> = new Set([
   'needs_info',
+  'needs_spec',
   'done',
   'no_change',
   'failed',

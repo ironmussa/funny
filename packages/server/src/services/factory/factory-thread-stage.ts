@@ -46,6 +46,7 @@ const RUN_STAGE = {
   // A person has to look at it.
   waiting_human: 'review',
   needs_info: 'review',
+  needs_spec: 'review',
   failed: 'review',
   no_change: 'review',
   merged: 'done',

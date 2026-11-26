@@ -23,6 +23,7 @@ import {
   type FactoryApprovalRequestState,
   type FactoryRunState,
   type FactoryWaitReason,
+  type FactorySpec,
 } from '@funny/shared/contracts/factory';
 import { parseStoredJson } from '@funny/shared/json-validation';
 import { and, asc, eq, gte, like } from 'drizzle-orm';
@@ -39,6 +40,8 @@ import { sandboxThreadOfRunner } from '../runner-scope.js';
 import {
   createFactoryApprovalRequestsRepository,
   heldCommit,
+  heldSpecRevision,
+  specRequestKey,
   type FactoryApprovalRequestRecord,
 } from './factory-approval-requests.js';
 import { createFactoryRunsRepository, type FactoryRunView } from './factory-runs.js';
@@ -142,8 +145,16 @@ export interface AgentRunSummary {
   } | null;
   /** Whether it waits for a member's approval of a high-risk change. */
   awaitsApproval: boolean;
+  /** Whether its spec draft waits for a member's approval (openspec factory-spec-stage). */
+  awaitsSpecApproval: boolean;
   /** Its newest approval request, or null. */
-  approvalRequest: { id: string; state: FactoryApprovalRequestState; sha: string } | null;
+  approvalRequest: {
+    id: string;
+    state: FactoryApprovalRequestState;
+    kind: 'merge' | 'spec';
+    sha: string;
+    specRevision: number | null;
+  } | null;
 }
 
 /** A control a member or an agent applied to the run, from the owner's activities. */
@@ -181,6 +192,36 @@ export interface AgentRunDetail extends AgentRunSummary {
   threads: { role: string; threadId: string }[];
   /** The newest controls applied to it, oldest first. */
   history: AgentRunHistoryEntry[];
+  /** Its spec stage, or null without one (openspec factory-spec-stage). */
+  spec: {
+    threadId: string | null;
+    revision: number;
+    /** What the spec writer's latest result is: open questions, a draft, or nothing yet. */
+    status: 'questions' | 'draft' | 'none';
+    questions: string[];
+    draft: FactorySpec | null;
+    problem: string | null;
+    approved: { by: string; at: string; revision: number; spec: FactorySpec } | null;
+  } | null;
+}
+
+/** The run's spec stage as an agent reads it. */
+function specDetail(run: FactoryRunView): AgentRunDetail['spec'] {
+  const spec = run.spec;
+  if (!spec) return null;
+  const latest = spec.latest;
+  return {
+    threadId: spec.threadId ?? null,
+    revision: spec.revision,
+    status: latest?.status ?? 'none',
+    questions:
+      latest?.status === 'questions'
+        ? latest.questions.map((question) => oneLine(question.question) ?? '')
+        : [],
+    draft: latest?.status === 'draft' ? latest.spec : null,
+    problem: spec.problem ?? null,
+    approved: spec.approved ?? null,
+  };
 }
 
 const MAX_DETAIL_ITEMS = 10;
@@ -197,6 +238,7 @@ function threadsOf(run: FactoryRunView): AgentRunDetail['threads'] {
     out.push({ role, threadId });
   };
   add('triage', run.triage?.threadId);
+  add('spec', run.spec?.threadId);
   for (const one of run.roleThreads) add(one.role, one.threadId);
   for (const review of run.reviews) add('review', review.threadId);
   for (const threadId of run.threadIds) add('step', threadId);
@@ -223,6 +265,7 @@ function detail(run: FactoryRunView, history: AgentRunHistoryEntry[]): AgentRunD
           partsClosedAt: triage.partsClosedAt ?? null,
         }
       : null,
+    spec: specDetail(run),
     reviews: run.reviews.slice(-MAX_DETAIL_REVIEWS).map((review) => ({
       sha: review.sha,
       verdict: review.verdict,
@@ -278,7 +321,16 @@ function summarize(
     approvedSha: run.mergeApproval?.sha ?? null,
     sinceApproval: sinceApprovalOf(run),
     awaitsApproval: heldCommit(run) !== null,
-    approvalRequest: request ? { id: request.id, state: request.state, sha: request.sha } : null,
+    awaitsSpecApproval: heldSpecRevision(run) !== null,
+    approvalRequest: request
+      ? {
+          id: request.id,
+          state: request.state,
+          kind: request.kind,
+          sha: request.sha,
+          specRevision: request.specRevision,
+        }
+      : null,
   };
 }
 
@@ -582,14 +634,18 @@ export function createFactoryAgentTools(deps: FactoryAgentToolsDeps) {
         steering(userId, projectId)
           .andThen(() => ownRun(userId, projectId, runId))
           .andThen(({ run, factoryId }) => {
-            const sha = heldCommit(run);
+            // A held high-risk commit, or a spec draft (asked for its revision):
+            // either way the request approves nothing, the member does.
+            const revision = heldSpecRevision(run);
+            const sha = heldCommit(run) ?? (revision === null ? null : specRequestKey(revision));
             if (!sha) {
               return errAsync<
                 FactoryApprovalRequestRecord & { created: boolean },
                 FactoryToolError
               >({
                 kind: 'conflict',
-                message: 'This run is not waiting for an approval of a high-risk change.',
+                message:
+                  'This run is not waiting for an approval of a high-risk change or of a spec draft.',
               });
             }
             return deps.requests

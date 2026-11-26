@@ -53,6 +53,7 @@ import {
   type UpdateRunInput,
 } from './factory-runs.js';
 import { getWatchedFactory, type projectAgentDefaults } from './factory-settings.js';
+import { startSpecWriter } from './factory-spec.js';
 import type { BlockerState } from './factory-stacking.js';
 import {
   lastAgentError,
@@ -387,10 +388,31 @@ function triageDepsOf(
   trace: FlowTrace,
 ): Pick<
   FactoryActionProviderDeps,
-  'triage' | 'findTriageThread' | 'busyPaths' | 'holdForPaths' | 'exclusive'
+  | 'triage'
+  | 'findTriageThread'
+  | 'busyPaths'
+  | 'holdForPaths'
+  | 'exclusive'
+  | 'specStage'
+  | 'startSpec'
+  | 'specValidation'
 > {
   return {
     triage: job.run.triage,
+    specStage: job.factory.specStage,
+    specValidation: job.run.spec?.approved?.spec.validation ?? [],
+    startSpec: async () => {
+      const run = (await deps.runs.get(job.run.id)).unwrapOr(null);
+      if (!run) return;
+      const started = await startSpecWriter(run);
+      if (started.isErr()) {
+        log.warn('Issue factory could not start a spec writer', {
+          namespace: 'factory',
+          runId: job.run.id,
+          error: started.error,
+        });
+      }
+    },
     findTriageThread: (titlePrefix, since) => findLaunchedThread(scope, titlePrefix, since, true),
     busyPaths: async () => {
       const others = await deps.runs.inFlight(job.factory.id);

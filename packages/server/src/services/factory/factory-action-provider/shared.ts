@@ -238,6 +238,12 @@ export interface FactoryActionProviderDeps {
   storedProof?: RegressionProofRecord | null;
   /** What the run already stores of its triage (a resumed run, or one back from a path hold). */
   triage?: FactoryTriage | null;
+  /** Whether triage may answer `needs_spec` (the factory's Spec stage, openspec factory-spec-stage). */
+  specStage?: boolean;
+  /** Start the spec stage of a run triage parked in `needs_spec`. */
+  startSpec?(): Promise<void>;
+  /** The validation checklist of the run's approved spec, for its reviewer; empty without one. */
+  specValidation?: readonly string[];
   /** The newest triage thread of this run by its title prefix, since `since`. */
   findTriageThread?(titlePrefix: string, since: string): Promise<string | null>;
   /** The likely paths of the factory's other runs in progress, by issue. */

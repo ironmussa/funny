@@ -40,6 +40,7 @@ function useRoleLabels(): Record<FactoryRunThreadRole, string> {
     triage: t('factoryRunDetail.role.triage', 'Triage'),
     implementer: t('factoryRunDetail.role.implementer', 'Implementer'),
     reviewer: t('factoryRunDetail.role.reviewer', 'Reviewer'),
+    spec: t('factoryRunDetail.role.spec', 'Spec writer'),
     agent: t('factoryRunDetail.role.agent', 'Agent'),
   };
 }

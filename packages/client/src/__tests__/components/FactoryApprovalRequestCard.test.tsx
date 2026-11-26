@@ -85,6 +85,8 @@ const request = (over: Partial<FactoryApprovalRequest> = {}): FactoryApprovalReq
   runId: 'r1',
   projectId: 'p1',
   threadId: 't1',
+  kind: 'merge',
+  specRevision: null,
   sha: A,
   state: 'pending',
   createdAt: '2026-11-24T23:00:00.000Z',

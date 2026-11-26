@@ -13,7 +13,25 @@ import {
   isFactoryRunUnsavedWork,
 } from '@/lib/factory-run-labels';
 
-type WaitingRun = Pick<FactoryRun, 'state' | 'waitReason' | 'triage' | 'failureReason'>;
+type WaitingRun = Pick<FactoryRun, 'state' | 'waitReason' | 'triage' | 'failureReason'> &
+  Partial<Pick<FactoryRun, 'spec'>>;
+
+/** What a run waiting on its spec waits for: open questions, a draft to approve, or a problem. */
+function needsSpecText(t: TFunction, run: WaitingRun): string {
+  const spec = run.spec;
+  if (spec?.problem) {
+    return t('factoryBoard.waiting.specProblem', 'The spec writer gave no valid spec');
+  }
+  if (spec?.latest?.status === 'draft') {
+    return t('factoryBoard.waiting.specDraft', 'A spec waits for approval');
+  }
+  if (spec?.latest?.status === 'questions') {
+    return t('factoryBoard.waiting.specQuestions', 'The spec has {{count}} open questions', {
+      count: spec.latest.questions.length,
+    });
+  }
+  return t('factoryBoard.waiting.specWriting', 'A spec writer is reading the issue');
+}
 
 function needsInfoText(t: TFunction, run: WaitingRun): string {
   if (run.triage?.decision === 'already_done') {
@@ -85,6 +103,7 @@ const WAITING_TEXT: Partial<
 > = {
   requested: (t, run) => (run.waitReason ? factoryWaitReasonText(t, run.waitReason) : null),
   needs_info: needsInfoText,
+  needs_spec: needsSpecText,
   done: doneText,
   no_change: (t) =>
     t('factoryBoard.waiting.noChange', 'Nothing to change: the issue needs a person'),

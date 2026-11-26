@@ -73,12 +73,15 @@
     "externalClaudeUnavailable": "No disponible",
     "noProjects": "No hay proyectos. Presiona + para agregar uno.",
     "analytics": "Analíticas",
+    "grid": "Cuadrícula",
     "workflows": "Workflows",
     "githubIssues": "GitHub Issues",
     "viewDesigns": "Ver diseños",
     "createAutomation": "Crear automatización",
     "browser_panel": "Anotador del navegador",
-    "factory": "Cola del factory"
+    "factory": "Cola del factory",
+    "threadsView": "Hilos",
+    "kanbanView": "Kanban"
   },
   "externalClaude": {
     "title": "Claude Code",
@@ -564,6 +567,10 @@
     "deletions": "eliminaciones"
   },
   "history": {
+    "dropStashSuccess": "Stash descartado",
+    "confirmDropStashTitle": "Descartar stash",
+    "confirmDropStashDesc": "Esto eliminará la entrada más reciente del stash (stash@{0}) y los cambios que guarda. Esta acción no se puede deshacer.",
+    "confirmDropStashButton": "Descartar stash",
     "viewOnGithub": "Ver en GitHub"
   },
   "graph": {
@@ -592,6 +599,7 @@
     "copiedRef": "Copiado {{ref}}",
     "viewBranchOnGithub": "Ver rama en GitHub",
     "resetToHere": "Resetear rama a aquí",
+    "dropStash": "Descartar stash",
     "uncommittedChanges": "Cambios sin commitear",
     "searchPlaceholder": "Buscar ramas y commits",
     "matchCount_one": "{{count}} resultado",
@@ -835,7 +843,12 @@
     "projectFactoryLaneFinish": "Finalizar carril",
     "projectFactoryLaneFinishPr": "PR final #{{number}}",
     "projectFactoryLaneFinished": "PR final #{{number}} abierto para el carril {{name}}",
-    "projectFactoryLaneRemove": "Eliminar carril"
+    "projectFactoryLaneRemove": "Eliminar carril",
+    "projectFactorySpecStage": "Etapa de especificación",
+    "projectFactorySpecStageDesc": "Cuando la clasificación encuentra decisiones de producto que un issue deja abiertas, un redactor las resuelve con tu equipo en su propio hilo, y la fábrica implementa el issue solo después de que un miembro apruebe la especificación",
+    "projectFactoryCommitSpec": "Confirmar especificación",
+    "projectFactoryCommitSpecDesc": "Una carpeta del repositorio donde el implementador confirma la especificación aprobada como issue-<número>.md. Vacío: no se confirma",
+    "projectFactoryCommitSpecInvalid": "Usa una carpeta dentro del repositorio, como docs/specs, sin .."
   },
   "skills": {
     "showingFor": "Mostrando skills para:",
@@ -1612,7 +1625,27 @@
     "linkedBranch": "rama",
     "linkedPR": "PR",
     "alreadyLinked": "Ya tiene una rama",
-    "creatingFromIssue": "Creando hilo desde issue: {{title}}"
+    "creatingFromIssue": "Creando hilo desde issue: {{title}}",
+    "timeline": {
+      "loading": "Cargando actividad…",
+      "error": "No se pudo cargar la actividad",
+      "added": "añadió",
+      "removed": "quitó",
+      "mentioned": "mencionó esto",
+      "linkedToClose": "enlazó un pull request que cerrará este issue",
+      "closed": "cerró esto",
+      "closedCompleted": "cerró esto como completado",
+      "closedNotPlanned": "cerró esto como no planificado",
+      "closedDuplicate": "cerró esto como duplicado",
+      "in": "en",
+      "reopened": "reabrió esto",
+      "renamed": "cambió el título",
+      "selfAssigned": "se lo asignó",
+      "selfUnassigned": "quitó su asignación",
+      "assigned": "asignó a",
+      "unassigned": "desasignó a",
+      "commitReferenced": "añadió un commit que referencia este issue"
+    }
   },
   "users": {
     "title": "Usuarios",
@@ -1865,7 +1898,8 @@
       "notStartedStopped": "Detenida antes de su primer paso: ningún agente se ejecutó, sin rama ni pull request",
       "tooBig": "Muy grande",
       "alreadyDone": "Ya hecho",
-      "onHold": "En pausa"
+      "onHold": "En pausa",
+      "needsSpec": "Necesita una especificación"
     },
     "wait": {
       "pathsAwaitingApproval": "Esperando a {{blockers}}: reserva los mismos archivos mientras espera una aprobación",
@@ -2237,7 +2271,11 @@
       "alreadyDone": "Ya hecho: la factory cerró el issue",
       "alreadyDoneOpen": "Triage lo encontró ya hecho; cierra el issue si estás de acuerdo",
       "trackedBy": "Lo llevan {{issues}}",
-      "notPushed": "Hizo commit en su checkout, pero nunca hizo push"
+      "notPushed": "Hizo commit en su checkout, pero nunca hizo push",
+      "specProblem": "El redactor de la especificación no dio una especificación válida",
+      "specDraft": "Una especificación espera aprobación",
+      "specQuestions": "La especificación tiene {{count}} preguntas abiertas",
+      "specWriting": "Un redactor de especificación está leyendo el issue"
     },
     "time": {
       "inStep": "En {{step}} {{duration}}",
@@ -2290,7 +2328,8 @@
       "agent": "Agente",
       "implementer": "Implementador",
       "reviewer": "Reviewer",
-      "triage": "Triage"
+      "triage": "Triage",
+      "spec": "Redactor de especificación"
     },
     "superseded": "Reemplazado",
     "threads": "Hilos de los agentes",
@@ -2301,7 +2340,8 @@
       "needsInfo": "Preguntado en el issue",
       "tooBig": "División propuesta",
       "none": "Triage no dio contrato: el review juzga contra el issue.",
-      "alreadyDone": "Ya hecho: las pruebas"
+      "alreadyDone": "Ya hecho: las pruebas",
+      "needsSpec": "Decisiones de producto abiertas"
     },
     "timeline": {
       "title": "Línea de tiempo",
@@ -2312,6 +2352,24 @@
       "cancelled": "cancelado",
       "wait": "esperó {{duration}}",
       "attempt": "intento {{attempt}}"
-    }
+    },
+    "specTab": "Especificación"
+  },
+  "factorySpec": {
+    "title": "Especificación",
+    "thread": "Hilo de la especificación",
+    "problem": "El redactor no dio una especificación válida. Respóndele en su hilo o reintenta la ejecución para volver a clasificarla.",
+    "questionsIntro": "El redactor pregunta al equipo. Responde en su hilo:",
+    "writing": "El redactor está leyendo el issue y el código.",
+    "draftBadge": "El borrador {{revision}} espera aprobación",
+    "approve": "Aprobar especificación",
+    "approvedByYou": "Aprobada por ti, {{at}}",
+    "approvedByMember": "Aprobada por un miembro, {{at}}",
+    "reopen": "Reabrir especificación",
+    "decisions": "Decisiones",
+    "behavior": "Comportamiento",
+    "approach": "Enfoque",
+    "outOfScope": "Fuera de alcance",
+    "validation": "Lista de validación"
   }
 }

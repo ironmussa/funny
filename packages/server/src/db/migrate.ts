@@ -2666,6 +2666,17 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    // Openspec factory-spec-stage: the spec writer's latest result and its
+    // approval (JSON, `FactoryRunSpec`), and the factory's Spec stage (null /
+    // 0: off) and Commit spec path (null: the spec is not committed).
+    name: '142_factory_spec_stage',
+    async up() {
+      await ctx().addColumn('factory_runs', 'spec', 'TEXT');
+      await ctx().addColumn('factory_settings', 'spec_stage', 'INTEGER');
+      await ctx().addColumn('factory_settings', 'commit_spec_path', 'TEXT');
+    },
+  },
 ];
 
 /**

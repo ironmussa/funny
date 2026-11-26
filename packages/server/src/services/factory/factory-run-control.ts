@@ -61,6 +61,8 @@ import {
   type FactoryRunView,
 } from './factory-runs.js';
 import { getWatchedFactory } from './factory-settings.js';
+import { createSpecControls, releaseSpecOf } from './factory-spec-control.js';
+import { onFactorySpecTurn } from './factory-spec.js';
 import {
   archiveReplacedFactoryThreads,
   freeRunBranchForRetry,
@@ -93,6 +95,9 @@ const storage = (error: { message: string }): FactoryRunControlError => ({
   kind: 'storage',
   message: error.message,
 });
+
+/** Runs parked before any work (on their issue or their spec): a retry triages them again. */
+const PARKED_BEFORE_WORK: ReadonlySet<string> = new Set(['needs_info', 'needs_spec']);
 
 /** Look at the factory now; the request does not wait for the tick. */
 function wake(factoryId: string): void {
@@ -323,7 +328,9 @@ function putRunOnHold(
     .mapErr(reopenRefused)
     .andThen((held) =>
       held
-        ? ResultAsync.fromSafePromise(markIssueOnHold(run)).map(() => undefined)
+        ? ResultAsync.fromSafePromise(Promise.all([markIssueOnHold(run), releaseSpecOf(run)])).map(
+            () => undefined,
+          )
         : errAsync<undefined, FactoryRunControlError>({
             kind: 'conflict',
             message:
@@ -379,7 +386,8 @@ export function createFactoryRunControl(runs = createFactoryRunsRepository()) {
       .mapErr(storage)
       .andThen((moved) =>
         moved
-          ? okAsync(undefined)
+          ? // A run that waited on its spec gives its writer's checkout back.
+            ResultAsync.fromSafePromise(releaseSpecOf(run)).map(() => undefined)
           : errAsync<undefined, FactoryRunControlError>({
               kind: 'conflict',
               message: 'Only a failed run, or one waiting for you, can be retried.',
@@ -440,7 +448,7 @@ export function createFactoryRunControl(runs = createFactoryRunsRepository()) {
               ? stopFactoryThreads(ports, userId, threadsOf(run))
               : Promise.resolve();
             return ResultAsync.fromSafePromise(
-              Promise.all([threadsStopped, releaseStoppedIssue(run)]),
+              Promise.all([threadsStopped, releaseStoppedIssue(run), releaseSpecOf(run)]),
             ).andThen(() => reread(run.id));
           }),
       );
@@ -449,8 +457,8 @@ export function createFactoryRunControl(runs = createFactoryRunsRepository()) {
     retry(factoryId: string, runId: string): ResultAsync<FactoryRunView, FactoryRunControlError> {
       return runOf(factoryId, runId)
         .andThen((run) =>
-          // A run parked on its issue has done no work to keep: it is triaged again.
-          run.state === 'needs_info' ? retriaged(run) : reopened(run),
+          // A run parked on its issue (or its spec) has done no work to keep: it is triaged again.
+          PARKED_BEFORE_WORK.has(run.state) ? retriaged(run) : reopened(run),
         )
         .andThen(() => {
           wake(factoryId);
@@ -501,6 +509,8 @@ export function createFactoryRunControl(runs = createFactoryRunsRepository()) {
         .andThen((run) => putRunOnHold(runs, run, userId, reason))
         .andThen(() => reread(runId));
     },
+
+    ...createSpecControls({ runs, runOf, reread, wake }),
 
     /**
      * Release a run on hold: it goes back to the end of the queue and is
@@ -690,6 +700,14 @@ export async function onFactoryThreadTerminal(threadId: string, status: string):
   signalThreadTerminal(threadId);
   if (status !== 'completed') return;
   const runs = createFactoryRunsRepository();
+  // A spec writer's turn (openspec factory-spec-stage): its result is read and
+  // stored on the run. A role thread never takes a run over.
+  const waitingOnSpec = await runs.waitingOnSpec();
+  if (waitingOnSpec.isOk()) {
+    for (const run of waitingOnSpec.value) {
+      if (run.spec?.threadId === threadId) await onFactorySpecTurn(run, threadId);
+    }
+  }
   const found = await runs.reopenableByThread(threadId);
   if (found.isErr()) return;
   for (const run of found.value) {

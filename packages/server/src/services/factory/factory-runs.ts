@@ -43,6 +43,7 @@ import {
 import { parkedOperations } from './factory-runs-parked.js';
 import { queueOperations } from './factory-runs-queue.js';
 import { inFlight, runReadOperations } from './factory-runs-reads.js';
+import { specOperations } from './factory-runs-spec.js';
 import {
   afterStateWrite,
   NO_FREE_SLOT,
@@ -187,6 +188,8 @@ export function createFactoryRunsRepository(
     },
 
     ...parkedOperations(),
+
+    ...specOperations(),
 
     /**
      * Record (or, with null, remove) a member's statement that the run is a

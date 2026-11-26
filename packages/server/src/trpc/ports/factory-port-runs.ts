@@ -35,7 +35,9 @@ export type RunControlAction =
   | 'mark-done'
   | 'hold'
   | 'release'
-  | 'close-replaced-pr';
+  | 'close-replaced-pr'
+  | 'approve-spec'
+  | 'reopen-spec';
 
 /** A controlled run, and the commit the control was for (only an approval names one). */
 interface ControlledRun {
@@ -60,7 +62,9 @@ const RUN_CONTROL: Record<
       | 'factory.run_marked_done'
       | 'factory.run_put_on_hold'
       | 'factory.run_released'
-      | 'factory.superseded_pr_closed';
+      | 'factory.superseded_pr_closed'
+      | 'factory.spec_approved'
+      | 'factory.spec_reopened';
     /**
      * The member's activity row, or null when the control records its own
      * (closing a pull request records `factory.close-pr` where it closes it).
@@ -73,6 +77,8 @@ const RUN_CONTROL: Record<
       | 'factory.mark-done'
       | 'factory.hold'
       | 'factory.release'
+      | 'factory.spec_approved'
+      | 'factory.spec_reopened'
       | null;
     /** `label` names the run: `for issue #12`, or its id when it has no issue. */
     auditDetail: (label: string, sha: string | null, reason?: string) => string;
@@ -129,6 +135,21 @@ const RUN_CONTROL: Record<
     title: (issue, _sha, done) =>
       `${done ? 'Released' : 'Release'} the factory run${issue ? ` for #${issue}` : ''} from hold`,
   },
+  'approve-spec': {
+    audit: 'factory.spec_approved',
+    kind: 'factory.spec_approved',
+    auditDetail: (label, revision) =>
+      `Spec of factory run ${label} approved at revision ${revision ?? 'unknown'}`,
+    title: (issue, _revision, done) =>
+      `${done ? 'Approved' : 'Approve'} the spec${issue ? ` of #${issue}` : ''}`,
+  },
+  'reopen-spec': {
+    audit: 'factory.spec_reopened',
+    kind: 'factory.spec_reopened',
+    auditDetail: (label) => `Spec of factory run ${label} reopened`,
+    title: (issue, _sha, done) =>
+      `${done ? 'Reopened' : 'Reopen'} the spec${issue ? ` of #${issue}` : ''}`,
+  },
   'close-replaced-pr': {
     audit: 'factory.superseded_pr_closed',
     kind: null,
@@ -161,6 +182,7 @@ function recordRunControl(
       input: {
         ...(isNumber(issueNumber) && { issueNumber }),
         ...(action === 'approve-merge' && sha && { sha }),
+        ...(action === 'approve-spec' && sha && { revision: Number(sha) }),
       },
       origin: askedByThread ? 'implicit' : 'user',
     },
@@ -176,6 +198,8 @@ interface RunControlOptions {
   askedByThread?: string;
   /** Why the run is put on hold (`hold` only). */
   reason?: string;
+  /** The spec draft's revision the member was shown (`approve-spec` only). */
+  revision?: number;
 }
 
 /**
@@ -193,7 +217,7 @@ export function createRunControl(
     userId: string,
     projectId: string,
     runId: string,
-    { expectedSha = '', askedByThread, reason = '' }: RunControlOptions = {},
+    { expectedSha = '', askedByThread, reason = '', revision = -1 }: RunControlOptions = {},
   ): ResultAsync<FactoryRunView, ApiFailure> =>
     ownFactory(userId, projectId)
       .andThen((factoryId) => {
@@ -207,6 +231,12 @@ export function createRunControl(
           release: () => control.release(factoryId, runId).map(withoutSha),
           'close-replaced-pr': () =>
             control.closeReplacedPr(factoryId, runId).map(({ run }) => withoutSha(run)),
+          // The revision rides in `sha` for the audit and the activity row.
+          'approve-spec': () =>
+            control
+              .approveSpec(userId, factoryId, runId, revision)
+              .map((run) => ({ run, sha: String(revision) })),
+          'reopen-spec': () => control.reopenSpec(factoryId, runId).map(withoutSha),
         }[action];
         return run().mapErr(controlFailure);
       })
@@ -282,6 +312,8 @@ export function runPortMethods(
   | 'markRunDone'
   | 'holdRun'
   | 'releaseRun'
+  | 'approveSpec'
+  | 'reopenSpec'
   | 'closeReplacedPr'
   | 'setLintCleanup'
   | 'approvalRequests'
@@ -386,6 +418,14 @@ export function runPortMethods(
 
     async releaseRun(userId, projectId, runId) {
       return controlled('release', userId, projectId, runId);
+    },
+
+    async approveSpec(userId, projectId, runId, revision) {
+      return controlled('approve-spec', userId, projectId, runId, { revision });
+    },
+
+    async reopenSpec(userId, projectId, runId) {
+      return controlled('reopen-spec', userId, projectId, runId);
     },
 
     async closeReplacedPr(userId, projectId, runId) {

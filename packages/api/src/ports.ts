@@ -494,6 +494,23 @@ export interface FactoryPort {
    */
   releaseRun(userId: string, projectId: string, runId: string): PortResult<FactoryRun>;
   /**
+   * Approve the spec draft of `revision` of a run waiting on its spec (openspec
+   * factory-spec-stage): the run goes back to the queue with the draft's
+   * contract. Refused (409) when the run left `needs_spec` or a newer draft
+   * was stored. Only from a member's browser session. Audited.
+   */
+  approveSpec(
+    userId: string,
+    projectId: string,
+    runId: string,
+    revision: number,
+  ): PortResult<FactoryRun>;
+  /**
+   * Reopen a run's spec: the approval is dropped and the spec writer asked to
+   * revise it. Refused (409) for a run in flight. Audited.
+   */
+  reopenSpec(userId: string, projectId: string, runId: string): PortResult<FactoryRun>;
+  /**
    * Close the pull request of a run of the caller's factory that a newer run
    * of its issue replaced, and delete its branch. Refused (409) for a run that
    * was not replaced, has not ended or has no pull request of its own; 502

@@ -3,6 +3,7 @@ import {
   factoryFlowInput,
   factoryApprovalRequestInput,
   factoryApproveMergeInput,
+  factoryApproveSpecInput,
   factoryHoldRunInput,
   factoryLaneInput,
   factoryLintCleanupInput,
@@ -105,6 +106,26 @@ export const factoryRouter = router({
       unwrap(
         await ctx.ports.factory.holdRun(ctx.userId, input.projectId, input.runId, input.reason),
       ),
+    ),
+  // A member approves a spec draft from the browser (openspec factory-spec-stage).
+  // No factory MCP tool and nothing on the runner's data channel reaches it:
+  // an agent can only ask, through an approval request of kind `spec`.
+  approveSpec: projectProcedure('steer', CONTROL_FORBIDDEN)
+    .input(factoryApproveSpecInput)
+    .mutation(async ({ ctx, input }) =>
+      unwrap(
+        await ctx.ports.factory.approveSpec(
+          ctx.userId,
+          input.projectId,
+          input.runId,
+          input.revision,
+        ),
+      ),
+    ),
+  reopenSpec: projectProcedure('steer', CONTROL_FORBIDDEN)
+    .input(factoryRunInput)
+    .mutation(async ({ ctx, input }) =>
+      unwrap(await ctx.ports.factory.reopenSpec(ctx.userId, input.projectId, input.runId)),
     ),
   releaseRun: projectProcedure('steer', CONTROL_FORBIDDEN)
     .input(factoryRunInput)

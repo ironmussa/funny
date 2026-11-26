@@ -14,6 +14,7 @@ const NEEDS_PERSON: ReadonlySet<FactoryQueueRun['state']> = new Set([
   'failed',
   'stopped',
   'needs_info',
+  'needs_spec',
   'no_change',
 ]);
 

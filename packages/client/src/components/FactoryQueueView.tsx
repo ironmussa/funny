@@ -158,6 +158,7 @@ const FactoryRunRow = memo(function FactoryRunRow({ run, projectName, now, onSel
 const STATE_ORDER: readonly FactoryRun['state'][] = [
   'waiting_human',
   'needs_info',
+  'needs_spec',
   'requested',
   'queued',
   'triaging',

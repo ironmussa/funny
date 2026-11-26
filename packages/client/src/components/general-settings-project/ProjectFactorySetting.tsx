@@ -21,6 +21,7 @@ import { ProjectFactoryBaseBranch } from './ProjectFactoryBaseBranch';
 import { ProjectFactoryIncident } from './ProjectFactoryIncident';
 import { ProjectFactoryLanes } from './ProjectFactoryLanes';
 import { ProjectFactoryMergeRows } from './ProjectFactoryMergeRows';
+import { ProjectFactorySpecRows } from './ProjectFactorySpecRows';
 import { ProjectFactoryStepOptions } from './ProjectFactoryStepOptions';
 import { ProjectFactoryTriggers } from './ProjectFactoryTriggers';
 import { SegmentedControl, ProjectSettingRow } from './setting-primitives';
@@ -46,6 +47,8 @@ type FactoryForm = Pick<
   | 'batch'
   | 'dependencies'
   | 'tooBig'
+  | 'specStage'
+  | 'commitSpecPath'
   | 'holdPathsAwaitingApproval'
   | 'baseBranch'
   | 'laneLabelPrefix'
@@ -70,6 +73,8 @@ const DEFAULT_FORM: FactoryForm = {
   batch: { size: 5, waitSeconds: 60 },
   dependencies: 'wait',
   tooBig: 'ask',
+  specStage: false,
+  commitSpecPath: '',
   holdPathsAwaitingApproval: false,
   baseBranch: '',
   laneLabelPrefix: 'feature:',
@@ -83,7 +88,7 @@ function formValues(settings: FactorySettings | null | undefined): FactoryForm {
   const { autoMerge, sensitivePaths, stageLimits, stepOverrides, batch, dependencies } = settings;
   const { maxLowRiskLines, sizeIgnoredPaths, tooBig, approvalAdjustMaxLines } = settings;
   const { holdPathsAwaitingApproval, baseBranch, sizeGateEnabled } = settings;
-  const { laneLabelPrefix, laneBranchPrefix } = settings;
+  const { laneLabelPrefix, laneBranchPrefix, specStage, commitSpecPath } = settings;
   return {
     enabled,
     mode,
@@ -101,6 +106,8 @@ function formValues(settings: FactorySettings | null | undefined): FactoryForm {
     batch,
     dependencies,
     tooBig,
+    specStage,
+    commitSpecPath,
     holdPathsAwaitingApproval,
     baseBranch,
     laneLabelPrefix,
@@ -307,6 +314,13 @@ function ProjectFactorySettingRows({ projectId }: { projectId: string }) {
             projectId={projectId}
             flowName={flowName}
             settings={form}
+            rowKey={rowKey}
+            onSave={(input) => void save({ enabled, ...input })}
+          />
+
+          <ProjectFactorySpecRows
+            specStage={form.specStage}
+            commitSpecPath={form.commitSpecPath}
             rowKey={rowKey}
             onSave={(input) => void save({ enabled, ...input })}
           />

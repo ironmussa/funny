@@ -41,8 +41,8 @@
  */
 
 import {
-  factoryTriageResultSchema,
   MAX_TRIAGE_ITEM_CHARS,
+  triageResultSchemaFor,
   MAX_TRIAGE_ITEMS,
   type FactoryTriage,
   type FactoryTriageResult,
@@ -163,6 +163,7 @@ const COMMENT_FIRST_LINE = {
 type TriageCommentKind = keyof typeof COMMENT_FIRST_LINE;
 
 type TooBigAnswer = Extract<FactoryTriageResult, { decision: 'too_big' }>;
+type NeedsSpecAnswer = Extract<FactoryTriageResult, { decision: 'needs_spec' }>;
 
 /** The parts posted on a parked issue, then the existing issues that cover the rest. */
 const withExisting = (answer: TooBigAnswer): string[] =>
@@ -287,6 +288,17 @@ const RESULT_FORMAT = [
   '```',
 ].join('\n');
 
+/** The `needs_spec` answer, offered only while the factory's Spec stage is on. */
+const NEEDS_SPEC_CHOICE =
+  "- `needs_spec`: the issue is clear enough to work, but it leaves product decisions open that a wrong guess would waste: where an affordance lives, what it applies to, what happens at its edges, what a user sees when it fails. Not a technical choice the code answers (decide those and answer `ready`), and not a missing fact only the issue's author knows (that is `needs_info`). List the open decisions (at most ten), each with the answers you see, and in `findings` what you learned in the code (at most ten lines). Nothing is posted on the issue: the team settles them with a spec writer.";
+
+const RESULT_FORMAT_WITH_SPEC = [
+  RESULT_FORMAT.replace('One of these four', 'One of these five'),
+  '```json',
+  '{ "decision": "needs_spec", "decisions": [{ "question": "<an open product decision>", "options": ["<a possible answer>"] }], "findings": ["<what the code shows about it>"] }',
+  '```',
+].join('\n');
+
 function triagePrompt(input: {
   repo: string;
   issueNumber: number;
@@ -294,6 +306,8 @@ function triagePrompt(input: {
   issue: FactoryIssueText | null;
   /** Likely paths of the factory's runs in progress. */
   busyPaths: readonly string[];
+  /** Whether `needs_spec` is offered (the factory's Spec stage). */
+  specStage?: boolean;
 }): string {
   const busy =
     input.busyPaths.length > 0
@@ -319,11 +333,12 @@ function triagePrompt(input: {
     '- `needs_info`: something the issue must say is missing or ambiguous, and a wrong guess would waste the work. Ask at most five short questions. Do not ask what the code already answers.',
     "- `too_big`: it is several independent changes. Propose the parts. A part an existing issue already covers (a sub-issue the issue lists, a part of an earlier split, an issue it names as already opened) is not a part: put that issue's number in `existing` and do not describe it in `parts`. When every part is an existing issue, `parts` is empty. Never write a part that only points at another issue.",
     '- `already_done`: what the issue asks is already true of the code in the checkout (it duplicates work already merged, or a fix already landed), so there is nothing to change. Run the check the issue names (its lint, test or command) in the checkout and see it pass: that output is the evidence, with the commit or pull request that did the work. Files, tests or commits that merely exist are not evidence, and neither is another issue being closed. The factory closes the issue on your answer: when you could not run the check, or it does not pass, it is not `already_done`.',
+    ...(input.specStage ? [NEEDS_SPEC_CHOICE] : []),
     'Prefer `ready` when a reasonable decision can be made and stated.',
     ...(busy ? ['', busy] : []),
     '',
     'End your final message with exactly one fenced json block, and nothing after it.',
-    RESULT_FORMAT,
+    input.specStage ? RESULT_FORMAT_WITH_SPEC : RESULT_FORMAT,
   ].join('\n');
 }
 
@@ -345,6 +360,13 @@ export interface FactoryTriageDeps {
   issueUrl: string | null;
   /** What the run already stores of its triage (a resumed run, or one back from a hold). */
   stored: FactoryTriage | null;
+  /**
+   * The factory's Spec stage (openspec factory-spec-stage): triage is offered
+   * `needs_spec`, which is an invalid answer otherwise.
+   */
+  specStage?: boolean;
+  /** Start the spec writer of a run parked in `needs_spec` (best effort; logged by the caller). */
+  startSpec?(): Promise<void>;
   /** Triage threads started before this are not this attempt's. */
   since: string;
   signal: AbortSignal;
@@ -521,6 +543,36 @@ async function heldForPaths(
   };
 }
 
+/** What a `needs_spec` answer stores (openspec factory-spec-stage). */
+function needsSpecTriage(answer: NeedsSpecAnswer, threadId: string): FactoryTriage {
+  return {
+    decision: 'needs_spec',
+    at: new Date().toISOString(),
+    threadId,
+    decisions: answer.decisions,
+    findings: answer.findings,
+  };
+}
+
+/**
+ * Open product decisions: park the run in `needs_spec` with nothing posted on
+ * the issue, and start its spec writer. Not ok: the flow stops here.
+ */
+async function parkForSpec(
+  deps: FactoryTriageDeps,
+  triage: FactoryTriage,
+  open: number,
+): Promise<ActionResult> {
+  await deps.record({ state: 'needs_spec', failureReason: null, triage });
+  await deps.count('triage_needs_spec');
+  await deps.startSpec?.();
+  return {
+    ok: false,
+    error: `The issue leaves ${open} product decision${open === 1 ? '' : 's'} open: a spec is being written.`,
+    metadata: { outcome: 'needs_spec', decision: 'needs_spec' },
+  };
+}
+
 export function createFactoryTriage(deps: FactoryTriageDeps) {
   const { scope } = deps;
   const exclusive = deps.exclusive ?? (<T>(work: () => Promise<T>) => work());
@@ -544,6 +596,7 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
       issueUrl: deps.issueUrl,
       issue,
       busyPaths,
+      specStage: deps.specStage ?? false,
     });
     const title = `${titlePrefix}${scope.issueTitle}`;
     const body = readOnlyRoleLaunch({ scope, title, base, opts, issue, prompt });
@@ -552,7 +605,7 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
 
   /** The triage agent's validated answer, asking once more on its thread when it is invalid. */
   function resultOf(threadId: string) {
-    return readRoleResult(factoryTriageResultSchema, {
+    return readRoleResult(triageResultSchemaFor(deps.specStage ?? false), {
       finalMessage: () => deps.finalMessage(threadId),
       askAgain: async (prompt) => {
         const followUp = deps.followUp;
@@ -754,6 +807,10 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
     if (answer.decision === 'needs_info') {
       return askOnIssue('needs_info', answer.questions, threadId);
     }
+    if (answer.decision === 'needs_spec') {
+      current = needsSpecTriage(answer, threadId);
+      return parkForSpec(deps, current, answer.decisions.length);
+    }
     if (answer.decision === 'too_big') return tooBig(answer, threadId);
     if (answer.decision === 'already_done') return alreadyDone(answer.evidence, threadId);
     const ready: FactoryTriage = {
@@ -934,7 +991,8 @@ function readyPathsOf(triage: FactoryTriage | null): string[] {
  * triage asked (an edit or a comment moves GitHub's `updated_at`).
  */
 export function issueChangedSince(triage: FactoryTriage | null, updatedAt: string | undefined) {
-  if (!triage || !updatedAt) return false;
+  // An approved spec is the team's decision: an issue edit does not discard it.
+  if (!triage || !updatedAt || triage.fromSpec) return false;
   const changed = Date.parse(updatedAt);
   const asked = Date.parse(triage.at);
   return Number.isFinite(changed) && Number.isFinite(asked) && changed > asked;

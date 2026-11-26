@@ -44,6 +44,8 @@ const COLUMN_OF = {
   reviewing: 'review',
   merging: 'merge',
   needs_info: 'needs_person',
+  // The team settles open product decisions with the spec writer (openspec factory-spec-stage).
+  needs_spec: 'needs_person',
   waiting_human: 'needs_person',
   failed: 'needs_person',
   no_change: 'needs_person',

@@ -210,6 +210,26 @@ describe('factory flow warnings', () => {
     expect(flow._unsafeUnwrap().warnings).toEqual([]);
   });
 
+  test('with the Spec stage on, a flow whose implementer ignores {{spec}} is warned about', async () => {
+    const yaml = `${HEADER}  - id: implement
+    spawn_agent: { prompt: "Implement {{issue_number}}" }
+`;
+    const flow = await loadFactoryFlow('custom', fromRepository(yaml), { specStage: true });
+    expect(flow._unsafeUnwrap().warnings).toEqual([
+      expect.objectContaining({ path: 'nodes.0.spawn_agent.prompt' }),
+    ]);
+    const off = await loadFactoryFlow('custom', fromRepository(yaml), { specStage: false });
+    expect(off._unsafeUnwrap().warnings).toEqual([]);
+  });
+
+  test('a flow whose implementer uses {{spec}} is not warned about', async () => {
+    const yaml = `${HEADER}  - id: implement
+    spawn_agent: { prompt: "Implement it. {{#spec}}Follow {{spec}}{{/spec}}" }
+`;
+    const flow = await loadFactoryFlow('custom', fromRepository(yaml), { specStage: true });
+    expect(flow._unsafeUnwrap().warnings).toEqual([]);
+  });
+
   test('the built-in factory flows have only the proof-not-configured warning', async () => {
     for (const name of ['issue-to-merge', 'issue-to-pr']) {
       const flow = await loadFactoryFlow(name, { readDefaultBranchFile: async () => ok(null) });

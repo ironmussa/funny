@@ -71,6 +71,8 @@ interface Script {
   releaseFails?: boolean;
   /** How closing the issue goes: GitHub refuses, or the factory has no way to close one. */
   close?: 'fails' | 'absent';
+  /** The factory's Spec stage (openspec factory-spec-stage). */
+  specStage?: boolean;
 }
 
 function triaging(script: Script) {
@@ -90,6 +92,8 @@ function triaging(script: Script) {
   const roleThreads: Array<{ role: string; threadId: string }> = [];
   let notedAtWait: string[] | null = null;
   let turn = 0;
+  /** How many times the spec stage was started. */
+  const specsStarted: true[] = [];
   const split = script.split;
   const deps: ProviderDeps = {
     scope,
@@ -97,6 +101,10 @@ function triaging(script: Script) {
     prUrl: script.prUrl ?? null,
     launchStartedAt: null,
     triage: script.stored ?? null,
+    specStage: script.specStage ?? false,
+    startSpec: async () => {
+      specsStarted.push(true);
+    },
     admittedAt: '2026-11-22T00:00:00.000Z',
     findLaunched: async () => null,
     findTriageThread: async () => script.found ?? null,
@@ -206,6 +214,7 @@ function triaging(script: Script) {
     notedBeforeAnswer,
     closedIssues,
     labelsDropped,
+    specsStarted,
   };
 }
 
@@ -429,6 +438,78 @@ describe('the triage step', () => {
         threadId: 'tri-1',
         items: ['Which endpoint is slow?', 'How slow?'],
       },
+    });
+  });
+
+  describe('needs_spec (openspec factory-spec-stage)', () => {
+    const NEEDS_SPEC = json({
+      decision: 'needs_spec',
+      decisions: [
+        { question: 'Where does the logout button live?', options: ['User menu', 'Header'] },
+        { question: 'Does it sign out of every device?' },
+      ],
+      findings: ['The session store is in src/auth/session.ts'],
+    });
+
+    test('the run parks on its spec, nothing is posted, and the spec writer starts', async () => {
+      const { provider, comments, recorded, specsStarted, events } = triaging({
+        says: [NEEDS_SPEC],
+        specStage: true,
+      });
+      const result = await provider.triage!({});
+      expect(result).toMatchObject({ ok: false, metadata: { outcome: 'needs_spec' } });
+      expect(comments).toEqual([]);
+      expect(specsStarted).toHaveLength(1);
+      expect(recorded).toContainEqual({
+        state: 'needs_spec',
+        failureReason: null,
+        triage: expect.objectContaining({
+          decision: 'needs_spec',
+          threadId: 'tri-1',
+          decisions: [
+            { question: 'Where does the logout button live?', options: ['User menu', 'Header'] },
+            { question: 'Does it sign out of every device?', options: [] },
+          ],
+          findings: ['The session store is in src/auth/session.ts'],
+        }),
+      });
+      // Triage's own checkout goes: the spec writer reads the code on its own thread.
+      expect(events).toContain('free:tri-1');
+    });
+
+    test('the prompt offers needs_spec only while the Spec stage is on', async () => {
+      const on = triaging({ says: [READY], specStage: true });
+      await on.provider.triage!({});
+      expect(String(on.bodies[0]?.prompt)).toContain('`needs_spec`');
+      const off = triaging({ says: [READY] });
+      await off.provider.triage!({});
+      expect(String(off.bodies[0]?.prompt)).not.toContain('needs_spec');
+    });
+
+    test('without the Spec stage, needs_spec is an invalid answer: asked once, then no contract', async () => {
+      const { provider, recorded, specsStarted, events, comments } = triaging({
+        says: [NEEDS_SPEC, NEEDS_SPEC],
+      });
+      const result = await provider.triage!({});
+      expect(result.ok).toBe(true);
+      expect(events.filter((event) => event === 'ask')).toHaveLength(1);
+      expect(specsStarted).toEqual([]);
+      expect(comments).toEqual([]);
+      expect(recorded).not.toContainEqual(expect.objectContaining({ state: 'needs_spec' }));
+      expect(recorded).toContainEqual({ triage: expect.objectContaining({ decision: 'none' }) });
+    });
+
+    test('a run whose spec was approved is not triaged again', async () => {
+      const stored: FactoryTriage = {
+        decision: 'ready',
+        at: '2026-11-22T00:00:00.000Z',
+        contract: CONTRACT,
+        fromSpec: true,
+      };
+      const { provider, bodies } = triaging({ says: [], stored, specStage: true });
+      const result = await provider.triage!({});
+      expect(result.ok).toBe(true);
+      expect(bodies).toEqual([]);
     });
   });
 

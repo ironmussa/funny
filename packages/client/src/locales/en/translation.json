@@ -74,12 +74,15 @@
     "externalClaudeUnavailable": "Unavailable",
     "noProjects": "No projects yet. Click + to add one.",
     "analytics": "Analytics",
+    "grid": "Grid",
     "workflows": "Workflows",
     "githubIssues": "GitHub Issues",
     "viewDesigns": "View designs",
     "createAutomation": "Create automation",
     "browser_panel": "Browser annotator",
-    "factory": "Factory queue"
+    "factory": "Factory queue",
+    "threadsView": "Threads",
+    "kanbanView": "Kanban"
   },
   "externalClaude": {
     "title": "Claude Code",
@@ -566,6 +569,10 @@
     "deletions": "deletions"
   },
   "history": {
+    "dropStashSuccess": "Stash discarded",
+    "confirmDropStashTitle": "Discard stash",
+    "confirmDropStashDesc": "This will drop the newest stash entry (stash@{0}) and the changes it holds. This action cannot be undone.",
+    "confirmDropStashButton": "Discard stash",
     "viewOnGithub": "View on GitHub"
   },
   "graph": {
@@ -594,6 +601,7 @@
     "copiedRef": "Copied {{ref}}",
     "viewBranchOnGithub": "View branch on GitHub",
     "resetToHere": "Reset branch to here",
+    "dropStash": "Discard stash",
     "uncommittedChanges": "Uncommitted changes",
     "searchPlaceholder": "Search branches & commits",
     "matchCount_one": "{{count}} match",
@@ -837,7 +845,12 @@
     "projectFactoryLaneFinish": "Finish lane",
     "projectFactoryLaneFinishPr": "Finish PR #{{number}}",
     "projectFactoryLaneFinished": "Opened finish PR #{{number}} for lane {{name}}",
-    "projectFactoryLaneRemove": "Remove lane"
+    "projectFactoryLaneRemove": "Remove lane",
+    "projectFactorySpecStage": "Spec stage",
+    "projectFactorySpecStageDesc": "When triage finds product decisions an issue leaves open, a spec writer settles them with your team in its own thread, and the factory implements the issue only after a member approves the spec",
+    "projectFactoryCommitSpec": "Commit spec",
+    "projectFactoryCommitSpecDesc": "A folder in the repository where the implementer commits the approved spec as issue-<number>.md. Empty: the spec is not committed",
+    "projectFactoryCommitSpecInvalid": "Use a folder inside the repository, such as docs/specs, without .."
   },
   "skills": {
     "showingFor": "Showing skills for:",
@@ -1619,7 +1632,27 @@
     "linkedBranch": "branch",
     "linkedPR": "PR",
     "alreadyLinked": "Already has a branch",
-    "creatingFromIssue": "Creating thread from issue: {{title}}"
+    "creatingFromIssue": "Creating thread from issue: {{title}}",
+    "timeline": {
+      "loading": "Loading activity…",
+      "error": "Failed to load activity",
+      "added": "added",
+      "removed": "removed",
+      "mentioned": "mentioned this",
+      "linkedToClose": "linked a pull request that will close this issue",
+      "closed": "closed this",
+      "closedCompleted": "closed this as completed",
+      "closedNotPlanned": "closed this as not planned",
+      "closedDuplicate": "closed this as a duplicate",
+      "in": "in",
+      "reopened": "reopened this",
+      "renamed": "changed the title",
+      "selfAssigned": "self-assigned this",
+      "selfUnassigned": "removed their assignment",
+      "assigned": "assigned",
+      "unassigned": "unassigned",
+      "commitReferenced": "added a commit that referenced this issue"
+    }
   },
   "users": {
     "title": "Users",
@@ -1872,7 +1905,8 @@
       "notStartedStopped": "Stopped before its first step: no agent ran, no branch or pull request",
       "tooBig": "Too big",
       "alreadyDone": "Already done",
-      "onHold": "On hold"
+      "onHold": "On hold",
+      "needsSpec": "Needs a spec"
     },
     "wait": {
       "pathsAwaitingApproval": "Waiting for {{blockers}}: it holds the same files while it waits for an approval",
@@ -2244,7 +2278,11 @@
       "alreadyDone": "Already done: the factory closed the issue",
       "alreadyDoneOpen": "Triage found it already done; close the issue if you agree",
       "trackedBy": "Tracked by {{issues}}",
-      "notPushed": "Committed in its checkout, but never pushed"
+      "notPushed": "Committed in its checkout, but never pushed",
+      "specProblem": "The spec writer gave no valid spec",
+      "specDraft": "A spec waits for approval",
+      "specQuestions": "The spec has {{count}} open questions",
+      "specWriting": "A spec writer is reading the issue"
     },
     "time": {
       "inStep": "In {{step}} {{duration}}",
@@ -2297,7 +2335,8 @@
       "agent": "Agent",
       "implementer": "Implementer",
       "reviewer": "Reviewer",
-      "triage": "Triage"
+      "triage": "Triage",
+      "spec": "Spec writer"
     },
     "superseded": "Superseded",
     "threads": "Agent threads",
@@ -2308,7 +2347,8 @@
       "needsInfo": "Asked on the issue",
       "tooBig": "Proposed split",
       "none": "Triage gave no contract: the review judges against the issue.",
-      "alreadyDone": "Already done: the evidence"
+      "alreadyDone": "Already done: the evidence",
+      "needsSpec": "Open product decisions"
     },
     "timeline": {
       "title": "Timeline",
@@ -2319,6 +2359,24 @@
       "cancelled": "cancelled",
       "wait": "waited {{duration}}",
       "attempt": "attempt {{attempt}}"
-    }
+    },
+    "specTab": "Spec"
+  },
+  "factorySpec": {
+    "title": "Spec",
+    "thread": "Spec thread",
+    "problem": "The spec writer gave no valid spec. Answer it in its thread, or retry the run to triage it again.",
+    "questionsIntro": "The spec writer asks the team. Answer in its thread:",
+    "writing": "The spec writer is reading the issue and the code.",
+    "draftBadge": "Draft {{revision}} waits for approval",
+    "approve": "Approve spec",
+    "approvedByYou": "Approved by you, {{at}}",
+    "approvedByMember": "Approved by a member, {{at}}",
+    "reopen": "Reopen spec",
+    "decisions": "Decisions",
+    "behavior": "Behavior",
+    "approach": "Approach",
+    "outOfScope": "Out of scope",
+    "validation": "Validation checklist"
   }
 }

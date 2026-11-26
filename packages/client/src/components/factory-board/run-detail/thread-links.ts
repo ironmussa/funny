@@ -7,7 +7,7 @@
  */
 import type { FactoryRun } from '@funny/shared/contracts/factory';
 
-export type FactoryRunThreadRole = 'triage' | 'implementer' | 'reviewer' | 'agent';
+export type FactoryRunThreadRole = 'triage' | 'spec' | 'implementer' | 'reviewer' | 'agent';
 
 export interface FactoryRunThreadLink {
   threadId: string;
@@ -17,7 +17,8 @@ export interface FactoryRunThreadLink {
 }
 
 export function factoryRunThreadLinks(
-  run: Pick<FactoryRun, 'triage' | 'stepOptions' | 'reviews' | 'roleThreads'>,
+  run: Pick<FactoryRun, 'triage' | 'stepOptions' | 'reviews' | 'roleThreads'> &
+    Partial<Pick<FactoryRun, 'spec'>>,
 ): FactoryRunThreadLink[] {
   const links = new Map<string, FactoryRunThreadLink>();
   const add = (threadId: string | undefined, role: FactoryRunThreadRole, step?: string) => {
@@ -30,6 +31,8 @@ export function factoryRunThreadLinks(
   for (const role of run.roleThreads) {
     if (role.role === 'triage') add(role.threadId, 'triage', 'triage');
   }
+  // The spec writer (openspec factory-spec-stage): the team answers it in its thread.
+  add(run.spec?.threadId, 'spec', 'spec');
   const reviewers = new Set(run.reviews.map((review) => review.threadId));
   const roleOf = (step: FactoryRun['stepOptions'][number]): FactoryRunThreadRole => {
     if (reviewers.has(step.threadId)) return 'reviewer';

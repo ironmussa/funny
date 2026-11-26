@@ -10,6 +10,7 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { interpolate } from '@funny/pipelines/templates';
 import { parseWorkflowYaml } from '@funny/workflows';
 import { ok } from 'neverthrow';
 
@@ -349,7 +350,70 @@ nodes:
       base_branch: 'main',
       factory_id: 'f1',
       stack_branch: '',
+      spec: '',
+      spec_commit_path: '',
     });
+  });
+
+  test('a run with an approved spec gets it, and where to commit it (factory-spec-stage)', () => {
+    const issue = { number: 12, title: 'Fix login', url: 'u/12' };
+    const spec = {
+      summary: 'Add a logout button',
+      decisions: [{ question: 'Where?', answer: 'In the user menu' }],
+      behavior: ['The menu shows Log out'],
+      approach: [],
+      outOfScope: ['Single sign-out'],
+      validation: ['Log out ends the session'],
+      contract: { acceptanceCriteria: ['A user can log out'], likelyPaths: [], riskHints: [] },
+    };
+    const run = {
+      inputs: {},
+      spec: { revision: 2, approved: { spec, revision: 2, by: 'u1', at: '2026-11-26T00:00:00Z' } },
+    };
+    const inputs = flowInputsOf(
+      { repo: 'o/r', issue, factory: { id: 'f1', commitSpecPath: 'docs/specs' }, run },
+      at,
+    );
+    expect(inputs.spec).toContain('Where? — In the user menu');
+    expect(inputs.spec).toContain('Log out ends the session');
+    expect(inputs.spec_commit_path).toBe('docs/specs/issue-12.md');
+  });
+
+  test('the built-in implement prompt carries the approved spec, and nothing without one', () => {
+    const template = readFileSync(
+      join(import.meta.dir, '../../../../../workflows/defaults/prompts/implement.md'),
+      'utf8',
+    );
+    const base = {
+      issue_number: '12',
+      repo: 'o/r',
+      issue_title: 'Fix login',
+      issue_url: 'u/12',
+      branch: 'factory/issue-12',
+      base_branch: 'main',
+      stack_branch: '',
+    };
+    const withSpec = interpolate(template, {
+      ...base,
+      spec: '# Approved spec\n\n- Where? — In the user menu',
+      spec_commit_path: 'docs/specs/issue-12.md',
+    });
+    expect(withSpec).toContain('Its\ndecisions are not yours to change');
+    expect(withSpec).toContain('- Where? — In the user menu');
+    expect(withSpec).toContain('`docs/specs/issue-12.md`');
+    const without = interpolate(template, { ...base, spec: '', spec_commit_path: '' });
+    expect(without).not.toContain('approved this spec');
+    expect(without).not.toContain('Commit this spec');
+  });
+
+  test('a spec not approved yet reaches no prompt', () => {
+    const issue = { number: 12, title: 'Fix login', url: 'u/12' };
+    const run = { inputs: {}, spec: { revision: 1 } };
+    const inputs = flowInputsOf(
+      { repo: 'o/r', issue, factory: { id: 'f1', commitSpecPath: 'docs/specs' }, run },
+      at,
+    );
+    expect(inputs).toMatchObject({ spec: '', spec_commit_path: '' });
   });
 
   test('a run without an issue gets what its trigger recorded; the factory inputs win', () => {
@@ -361,6 +425,8 @@ nodes:
       base_branch: 'main',
       factory_id: 'f1',
       stack_branch: '',
+      spec: '',
+      spec_commit_path: '',
     });
   });
 });

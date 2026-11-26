@@ -32,6 +32,7 @@ const DOT_CLASS: Record<LabelBadgeTone, string> = {
 const WAITS_ON_PERSON: ReadonlySet<FactoryQueueRun['state']> = new Set([
   'waiting_human',
   'needs_info',
+  'needs_spec',
   'failed',
 ]);
 

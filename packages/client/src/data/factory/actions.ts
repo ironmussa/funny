@@ -143,6 +143,42 @@ export function releaseFactoryRun(
 }
 
 /**
+ * Approve the spec draft of `revision` a run waits on (openspec
+ * factory-spec-stage): the revision is the one on screen, and the server
+ * refuses when a newer draft was stored. Not optimistic: on a refusal the
+ * runs are read again, so the member sees the newer draft. The caller shows
+ * the error.
+ */
+export function approveFactorySpec(
+  projectId: string,
+  runId: string,
+  revision: number,
+  layer: DataLayer = getDataLayer(),
+): ResultAsync<FactoryRun, DomainError> {
+  return factoryApi
+    .approveSpec(projectId, runId, revision)
+    .map((run) => {
+      writeFactoryRun(projectId, run, layer);
+      // An approval closes the request an agent made for this draft.
+      refreshFactoryApprovalRequests(projectId, layer);
+      return run;
+    })
+    .orTee(() => refreshFactoryRuns(projectId, layer));
+}
+
+/** Reopen a run's spec: the approval is dropped and the spec writer revises it. */
+export function reopenFactorySpec(
+  projectId: string,
+  runId: string,
+  layer: DataLayer = getDataLayer(),
+): ResultAsync<FactoryRun, DomainError> {
+  return factoryApi.reopenSpec(projectId, runId).map((run) => {
+    writeFactoryRun(projectId, run, layer);
+    return run;
+  });
+}
+
+/**
  * Close the pull request a replaced run left open, and delete its branch. The
  * server decides again that a newer run of the issue replaced it. The run does
  * not change; the PR's state is read again from GitHub so the card shows it

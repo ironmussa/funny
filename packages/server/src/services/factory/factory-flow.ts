@@ -99,6 +99,8 @@ export interface FactoryFlowContext {
   batch?: FactoryBatchSettings;
   /** The factory stacks dependent issues (D10): a flow whose prompts ignore it is warned about. */
   dependencies?: FactoryDependencies;
+  /** The factory's Spec stage (openspec factory-spec-stage): a flow whose implementer ignores `{{spec}}` is warned about. */
+  specStage?: boolean;
   overrides?: StepOverrides;
   project?: ProjectAgentDefaults;
 }
@@ -227,6 +229,28 @@ function staleStackingIssues(
 }
 
 /**
+ * A factory with a Spec stage passes a run's approved spec as `{{spec}}`
+ * (openspec factory-spec-stage). A repository flow whose first agent prompt
+ * never uses it implements the issue without the decisions the team took:
+ * warn so the copy gets the built-in implement prompt's spec section.
+ */
+export function specIgnoredIssues(
+  workflow: ParsedWorkflow,
+  specStage: boolean | undefined,
+): WorkflowIssue[] {
+  if (!specStage) return [];
+  const [first] = workflow.nodes.flatMap((node, index) => agentPrompts(node, index));
+  if (!first || /\{\{[#^]?\s*spec\s*\}\}/.test(first.prompt)) return [];
+  return [
+    {
+      path: first.path,
+      message:
+        "The factory's Spec stage is on, but this flow's first agent prompt never uses {{spec}}: a run implements its issue without the spec the team approved. Copy the spec section of the built-in implement prompt.",
+    },
+  ];
+}
+
+/**
  * The merge lane (change factory-agent-roles, D8): the concurrency group every
  * `merge` node of a factory flow runs in, one per repository and base branch,
  * shared by every factory on that repository.
@@ -301,6 +325,7 @@ async function compile(
               ...parsed.warnings,
               ...staleBranchWordingIssues(workflow),
               ...staleStackingIssues(workflow, context.dependencies),
+              ...specIgnoredIssues(workflow, context.specStage),
             ]
           : parsed.warnings,
       proofReady: isProofReady(workflow),

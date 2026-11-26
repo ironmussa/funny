@@ -79,6 +79,15 @@ function ThreadLink({
   );
 }
 
+/** What a triage answer lists: the contract's criteria, the open decisions, or what it asked. */
+function triageItemsOf(triage: FactoryTriage): string[] {
+  if (triage.decision === 'ready') return triage.contract?.acceptanceCriteria ?? [];
+  if (triage.decision === 'needs_spec') {
+    return (triage.decisions ?? []).map((decision) => decision.question);
+  }
+  return triage.items ?? [];
+}
+
 function TriageItems({ triage }: { triage: FactoryTriage }) {
   const { t } = useTranslation();
   if (triage.decision === 'none') {
@@ -91,13 +100,11 @@ function TriageItems({ triage }: { triage: FactoryTriage }) {
       </p>
     );
   }
-  const items =
-    triage.decision === 'ready'
-      ? (triage.contract?.acceptanceCriteria ?? [])
-      : (triage.items ?? []);
+  const items = triageItemsOf(triage);
   const heading = {
     ready: t('factoryRunDetail.triage.ready', 'Contract: what must be true'),
     needs_info: t('factoryRunDetail.triage.needsInfo', 'Asked on the issue'),
+    needs_spec: t('factoryRunDetail.triage.needsSpec', 'Open product decisions'),
     too_big: t('factoryRunDetail.triage.tooBig', 'Proposed split'),
     already_done: t('factoryRunDetail.triage.alreadyDone', 'Already done: the evidence'),
   }[triage.decision];
@@ -344,6 +351,7 @@ function ThreadEntry({
     triage: t('factoryRunDetail.role.triage', 'Triage'),
     implementer: t('factoryRunDetail.role.implementer', 'Implementer'),
     reviewer: t('factoryRunDetail.role.reviewer', 'Reviewer'),
+    spec: t('factoryRunDetail.role.spec', 'Spec writer'),
     agent: t('factoryRunDetail.role.agent', 'Agent'),
   };
   return (

@@ -20,9 +20,10 @@
  * migration 127), so asking is an insert the index refuses when one is pending.
  */
 
-import type {
-  FactoryApprovalRequest,
-  FactoryApprovalRequestState,
+import {
+  pendingSpecDraft,
+  type FactoryApprovalRequest,
+  type FactoryApprovalRequestState,
 } from '@funny/shared/contracts/factory';
 import { errorMessage } from '@funny/shared/errors';
 import { and, desc, eq, ne } from 'drizzle-orm';
@@ -65,18 +66,40 @@ const STATES: readonly FactoryApprovalRequestState[] = [
   'expired',
 ];
 
-const toRecord = (row: Row): FactoryApprovalRequestRecord => ({
-  id: row.id,
-  runId: row.runId,
-  factoryId: row.factoryId,
-  projectId: row.projectId,
-  threadId: row.threadId,
-  sha: row.sha,
-  // An unknown stored state offers no approval.
-  state: STATES.find((state) => state === row.state) ?? 'expired',
-  createdAt: row.createdAt,
-  resolvedAt: row.resolvedAt ?? null,
-});
+/**
+ * A spec approval request (openspec factory-spec-stage) is stored in the `sha`
+ * column as `spec:<revision>`: one pending request per run either way, and a
+ * request for another revision is expired like one for another commit.
+ */
+const SPEC_KEY_PREFIX = 'spec:';
+
+/** The stored key of a request to approve the spec draft of `revision`. */
+export const specRequestKey = (revision: number): string => `${SPEC_KEY_PREFIX}${revision}`;
+
+/** The revision a stored key names, or null for a merge request's commit. */
+function specRevisionOf(key: string): number | null {
+  if (!key.startsWith(SPEC_KEY_PREFIX)) return null;
+  const revision = Number(key.slice(SPEC_KEY_PREFIX.length));
+  return Number.isInteger(revision) && revision >= 0 ? revision : null;
+}
+
+const toRecord = (row: Row): FactoryApprovalRequestRecord => {
+  const specRevision = specRevisionOf(row.sha);
+  return {
+    id: row.id,
+    runId: row.runId,
+    factoryId: row.factoryId,
+    projectId: row.projectId,
+    threadId: row.threadId,
+    kind: specRevision === null ? 'merge' : 'spec',
+    sha: specRevision === null ? row.sha : '',
+    specRevision,
+    // An unknown stored state offers no approval.
+    state: STATES.find((state) => state === row.state) ?? 'expired',
+    createdAt: row.createdAt,
+    resolvedAt: row.resolvedAt ?? null,
+  };
+};
 
 /** The request as a member or an agent sees it. */
 export function publicApprovalRequest(
@@ -90,7 +113,14 @@ export function publicApprovalRequest(
 export type RequestRunFacts = Pick<
   FactoryRunView,
   'state' | 'failureReason' | 'risk' | 'mergeApproval'
->;
+> &
+  Partial<Pick<FactoryRunView, 'spec'>>;
+
+/** The spec draft revision a run waits on a member's approval of, or null. */
+export function heldSpecRevision(run: RequestRunFacts): number | null {
+  if (run.state !== 'needs_spec' || !run.spec || !pendingSpecDraft(run.spec)) return null;
+  return run.spec.revision;
+}
 
 /** The commit a run is held on for a member's approval, or null when it is not held. */
 export function heldCommit(run: RequestRunFacts): string | null {
@@ -105,11 +135,17 @@ export function heldCommit(run: RequestRunFacts): string | null {
  * no longer held on that commit. A gone run expires its request.
  */
 export function nextRequestState(
-  request: Pick<FactoryApprovalRequest, 'state' | 'sha'>,
+  request: Pick<FactoryApprovalRequest, 'state' | 'sha'> &
+    Partial<Pick<FactoryApprovalRequest, 'kind' | 'specRevision'>>,
   run: RequestRunFacts | null,
 ): 'approved' | 'expired' | null {
   if (request.state !== 'pending') return null;
   if (!run) return 'expired';
+  if (request.kind === 'spec') {
+    // Approved for that revision; expired when the draft changed or the run left `needs_spec`.
+    if (run.spec?.approved?.revision === request.specRevision) return 'approved';
+    return heldSpecRevision(run) === request.specRevision ? null : 'expired';
+  }
   const approval = run.mergeApproval;
   if (approval && (approval.sha === request.sha || approval.carriedFrom === request.sha)) {
     return 'approved';

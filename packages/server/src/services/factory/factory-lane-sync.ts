@@ -87,10 +87,10 @@ export const LANE_SYNC_MIN_INTERVAL_MS = 60 * 60 * 1000;
 export const LANE_SYNC_NO_CHECKS_MS = 15 * 60 * 1000;
 
 /** How many turns the agent gets on one sync before a person is asked. */
-export const LANE_SYNC_MAX_ATTEMPTS = 3;
+const LANE_SYNC_MAX_ATTEMPTS = 3;
 
 /** How long one sync may stay with its agent before a person is asked. */
-export const LANE_SYNC_AGENT_LIMIT_MS = 3 * 60 * 60 * 1000;
+const LANE_SYNC_AGENT_LIMIT_MS = 3 * 60 * 60 * 1000;
 
 const ENDED_THREAD: ReadonlySet<string> = new Set([
   'completed',
@@ -111,11 +111,10 @@ const RULES = [
 ].join('\n');
 
 /** The factory's own scratch branch of a lane's sync. */
-export const laneSyncBranch = (lane: Pick<FactoryLaneView, 'name'>): string =>
-  `factory/sync/${lane.name}`;
+const laneSyncBranch = (lane: Pick<FactoryLaneView, 'name'>): string => `factory/sync/${lane.name}`;
 
 /** The concurrency group the lane's runs merge under (`MERGE_LANE_GROUP` of `factory-flow.ts`). */
-export const laneMergeGroup = (repo: string, branch: string): string => `merge:${repo}:${branch}`;
+const laneMergeGroup = (repo: string, branch: string): string => `merge:${repo}:${branch}`;
 
 export interface LaneSyncDeps {
   lanes: Pick<FactoryLanesRepository, 'list' | 'moveSync'>;
@@ -253,6 +252,37 @@ function createLaneSyncAgent({ deps, now, move, failed, contains }: LaneSyncAgen
     });
   }
 
+  async function checkAgentTimeout(lane: FactoryLaneView): Promise<void> {
+    const started = lane.syncStartedAt ? Date.parse(lane.syncStartedAt) : now();
+    if (now() - started > LANE_SYNC_AGENT_LIMIT_MS) {
+      await failed(lane, 'The sync agent did not finish in time.');
+    }
+  }
+
+  async function resolveEndedTurn(
+    lane: FactoryLaneView,
+    sha: string,
+    turnStatus: string,
+  ): Promise<void> {
+    const from = (await deps.baseBranch()) ?? 'the base branch';
+    const scratch = laneSyncBranch(lane);
+    const pushed = await contains(scratch, sha);
+    if (pushed === null) return;
+    if (pushed) {
+      const number = lane.syncPrNumber ?? (await openSyncPullRequest(lane, from));
+      if (number !== null) await move(lane, 'resolved', { syncPrNumber: number });
+      return;
+    }
+    await askAgent(lane, 'again', {
+      from,
+      problem: `The agent's turn ended (${turnStatus}) and ${scratch} does not contain ${from} yet.`,
+      ask: [
+        `The branch \`${scratch}\` on origin still does not contain \`origin/${from}\` (commit ${sha}): the merge was not pushed.`,
+        RULES,
+      ].join('\n\n'),
+    });
+  }
+
   /**
    * The agent's turn: nothing while it works; once it ended, back to the
    * checks when the scratch branch contains the base, else another attempt.
@@ -271,29 +301,10 @@ function createLaneSyncAgent({ deps, now, move, failed, contains }: LaneSyncAgen
     }
     const judged = turn.completedAt !== null && turn.completedAt === lane.syncTurnAt;
     if (!ENDED_THREAD.has(turn.status) || judged) {
-      const started = lane.syncStartedAt ? Date.parse(lane.syncStartedAt) : now();
-      if (now() - started > LANE_SYNC_AGENT_LIMIT_MS) {
-        await failed(lane, 'The sync agent did not finish in time.');
-      }
+      await checkAgentTimeout(lane);
       return;
     }
-    const from = (await deps.baseBranch()) ?? 'the base branch';
-    const scratch = laneSyncBranch(lane);
-    const pushed = await contains(scratch, sha);
-    if (pushed === null) return;
-    if (pushed) {
-      const number = lane.syncPrNumber ?? (await openSyncPullRequest(lane, from));
-      if (number !== null) await move(lane, 'resolved', { syncPrNumber: number });
-      return;
-    }
-    await askAgent(lane, 'again', {
-      from,
-      problem: `The agent's turn ended (${turn.status}) and ${scratch} does not contain ${from} yet.`,
-      ask: [
-        `The branch \`${scratch}\` on origin still does not contain \`origin/${from}\` (commit ${sha}): the merge was not pushed.`,
-        RULES,
-      ].join('\n\n'),
-    });
+    await resolveEndedTurn(lane, sha, turn.status);
   }
 
   return { openSyncPullRequest, askAgent, whenResolving };

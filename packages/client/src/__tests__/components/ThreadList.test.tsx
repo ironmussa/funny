@@ -9,6 +9,7 @@ import { buildProject, withProjects } from '@/data/projects/testing';
 import { buildThread, withThreadIndex } from '@/data/threads/testing';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
+import { useUIStore } from '@/stores/ui-store';
 
 import { mockT } from '../helpers/mock-i18n';
 import { renderWithProviders } from '../helpers/render';
@@ -99,6 +100,7 @@ describe('ThreadList', () => {
         activeThread: null,
       }),
     );
+    useUIStore.setState({ liveColumnsOpen: false, gridSelectedThreadId: null });
     seedGitStatus({
       statusByBranch: {},
       threadToBranchKey: {},
@@ -258,6 +260,32 @@ describe('ThreadList', () => {
     expect(rowB?.className).toContain('bg-sidebar-selected text-foreground');
     expect(rowA?.className).not.toContain('bg-sidebar-selected text-foreground');
     expect(rowA?.className).toContain('text-muted-foreground');
+  });
+
+  test('highlights the grid-selected thread while the grid view is open', () => {
+    const a = makeThread('t-a', { status: 'running', title: 'A' });
+    const b = makeThread('t-b', { status: 'running', title: 'B' });
+    useThreadStore.setState(
+      withThreadIndex({
+        ...seedThreads({ p1: [a, b] }),
+        scratchThreadIds: [],
+      }),
+    );
+    useUIStore.setState({ liveColumnsOpen: true, gridSelectedThreadId: 't-a' });
+
+    renderWithProviders(<ThreadList {...noopHandlers} />, { route: '/grid' });
+
+    const rowA = screen.getByTestId('thread-item-t-a').parentElement;
+    const rowB = screen.getByTestId('thread-item-t-b').parentElement;
+    expect(rowA?.className).toContain('bg-sidebar-selected text-foreground');
+    expect(rowB?.className).not.toContain('bg-sidebar-selected text-foreground');
+
+    act(() => {
+      useUIStore.getState().setGridSelectedThreadId('t-b');
+    });
+
+    expect(rowB?.className).toContain('bg-sidebar-selected text-foreground');
+    expect(rowA?.className).not.toContain('bg-sidebar-selected text-foreground');
   });
 
   test('updates Activity row when PR metadata arrives for an existing git status', async () => {

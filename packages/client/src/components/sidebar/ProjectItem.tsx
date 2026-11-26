@@ -12,11 +12,11 @@ import { ProjectSetupHost } from '@/components/sidebar/ProjectSetupHost';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { useActiveThreadId } from '@/hooks/use-active-thread-id';
 import { useExternalClaudeSessionsLoaded } from '@/hooks/use-external-claude-sessions';
 import { useVisibleGitStatus } from '@/hooks/use-git-status-scope';
 import { useGridThreadDrag } from '@/hooks/use-grid-thread-drag';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
+import { useSidebarActiveThreadId } from '@/hooks/use-sidebar-active-thread-id';
 import { useSidebarGitStatuses } from '@/hooks/use-sidebar-git-statuses';
 import { api } from '@/lib/api';
 import { canDeleteWhileBusy, isExternalClaudeShell } from '@/lib/thread-variant';
@@ -251,7 +251,7 @@ export const ProjectItem = memo(function ProjectItem({
   // on every navigation (it reads the URL), but the scoped value only flips when
   // one of *its* threads gains/loses active status and the row children are
   // memo'd — so a nav elsewhere does no row-level work here.
-  const activeThreadId = useActiveThreadId();
+  const activeThreadId = useSidebarActiveThreadId();
   const selectedThreadId = useMemo(
     () => (activeThreadId && threadIds.includes(activeThreadId) ? activeThreadId : null),
     [activeThreadId, threadIds],

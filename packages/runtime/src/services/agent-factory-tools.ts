@@ -202,7 +202,7 @@ function describeHistory(history: RunDetail['history']): string[] {
 }
 
 /** One run in detail, on lines an agent can quote. */
-export function describeRunDetail(run: RunDetail): string {
+function describeRunDetail(run: RunDetail): string {
   const lines = [describeRun(run)];
   if (run.issueTitle) lines.push(`  title: ${run.issueTitle}`);
   if (run.flowName) lines.push(`  flow: ${run.flowName} (${run.flowSteps.join(' → ')})`);

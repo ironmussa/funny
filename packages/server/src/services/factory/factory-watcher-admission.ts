@@ -310,6 +310,30 @@ async function admitQueue(
   }
 }
 
+/** Note a base-branch sentinel incident when `branch` has one, holding the run back (D6). */
+async function heldByBaseIncident(
+  run: FactoryRunView,
+  branch: string | null,
+  ctx: AdmissionContext,
+): Promise<boolean> {
+  if (!branch || !ctx.incidents.has(branch)) return false;
+  await noteWaitReason(run, { kind: 'base-incident', blockers: [], detail: branch });
+  return true;
+}
+
+/** Admit a queued trigger run (one without an issue) unless its base branch has an incident. */
+async function admitTriggerRun(
+  factory: WatchedFactory,
+  repo: string,
+  mode: LaunchMode,
+  run: FactoryRunView,
+  ctx: AdmissionContext,
+): Promise<Launch | false | typeof NO_FREE_SLOT> {
+  const branch = run.baseBranch ?? (await baseBranchFor(factory, repo));
+  if (await heldByBaseIncident(run, branch, ctx)) return false;
+  return admitAndStart(factory, repo, mode, null, run);
+}
+
 /**
  * Admit one queued issue when nothing holds it back: its starting flow, false
  * when it waits, or `NO_FREE_SLOT` when the factory filled up since the pass
@@ -323,14 +347,7 @@ async function admitQueued(
   ctx: AdmissionContext,
 ): Promise<Launch | false | typeof NO_FREE_SLOT> {
   if (!runs || !deps) return false;
-  if (run.issueNumber === null) {
-    const branch = run.baseBranch ?? (await baseBranchFor(factory, repo));
-    if (branch && ctx.incidents.has(branch)) {
-      await noteWaitReason(run, { kind: 'base-incident', blockers: [], detail: branch });
-      return false;
-    }
-    return admitAndStart(factory, repo, mode, null, run);
-  }
+  if (run.issueNumber === null) return admitTriggerRun(factory, repo, mode, run, ctx);
   if (await heldWithoutProofRules(factory, run, ctx)) return false;
   // The issue first: one closed since it was sent leaves the queue even while
   // something still blocks it.
@@ -345,10 +362,7 @@ async function admitQueued(
     return false;
   }
   // A sentinel incident on this base branch holds only runs targeting it (D6).
-  if (base.branch && ctx.incidents.has(base.branch)) {
-    await noteWaitReason(run, { kind: 'base-incident', blockers: [], detail: base.branch });
-    return false;
-  }
+  if (await heldByBaseIncident(run, base.branch, ctx)) return false;
 
   const blocked = await blockedReason(ctx, issue.number, {
     branch: base.branch,
@@ -370,6 +384,50 @@ interface AdmissionBase {
 }
 
 const lanes = createFactoryLanesRepository();
+
+/** Create the branch and row for a lane not yet known to `factory`. */
+async function ensureLaneForChoice(
+  factory: WatchedFactory,
+  reader: FactoryRepoReader,
+  issue: FactoryIssue,
+  choice: Parameters<typeof lanes.ensure>[1],
+): Promise<AdmissionBase | { wait: FactoryWaitReason }> {
+  // D12: never adopt the branch another member's factory runs a lane on.
+  const taken = await lanes.branchOfAnotherFactory(factory.id, factory.projectId, choice.branch);
+  if (taken.isErr()) return { wait: laneUnusable(taken.error.message) };
+  if (taken.value) {
+    return {
+      wait: laneUnusable(
+        `the branch ${choice.branch} is a lane of another member's factory on this project; change this factory's lane prefixes or the lane's name`,
+      ),
+    };
+  }
+
+  // The first issue of the lane: its branch first, so a lane's row means a branch exists.
+  if (!deps!.github.ensureBranch)
+    return { wait: laneUnusable('this factory cannot make branches') };
+  const made = await deps!.github.ensureBranch(reader, choice.branch);
+  if (made.isErr()) {
+    return {
+      wait: laneUnusable(`the branch ${choice.branch} could not be made: ${made.error.message}`),
+    };
+  }
+  const lane = await lanes.ensure(factory.id, choice);
+  if (lane.isErr()) return { wait: laneUnusable(lane.error.message) };
+  const workflows = await readWorkflowFiles(deps!.github, reader);
+  const ciWarning = laneCiWarning(workflows, lane.value.branch);
+  if (ciWarning !== null) await lanes.setCiWarning(lane.value.id, ciWarning);
+  log.info('Issue factory lane created', {
+    namespace: 'factory',
+    factoryId: factory.id,
+    lane: lane.value.name,
+    branch: lane.value.branch,
+    branchCreated: made.value === 'created',
+    ciWarning: ciWarning ?? undefined,
+    issue: issue.number,
+  });
+  return { branch: lane.value.branch, lane: lane.value.name };
+}
 
 /**
  * Where an issue admitted now runs (openspec factory-lanes, D1 and D2): the
@@ -411,41 +469,7 @@ async function baseFor(
   if (known.value?.state === 'finished') return { branch: own, lane: null };
   if (known.value) return { branch: known.value.branch, lane: known.value.name };
 
-  // D12: never adopt the branch another member's factory runs a lane on.
-  const taken = await lanes.branchOfAnotherFactory(factory.id, factory.projectId, choice.branch);
-  if (taken.isErr()) return { wait: laneUnusable(taken.error.message) };
-  if (taken.value) {
-    return {
-      wait: laneUnusable(
-        `the branch ${choice.branch} is a lane of another member's factory on this project; change this factory's lane prefixes or the lane's name`,
-      ),
-    };
-  }
-
-  // The first issue of the lane: its branch first, so a lane's row means a branch exists.
-  if (!deps!.github.ensureBranch)
-    return { wait: laneUnusable('this factory cannot make branches') };
-  const made = await deps!.github.ensureBranch(reader, choice.branch);
-  if (made.isErr()) {
-    return {
-      wait: laneUnusable(`the branch ${choice.branch} could not be made: ${made.error.message}`),
-    };
-  }
-  const lane = await lanes.ensure(factory.id, choice);
-  if (lane.isErr()) return { wait: laneUnusable(lane.error.message) };
-  const workflows = await readWorkflowFiles(deps!.github, reader);
-  const ciWarning = laneCiWarning(workflows, lane.value.branch);
-  if (ciWarning !== null) await lanes.setCiWarning(lane.value.id, ciWarning);
-  log.info('Issue factory lane created', {
-    namespace: 'factory',
-    factoryId: factory.id,
-    lane: lane.value.name,
-    branch: lane.value.branch,
-    branchCreated: made.value === 'created',
-    ciWarning: ciWarning ?? undefined,
-    issue: issue.number,
-  });
-  return { branch: lane.value.branch, lane: lane.value.name };
+  return ensureLaneForChoice(factory, reader, issue, choice);
 }
 
 const laneUnusable = (detail: string): FactoryWaitReason => ({

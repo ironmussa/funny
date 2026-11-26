@@ -65,22 +65,134 @@ function applyResultToRow(t: Thread, nextStatus: ThreadStatus, data: any): Threa
   };
 }
 
+const TERMINAL_READ_STATUSES = new Set<ThreadStatus>([
+  'completed',
+  'failed',
+  'stopped',
+  'interrupted',
+]);
+
+function applyThreadPayloadResult<T extends Thread>(
+  t: T,
+  machineEvent: NonNullable<ReturnType<typeof wsEventToMachineEvent>>,
+  serverStatus: ThreadStatus,
+  data: any,
+  threadId: string,
+): T {
+  const newStatus = transitionThreadStatus(threadId, machineEvent, t.status, data.cost ?? t.cost);
+  const finalStatus = newStatus !== t.status ? newStatus : serverStatus;
+  if (finalStatus === 'waiting') {
+    if (!data.waitingReason) {
+      wsLog.warn(
+        'BUG-HUNT: agent:result waiting but NO waitingReason — will show generic WaitingActions instead of question/plan card',
+        { threadId },
+      );
+    }
+    return {
+      ...t,
+      status: finalStatus,
+      cost: data.cost ?? t.cost,
+      waitingReason: data.waitingReason,
+      pendingPermission: data.permissionRequest,
+      stage: data.stage ? data.stage : t.stage,
+    };
+  }
+  return {
+    ...t,
+    status: finalStatus,
+    cost: data.cost ?? t.cost,
+    ...terminalTimestamps(finalStatus),
+    waitingReason: undefined,
+    pendingPermission: undefined,
+    resultInfo: {
+      // SAFETY: machineEvent is non-null only for a completed / failed / waiting result, and
+      // waiting returned above; COMPLETE and FAIL only move to 'completed' or 'failed', and an
+      // unchanged status falls back to the server's, so finalStatus is one of those two.
+      status: finalStatus as 'completed' | 'failed',
+      cost: data.cost ?? t.cost,
+      duration: data.duration ?? 0,
+      error: data.error,
+    },
+    stage: data.stage ? data.stage : t.stage,
+  };
+}
+
+function flushOrphanedDequeuedMessage(get: Get, set: Set, threadId: string): void {
+  const orphaned = pendingDequeuedMessages.get(threadId);
+  if (!orphaned) return;
+  pendingDequeuedMessages.delete(threadId);
+  if (!isHydrated(get(), threadId)) return;
+  set((s) =>
+    mutations.applyThreadDataPatch(s, threadId, (t) => {
+      if (dequeuedUserAlreadyShownInTurn(t.messages, orphaned.content)) return t;
+      const insertionIndex = trailingAssistantScaffoldStart(t.messages);
+      const messages = t.messages.slice();
+      messages.splice(insertionIndex, 0, buildDequeuedUserMessage(threadId, orphaned));
+      return { ...t, messages };
+    }),
+  );
+}
+
+function appendFallbackResultText(
+  get: Get,
+  set: Set,
+  threadId: string,
+  resultStatus: ThreadStatus,
+  data: any,
+): void {
+  const resultText = resultStatus === 'completed' ? resultTextToAssistantMessage(data) : null;
+  if (!resultText || !isHydrated(get(), threadId)) return;
+  let appendedResultMessage = false;
+  set((s) =>
+    mutations.applyThreadDataPatch(s, threadId, (t) => {
+      if (hasAssistantContentAfterLastUser(t.messages)) return t;
+      appendedResultMessage = true;
+      const role: MessageRole = 'assistant';
+      const message = {
+        id: crypto.randomUUID(),
+        threadId,
+        role,
+        content: resultText,
+        timestamp: new Date().toISOString(),
+      };
+      return { ...t, messages: [...t.messages, message] };
+    }),
+  );
+  if (appendedResultMessage) {
+    patchSidebarLastAssistant(threadId, resultText);
+  }
+}
+
+function refreshProjectAfterResult(
+  get: Get,
+  threadId: string,
+  foundInSidebar: boolean,
+  loadThreadsForProject: (projectId: string) => Promise<void>,
+): void {
+  const payloadEntry = get().threadDataById[threadId];
+  const projectIdForRefresh =
+    payloadEntry && !isScratch(payloadEntry)
+      ? payloadEntry.projectId
+      : getProjectIdForThread(threadId);
+  if (projectIdForRefresh) {
+    setTimeout(() => loadThreadsForProject(projectIdForRefresh), 500);
+  } else if (!foundInSidebar) {
+    scheduleProjectRefresh(get);
+  }
+}
+
 export function handleWSResult(get: Get, set: Set, threadId: string, data: any): void {
   // The server has spoken about this thread's status: an optimistic
   // `running` from a send is no longer something to undo.
   settlePreSendState(threadId);
   // Invalidate the cached snapshot unconditionally so the next selectThread()
-  // refetches the final messages/tool calls/resultInfo from the server. Must
-  // run even for the active thread — otherwise the user switches away, comes
-  // back, and the data-actor returns the stale pre-completion snapshot,
-  // making the thread look as if it never finished.
+  // refetches the final messages/tool calls/resultInfo from the server.
   invalidateThreadData(threadId);
 
   const state = get();
   const loadThreadsForProject = state.loadThreadsForProject;
   if (!isHydrated(state, threadId)) {
     maybeBuffer(state, threadId, 'result', data);
-    // Sidebar status still applied below.
   }
 
   useThreadActiveToolStore.getState().clear(threadId);
@@ -104,162 +216,39 @@ export function handleWSResult(get: Get, set: Set, threadId: string, data: any):
     hydrated: String(isHydrated(state, threadId)),
   });
 
-  // Apply the result transition to whichever sidebar bucket holds the thread.
-  // The updater closes over `resultStatus` to also expose the resolved status
-  // back to the caller for the toast/notification + payload paths.
   const foundInSidebar = patchSidebarThread(threadId, (t) => {
     const newStatus = transitionThreadStatus(threadId, machineEvent, t.status, data.cost ?? t.cost);
-    // The server's result is authoritative: when the machine has no
-    // transition for it from the row's status, take the server status as is.
     const nextStatus = newStatus !== t.status ? newStatus : serverStatus;
     resultStatus = nextStatus;
     return applyResultToRow(t, nextStatus, data);
   });
-  // Scratch threads sit outside any project, so the post-result fallback
-  // (`loadThreadsForProject` / `scheduleProjectRefresh`) should be skipped.
   const sidebarHitScratch = readThreadIndex().scratchThreadIds.includes(threadId);
 
-  const payloadPatch = mutations.applyThreadDataPatch(state, threadId, (t) => {
-    const newStatus = transitionThreadStatus(threadId, machineEvent, t.status, data.cost ?? t.cost);
-    const finalStatus = newStatus !== t.status ? newStatus : serverStatus;
-    if (finalStatus === 'waiting') {
-      if (!data.waitingReason) {
-        wsLog.warn(
-          'BUG-HUNT: agent:result waiting but NO waitingReason — will show generic WaitingActions instead of question/plan card',
-          { threadId },
-        );
-      }
-      return {
-        ...t,
-        status: finalStatus,
-        cost: data.cost ?? t.cost,
-        waitingReason: data.waitingReason,
-        pendingPermission: data.permissionRequest,
-        stage: data.stage ? data.stage : t.stage,
-      };
-    }
-    return {
-      ...t,
-      status: finalStatus,
-      cost: data.cost ?? t.cost,
-      ...terminalTimestamps(finalStatus),
-      waitingReason: undefined,
-      pendingPermission: undefined,
-      resultInfo: {
-        // SAFETY: machineEvent is non-null only for a completed / failed / waiting result, and
-        // waiting returned above; COMPLETE and FAIL only move to 'completed' or 'failed', and an
-        // unchanged status falls back to the server's, so finalStatus is one of those two.
-        status: finalStatus as 'completed' | 'failed',
-        cost: data.cost ?? t.cost,
-        duration: data.duration ?? 0,
-        error: data.error,
-      },
-      stage: data.stage ? data.stage : t.stage,
-    };
-  });
+  set(
+    mutations.applyThreadDataPatch(state, threadId, (t) =>
+      applyThreadPayloadResult(t, machineEvent, serverStatus, data, threadId),
+    ),
+  );
 
-  set(payloadPatch);
+  flushOrphanedDequeuedMessage(get, set, threadId);
+  appendFallbackResultText(get, set, threadId, resultStatus, data);
 
-  // Flush any orphaned dequeued message for this thread. The buffer is set by
-  // a `queue:update` event between the previous turn's result and the next
-  // turn's first agent:message — but if the next agent fails before emitting
-  // any message, the buffer leaks and would inject into a future, unrelated
-  // turn. Inject it now as a user message so the user sees what was dequeued,
-  // and clear the buffer so it can't contaminate later. Skip injection if the
-  // payload already ends with a matching user message (bug 4 — duplicate when
-  // the server-inserted message is already loaded).
-  const orphaned = pendingDequeuedMessages.get(threadId);
-  if (orphaned) {
-    pendingDequeuedMessages.delete(threadId);
-    if (isHydrated(get(), threadId)) {
-      set((s) =>
-        mutations.applyThreadDataPatch(s, threadId, (t) => {
-          if (dequeuedUserAlreadyShownInTurn(t.messages, orphaned.content)) return t;
-          const insertionIndex = trailingAssistantScaffoldStart(t.messages);
-          const messages = t.messages.slice();
-          messages.splice(insertionIndex, 0, buildDequeuedUserMessage(threadId, orphaned));
-          return {
-            ...t,
-            messages,
-          };
-        }),
-      );
-    }
-  }
-
-  const resultText = resultStatus === 'completed' ? resultTextToAssistantMessage(data) : null;
-  if (resultText && isHydrated(get(), threadId)) {
-    let appendedResultMessage = false;
-    set((s) =>
-      mutations.applyThreadDataPatch(s, threadId, (t) => {
-        if (hasAssistantContentAfterLastUser(t.messages)) return t;
-        appendedResultMessage = true;
-        const role: MessageRole = 'assistant';
-        const message = {
-          id: crypto.randomUUID(),
-          threadId,
-          role,
-          content: resultText,
-          timestamp: new Date().toISOString(),
-        };
-        return {
-          ...t,
-          messages: [...t.messages, message],
-        };
-      }),
-    );
-
-    if (appendedResultMessage) {
-      patchSidebarLastAssistant(threadId, resultText);
-    }
-  }
-
-  // If the thread the user is currently viewing just finished, mark it as read
-  // so it doesn't show an unread blue dot in the sidebar.
   if (
     (getUrlThreadId() ?? state.selectedThreadId) === threadId &&
-    (resultStatus === 'completed' ||
-      resultStatus === 'failed' ||
-      resultStatus === 'stopped' ||
-      resultStatus === 'interrupted')
+    TERMINAL_READ_STATUSES.has(resultStatus)
   ) {
     useThreadReadStore.getState().markRead(threadId);
   }
 
   if (resultStatus === 'waiting') return;
 
-  // Skip the project-refresh fallback when the thread is scratch — we already
-  // patched scratchThreads above, and scratch threads have no project so a
-  // bare scheduleProjectRefresh() would just storm every loaded project.
-  if (sidebarHitScratch) {
-    if (!data.continuesAutomatically)
-      notifyThreadResult(threadId, resultStatus, get, data.errorReason);
-    return;
+  if (!sidebarHitScratch) {
+    refreshProjectAfterResult(get, threadId, foundInSidebar, loadThreadsForProject);
   }
 
-  const payloadEntry = get().threadDataById[threadId];
-  const projectIdForRefresh =
-    payloadEntry && !isScratch(payloadEntry)
-      ? payloadEntry.projectId
-      : getProjectIdForThread(threadId);
-
-  if (projectIdForRefresh) {
-    setTimeout(() => loadThreadsForProject(projectIdForRefresh), 500);
-  } else if (foundInSidebar) {
-    // Thread is in the sidebar but we don't know its project (shouldn't
-    // happen for project threads — defensive). Skip the global refresh.
-  } else {
-    // Thread not found in any loaded project — likely created externally
-    // (e.g. Chrome extension ingest). Debounce refresh to avoid API storm.
-    scheduleProjectRefresh(get);
+  if (!data.continuesAutomatically) {
+    notifyThreadResult(threadId, resultStatus, get, data.errorReason);
   }
-
-  // funny starts the agent again on its own (queued follow-up, background
-  // job): the run is not over, so do not announce it as finished.
-  if (data.continuesAutomatically) return;
-
-  // Toast notification
-  notifyThreadResult(threadId, resultStatus, get, data.errorReason);
 }
 
 // ── Toast helper ────────────────────────────────────────────────

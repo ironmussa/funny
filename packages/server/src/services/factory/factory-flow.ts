@@ -234,7 +234,7 @@ function staleStackingIssues(
  * never uses it implements the issue without the decisions the team took:
  * warn so the copy gets the built-in implement prompt's spec section.
  */
-export function specIgnoredIssues(
+function specIgnoredIssues(
   workflow: ParsedWorkflow,
   specStage: boolean | undefined,
 ): WorkflowIssue[] {

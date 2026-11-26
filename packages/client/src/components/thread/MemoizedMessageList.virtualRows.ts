@@ -59,16 +59,23 @@ export function buildVirtualRows(
   /** Index in `rows` of the current session's user-message row. */
   let sectionStart = -1;
 
+  const pickNewer = (
+    latest: SessionChanges | undefined,
+    candidate: SessionChanges | undefined,
+  ): SessionChanges | undefined => {
+    if (!candidate) return latest;
+    if (!latest || (candidate.createdAt || '') >= (latest.createdAt || '')) return candidate;
+    return latest;
+  };
+
   // Match snapshots keyed by the real prompt id, plus any legacy snapshot that
   // was saved under an auto-resume divider's id within the same turn.
   const findSectionChanges = (): SessionChanges | undefined => {
     if (!currentUser || !sessionChanges) return undefined;
     let latest = sessionChanges.get(currentUser.msg.id);
     for (const sectionItem of currentSessionItems) {
-      if (sectionItem.type !== 'message' || sectionItem.msg.role !== 'user') continue;
-      const resumed = sessionChanges.get(sectionItem.msg.id);
-      if (resumed && (!latest || (resumed.createdAt || '') >= (latest.createdAt || ''))) {
-        latest = resumed;
+      if (sectionItem.type === 'message' && sectionItem.msg.role === 'user') {
+        latest = pickNewer(latest, sessionChanges.get(sectionItem.msg.id));
       }
     }
     return latest;

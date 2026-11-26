@@ -433,13 +433,17 @@ export function filterFactoryRuns<R extends FactoryRun & { projectId: string }>(
 ): R[] {
   const fold = (text: string) => (caseSensitive ? text : text.toLowerCase());
   const needle = fold(search.trim().replace(/^#/, ''));
-  const matchesSearch = (run: R) =>
-    !needle ||
-    String(run.issueNumber ?? '').includes(needle) ||
-    fold(run.triggerName ?? '').includes(needle) ||
-    fold(projectNameById.get(run.projectId) ?? '').includes(needle) ||
-    fold(run.lane ?? '').includes(needle) ||
-    fold(run.currentStep ?? '').includes(needle);
+  const matchesSearch = (run: R) => {
+    if (!needle) return true;
+    const fields = [
+      run.issueNumber === null ? '' : String(run.issueNumber),
+      run.triggerName ?? '',
+      projectNameById.get(run.projectId) ?? '',
+      run.lane ?? '',
+      run.currentStep ?? '',
+    ];
+    return fields.some((field) => fold(field).includes(needle));
+  };
   const matchesLane = (run: R) =>
     !lanes || lanes.size === 0 || lanes.has(factoryLaneKey(run.projectId, run.lane));
   const kept = runs.filter(

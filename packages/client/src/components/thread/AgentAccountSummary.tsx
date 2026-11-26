@@ -101,23 +101,53 @@ function thirdPartyProvider(info: AccountInfo | undefined): string | null {
   return provider && provider !== 'firstParty' ? provider : null;
 }
 
+function resolveAccountName(
+  account: AgentAccountRow | undefined,
+  profileName: string | null | undefined,
+  provider: AgentProvider | undefined,
+): string {
+  const resolvedProvider = account?.provider ?? provider;
+  const fallbackName = resolvedProvider
+    ? (PROVIDER_LABELS[resolvedProvider] ?? resolvedProvider)
+    : 'Default profile';
+  return account?.profileName ?? profileName ?? fallbackName;
+}
+
+function AccountUsageSection({
+  windows,
+  extraUsage,
+  capturedAt,
+  now,
+}: {
+  windows: UsageWindow[];
+  extraUsage: ExtraUsage | undefined;
+  capturedAt: number | undefined;
+  now: number;
+}) {
+  if (windows.length === 0) return null;
+  return (
+    <div className="mt-2 space-y-2" data-testid="agent-account-usage">
+      {windows.map((w) => (
+        <UsageWindowRow key={w.key} window={w} now={now} />
+      ))}
+      <ExtraUsageLine extra={extraUsage} />
+      <p className="text-muted-foreground text-xs">{updatedLabel(capturedAt ?? now, now)}</p>
+    </div>
+  );
+}
+
 /**
  * The account a thread runs on — funny execution profile, provider login and
  * plan — and the account's total plan usage. Top of the context usage card.
  */
 export function AgentAccountSummary({ account, profileName, provider }: Props) {
-  const resolvedProvider = account?.provider ?? provider;
-  const fallbackName = resolvedProvider
-    ? (PROVIDER_LABELS[resolvedProvider] ?? resolvedProvider)
-    : 'Default profile';
-  const name = account?.profileName ?? profileName ?? fallbackName;
+  const name = resolveAccountName(account, profileName, provider);
   const info = account?.account;
   const plan = planLabel(info?.subscriptionType);
   const identity = [info?.email, info?.organization].filter(Boolean).join(' · ');
   // The card mounts when it opens: the time it opened is what it shows.
   const [now] = useState(() => Date.now());
   const windows = account?.usage?.windows ?? [];
-
   const apiProvider = account && windows.length === 0 ? thirdPartyProvider(info) : null;
 
   return (
@@ -131,18 +161,12 @@ export function AgentAccountSummary({ account, profileName, provider }: Props) {
           {identity}
         </p>
       )}
-
-      {windows.length > 0 && (
-        <div className="mt-2 space-y-2" data-testid="agent-account-usage">
-          {windows.map((w) => (
-            <UsageWindowRow key={w.key} window={w} now={now} />
-          ))}
-          <ExtraUsageLine extra={account?.usage?.extraUsage} />
-          <p className="text-muted-foreground text-xs">
-            {updatedLabel(account?.capturedAt ?? now, now)}
-          </p>
-        </div>
-      )}
+      <AccountUsageSection
+        windows={windows}
+        extraUsage={account?.usage?.extraUsage}
+        capturedAt={account?.capturedAt}
+        now={now}
+      />
       {apiProvider && (
         <p className="text-muted-foreground mt-1 pl-6 text-xs">
           Plan limits do not apply ({apiProvider}).

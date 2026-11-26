@@ -22,19 +22,36 @@ const log = createClientLogger('github-item-viewer');
 
 /** The PR the dialog shows until (and around) its detail: the number and URL the chip knew. */
 function prFromTarget(target: GitHubItemTarget, detail: PRDetail | undefined): GitHubPR {
+  if (!detail) {
+    return {
+      number: target.number,
+      title: `#${target.number}`,
+      body: null,
+      state: 'open',
+      html_url: target.url ?? '',
+      user: null,
+      created_at: '',
+      updated_at: '',
+      head: { ref: '', label: '', sha: undefined },
+      base: { ref: '', label: '' },
+      draft: false,
+      merged_at: null,
+      labels: [],
+    };
+  }
   return {
     number: target.number,
-    title: detail?.title ?? `#${target.number}`,
-    body: detail?.body ?? null,
-    state: detail?.state ?? 'open',
-    html_url: detail?.html_url ?? target.url ?? '',
-    user: detail?.user ?? null,
-    created_at: detail?.created_at ?? '',
-    updated_at: detail?.updated_at ?? '',
-    head: { ref: detail?.head.ref ?? '', label: detail?.head.ref ?? '', sha: detail?.head.sha },
-    base: { ref: detail?.base.ref ?? '', label: detail?.base.ref ?? '' },
-    draft: detail?.draft ?? false,
-    merged_at: detail?.merged ? (detail.updated_at ?? null) : null,
+    title: detail.title,
+    body: detail.body,
+    state: detail.state,
+    html_url: detail.html_url,
+    user: detail.user,
+    created_at: detail.created_at,
+    updated_at: detail.updated_at,
+    head: { ref: detail.head.ref, label: detail.head.ref, sha: detail.head.sha },
+    base: { ref: detail.base.ref, label: detail.base.ref },
+    draft: detail.draft,
+    merged_at: detail.merged ? (detail.updated_at ?? null) : null,
     labels: [],
   };
 }
@@ -49,6 +66,21 @@ function isOtherRepository(target: GitHubItemTarget, resolvedUrl: string | undef
   return wanted !== null && resolved !== null && wanted !== resolved;
 }
 
+function useOpenOtherRepository(
+  target: GitHubItemTarget,
+  resolvedUrl: string | undefined,
+  onClose: () => void,
+): boolean {
+  const otherRepository = isOtherRepository(target, resolvedUrl);
+  useEffect(() => {
+    if (!otherRepository || !target.url) return;
+    log.info('item is in another repository; opening GitHub');
+    window.open(target.url, '_blank', 'noopener,noreferrer');
+    onClose();
+  }, [otherRepository, target.url, onClose]);
+  return otherRepository;
+}
+
 function PRViewer({ target, onClose }: { target: GitHubItemTarget; onClose: () => void }) {
   const { detail } = usePRDetail(target.projectId, target.number);
 
@@ -56,14 +88,7 @@ function PRViewer({ target, onClose }: { target: GitHubItemTarget; onClose: () =
     void fetchPRDetail(target.projectId, target.number);
   }, [target.projectId, target.number]);
 
-  const otherRepository = isOtherRepository(target, detail?.html_url);
-  useEffect(() => {
-    if (!otherRepository || !target.url) return;
-    log.info('item is in another repository; opening GitHub');
-    window.open(target.url, '_blank', 'noopener,noreferrer');
-    onClose();
-  }, [otherRepository, target.url, onClose]);
-  if (otherRepository) return null;
+  if (useOpenOtherRepository(target, detail?.html_url, onClose)) return null;
 
   return (
     <PRDetailDialog
@@ -82,11 +107,9 @@ type IssueState =
   | { status: 'error'; message: string }
   | { status: 'ready'; issue: EnrichedGitHubIssue };
 
-function IssueViewer({ target, onClose }: { target: GitHubItemTarget; onClose: () => void }) {
-  const { t } = useTranslation();
+function useLoadIssue(target: GitHubItemTarget): IssueState {
   const key = `${target.projectId}#${target.number}`;
   const [loaded, setLoaded] = useState<{ key: string; state: IssueState } | null>(null);
-  const state: IssueState = loaded?.key === key ? loaded.state : { status: 'loading' };
 
   useEffect(() => {
     let cancelled = false;
@@ -112,31 +135,19 @@ function IssueViewer({ target, onClose }: { target: GitHubItemTarget; onClose: (
     };
   }, [target.projectId, target.number]);
 
-  const otherRepository =
-    state.status === 'ready' && isOtherRepository(target, state.issue.html_url);
-  useEffect(() => {
-    if (!otherRepository || !target.url) return;
-    log.info('item is in another repository; opening GitHub');
-    window.open(target.url, '_blank', 'noopener,noreferrer');
-    onClose();
-  }, [otherRepository, target.url, onClose]);
-  if (otherRepository) return null;
+  return loaded?.key === key ? loaded.state : { status: 'loading' };
+}
 
-  const onOpenChange = (open: boolean) => {
-    if (!open) onClose();
-  };
-
-  if (state.status === 'ready') {
-    return (
-      <IssueDetailDialog
-        open
-        onOpenChange={onOpenChange}
-        projectId={target.projectId}
-        issue={state.issue}
-      />
-    );
-  }
-
+function IssuePendingDialog({
+  target,
+  state,
+  onOpenChange,
+}: {
+  target: GitHubItemTarget;
+  state: Exclude<IssueState, { status: 'ready' }>;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const { t } = useTranslation();
   return (
     <Dialog open onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md" data-testid="github-item-viewer-issue-pending">
@@ -176,6 +187,29 @@ function IssueViewer({ target, onClose }: { target: GitHubItemTarget; onClose: (
       </DialogContent>
     </Dialog>
   );
+}
+
+function IssueViewer({ target, onClose }: { target: GitHubItemTarget; onClose: () => void }) {
+  const state = useLoadIssue(target);
+  const resolvedUrl = state.status === 'ready' ? state.issue.html_url : undefined;
+  if (useOpenOtherRepository(target, resolvedUrl, onClose)) return null;
+
+  const onOpenChange = (open: boolean) => {
+    if (!open) onClose();
+  };
+
+  if (state.status === 'ready') {
+    return (
+      <IssueDetailDialog
+        open
+        onOpenChange={onOpenChange}
+        projectId={target.projectId}
+        issue={state.issue}
+      />
+    );
+  }
+
+  return <IssuePendingDialog target={target} state={state} onOpenChange={onOpenChange} />;
 }
 
 /**

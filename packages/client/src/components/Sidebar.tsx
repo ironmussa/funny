@@ -10,7 +10,7 @@ import { useSidebarActions } from '@/hooks/use-sidebar-actions';
 import { useSidebarDragDrop } from '@/hooks/use-sidebar-drag-drop';
 import { useSidebarScrollSync } from '@/hooks/use-sidebar-scroll-sync';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
-import { useThreadsByProject } from '@/lib/thread-selectors';
+import { useThreadById, useThreadsByProject } from '@/lib/thread-selectors';
 import { buildPath } from '@/lib/url';
 import { cn, scrollSidebarItemIntoView } from '@/lib/utils';
 import { useProjectStore } from '@/stores/project-store';
@@ -43,7 +43,7 @@ function AppSidebarBody({ singleProjectId }: { singleProjectId?: string | null }
     ? allProjects.filter((p) => p.id === singleProjectId)
     : allProjects;
   const projectsInitialized = useProjectStore((s) => s.initialized);
-  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
+  const storeSelectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const expandedProjects = useProjectStore((s) => s.expandedProjects);
   const toggleProject = useProjectStore((s) => s.toggleProject);
   const reorderProjects = useProjectStore((s) => s.reorderProjects);
@@ -55,6 +55,12 @@ function AppSidebarBody({ singleProjectId }: { singleProjectId?: string | null }
   const settingsNavOpen = settingsOpen || generalSettingsOpen;
   const startNewThread = useUIStore((s) => s.startNewThread);
   const showGlobalSearch = useUIStore((s) => s.showGlobalSearch);
+  const liveColumnsOpen = useUIStore((s) => s.liveColumnsOpen);
+  const gridSelectedThreadId = useUIStore((s) => s.gridSelectedThreadId);
+  const gridSelectedThread = useThreadById(liveColumnsOpen ? gridSelectedThreadId : null);
+  const selectedProjectId = liveColumnsOpen
+    ? gridSelectedThread?.projectId || null
+    : storeSelectedProjectId;
 
   const actions = useSidebarActions();
   const {

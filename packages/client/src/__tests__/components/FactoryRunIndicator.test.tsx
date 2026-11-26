@@ -149,7 +149,8 @@ describe('FactoryRunIndicator', () => {
 
     fireEvent.click(screen.getByTestId('factory-run-indicator'));
     expect(statuses()).toEqual(['done', 'done', 'done', 'done']);
-    expect(screen.getByTestId('factory-run-pr')).toHaveAttribute(
+    expect(screen.getByTestId('factory-run-pr')).toHaveTextContent('#9');
+    expect(screen.getByTestId('factory-run-pr-external')).toHaveAttribute(
       'href',
       'https://github.com/o/r/pull/9',
     );

@@ -3,7 +3,7 @@ import { useEffect, type RefObject } from 'react';
 import { scrollSidebarItemIntoView } from '@/lib/utils';
 import { useProjectStore } from '@/stores/project-store';
 
-import { useActiveThreadId } from './use-active-thread-id';
+import { useSidebarActiveThreadId } from './use-sidebar-active-thread-id';
 
 interface Options {
   selectedProjectId: string | null;
@@ -29,10 +29,9 @@ export function useSidebarScrollSync({
   const revealNonce = useProjectStore((s) => s.revealNonce);
   const revealIntent = useProjectStore((s) => s.revealIntent);
   const toggleProject = useProjectStore((s) => s.toggleProject);
-  // Scroll target follows the URL so it stays in lockstep with the sidebar
-  // highlight (also route-driven). Using the async selectedThreadId here could
-  // scroll to a row the highlight has already moved off of.
-  const selectedThreadId = useActiveThreadId();
+  // Scroll target follows the URL (or the focused grid cell while on /grid)
+  // so it stays in lockstep with the sidebar highlight.
+  const selectedThreadId = useSidebarActiveThreadId();
 
   useEffect(() => {
     if (!selectedProjectId) return;

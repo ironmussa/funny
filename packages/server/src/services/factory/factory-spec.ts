@@ -55,7 +55,7 @@ export const PREVIOUS_SPEC_INPUT = 'previous-spec.md';
 export const SPEC_NO_VALID_RESULT = 'no valid result';
 
 /** The title prefix of a run's spec writer thread (adopted by it on resume). */
-export const specTitlePrefix = (issueNumber: number): string => `[Factory spec] #${issueNumber} `;
+const specTitlePrefix = (issueNumber: number): string => `[Factory spec] #${issueNumber} `;
 
 /** Where a run's spec writer runs: its enabler, project, repository and checkout. */
 export interface SpecTarget {
@@ -150,7 +150,7 @@ export function specWriterPrompt(input: {
 }
 
 /** Triage's open decisions and findings, as the spec writer reads them. */
-export function specDecisionsMarkdown(triage: FactoryTriage | null): string {
+function specDecisionsMarkdown(triage: FactoryTriage | null): string {
   const decisions = triage?.decisions ?? [];
   const findings = triage?.findings ?? [];
   const lines = ['# Open product decisions', ''];

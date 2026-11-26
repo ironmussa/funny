@@ -112,28 +112,15 @@ async function idleThreadBranches(
   return { branch, baseBranch: resolvedBaseBranch || branch };
 }
 
-async function createIdleThreadImpl(params: CreateIdleThreadParams) {
-  const project = await getServices().projects.getProject(params.projectId);
-  if (!project) throw new ThreadServiceError('Project not found', 404);
-
-  // Resolve per-user path (owner uses project.path, member uses localPath)
-  const pathResult = await getServices().projects.resolveProjectPath(
-    params.projectId,
-    params.userId,
-  );
-  if (pathResult.isErr()) throw new ThreadServiceError(pathResult.error.message, 400);
-  const projectPath = pathResult.value;
-
-  const threadId = nanoid();
-  const prompt = await idleThreadPrompt(params, threadId, projectPath);
-  const { branch, baseBranch } = await idleThreadBranches(
-    params,
-    project.name,
-    threadId,
-    projectPath,
-  );
-
-  const thread = {
+function buildIdleThreadRecord(
+  params: CreateIdleThreadParams,
+  threadId: string,
+  prompt: string | undefined,
+  branch: string | undefined,
+  baseBranch: string | undefined,
+) {
+  const now = new Date().toISOString();
+  return {
     id: threadId,
     projectId: params.projectId,
     userId: params.userId,
@@ -157,20 +144,51 @@ async function createIdleThreadImpl(params: CreateIdleThreadParams) {
       : undefined,
     fileCheckpointingEnabled: 1,
     cost: 0,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+    createdAt: now,
+    updatedAt: now,
   };
+}
+
+async function persistInitialIdleMessage(
+  threadId: string,
+  prompt: string | undefined,
+  images: CreateIdleThreadParams['images'],
+) {
+  const hasImages = Boolean(images?.length);
+  if (!prompt && !hasImages) return;
+  await tm.insertMessage({
+    threadId,
+    role: 'user',
+    content: stripInlineReferencedContent(prompt ?? ''),
+    images: hasImages ? JSON.stringify(images) : null,
+  });
+}
+
+async function createIdleThreadImpl(params: CreateIdleThreadParams) {
+  const project = await getServices().projects.getProject(params.projectId);
+  if (!project) throw new ThreadServiceError('Project not found', 404);
+
+  // Resolve per-user path (owner uses project.path, member uses localPath)
+  const pathResult = await getServices().projects.resolveProjectPath(
+    params.projectId,
+    params.userId,
+  );
+  if (pathResult.isErr()) throw new ThreadServiceError(pathResult.error.message, 400);
+  const projectPath = pathResult.value;
+
+  const threadId = nanoid();
+  const prompt = await idleThreadPrompt(params, threadId, projectPath);
+  const { branch, baseBranch } = await idleThreadBranches(
+    params,
+    project.name,
+    threadId,
+    projectPath,
+  );
+
+  const thread = buildIdleThreadRecord(params, threadId, prompt, branch, baseBranch);
 
   await tm.createThread(thread);
-
-  if (prompt || params.images?.length) {
-    await tm.insertMessage({
-      threadId,
-      role: 'user',
-      content: stripInlineReferencedContent(prompt ?? ''),
-      images: params.images?.length ? JSON.stringify(params.images) : null,
-    });
-  }
+  await persistInitialIdleMessage(threadId, prompt, params.images);
 
   threadEventBus.emit('thread:created', {
     threadId,

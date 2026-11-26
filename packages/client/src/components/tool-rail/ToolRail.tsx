@@ -33,7 +33,7 @@ import { useThreadHistoryStore } from '@/stores/thread-history-store';
 import { selectRightPanel, useUIStore, type LeftPanelMode } from '@/stores/ui-store';
 
 /** What the registry's availability rules need, for the thread the rail acts on. */
-export function useToolPanelContext(): ToolPanelContext {
+function useToolPanelContext(): ToolPanelContext {
   const threadId = useThreadId();
   const projectId = useRightPaneProjectId();
   const selfUserId = useAuthStore((s) => s.user?.id ?? null);

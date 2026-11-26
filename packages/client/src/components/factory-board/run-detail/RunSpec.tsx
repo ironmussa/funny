@@ -83,9 +83,141 @@ export function SpecBody({ spec }: { spec: FactorySpec }) {
   );
 }
 
-export function RunSpec({ run }: { run: FactoryQueueRun }) {
+function SpecQuestionsSection({
+  questions,
+}: {
+  questions: Array<{ question: string; options: string[] }>;
+}) {
+  const { t } = useTranslation();
+  if (questions.length === 0) return null;
+  return (
+    <>
+      <p>
+        {t('factorySpec.questionsIntro', 'The spec writer asks the team. Answer in its thread:')}
+      </p>
+      <ul className="text-foreground list-disc pl-4" data-testid="factory-spec-questions">
+        {questions.map((question) => (
+          <li key={question.question}>
+            {question.question}
+            {question.options.length > 0 && (
+              <span className="text-muted-foreground"> ({question.options.join(' / ')})</span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+function SpecDraftSection({
+  draft,
+  revision,
+  canSteer,
+  busy,
+  onApprove,
+}: {
+  draft: FactorySpec;
+  revision: number;
+  canSteer: boolean;
+  busy: boolean;
+  onApprove: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <>
+      <LabelBadge tone="warning">
+        {t('factorySpec.draftBadge', 'Draft {{revision}} waits for approval', { revision })}
+      </LabelBadge>
+      <SpecBody spec={draft} />
+      {canSteer && (
+        <div className="flex gap-1.5 pt-1">
+          <Button size="xs" disabled={busy} onClick={onApprove} data-testid="factory-spec-approve">
+            {t('factorySpec.approve', 'Approve spec')}
+          </Button>
+        </div>
+      )}
+    </>
+  );
+}
+
+function SpecApprovedSection({
+  approved,
+  currentUserId,
+  canReopen,
+  busy,
+  onReopen,
+}: {
+  approved: NonNullable<NonNullable<FactoryQueueRun['spec']>['approved']>;
+  currentUserId: string | undefined;
+  canReopen: boolean;
+  busy: boolean;
+  onReopen: () => void;
+}) {
+  const { t } = useTranslation();
+  const at = new Date(approved.at).toLocaleString();
+  return (
+    <>
+      <p data-testid="factory-spec-approved">
+        {approved.by === currentUserId
+          ? t('factorySpec.approvedByYou', 'Approved by you, {{at}}', { at })
+          : t('factorySpec.approvedByMember', 'Approved by a member, {{at}}', { at })}
+      </p>
+      <SpecBody spec={approved.spec} />
+      {canReopen && (
+        <div className="flex gap-1.5 pt-1">
+          <Button
+            size="xs"
+            variant="outline"
+            disabled={busy}
+            onClick={onReopen}
+            data-testid="factory-spec-reopen"
+          >
+            {t('factorySpec.reopen', 'Reopen spec')}
+          </Button>
+        </div>
+      )}
+    </>
+  );
+}
+
+function SpecThreadLink({ projectId, threadId }: { projectId: string; threadId: string }) {
   const { t } = useTranslation();
   const navigate = useStableNavigate();
+  return (
+    <Button
+      size="xs"
+      variant="link"
+      onClick={() =>
+        navigate(buildPath(getThreadRoute({ id: threadId, projectId, isScratch: false })))
+      }
+      data-testid="factory-spec-thread-link"
+    >
+      {t('factorySpec.thread', 'Spec thread')}
+      <ExternalLink className="icon-xs" />
+    </Button>
+  );
+}
+
+function SpecWaitingStatus({ hasProblem, hasLatest }: { hasProblem: boolean; hasLatest: boolean }) {
+  const { t } = useTranslation();
+  if (hasProblem) {
+    return (
+      <p data-testid="factory-spec-problem">
+        {t(
+          'factorySpec.problem',
+          'The spec writer gave no valid spec. Answer it in its thread, or retry the run to triage it again.',
+        )}
+      </p>
+    );
+  }
+  if (!hasLatest) {
+    return <p>{t('factorySpec.writing', 'The spec writer is reading the issue and the code.')}</p>;
+  }
+  return null;
+}
+
+export function RunSpec({ run }: { run: FactoryQueueRun }) {
+  const { t } = useTranslation();
   const canSteer = useCanSteerProject(run.projectId);
   const currentUserId = useAuthStore((s) => s.user?.id);
   const [busy, setBusy] = useState(false);
@@ -102,116 +234,48 @@ export function RunSpec({ run }: { run: FactoryQueueRun }) {
     void approveFactorySpec(run.projectId, run.id, spec.revision)
       // A refusal reads the runs again: the newer draft replaces this one on screen.
       .orTee((error) => toastError(error, 'factoryApproveSpec'))
-      .andTee(() => setBusy(false))
-      .orTee(() => setBusy(false));
+      .match(
+        () => setBusy(false),
+        () => setBusy(false),
+      );
   };
   const reopen = () => {
     setBusy(true);
     void reopenFactorySpec(run.projectId, run.id)
       .orTee((error) => toastError(error, 'factoryReopenSpec'))
-      .andTee(() => setBusy(false))
-      .orTee(() => setBusy(false));
+      .match(
+        () => setBusy(false),
+        () => setBusy(false),
+      );
   };
 
   const threadLink = spec.threadId ? (
-    <Button
-      size="xs"
-      variant="link"
-      onClick={() =>
-        navigate(
-          buildPath(
-            getThreadRoute({ id: spec.threadId!, projectId: run.projectId, isScratch: false }),
-          ),
-        )
-      }
-      data-testid="factory-spec-thread-link"
-    >
-      {t('factorySpec.thread', 'Spec thread')}
-      <ExternalLink className="icon-xs" />
-    </Button>
+    <SpecThreadLink projectId={run.projectId} threadId={spec.threadId} />
   ) : null;
 
   return (
     <DetailSection id="spec" title={t('factorySpec.title', 'Spec')} aside={threadLink}>
-      {waiting && spec.problem && (
-        <p data-testid="factory-spec-problem">
-          {t(
-            'factorySpec.problem',
-            'The spec writer gave no valid spec. Answer it in its thread, or retry the run to triage it again.',
-          )}
-        </p>
+      {waiting && (
+        <SpecWaitingStatus hasProblem={Boolean(spec.problem)} hasLatest={Boolean(latest)} />
       )}
-      {questions.length > 0 && (
-        <>
-          <p>
-            {t(
-              'factorySpec.questionsIntro',
-              'The spec writer asks the team. Answer in its thread:',
-            )}
-          </p>
-          <ul className="text-foreground list-disc pl-4" data-testid="factory-spec-questions">
-            {questions.map((question) => (
-              <li key={question.question}>
-                {question.question}
-                {question.options.length > 0 && (
-                  <span className="text-muted-foreground"> ({question.options.join(' / ')})</span>
-                )}
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
-      {waiting && !latest && !spec.problem && (
-        <p>{t('factorySpec.writing', 'The spec writer is reading the issue and the code.')}</p>
-      )}
+      <SpecQuestionsSection questions={questions} />
       {draft && (
-        <>
-          <LabelBadge tone="warning">
-            {t('factorySpec.draftBadge', 'Draft {{revision}} waits for approval', {
-              revision: spec.revision,
-            })}
-          </LabelBadge>
-          <SpecBody spec={draft} />
-          {canSteer && (
-            <div className="flex gap-1.5 pt-1">
-              <Button
-                size="xs"
-                disabled={busy}
-                onClick={approve}
-                data-testid="factory-spec-approve"
-              >
-                {t('factorySpec.approve', 'Approve spec')}
-              </Button>
-            </div>
-          )}
-        </>
+        <SpecDraftSection
+          draft={draft}
+          revision={spec.revision}
+          canSteer={canSteer}
+          busy={busy}
+          onApprove={approve}
+        />
       )}
       {approved && !waiting && (
-        <>
-          <p data-testid="factory-spec-approved">
-            {approved.by === currentUserId
-              ? t('factorySpec.approvedByYou', 'Approved by you, {{at}}', {
-                  at: new Date(approved.at).toLocaleString(),
-                })
-              : t('factorySpec.approvedByMember', 'Approved by a member, {{at}}', {
-                  at: new Date(approved.at).toLocaleString(),
-                })}
-          </p>
-          <SpecBody spec={approved.spec} />
-          {canSteer && REOPENABLE.has(run.state) && (
-            <div className="flex gap-1.5 pt-1">
-              <Button
-                size="xs"
-                variant="outline"
-                disabled={busy}
-                onClick={reopen}
-                data-testid="factory-spec-reopen"
-              >
-                {t('factorySpec.reopen', 'Reopen spec')}
-              </Button>
-            </div>
-          )}
-        </>
+        <SpecApprovedSection
+          approved={approved}
+          currentUserId={currentUserId}
+          canReopen={canSteer && REOPENABLE.has(run.state)}
+          busy={busy}
+          onReopen={reopen}
+        />
       )}
     </DetailSection>
   );

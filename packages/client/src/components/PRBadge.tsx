@@ -124,6 +124,69 @@ function prBadgeClassName({
   );
 }
 
+function ProjectPRBadge({
+  prNumber,
+  prState,
+  prUrl,
+  projectId,
+  size,
+  variant,
+  className,
+  testId,
+  tooltipLabel,
+  iconClassName,
+}: {
+  prNumber: number;
+  prState: NonNullable<PRBadgeProps['prState']>;
+  prUrl?: string;
+  projectId: string;
+  size: NonNullable<PRBadgeProps['size']>;
+  variant: NonNullable<PRBadgeProps['variant']>;
+  className?: string;
+  testId?: string;
+  tooltipLabel: string;
+  iconClassName: string;
+}) {
+  const StateIcon = PR_STATE_ICON[prState];
+  const openInFunny = (event: SyntheticEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openGitHubItem({ kind: 'pr', projectId, number: prNumber, url: prUrl });
+  };
+  return (
+    <span className={cn('inline-flex shrink-0 items-center gap-0.5', className)}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            onClick={openInFunny}
+            onKeyDown={(e) => e.stopPropagation()}
+            className={prBadgeClassName({ variant, prState, size, linked: true })}
+            data-testid={testId}
+            aria-label={tooltipLabel}
+          >
+            <StateIcon
+              className={iconClassName}
+              aria-hidden="true"
+              data-testid={testId ? `${testId}-icon-${prState}` : undefined}
+            />
+            <span className={cn(variant === 'plain' && 'font-mono')}>#{prNumber}</span>
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="top">{tooltipLabel}</TooltipContent>
+      </Tooltip>
+      {prUrl && (
+        <GitHubExternalLink
+          url={prUrl}
+          iconClassName={iconClassName}
+          className={externalLinkColorClass(variant, prState)}
+          data-testid={testId ? `${testId}-external` : undefined}
+        />
+      )}
+    </span>
+  );
+}
+
 /**
  * Standardized PR number badge/link.
  * State is exposed in the tooltip and soft color so it reads consistently
@@ -146,6 +209,25 @@ export function PRBadge({
   const tooltipLabel = prTooltipLabel(t, prState, prNumber);
   const plain = variant === 'plain';
   const iconClassName = plain && size !== 'compact' ? GIT_STAT_ICON_CLASS : config.icon;
+  const testId = props['data-testid'];
+
+  if (projectId) {
+    return (
+      <ProjectPRBadge
+        prNumber={prNumber}
+        prState={prState}
+        prUrl={prUrl}
+        projectId={projectId}
+        size={size}
+        variant={variant}
+        className={className}
+        testId={testId}
+        tooltipLabel={tooltipLabel}
+        iconClassName={iconClassName}
+      />
+    );
+  }
+
   const badgeClassName = prBadgeClassName({ variant, prState, size, linked: !!prUrl, className });
   const StateIcon = PR_STATE_ICON[prState];
   const content = (
@@ -153,53 +235,12 @@ export function PRBadge({
       <StateIcon
         className={iconClassName}
         aria-hidden="true"
-        data-testid={props['data-testid'] ? `${props['data-testid']}-icon-${prState}` : undefined}
+        data-testid={testId ? `${testId}-icon-${prState}` : undefined}
       />
       <span className={cn(plain && 'font-mono')}>#{prNumber}</span>
       {showExternalIcon ? <ExternalLink className={iconClassName} aria-hidden="true" /> : null}
     </>
   );
-
-  if (projectId) {
-    const testId = props['data-testid'];
-    const openInFunny = (event: SyntheticEvent) => {
-      event.preventDefault();
-      event.stopPropagation();
-      openGitHubItem({ kind: 'pr', projectId, number: prNumber, url: prUrl });
-    };
-    return (
-      <span className={cn('inline-flex shrink-0 items-center gap-0.5', className)}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              onClick={openInFunny}
-              onKeyDown={(e) => e.stopPropagation()}
-              className={prBadgeClassName({ variant, prState, size, linked: true })}
-              data-testid={testId}
-              aria-label={tooltipLabel}
-            >
-              <StateIcon
-                className={iconClassName}
-                aria-hidden="true"
-                data-testid={testId ? `${testId}-icon-${prState}` : undefined}
-              />
-              <span className={cn(plain && 'font-mono')}>#{prNumber}</span>
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="top">{tooltipLabel}</TooltipContent>
-        </Tooltip>
-        {prUrl && (
-          <GitHubExternalLink
-            url={prUrl}
-            iconClassName={iconClassName}
-            className={externalLinkColorClass(variant, prState)}
-            data-testid={testId ? `${testId}-external` : undefined}
-          />
-        )}
-      </span>
-    );
-  }
 
   if (prUrl) {
     return (

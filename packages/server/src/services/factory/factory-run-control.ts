@@ -696,36 +696,48 @@ function followedUpAfterParking(run: FactoryRunView, threadId: string): boolean 
   return noted >= Date.parse(run.completedAt);
 }
 
+async function notifyWaitingSpecRuns(
+  runs: ReturnType<typeof createFactoryRunsRepository>,
+  threadId: string,
+): Promise<void> {
+  // A spec writer's turn (openspec factory-spec-stage): its result is read and
+  // stored on the run. A role thread never takes a run over.
+  const waitingOnSpec = await runs.waitingOnSpec();
+  if (waitingOnSpec.isErr()) return;
+  for (const run of waitingOnSpec.value) {
+    if (run.spec?.threadId === threadId) await onFactorySpecTurn(run, threadId);
+  }
+}
+
+async function tryTakeOverRun(
+  runs: ReturnType<typeof createFactoryRunsRepository>,
+  run: FactoryRunView,
+  threadId: string,
+): Promise<void> {
+  // Only the implementing thread takes a run over, never a step's own read-only thread.
+  if (implementingThreadOf(run) !== threadId || !followedUpAfterParking(run, threadId)) return;
+  const reopened = await runs.reopen(run, run.threadIds);
+  forgetOwnerFollowUp(threadId);
+  // Queued: the factory is full, and the run takes the next free slot.
+  if (reopened.isOk() && (reopened.value === 'reopened' || reopened.value === 'queued')) {
+    log.info('Issue factory run taken over by a follow-up', {
+      namespace: 'factory',
+      runId: run.id,
+      threadId,
+      queued: reopened.value === 'queued',
+    });
+    wake(run.factoryId);
+  }
+}
+
 export async function onFactoryThreadTerminal(threadId: string, status: string): Promise<void> {
   signalThreadTerminal(threadId);
   if (status !== 'completed') return;
   const runs = createFactoryRunsRepository();
-  // A spec writer's turn (openspec factory-spec-stage): its result is read and
-  // stored on the run. A role thread never takes a run over.
-  const waitingOnSpec = await runs.waitingOnSpec();
-  if (waitingOnSpec.isOk()) {
-    for (const run of waitingOnSpec.value) {
-      if (run.spec?.threadId === threadId) await onFactorySpecTurn(run, threadId);
-    }
-  }
+  await notifyWaitingSpecRuns(runs, threadId);
   const found = await runs.reopenableByThread(threadId);
   if (found.isErr()) return;
   for (const run of found.value) {
-    // Only the implementing thread takes a run over, never a step's own read-only thread.
-    if (implementingThreadOf(run) !== threadId || !followedUpAfterParking(run, threadId)) {
-      continue;
-    }
-    const reopened = await runs.reopen(run, run.threadIds);
-    forgetOwnerFollowUp(threadId);
-    // Queued: the factory is full, and the run takes the next free slot.
-    if (reopened.isOk() && (reopened.value === 'reopened' || reopened.value === 'queued')) {
-      log.info('Issue factory run taken over by a follow-up', {
-        namespace: 'factory',
-        runId: run.id,
-        threadId,
-        queued: reopened.value === 'queued',
-      });
-      wake(run.factoryId);
-    }
+    await tryTakeOverRun(runs, run, threadId);
   }
 }

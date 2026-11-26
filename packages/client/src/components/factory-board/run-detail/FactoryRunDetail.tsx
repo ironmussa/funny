@@ -147,6 +147,18 @@ function RunOutcome({ run, dependencies, onSelect }: { run: FactoryQueueRun } & 
 
 type RunDetailTab = 'flow' | 'triage' | 'spec' | 'proof' | 'reviews' | 'risk' | 'threads';
 
+function hasFlowContent(run: FactoryQueueRun): boolean {
+  return (
+    run.flowSteps.length > 0 ||
+    (run.stepTimings ?? []).length > 0 ||
+    Object.keys(run.inputs).length > 0
+  );
+}
+
+function hasRiskContent(run: FactoryQueueRun): boolean {
+  return Boolean(run.risk || run.mergeApproval) || run.metrics.ciRounds > 0;
+}
+
 /**
  * The tabs a run has, in pipeline order: one per section with something to
  * show. Triage, the proof and the reviews judge a change against an issue.
@@ -154,17 +166,12 @@ type RunDetailTab = 'flow' | 'triage' | 'spec' | 'proof' | 'reviews' | 'risk' | 
 function runDetailTabs(run: FactoryQueueRun): RunDetailTab[] {
   const judged = run.issueNumber !== null;
   const tabs: [RunDetailTab, boolean][] = [
-    [
-      'flow',
-      run.flowSteps.length > 0 ||
-        (run.stepTimings ?? []).length > 0 ||
-        Object.keys(run.inputs).length > 0,
-    ],
+    ['flow', hasFlowContent(run)],
     ['triage', judged && Boolean(run.triage)],
     ['spec', judged && hasFactoryRunSpec(run)],
     ['proof', judged && Boolean(run.regressionProof)],
     ['reviews', judged && run.reviews.length > 0],
-    ['risk', Boolean(run.risk || run.mergeApproval) || run.metrics.ciRounds > 0],
+    ['risk', hasRiskContent(run)],
     ['threads', factoryRunThreadLinks(run).length > 0],
   ];
   return tabs.flatMap(([tab, shown]) => (shown ? [tab] : []));

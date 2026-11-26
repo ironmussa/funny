@@ -146,7 +146,7 @@ const PARKED: ReadonlySet<FactoryRunState> = new Set(PARKED_STATES);
 export const HELD_STATES = ['on_hold'] as const satisfies FactoryRunState[];
 
 /** The states a member may put on hold (`FACTORY_RUN_HOLDABLE_STATES`). */
-export const HOLDABLE_STATES = [
+const HOLDABLE_STATES = [
   'needs_info',
   'needs_spec',
   'waiting_human',

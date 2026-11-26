@@ -184,18 +184,79 @@ export class GenericACPProcess extends BaseAgentProcess {
 
   // ── Provider-specific run loop ─────────────────────────────────
 
-  protected async runProcess(): Promise<void> {
-    let SDK: ACPSDK;
+  private async loadACPSDK(): Promise<ACPSDK> {
     try {
-      SDK = await import('@agentclientprotocol/sdk/unstable');
+      return await import('@agentclientprotocol/sdk/unstable');
     } catch {
       throw new Error(
         'ACP SDK not installed. Run: bun add @agentclientprotocol/sdk\n' +
           `Also ensure ${this.manifest.label} is installed and on PATH.`,
       );
     }
+  }
 
-    const { client, methods, ndJsonStream } = SDK;
+  private filterMcpServers(
+    mcpCaps: { http?: boolean; sse?: boolean } | undefined,
+  ): ReturnType<typeof toACPMcpServers> {
+    const allMcp = toACPMcpServers(this.options.mcpServers);
+    if (!this.manifest.quirks.filterMcpByCapability) return allMcp;
+
+    const supportsHttp = mcpCaps?.http === true;
+    const supportsSse = mcpCaps?.sse === true;
+    const filtered = allMcp.filter((s) => {
+      const t = 'type' in s ? s.type : undefined;
+      if (t === 'http') return supportsHttp;
+      if (t === 'sse') return supportsSse;
+      return true;
+    });
+    if (allMcp.length !== filtered.length) {
+      this.dlog.warn('dropped MCP servers unsupported by agent', {
+        dropped: allMcp.length - filtered.length,
+        mcpCapabilities: mcpCaps && definedJsonFields({ http: mcpCaps.http, sse: mcpCaps.sse }),
+      });
+    }
+    return filtered;
+  }
+
+  private async openSession(
+    agent: ACPConnection['agent'],
+    methods: ACPMethods,
+    mcpServerList: ReturnType<typeof toACPMcpServers>,
+    supportsLoadSession: boolean,
+  ): Promise<{ isResume: boolean; sessionAccount: AgentAccountInfo | null }> {
+    const isResume = Boolean(this.options.sessionId && supportsLoadSession);
+    if (isResume) {
+      this.activeSessionId = this.options.sessionId!;
+      this.replayingHistory = true;
+      try {
+        const loadResponse = await agent.request(methods.agent.session.load, {
+          sessionId: this.options.sessionId!,
+          cwd: this.options.cwd,
+          mcpServers: mcpServerList,
+        });
+        // `loadSession` returns the same `configOptions` as `newSession`
+        // (ACP 0.26+). Capture them here too, otherwise `applyModelSelection`
+        // has no model config option to set on resume and silently falls back
+        // to the provider default — losing the user's model choice on every
+        // follow-up message.
+        this.captureSessionConfigOptions(loadResponse?.configOptions);
+        return { isResume: true, sessionAccount: extractACPAccountInfo(loadResponse?._meta) };
+      } finally {
+        this.replayingHistory = false;
+      }
+    }
+
+    const sessionResponse = await agent.request(methods.agent.session.new, {
+      cwd: this.options.cwd,
+      mcpServers: mcpServerList,
+    });
+    this.activeSessionId = sessionResponse.sessionId;
+    this.captureSessionConfigOptions(sessionResponse.configOptions);
+    return { isResume: false, sessionAccount: extractACPAccountInfo(sessionResponse._meta) };
+  }
+
+  protected async runProcess(): Promise<void> {
+    const { client, methods, ndJsonStream } = await this.loadACPSDK();
     this.acpMethods = methods;
 
     await this.runPrelaunch();
@@ -261,61 +322,18 @@ export class GenericACPProcess extends BaseAgentProcess {
 
       const supportsLoadSession = initResult.agentCapabilities?.loadSession === true;
       this.supportsImages = initResult.agentCapabilities?.promptCapabilities?.image === true;
-      const mcpCaps = initResult.agentCapabilities?.mcpCapabilities;
-      const supportsHttp = mcpCaps?.http === true;
-      const supportsSse = mcpCaps?.sse === true;
-
-      const allMcp = toACPMcpServers(this.options.mcpServers);
-      const mcpServerList = this.manifest.quirks.filterMcpByCapability
-        ? allMcp.filter((s) => {
-            const t = 'type' in s ? s.type : undefined;
-            if (t === 'http') return supportsHttp;
-            if (t === 'sse') return supportsSse;
-            return true;
-          })
-        : allMcp;
-      if (allMcp.length !== mcpServerList.length) {
-        this.dlog.warn('dropped MCP servers unsupported by agent', {
-          dropped: allMcp.length - mcpServerList.length,
-          mcpCapabilities: mcpCaps && definedJsonFields({ http: mcpCaps.http, sse: mcpCaps.sse }),
-        });
-      }
+      const mcpServerList = this.filterMcpServers(initResult.agentCapabilities?.mcpCapabilities);
 
       const initAccount = extractACPAccountInfo(initResult._meta);
-      let sessionAccount: AgentAccountInfo | null = null;
-
-      const isResume = Boolean(this.options.sessionId && supportsLoadSession);
-      if (isResume) {
-        this.activeSessionId = this.options.sessionId!;
-        this.replayingHistory = true;
-        try {
-          const loadResponse = await agent.request(methods.agent.session.load, {
-            sessionId: this.options.sessionId!,
-            cwd: this.options.cwd,
-            mcpServers: mcpServerList,
-          });
-          sessionAccount = extractACPAccountInfo(loadResponse?._meta);
-          // `loadSession` returns the same `configOptions` as `newSession`
-          // (ACP 0.26+). Capture them here too, otherwise `applyModelSelection`
-          // has no model config option to set on resume and silently falls back
-          // to the provider default — losing the user's model choice on every
-          // follow-up message.
-          this.captureSessionConfigOptions(loadResponse?.configOptions);
-        } finally {
-          this.replayingHistory = false;
-        }
-      } else {
-        const sessionResponse = await agent.request(methods.agent.session.new, {
-          cwd: this.options.cwd,
-          mcpServers: mcpServerList,
-        });
-        this.activeSessionId = sessionResponse.sessionId;
-        sessionAccount = extractACPAccountInfo(sessionResponse._meta);
-        this.captureSessionConfigOptions(sessionResponse.configOptions);
-      }
+      const { isResume, sessionAccount } = await this.openSession(
+        agent,
+        methods,
+        mcpServerList,
+        supportsLoadSession,
+      );
 
       this.emitInit(
-        this.activeSessionId,
+        this.activeSessionId!,
         this.manifest.builtinTools,
         this.options.model ?? 'default',
         this.options.cwd,

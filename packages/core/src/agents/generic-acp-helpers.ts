@@ -308,6 +308,21 @@ const acpAccountMetaSchema = acpAccountFieldsSchema.extend({
   user: acpAccountFieldsSchema.optional().catch(undefined),
 });
 
+function firstNonEmpty(...values: Array<string | undefined>): string | undefined {
+  return values.find((v) => v !== undefined);
+}
+
+function buildAccountInfo(fields: Partial<AgentAccountInfo>): AgentAccountInfo | null {
+  const info: AgentAccountInfo = {};
+  // SAFETY: every property on AgentAccountInfo is an optional string, so Object.entries yields [keyof AgentAccountInfo, string | undefined].
+  for (const [key, value] of Object.entries(fields) as Array<
+    [keyof AgentAccountInfo, string | undefined]
+  >) {
+    if (value) info[key] = value;
+  }
+  return Object.keys(info).length > 0 ? info : null;
+}
+
 /**
  * Extract provider account metadata from an ACP `initialize`, `session/new`,
  * or `session/load` `_meta` bag. Returns `null` when no known account fields
@@ -319,24 +334,19 @@ export function extractACPAccountInfo(meta: ACPMeta): AgentAccountInfo | null {
   const record = parsed.data;
   const nested = record.account ?? record.user;
 
-  const email = nested?.email ?? record.email ?? record.userEmail;
-  const organization = nested?.organization ?? nested?.org ?? record.organization;
-  const subscriptionType =
-    nested?.subscriptionType ??
-    nested?.plan ??
-    nested?.tier ??
-    record.subscriptionType ??
-    record.plan ??
-    record.tier;
-  const apiProvider = nested?.apiProvider ?? record.apiProvider;
-
-  if (!email && !organization && !subscriptionType && !apiProvider) return null;
-  const info: AgentAccountInfo = {};
-  if (email) info.email = email;
-  if (organization) info.organization = organization;
-  if (subscriptionType) info.subscriptionType = subscriptionType;
-  if (apiProvider) info.apiProvider = apiProvider;
-  return info;
+  return buildAccountInfo({
+    email: firstNonEmpty(nested?.email, record.email, record.userEmail),
+    organization: firstNonEmpty(nested?.organization, nested?.org, record.organization),
+    subscriptionType: firstNonEmpty(
+      nested?.subscriptionType,
+      nested?.plan,
+      nested?.tier,
+      record.subscriptionType,
+      record.plan,
+      record.tier,
+    ),
+    apiProvider: firstNonEmpty(nested?.apiProvider, record.apiProvider),
+  });
 }
 
 const geminiTrustedFoldersSchema = z.record(z.string(), z.string());

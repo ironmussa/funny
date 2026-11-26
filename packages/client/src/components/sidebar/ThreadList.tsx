@@ -5,10 +5,10 @@ import { useTranslation } from 'react-i18next';
 import { useProjects } from '@/data/projects/hooks';
 import { useLoadedThreads } from '@/data/threads/hooks';
 import { selectActivityThreads } from '@/data/threads/views';
-import { useActiveThreadId } from '@/hooks/use-active-thread-id';
 import { useVisibleGitStatus } from '@/hooks/use-git-status-scope';
 import { useGridThreadDrag } from '@/hooks/use-grid-thread-drag';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
+import { useSidebarActiveThreadId } from '@/hooks/use-sidebar-active-thread-id';
 import { useSidebarGitStatuses } from '@/hooks/use-sidebar-git-statuses';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { timeAgo } from '@/lib/thread-utils';
@@ -47,8 +47,8 @@ export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: 
   const navigate = useStableNavigate();
   // Every loaded project list plus scratch, from a live query on the threads collection.
   const loadedThreads = useLoadedThreads(null);
-  // Highlight follows the URL (route-driven), not the async selectedThreadId.
-  const activeThreadId = useActiveThreadId();
+  // Highlight follows the URL (or the focused grid cell while on /grid).
+  const activeThreadId = useSidebarActiveThreadId();
   const projects = useProjects();
   const hideFactoryThreads = useSidebarFilterStore((s) => s.hideFactoryThreads);
 

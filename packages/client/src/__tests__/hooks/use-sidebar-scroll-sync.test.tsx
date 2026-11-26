@@ -7,6 +7,7 @@ import { MemoryRouter } from 'react-router-dom';
 
 import { useSidebarScrollSync } from '@/hooks/use-sidebar-scroll-sync';
 import { useProjectStore } from '@/stores/project-store';
+import { useUIStore } from '@/stores/ui-store';
 
 // Spy on the scroll helper; keep the rest of utils real.
 const actualUtils = { ...(await import('@/lib/utils')) };
@@ -44,6 +45,7 @@ describe('useSidebarScrollSync — scroll target follows the URL', () => {
       revealIntent: 'nearest',
       toggleProject: vi.fn(),
     });
+    useUIStore.setState({ liveColumnsOpen: false, gridSelectedThreadId: null });
   });
 
   afterEach(() => {
@@ -84,5 +86,24 @@ describe('useSidebarScrollSync — scroll target follows the URL', () => {
     const calls = mocked(scrollSidebarItemIntoView).mock.calls;
     const scrolledEl = calls[calls.length - 1][1];
     expect(scrolledEl.getAttribute('data-testid')).toBe('thread-item-t-a');
+  });
+
+  test('scrolls to the grid-selected thread while the grid view is open', () => {
+    useUIStore.setState({ liveColumnsOpen: true, gridSelectedThreadId: 't-b' });
+    const root = makeScrollRoot();
+    renderHook(
+      () =>
+        useSidebarScrollSync({
+          selectedProjectId: 'p1',
+          projectsScrollRef: { current: root },
+          settingsNavOpen: false,
+        }),
+      { wrapper: wrapperFor('/grid') },
+    );
+
+    const calls = mocked(scrollSidebarItemIntoView).mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    const scrolledEl = calls[calls.length - 1][1];
+    expect(scrolledEl.getAttribute('data-testid')).toBe('thread-item-t-b');
   });
 });

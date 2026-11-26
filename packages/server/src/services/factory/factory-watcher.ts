@@ -322,6 +322,37 @@ function tick(id: string): Promise<void> {
     .finally(() => busy.delete(id));
 }
 
+async function resolveOwnIncident(
+  factory: WatchedFactory,
+  repo: string,
+  incidents: Map<string, string>,
+): Promise<string | null> {
+  if (!deps || incidents.size === 0) return null;
+  const ownBase = (
+    await deps.github.defaultBranch({
+      repo,
+      ownerId: factory.userId,
+      projectId: factory.projectId,
+    })
+  ).unwrapOr(null);
+  return ownBase ? (incidents.get(ownBase) ?? null) : (incidents.values().next().value ?? null);
+}
+
+async function runEnabledSteps(
+  factory: WatchedFactory,
+  repo: string,
+  mode: LaunchMode,
+  ownIncident: string | null,
+  incidents: Map<string, string>,
+): Promise<void> {
+  // A broken "Merge into" branch is not carried into the lanes (D6).
+  if (!ownIncident) await syncLanes(factory, repo, mode);
+  // Once a day, the lanes are tried against each other on the enabler's runner (D7).
+  await checkLanesAgainstEachOther(factory);
+  if (!ownIncident) await queueDueTriggers(factory);
+  await admitWork(factory, repo, mode, incidents);
+}
+
 async function fire(id: string): Promise<void> {
   if (!deps || !runs) return;
   // Re-read so a disable or an edit that raced the tick is honored.
@@ -340,19 +371,7 @@ async function fire(id: string): Promise<void> {
   // broken after a factory merge: then only that base pauses (openspec
   // factory-lanes, D6).
   const incidents = await superviseBases(factory, target.repo, target.mode);
-  const ownBase =
-    incidents.size > 0
-      ? (
-          await deps.github.defaultBranch({
-            repo: target.repo,
-            ownerId: factory.userId,
-            projectId: factory.projectId,
-          })
-        ).unwrapOr(null)
-      : null;
-  const ownIncident = ownBase
-    ? (incidents.get(ownBase) ?? null)
-    : (incidents.values().next().value ?? null);
+  const ownIncident = await resolveOwnIncident(factory, target.repo, incidents);
   await reportBlocked(factory.id, ownIncident);
   await reconcileParked(factory, target.repo);
   await retriageAnswered(factory, target.repo);
@@ -367,15 +386,10 @@ async function fire(id: string): Promise<void> {
       reader: { repo: target.repo, ownerId: factory.userId, projectId: factory.projectId },
     },
   );
-  // A broken "Merge into" branch is not carried into the lanes (D6).
-  if (factory.enabled && !ownIncident) await syncLanes(factory, target.repo, target.mode);
-  // Once a day, the lanes are tried against each other on the enabler's runner (D7).
-  if (factory.enabled) await checkLanesAgainstEachOther(factory);
   // A paused factory finishes its runs but admits nothing new; its queue waits,
   // and its schedules start nothing.
   if (!factory.enabled) return;
-  if (!ownIncident) await queueDueTriggers(factory);
-  await admitWork(factory, target.repo, target.mode, incidents);
+  await runEnabledSteps(factory, target.repo, target.mode, ownIncident, incidents);
 }
 
 /**

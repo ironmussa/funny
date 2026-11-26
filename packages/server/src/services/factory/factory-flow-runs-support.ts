@@ -312,7 +312,7 @@ export function flowInputsOf(
 }
 
 /** The flow inputs that carry a run's approved spec (`specInputsOf`). */
-export interface SpecInputs {
+interface SpecInputs {
   spec: string;
   spec_commit_path: string;
 }
@@ -323,7 +323,7 @@ export interface SpecInputs {
  * Commit spec setting wants it committed. Both empty without an approved
  * spec, so `{{#spec}}…{{/spec}}` renders nothing.
  */
-export function specInputsOf(job: {
+function specInputsOf(job: {
   issue?: { number: number } | null;
   factory: Partial<Pick<WatchedFactory, 'commitSpecPath'>>;
   run: Partial<Pick<FactoryRunView, 'spec'>>;

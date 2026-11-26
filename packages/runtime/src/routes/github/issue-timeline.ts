@@ -152,16 +152,21 @@ function toRefState(state: string | undefined): IssueTimelineRef['state'] {
   return 'closed';
 }
 
+const str = (v: string | null | undefined): string => v ?? '';
+
+function isRefKind(kind: string | undefined): kind is 'PullRequest' | 'Issue' {
+  return kind === 'PullRequest' || kind === 'Issue';
+}
+
 function toRef(node: GqlRef | null | undefined): IssueTimelineRef | null {
-  if (!node || (node.kind !== 'PullRequest' && node.kind !== 'Issue')) return null;
-  if (!isNumber(node.number) || !node.url) return null;
+  if (!node || !isRefKind(node.kind) || !isNumber(node.number) || !node.url) return null;
   return {
     kind: node.kind === 'PullRequest' ? 'pr' : 'issue',
     number: node.number,
-    title: node.title ?? '',
+    title: str(node.title),
     url: node.url,
     state: toRefState(node.state),
-    repo: (node.repository?.nameWithOwner ?? '').toLowerCase(),
+    repo: str(node.repository?.nameWithOwner).toLowerCase(),
   };
 }
 
@@ -218,67 +223,109 @@ function toStateReason(reason: string | null | undefined) {
   return null;
 }
 
+interface TimelineBase {
+  id: string;
+  created_at: string;
+  actor: IssueTimelineActor | null;
+}
+
+function toCloser(closer: TimelineNode['closer']) {
+  const ref = toRef(closer);
+  if (ref) return { kind: 'pr' as const, ref };
+  if (closer?.kind === 'Commit' && closer.oid && closer.url) {
+    return { kind: 'commit' as const, sha: closer.oid, url: closer.url };
+  }
+  return null;
+}
+
+type TimelineMapper = (node: TimelineNode, base: TimelineBase) => IssueTimelineItem | null;
+
+const TIMELINE_MAPPERS = new Map<string, TimelineMapper>([
+  [
+    'LabeledEvent',
+    (node, base) =>
+      node.label
+        ? { ...base, type: 'labeled', label: { name: node.label.name, color: node.label.color } }
+        : null,
+  ],
+  [
+    'UnlabeledEvent',
+    (node, base) =>
+      node.label
+        ? { ...base, type: 'unlabeled', label: { name: node.label.name, color: node.label.color } }
+        : null,
+  ],
+  [
+    'CrossReferencedEvent',
+    (node, base) => {
+      const source = toRef(node.source);
+      return source
+        ? { ...base, type: 'cross-referenced', source, willClose: !!node.willCloseTarget }
+        : null;
+    },
+  ],
+  [
+    'ClosedEvent',
+    (node, base) => ({
+      ...base,
+      type: 'closed',
+      stateReason: toStateReason(node.stateReason),
+      closer: toCloser(node.closer),
+    }),
+  ],
+  ['ReopenedEvent', (_node, base) => ({ ...base, type: 'reopened' })],
+  [
+    'RenamedTitleEvent',
+    (node, base) => ({
+      ...base,
+      type: 'renamed',
+      from: str(node.previousTitle),
+      to: str(node.currentTitle),
+    }),
+  ],
+  [
+    'AssignedEvent',
+    (node, base) => ({
+      ...base,
+      type: 'assigned',
+      assignee: toActor(node.assignee),
+    }),
+  ],
+  [
+    'UnassignedEvent',
+    (node, base) => ({
+      ...base,
+      type: 'unassigned',
+      assignee: toActor(node.assignee),
+    }),
+  ],
+  [
+    'ReferencedEvent',
+    (node, base) =>
+      node.commit
+        ? {
+            ...base,
+            type: 'commit-referenced',
+            commit: {
+              sha: node.commit.oid,
+              url: node.commit.url,
+              message: node.commit.messageHeadline,
+            },
+          }
+        : null,
+  ],
+]);
+
 /** Maps one GraphQL timeline node; `null` for a node funny does not show. */
 export function mapTimelineNode(node: TimelineNode): IssueTimelineItem | null {
   if (node.kind === 'IssueComment') return { type: 'comment', comment: toComment(node) };
-  const base = {
-    id: node.id ?? '',
-    created_at: node.createdAt ?? '',
+  const mapper = node.kind ? TIMELINE_MAPPERS.get(node.kind) : undefined;
+  if (!mapper) return null;
+  return mapper(node, {
+    id: str(node.id),
+    created_at: str(node.createdAt),
     actor: toActor(node.actor),
-  };
-  switch (node.kind) {
-    case 'LabeledEvent':
-    case 'UnlabeledEvent':
-      if (!node.label) return null;
-      return {
-        ...base,
-        type: node.kind === 'LabeledEvent' ? 'labeled' : 'unlabeled',
-        label: { name: node.label.name, color: node.label.color },
-      };
-    case 'CrossReferencedEvent': {
-      const source = toRef(node.source);
-      if (!source) return null;
-      return { ...base, type: 'cross-referenced', source, willClose: !!node.willCloseTarget };
-    }
-    case 'ClosedEvent': {
-      const closerRef = toRef(node.closer);
-      const closer = closerRef
-        ? { kind: 'pr' as const, ref: closerRef }
-        : node.closer?.kind === 'Commit' && node.closer.oid && node.closer.url
-          ? { kind: 'commit' as const, sha: node.closer.oid, url: node.closer.url }
-          : null;
-      return { ...base, type: 'closed', stateReason: toStateReason(node.stateReason), closer };
-    }
-    case 'ReopenedEvent':
-      return { ...base, type: 'reopened' };
-    case 'RenamedTitleEvent':
-      return {
-        ...base,
-        type: 'renamed',
-        from: node.previousTitle ?? '',
-        to: node.currentTitle ?? '',
-      };
-    case 'AssignedEvent':
-    case 'UnassignedEvent':
-      return {
-        ...base,
-        type: node.kind === 'AssignedEvent' ? 'assigned' : 'unassigned',
-        assignee: toActor(node.assignee),
-      };
-    case 'ReferencedEvent':
-      if (!node.commit) return null;
-      return {
-        ...base,
-        type: 'commit-referenced',
-        commit: {
-          sha: node.commit.oid,
-          url: node.commit.url,
-          message: node.commit.messageHeadline,
-        },
-      };
-    default:
-      return null;
-  }
+  });
 }
 
 /**

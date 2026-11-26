@@ -209,21 +209,106 @@ interface EventView {
   detail?: ReactNode;
 }
 
+function describeLabeledEvent(
+  event: Extract<IssueTimelineEvent, { type: 'labeled' | 'unlabeled' }>,
+  t: TFunction,
+): EventView {
+  return {
+    icon: Tag,
+    text: (
+      <>
+        {event.type === 'labeled'
+          ? t('issues.timeline.added', 'added')
+          : t('issues.timeline.removed', 'removed')}
+        <LabelBadge color={event.label.color}>{event.label.name}</LabelBadge>
+      </>
+    ),
+  };
+}
+
+function describeClosedEvent(
+  event: Extract<IssueTimelineEvent, { type: 'closed' }>,
+  ctx: TimelineContext,
+  t: TFunction,
+): EventView {
+  const [key, fallback] = event.stateReason
+    ? STATE_REASON_TEXT[event.stateReason]
+    : (['issues.timeline.closed', 'closed this'] as const);
+  const notPlanned = event.stateReason === 'not_planned' || event.stateReason === 'duplicate';
+  return {
+    icon: notPlanned ? CircleSlash : CircleCheck,
+    iconClass: cn('text-background', notPlanned ? 'bg-muted-foreground' : 'bg-status-violet'),
+    text: (
+      <>
+        {t(key, fallback)}
+        {event.closer && <span>{t('issues.timeline.in', 'in')}</span>}
+        {event.closer?.kind === 'pr' && <RefLink item={event.closer.ref} ctx={ctx} />}
+        {event.closer?.kind === 'commit' && (
+          <a
+            href={event.closer.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-mono hover:underline"
+          >
+            {event.closer.sha.slice(0, 7)}
+          </a>
+        )}
+      </>
+    ),
+  };
+}
+
+function describeAssignedEvent(
+  event: Extract<IssueTimelineEvent, { type: 'assigned' | 'unassigned' }>,
+  t: TFunction,
+): EventView {
+  const self = !!event.assignee && event.assignee.login === event.actor?.login;
+  const assigned = event.type === 'assigned';
+  const selfText = assigned
+    ? t('issues.timeline.selfAssigned', 'self-assigned this')
+    : t('issues.timeline.selfUnassigned', 'removed their assignment');
+  const otherText = assigned
+    ? t('issues.timeline.assigned', 'assigned')
+    : t('issues.timeline.unassigned', 'unassigned');
+  return {
+    icon: assigned ? UserPlus : UserMinus,
+    text: self ? (
+      selfText
+    ) : (
+      <>
+        {otherText}
+        <Actor actor={event.assignee} />
+      </>
+    ),
+  };
+}
+
+function describeCommitReferencedEvent(
+  event: Extract<IssueTimelineEvent, { type: 'commit-referenced' }>,
+  t: TFunction,
+): EventView {
+  return {
+    icon: GitCommitHorizontal,
+    text: t('issues.timeline.commitReferenced', 'added a commit that referenced this issue'),
+    detail: (
+      <a
+        href={event.commit.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex min-w-0 items-center gap-1.5 hover:underline"
+      >
+        <span className="text-foreground truncate">{event.commit.message}</span>
+        <span className="text-muted-foreground font-mono">{event.commit.sha.slice(0, 7)}</span>
+      </a>
+    ),
+  };
+}
+
 function describeEvent(event: IssueTimelineEvent, ctx: TimelineContext, t: TFunction): EventView {
   switch (event.type) {
     case 'labeled':
     case 'unlabeled':
-      return {
-        icon: Tag,
-        text: (
-          <>
-            {event.type === 'labeled'
-              ? t('issues.timeline.added', 'added')
-              : t('issues.timeline.removed', 'removed')}
-            <LabelBadge color={event.label.color}>{event.label.name}</LabelBadge>
-          </>
-        ),
-      };
+      return describeLabeledEvent(event, t);
     case 'cross-referenced':
       return {
         icon: event.source.kind === 'pr' ? PR_STATE_ICON.OPEN : CircleDot,
@@ -232,33 +317,8 @@ function describeEvent(event: IssueTimelineEvent, ctx: TimelineContext, t: TFunc
           : t('issues.timeline.mentioned', 'mentioned this'),
         detail: <RefLink item={event.source} ctx={ctx} withTitle />,
       };
-    case 'closed': {
-      const [key, fallback] = event.stateReason
-        ? STATE_REASON_TEXT[event.stateReason]
-        : (['issues.timeline.closed', 'closed this'] as const);
-      const notPlanned = event.stateReason === 'not_planned' || event.stateReason === 'duplicate';
-      return {
-        icon: notPlanned ? CircleSlash : CircleCheck,
-        iconClass: cn('text-background', notPlanned ? 'bg-muted-foreground' : 'bg-status-violet'),
-        text: (
-          <>
-            {t(key, fallback)}
-            {event.closer && <span>{t('issues.timeline.in', 'in')}</span>}
-            {event.closer?.kind === 'pr' && <RefLink item={event.closer.ref} ctx={ctx} />}
-            {event.closer?.kind === 'commit' && (
-              <a
-                href={event.closer.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="font-mono hover:underline"
-              >
-                {event.closer.sha.slice(0, 7)}
-              </a>
-            )}
-          </>
-        ),
-      };
-    }
+    case 'closed':
+      return describeClosedEvent(event, ctx, t);
     case 'reopened':
       return {
         icon: CircleDot,
@@ -277,43 +337,10 @@ function describeEvent(event: IssueTimelineEvent, ctx: TimelineContext, t: TFunc
         ),
       };
     case 'assigned':
-    case 'unassigned': {
-      const self = !!event.assignee && event.assignee.login === event.actor?.login;
-      const assigned = event.type === 'assigned';
-      return {
-        icon: assigned ? UserPlus : UserMinus,
-        text: self ? (
-          assigned ? (
-            t('issues.timeline.selfAssigned', 'self-assigned this')
-          ) : (
-            t('issues.timeline.selfUnassigned', 'removed their assignment')
-          )
-        ) : (
-          <>
-            {assigned
-              ? t('issues.timeline.assigned', 'assigned')
-              : t('issues.timeline.unassigned', 'unassigned')}
-            <Actor actor={event.assignee} />
-          </>
-        ),
-      };
-    }
+    case 'unassigned':
+      return describeAssignedEvent(event, t);
     case 'commit-referenced':
-      return {
-        icon: GitCommitHorizontal,
-        text: t('issues.timeline.commitReferenced', 'added a commit that referenced this issue'),
-        detail: (
-          <a
-            href={event.commit.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex min-w-0 items-center gap-1.5 hover:underline"
-          >
-            <span className="text-foreground truncate">{event.commit.message}</span>
-            <span className="text-muted-foreground font-mono">{event.commit.sha.slice(0, 7)}</span>
-          </a>
-        ),
-      };
+      return describeCommitReferencedEvent(event, t);
   }
 }
 

@@ -183,146 +183,160 @@ export class AgentMessageHandler {
       subtype: messageSubtype(msg),
     });
 
-    // System init — capture session ID and broadcast init info
-    if (msg.type === 'system' && 'subtype' in msg && msg.subtype === 'init') {
-      log.info('Session initialized — persisting sessionId', {
-        ...(await this.threadCtx(threadId)),
-        newSessionId: msg.session_id,
-      });
-      await this.threadManager.updateThread(threadId, {
-        sessionId: msg.session_id,
-        initTools: JSON.stringify(msg.tools ?? []),
-        initCwd: msg.cwd ?? '',
-        initSlashCommands: JSON.stringify(msg.slashCommands ?? []),
-      });
-      log.info('Session ID persisted to server', {
-        namespace: 'agent',
+    switch (msg.type) {
+      case 'system':
+        if ('subtype' in msg && msg.subtype === 'init') {
+          await this.handleSystemInit(threadId, msg);
+        }
+        return;
+      case 'commands_changed':
+        await this.handleCommandsChanged(threadId, msg);
+        return;
+      case 'permission_request':
+        await this.handleStructuredPermissionRequest(threadId, msg);
+        return;
+      case 'assistant':
+        await this.handleAssistantMessage(threadId, msg);
+        return;
+      case 'user':
+        await this.handleToolResults(threadId, msg);
+        return;
+      case 'compact_boundary':
+        await this.handleCompactBoundary(threadId, msg);
+        return;
+      case 'context_breakdown':
+        await this.handleContextBreakdown(threadId, msg);
+        return;
+      case 'rate_limit':
+        await this.handleRateLimit(threadId, msg);
+        return;
+      case 'account':
+        await this.handleAccount(threadId, msg);
+        return;
+      case 'result':
+        await this.handleResult(threadId, msg);
+        return;
+    }
+  }
+
+  /** System init — capture session ID and broadcast init info. */
+  private async handleSystemInit(
+    threadId: string,
+    msg: Extract<CLIMessage, { type: 'system'; subtype: 'init' }>,
+  ): Promise<void> {
+    log.info('Session initialized — persisting sessionId', {
+      ...(await this.threadCtx(threadId)),
+      newSessionId: msg.session_id,
+    });
+    await this.threadManager.updateThread(threadId, {
+      sessionId: msg.session_id,
+      initTools: JSON.stringify(msg.tools ?? []),
+      initCwd: msg.cwd ?? '',
+      initSlashCommands: JSON.stringify(msg.slashCommands ?? []),
+    });
+    log.info('Session ID persisted to server', {
+      namespace: 'agent',
+      threadId,
+      sessionId: msg.session_id,
+    });
+
+    // Capture the SDK-reported slash commands so the send boundary can reject
+    // an unknown /command instead of forwarding it to the model as text.
+    if (msg.slashCommands?.length) {
+      this.state.supportedSlashCommands.set(
         threadId,
-        sessionId: msg.session_id,
-      });
-
-      // Capture the SDK-reported slash commands so the send boundary can reject
-      // an unknown /command instead of forwarding it to the model as text.
-      if (msg.slashCommands?.length) {
-        this.state.supportedSlashCommands.set(
-          threadId,
-          new Set(msg.slashCommands.map((c) => c.replace(/^\//, ''))),
-        );
-      }
-
-      await this.emitWS(threadId, 'agent:init', {
-        tools: msg.tools ?? [],
-        cwd: msg.cwd ?? '',
-        model: msg.model ?? '',
-        slashCommands: msg.slashCommands ?? [],
-      });
-      return;
+        new Set(msg.slashCommands.map((c) => c.replace(/^\//, ''))),
+      );
     }
 
-    // Mid-session refresh of available slash commands (e.g. skills discovered
-    // dynamically). Replace the cached set so the send-boundary guard stays
-    // accurate.
-    if (msg.type === 'commands_changed') {
-      const commands = msg.commands.map((c) => c.replace(/^\//, ''));
-      this.state.supportedSlashCommands.set(threadId, new Set(commands));
-      // Persist + mirror to the client so the slash autocomplete reflects
-      // commands discovered mid-session (e.g. dynamically loaded skills).
-      await this.threadManager.updateThread(threadId, {
-        initSlashCommands: JSON.stringify(commands),
-      });
-      const thread = await this.threadManager.getThread(threadId);
-      await this.emitWS(threadId, 'agent:init', {
-        // SAFETY: initTools is only written as JSON.stringify of an init message's
-        // `tools` (a string[]): above, and in ingest-mapper for external sessions.
-        tools: thread?.initTools ? (JSON.parse(thread.initTools) as string[]) : [],
-        cwd: thread?.initCwd ?? '',
-        model: thread?.model ?? '',
-        slashCommands: commands,
-      });
-      return;
-    }
+    await this.emitWS(threadId, 'agent:init', {
+      tools: msg.tools ?? [],
+      cwd: msg.cwd ?? '',
+      model: msg.model ?? '',
+      slashCommands: msg.slashCommands ?? [],
+    });
+  }
 
-    if (msg.type === 'permission_request') {
-      await this.handleStructuredPermissionRequest(threadId, msg);
-      return;
-    }
+  /**
+   * Mid-session refresh of available slash commands (e.g. skills discovered
+   * dynamically). Replace the cached set so the send-boundary guard stays
+   * accurate.
+   */
+  private async handleCommandsChanged(
+    threadId: string,
+    msg: Extract<CLIMessage, { type: 'commands_changed' }>,
+  ): Promise<void> {
+    const commands = msg.commands.map((c) => c.replace(/^\//, ''));
+    this.state.supportedSlashCommands.set(threadId, new Set(commands));
+    // Persist + mirror to the client so the slash autocomplete reflects
+    // commands discovered mid-session (e.g. dynamically loaded skills).
+    await this.threadManager.updateThread(threadId, {
+      initSlashCommands: JSON.stringify(commands),
+    });
+    const thread = await this.threadManager.getThread(threadId);
+    await this.emitWS(threadId, 'agent:init', {
+      // SAFETY: initTools is only written as JSON.stringify of an init message's
+      // `tools` (a string[]): above, and in ingest-mapper for external sessions.
+      tools: thread?.initTools ? (JSON.parse(thread.initTools) as string[]) : [],
+      cwd: thread?.initCwd ?? '',
+      model: thread?.model ?? '',
+      slashCommands: commands,
+    });
+  }
 
-    // Assistant messages — text and tool calls
-    if (msg.type === 'assistant') {
-      await this.handleAssistantMessage(threadId, msg);
-      return;
-    }
+  /** Compact boundary — context window was compacted. */
+  private async handleCompactBoundary(
+    threadId: string,
+    msg: Extract<CLIMessage, { type: 'compact_boundary' }>,
+  ): Promise<void> {
+    const timestamp = new Date().toISOString();
+    log.info('Context compacted', {
+      ...(await this.threadCtx(threadId)),
+      trigger: msg.trigger,
+      preTokens: String(msg.preTokens),
+      timestamp,
+    });
+    // After compaction the context is the summary, not empty — track the
+    // SDK-reported post-compaction size (0 when unavailable) so the ring
+    // shows the real reduced usage instead of freezing or vanishing.
+    this.state.cumulativeInputTokens.set(threadId, msg.postTokens);
+    await this.emitWS(threadId, 'agent:compact_boundary', {
+      trigger: msg.trigger,
+      preTokens: msg.preTokens,
+      postTokens: msg.postTokens,
+      timestamp,
+    });
 
-    // User messages — tool results (output from tool executions)
-    if (msg.type === 'user') {
-      await this.handleToolResults(threadId, msg);
-      return;
-    }
-
-    // Compact boundary — context window was compacted
-    if (msg.type === 'compact_boundary') {
-      const timestamp = new Date().toISOString();
-      log.info('Context compacted', {
-        ...(await this.threadCtx(threadId)),
-        trigger: msg.trigger,
-        preTokens: String(msg.preTokens),
-        timestamp,
-      });
-      // After compaction the context is the summary, not empty — track the
-      // SDK-reported post-compaction size (0 when unavailable) so the ring
-      // shows the real reduced usage instead of freezing or vanishing.
-      this.state.cumulativeInputTokens.set(threadId, msg.postTokens);
-      await this.emitWS(threadId, 'agent:compact_boundary', {
+    // Persist to thread_events so it survives page refreshes
+    getServices()
+      .threadEvents.saveThreadEvent(threadId, 'compact_boundary', {
         trigger: msg.trigger,
         preTokens: msg.preTokens,
         postTokens: msg.postTokens,
         timestamp,
-      });
-
-      // Persist to thread_events so it survives page refreshes
-      getServices()
-        .threadEvents.saveThreadEvent(threadId, 'compact_boundary', {
-          trigger: msg.trigger,
-          preTokens: msg.preTokens,
-          postTokens: msg.postTokens,
-          timestamp,
-        })
-        .catch((err) => {
-          log.error('Failed to persist compact_boundary event', {
-            namespace: 'agent',
-            threadId,
-            error: err,
-          });
+      })
+      .catch((err) => {
+        log.error('Failed to persist compact_boundary event', {
+          namespace: 'agent',
+          threadId,
+          error: err,
         });
-      return;
-    }
-
-    if (msg.type === 'context_breakdown') {
-      await this.handleContextBreakdown(threadId, msg);
-      return;
-    }
-
-    if (msg.type === 'rate_limit') {
-      await this.handleRateLimit(threadId, msg);
-      return;
-    }
-
-    if (msg.type === 'account') {
-      const runProfile = await this.runAgentProfile(threadId);
-      await this.emitWS(threadId, 'agent:account', {
-        provider: msg.provider ?? runProfile.provider,
-        profileId: runProfile.profileId,
-        profileName: runProfile.profileName,
-        account: msg.info,
-        usage: msg.usage,
       });
-      return;
-    }
+  }
 
-    // Result — agent finished
-    if (msg.type === 'result') {
-      await this.handleResult(threadId, msg);
-    }
+  /** Account metadata / usage update from the provider. */
+  private async handleAccount(
+    threadId: string,
+    msg: Extract<CLIMessage, { type: 'account' }>,
+  ): Promise<void> {
+    const runProfile = await this.runAgentProfile(threadId);
+    await this.emitWS(threadId, 'agent:account', {
+      provider: msg.provider ?? runProfile.provider,
+      profileId: runProfile.profileId,
+      profileName: runProfile.profileName,
+      account: msg.info,
+      usage: msg.usage,
+    });
   }
 
   /**
@@ -455,6 +469,120 @@ export class AgentMessageHandler {
     }
   }
 
+  private async persistAssistantText(
+    threadId: string,
+    cliMsgId: string,
+    textContent: string,
+    hasStableMessageId: boolean | undefined,
+    cliMap: Map<string, string>,
+  ): Promise<void> {
+    // Some providers publish a stable item ID for every incremental update.
+    // An unseen stable ID starts a distinct message; otherwise it could be
+    // merged into the current card and later appear to jump around the
+    // thread. Keep the current-message fallback for legacy providers whose
+    // IDs change between chunks.
+    let msgId = cliMap.get(cliMsgId);
+    if (!msgId && !hasStableMessageId) {
+      msgId = this.state.currentAssistantMsgId.get(threadId);
+    }
+    if (msgId) {
+      // Existing message: emit WS immediately, persist in background
+      // This gives the user instant feedback while DB writes happen async
+      void this.emitWS(threadId, 'agent:message', {
+        messageId: msgId,
+        role: 'assistant',
+        content: textContent,
+      });
+      void this.threadManager.updateMessage(msgId, textContent);
+    } else {
+      // New message: must insert first to get the DB-generated msgId
+      msgId = await this.threadManager.insertMessage({
+        threadId,
+        role: 'assistant',
+        content: textContent,
+      });
+      this.state.markOwnMessage(threadId, msgId);
+      await this.emitWS(threadId, 'agent:message', {
+        messageId: msgId,
+        role: 'assistant',
+        content: textContent,
+      });
+    }
+    this.state.currentAssistantMsgId.set(threadId, msgId);
+    cliMap.set(cliMsgId, msgId);
+  }
+
+  private async emitAssistantUsage(
+    threadId: string,
+    msg: CLIMessage & { type: 'assistant' },
+  ): Promise<void> {
+    // Emit per-message context usage if available.
+    // With prompt caching, the Anthropic API splits input tokens across:
+    //   input_tokens — uncached (new) tokens only (often very small, e.g. 1-4)
+    //   cache_read_input_tokens — tokens served from cache (the bulk)
+    //   cache_creation_input_tokens — tokens being cached for the first time
+    // The total = input_tokens + cache_read + cache_creation represents the
+    // **full context window size** for this API call, not an incremental addition.
+    // So we use the latest totalInputTokens directly as the context window usage
+    // rather than accumulating across messages (which would vastly overcount).
+    // The compaction-summary assistant message carries a `compaction` content
+    // block and reports `usage` equal to the FULL pre-compaction context it
+    // just read to build the summary. The SDK emits it AFTER the
+    // `compact_boundary` system message, so forwarding its usage as an
+    // `agent:context_usage` event would clobber the reset the client just
+    // applied on the boundary — leaving the context-usage ring frozen at the
+    // pre-compaction value (the "compacted but the meter didn't move" bug).
+    // The boundary is authoritative for post-compaction usage, so skip this.
+    const isCompactionSummary = msg.message.content.some(
+      (b: any) => isObject(b) && 'type' in b && b.type === 'compaction',
+    );
+    const usage: AssistantMessageUsage | undefined = isCompactionSummary
+      ? undefined
+      : msg.message.usage;
+    if (!usage) {
+      log.debug('No usage data in assistant message', { namespace: 'agent', threadId });
+      return;
+    }
+
+    const inputTokens = usage.input_tokens ?? usage.inputTokens ?? usage.used ?? 0;
+    const cacheRead =
+      usage.cache_read_input_tokens ?? usage.cachedReadTokens ?? usage.cacheReadTokens ?? 0;
+    const cacheCreation =
+      usage.cache_creation_input_tokens ?? usage.cachedWriteTokens ?? usage.cacheWriteTokens ?? 0;
+    const outputTokens = usage.output_tokens ?? usage.outputTokens ?? 0;
+    const reportedMax = usage.max_tokens ?? usage.maxTokens ?? usage.size;
+    const maxTokens =
+      reportedMax !== undefined && Number.isFinite(reportedMax) && reportedMax > 0
+        ? reportedMax
+        : undefined;
+    const totalInputTokens = inputTokens + cacheRead + cacheCreation;
+
+    log.info('Assistant message usage (DEBUG)', {
+      namespace: 'agent',
+      threadId,
+      rawUsageKeys: Object.keys(usage).join(','),
+      rawUsage: JSON.stringify(usage),
+      inputTokens,
+      cacheRead,
+      cacheCreation,
+      totalInputTokens,
+      outputTokens,
+    });
+
+    // Each API response reports the full context window size (not a delta),
+    // so just store the latest value instead of accumulating.
+    this.state.cumulativeInputTokens.set(threadId, totalInputTokens);
+    // Cached per run: one thread read at the first usage event.
+    const data: WSContextUsageData = {
+      inputTokens: totalInputTokens,
+      outputTokens,
+      cumulativeInputTokens: totalInputTokens,
+    };
+    setUsageRun(data, await this.runAgentProfile(threadId));
+    if (maxTokens) data.maxTokens = maxTokens;
+    void this.emitWS(threadId, 'agent:context_usage', data);
+  }
+
   private async handleAssistantMessage(
     threadId: string,
     msg: CLIMessage & { type: 'assistant' },
@@ -503,110 +631,16 @@ export class AgentMessageHandler {
     // so the run isn't forced into `failed` at result time.
     if (textContent) {
       this.state.providerErrorPending.delete(threadId);
-    }
-
-    if (textContent) {
-      // Some providers publish a stable item ID for every incremental update.
-      // An unseen stable ID starts a distinct message; otherwise it could be
-      // merged into the current card and later appear to jump around the
-      // thread. Keep the current-message fallback for legacy providers whose
-      // IDs change between chunks.
-      let msgId = cliMap.get(cliMsgId);
-      if (!msgId && !msg.hasStableMessageId) {
-        msgId = this.state.currentAssistantMsgId.get(threadId);
-      }
-      if (msgId) {
-        // Existing message: emit WS immediately, persist in background
-        // This gives the user instant feedback while DB writes happen async
-        void this.emitWS(threadId, 'agent:message', {
-          messageId: msgId,
-          role: 'assistant',
-          content: textContent,
-        });
-        void this.threadManager.updateMessage(msgId, textContent);
-      } else {
-        // New message: must insert first to get the DB-generated msgId
-        msgId = await this.threadManager.insertMessage({
-          threadId,
-          role: 'assistant',
-          content: textContent,
-        });
-        this.state.markOwnMessage(threadId, msgId);
-        await this.emitWS(threadId, 'agent:message', {
-          messageId: msgId,
-          role: 'assistant',
-          content: textContent,
-        });
-      }
-      this.state.currentAssistantMsgId.set(threadId, msgId);
-      cliMap.set(cliMsgId, msgId);
-    }
-
-    // Emit per-message context usage if available.
-    // With prompt caching, the Anthropic API splits input tokens across:
-    //   input_tokens — uncached (new) tokens only (often very small, e.g. 1-4)
-    //   cache_read_input_tokens — tokens served from cache (the bulk)
-    //   cache_creation_input_tokens — tokens being cached for the first time
-    // The total = input_tokens + cache_read + cache_creation represents the
-    // **full context window size** for this API call, not an incremental addition.
-    // So we use the latest totalInputTokens directly as the context window usage
-    // rather than accumulating across messages (which would vastly overcount).
-    // The compaction-summary assistant message carries a `compaction` content
-    // block and reports `usage` equal to the FULL pre-compaction context it
-    // just read to build the summary. The SDK emits it AFTER the
-    // `compact_boundary` system message, so forwarding its usage as an
-    // `agent:context_usage` event would clobber the reset the client just
-    // applied on the boundary — leaving the context-usage ring frozen at the
-    // pre-compaction value (the "compacted but the meter didn't move" bug).
-    // The boundary is authoritative for post-compaction usage, so skip this.
-    const isCompactionSummary = msg.message.content.some(
-      (b: any) => isObject(b) && 'type' in b && b.type === 'compaction',
-    );
-    const usage: AssistantMessageUsage | undefined = isCompactionSummary
-      ? undefined
-      : msg.message.usage;
-    if (usage) {
-      const inputTokens = usage.input_tokens ?? usage.inputTokens ?? usage.used ?? 0;
-      const cacheRead =
-        usage.cache_read_input_tokens ?? usage.cachedReadTokens ?? usage.cacheReadTokens ?? 0;
-      const cacheCreation =
-        usage.cache_creation_input_tokens ?? usage.cachedWriteTokens ?? usage.cacheWriteTokens ?? 0;
-      const outputTokens = usage.output_tokens ?? usage.outputTokens ?? 0;
-      const reportedMax = usage.max_tokens ?? usage.maxTokens ?? usage.size;
-      const maxTokens =
-        reportedMax !== undefined && Number.isFinite(reportedMax) && reportedMax > 0
-          ? reportedMax
-          : undefined;
-      const totalInputTokens = inputTokens + cacheRead + cacheCreation;
-
-      log.info('Assistant message usage (DEBUG)', {
-        namespace: 'agent',
+      await this.persistAssistantText(
         threadId,
-        rawUsageKeys: Object.keys(usage).join(','),
-        rawUsage: JSON.stringify(usage),
-        inputTokens,
-        cacheRead,
-        cacheCreation,
-        totalInputTokens,
-        outputTokens,
-      });
-
-      // Each API response reports the full context window size (not a delta),
-      // so just store the latest value instead of accumulating.
-      this.state.cumulativeInputTokens.set(threadId, totalInputTokens);
-      // Cached per run: one thread read at the first usage event.
-      const data: WSContextUsageData = {
-        inputTokens: totalInputTokens,
-        outputTokens,
-        cumulativeInputTokens: totalInputTokens,
-      };
-      setUsageRun(data, await this.runAgentProfile(threadId));
-      if (maxTokens) data.maxTokens = maxTokens;
-      void this.emitWS(threadId, 'agent:context_usage', data);
-    } else {
-      log.debug('No usage data in assistant message', { namespace: 'agent', threadId });
+        cliMsgId,
+        textContent,
+        msg.hasStableMessageId,
+        cliMap,
+      );
     }
 
+    await this.emitAssistantUsage(threadId, msg);
     await handleToolUseBlocks(this.ctx, threadId, msg, cliMap);
   }
 

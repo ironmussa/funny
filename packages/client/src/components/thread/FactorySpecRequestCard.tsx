@@ -28,7 +28,7 @@ type Outcome = 'pending' | 'approved' | 'declined' | 'expired';
  * the run's latest (a newer revision, or the run left `needs_spec`) reads as
  * expired at once; the server expires it on its next read.
  */
-export function specRequestOutcome(request: FactoryApprovalRequest, run: FactoryRun): Outcome {
+function specRequestOutcome(request: FactoryApprovalRequest, run: FactoryRun): Outcome {
   if (request.state !== 'pending') return request.state;
   const current =
     run.state === 'needs_spec' &&

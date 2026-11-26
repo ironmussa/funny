@@ -46,14 +46,130 @@ function syncLabel(state: FactoryLaneSyncState, t: ReturnType<typeof useTranslat
   }
 }
 
-function LaneRow({ projectId, lane }: { projectId: string; lane: FactoryLane }) {
+function LanePrLink({
+  href,
+  label,
+  testId,
+}: {
+  href: string | null | undefined;
+  label: string;
+  testId: string;
+}) {
+  if (!href) return null;
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noreferrer"
+      className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 font-mono hover:underline"
+      data-testid={testId}
+    >
+      {label}
+      <ExternalLink className="icon-xs" />
+    </a>
+  );
+}
+
+function LaneActions({
+  lane,
+  busy,
+  onSync,
+  onFinish,
+  onRemove,
+}: {
+  lane: FactoryLane;
+  busy: 'sync' | 'finish' | 'remove' | null;
+  onSync: () => void;
+  onFinish: () => void;
+  onRemove: () => void;
+}) {
   const { t } = useTranslation();
-  const [busy, setBusy] = useState<'sync' | 'finish' | 'remove' | null>(null);
   const inFlight = SYNC_IN_FLIGHT.has(lane.syncState);
   const hasOpenRuns = lane.openRuns.length > 0;
   const canSync = lane.state === 'active' && !inFlight;
   const canFinish = lane.state === 'active' && !hasOpenRuns;
   const canRemove = !hasOpenRuns && !inFlight;
+  const isBusy = busy !== null;
+
+  return (
+    <div className="ml-auto flex items-center gap-1">
+      {canSync && (
+        <Button
+          variant="outline"
+          size="xs"
+          disabled={isBusy}
+          onClick={onSync}
+          data-testid={`settings-factory-lane-sync-${lane.name}`}
+        >
+          <RefreshCw className="icon-xs" />
+          {lane.syncState === 'needs_human'
+            ? t('settings.projectFactoryLaneSyncRetry', 'Retry sync')
+            : t('settings.projectFactoryLaneSyncNow', 'Sync now')}
+        </Button>
+      )}
+      {lane.state === 'active' && (
+        <Button
+          variant="outline"
+          size="xs"
+          disabled={isBusy || !canFinish}
+          onClick={onFinish}
+          data-testid={`settings-factory-lane-finish-${lane.name}`}
+        >
+          <GitMerge className="icon-xs" />
+          {t('settings.projectFactoryLaneFinish', 'Finish lane')}
+        </Button>
+      )}
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        disabled={isBusy || !canRemove}
+        onClick={onRemove}
+        aria-label={t('settings.projectFactoryLaneRemove', 'Remove lane')}
+        data-testid={`settings-factory-lane-remove-${lane.name}`}
+      >
+        <Trash2 className="icon-sm" />
+      </Button>
+    </div>
+  );
+}
+
+function LaneNotices({ lane }: { lane: FactoryLane }) {
+  const { t } = useTranslation();
+  return (
+    <>
+      {lane.openRuns.length > 0 && (
+        <p
+          className="text-muted-foreground"
+          data-testid={`settings-factory-lane-open-runs-${lane.name}`}
+        >
+          {t('settings.projectFactoryLaneOpenRuns', 'Open runs: {{runs}}', {
+            runs: lane.openRuns.join(', '),
+          })}
+        </p>
+      )}
+      {lane.syncError && (
+        <p
+          className="text-destructive"
+          data-testid={`settings-factory-lane-sync-error-${lane.name}`}
+        >
+          {lane.syncError}
+        </p>
+      )}
+      {lane.ciWarning && (
+        <p
+          className="text-status-warning"
+          data-testid={`settings-factory-lane-ci-warning-${lane.name}`}
+        >
+          {lane.ciWarning}
+        </p>
+      )}
+    </>
+  );
+}
+
+function LaneRow({ projectId, lane }: { projectId: string; lane: FactoryLane }) {
+  const { t } = useTranslation();
+  const [busy, setBusy] = useState<'sync' | 'finish' | 'remove' | null>(null);
 
   const sync = () => {
     setBusy('sync');
@@ -140,105 +256,29 @@ function LaneRow({ projectId, lane }: { projectId: string; lane: FactoryLane }) 
           {syncLabel(lane.syncState, t)}
         </LabelBadge>
 
-        {lane.syncPrNumber && lane.syncPrUrl && (
-          <a
+        {lane.syncPrNumber && (
+          <LanePrLink
             href={lane.syncPrUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 font-mono hover:underline"
-            data-testid={`settings-factory-lane-sync-pr-${lane.name}`}
-          >
-            {t('settings.projectFactoryLaneSyncPr', 'Sync PR #{{number}}', {
+            label={t('settings.projectFactoryLaneSyncPr', 'Sync PR #{{number}}', {
               number: lane.syncPrNumber,
             })}
-            <ExternalLink className="icon-xs" />
-          </a>
+            testId={`settings-factory-lane-sync-pr-${lane.name}`}
+          />
         )}
-
-        {lane.finishPrNumber && lane.finishPrUrl && (
-          <a
+        {lane.finishPrNumber && (
+          <LanePrLink
             href={lane.finishPrUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 font-mono hover:underline"
-            data-testid={`settings-factory-lane-finish-pr-${lane.name}`}
-          >
-            {t('settings.projectFactoryLaneFinishPr', 'Finish PR #{{number}}', {
+            label={t('settings.projectFactoryLaneFinishPr', 'Finish PR #{{number}}', {
               number: lane.finishPrNumber,
             })}
-            <ExternalLink className="icon-xs" />
-          </a>
+            testId={`settings-factory-lane-finish-pr-${lane.name}`}
+          />
         )}
 
-        <div className="ml-auto flex items-center gap-1">
-          {canSync && (
-            <Button
-              variant="outline"
-              size="xs"
-              disabled={busy !== null}
-              onClick={sync}
-              data-testid={`settings-factory-lane-sync-${lane.name}`}
-            >
-              <RefreshCw className="icon-xs" />
-              {lane.syncState === 'needs_human'
-                ? t('settings.projectFactoryLaneSyncRetry', 'Retry sync')
-                : t('settings.projectFactoryLaneSyncNow', 'Sync now')}
-            </Button>
-          )}
-          {lane.state === 'active' && (
-            <Button
-              variant="outline"
-              size="xs"
-              disabled={busy !== null || !canFinish}
-              onClick={finish}
-              data-testid={`settings-factory-lane-finish-${lane.name}`}
-            >
-              <GitMerge className="icon-xs" />
-              {t('settings.projectFactoryLaneFinish', 'Finish lane')}
-            </Button>
-          )}
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            disabled={busy !== null || !canRemove}
-            onClick={remove}
-            aria-label={t('settings.projectFactoryLaneRemove', 'Remove lane')}
-            data-testid={`settings-factory-lane-remove-${lane.name}`}
-          >
-            <Trash2 className="icon-sm" />
-          </Button>
-        </div>
+        <LaneActions lane={lane} busy={busy} onSync={sync} onFinish={finish} onRemove={remove} />
       </div>
 
-      {hasOpenRuns && (
-        <p
-          className="text-muted-foreground"
-          data-testid={`settings-factory-lane-open-runs-${lane.name}`}
-        >
-          {t('settings.projectFactoryLaneOpenRuns', 'Open runs: {{runs}}', {
-            runs: lane.openRuns.join(', '),
-          })}
-        </p>
-      )}
-
-      {lane.syncError && (
-        <p
-          className="text-destructive"
-          data-testid={`settings-factory-lane-sync-error-${lane.name}`}
-        >
-          {lane.syncError}
-        </p>
-      )}
-
-      {lane.ciWarning && (
-        <p
-          className="text-status-warning"
-          data-testid={`settings-factory-lane-ci-warning-${lane.name}`}
-        >
-          {lane.ciWarning}
-        </p>
-      )}
-
+      <LaneNotices lane={lane} />
       <LaneConflicts lane={lane} />
     </li>
   );

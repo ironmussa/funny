@@ -17,6 +17,88 @@ interface Props {
   search?: { placeholder: string };
 }
 
+interface FilterOption {
+  value: string;
+  label: string;
+  detail?: string;
+}
+
+function resolveTriggerLabel(
+  label: string,
+  options: FilterOption[],
+  selected: Set<string>,
+): string {
+  if (selected.size === 0) return label;
+  if (selected.size === 1) return options.find((o) => selected.has(o.value))?.label ?? label;
+  return `${label} (${selected.size})`;
+}
+
+function moveMenuFocus(container: HTMLDivElement | null, e: React.KeyboardEvent): void {
+  if (!container) return;
+  const items = Array.from(container.querySelectorAll<HTMLElement>('[role="menuitemcheckbox"]'));
+  const idx = items.findIndex((item) => item === document.activeElement);
+  const targets = new Map<string, HTMLElement | undefined>([
+    ['ArrowDown', items[(idx + 1) % items.length]],
+    ['ArrowUp', items[(idx - 1 + items.length) % items.length]],
+    ['Home', items[0]],
+    ['End', items[items.length - 1]],
+  ]);
+  const next = targets.get(e.key);
+  if (!next) return;
+  e.preventDefault();
+  next.focus();
+}
+
+function FilterOptionRow({
+  opt,
+  isActive,
+  count,
+  testId,
+  onToggle,
+}: {
+  opt: FilterOption;
+  isActive: boolean;
+  count: number | undefined;
+  testId?: string;
+  onToggle: (value: string) => void;
+}) {
+  return (
+    <button
+      role="menuitemcheckbox"
+      data-testid={testId ? `${testId}-option-${opt.value}` : undefined}
+      aria-checked={isActive}
+      tabIndex={-1}
+      onClick={() => onToggle(opt.value)}
+      className={cn(
+        'flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded-sm transition-colors text-left',
+        'hover:bg-accent hover:text-accent-foreground',
+        'focus:bg-accent focus:text-accent-foreground focus:outline-hidden',
+        isActive && 'text-accent-foreground',
+      )}
+    >
+      <span
+        className={cn(
+          'flex h-3.5 w-3.5 items-center justify-center rounded-sm border',
+          isActive
+            ? 'bg-primary border-primary text-primary-foreground'
+            : 'border-muted-foreground/30',
+        )}
+      >
+        {isActive && <Check className="icon-2xs" />}
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span>{opt.label}</span>
+        {opt.detail && (
+          <span className="text-muted-foreground text-2xs truncate font-mono">{opt.detail}</span>
+        )}
+      </span>
+      {count != null && count > 0 && (
+        <span className="text-muted-foreground tabular-nums">{count}</span>
+      )}
+    </button>
+  );
+}
+
 /**
  * Multi-select chip + popover used for status / sync-state filtering in
  * AllThreadsView. Extracted so the parent doesn't import Popover + the
@@ -39,34 +121,10 @@ export function FilterDropdown({
     search && needle
       ? options.filter((o) => `${o.label} ${o.detail ?? ''}`.toLowerCase().includes(needle))
       : options;
-  const triggerLabel =
-    // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
-    activeCount === 0
-      ? label
-      : activeCount === 1
-        ? (options.find((o) => selected.has(o.value))?.label ?? label)
-        : `${label} (${activeCount})`;
+  const triggerLabel = resolveTriggerLabel(label, options, selected);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    const container = listRef.current;
-    if (!container) return;
-
-    const items = Array.from(container.querySelectorAll<HTMLElement>('[role="menuitemcheckbox"]'));
-    const idx = items.findIndex((item) => item === document.activeElement);
-
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      items[(idx + 1) % items.length]?.focus();
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      items[(idx - 1 + items.length) % items.length]?.focus();
-    } else if (e.key === 'Home') {
-      e.preventDefault();
-      items[0]?.focus();
-    } else if (e.key === 'End') {
-      e.preventDefault();
-      items[items.length - 1]?.focus();
-    }
+    moveMenuFocus(listRef.current, e);
   }, []);
 
   return (
@@ -94,8 +152,7 @@ export function FilterDropdown({
           e.preventDefault();
           // With a search field, typing is the first thing to do.
           if (search) return;
-          const first = listRef.current?.querySelector<HTMLElement>('[role="menuitemcheckbox"]');
-          first?.focus();
+          listRef.current?.querySelector<HTMLElement>('[role="menuitemcheckbox"]')?.focus();
         }}
       >
         {search && (
@@ -115,48 +172,16 @@ export function FilterDropdown({
           />
         )}
         <div ref={listRef} role="menu" className={cn(search && 'max-h-72 overflow-y-auto')}>
-          {shownOptions.map((opt) => {
-            const isActive = selected.has(opt.value);
-            const count = counts?.[opt.value];
-            return (
-              <button
-                key={opt.value}
-                role="menuitemcheckbox"
-                data-testid={testId ? `${testId}-option-${opt.value}` : undefined}
-                aria-checked={isActive}
-                tabIndex={-1}
-                onClick={() => onToggle(opt.value)}
-                className={cn(
-                  'flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded-sm transition-colors text-left',
-                  'hover:bg-accent hover:text-accent-foreground',
-                  'focus:bg-accent focus:text-accent-foreground focus:outline-hidden',
-                  isActive && 'text-accent-foreground',
-                )}
-              >
-                <span
-                  className={cn(
-                    'flex h-3.5 w-3.5 items-center justify-center rounded-sm border',
-                    isActive
-                      ? 'bg-primary border-primary text-primary-foreground'
-                      : 'border-muted-foreground/30',
-                  )}
-                >
-                  {isActive && <Check className="icon-2xs" />}
-                </span>
-                <span className="flex min-w-0 flex-1 flex-col">
-                  <span>{opt.label}</span>
-                  {opt.detail && (
-                    <span className="text-muted-foreground text-2xs truncate font-mono">
-                      {opt.detail}
-                    </span>
-                  )}
-                </span>
-                {count != null && count > 0 && (
-                  <span className="text-muted-foreground tabular-nums">{count}</span>
-                )}
-              </button>
-            );
-          })}
+          {shownOptions.map((opt) => (
+            <FilterOptionRow
+              key={opt.value}
+              opt={opt}
+              isActive={selected.has(opt.value)}
+              count={counts?.[opt.value]}
+              testId={testId}
+              onToggle={onToggle}
+            />
+          ))}
         </div>
       </PopoverContent>
     </Popover>

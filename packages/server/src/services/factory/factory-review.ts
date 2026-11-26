@@ -278,7 +278,7 @@ const sameItem = (a: string, b: string): boolean =>
   a.trim().toLowerCase() === b.trim().toLowerCase();
 
 /** The validation items a reviewer's checklist leaves unanswered. */
-export function unansweredChecklistItems(
+function unansweredChecklistItems(
   validation: readonly string[],
   checklist: FactoryReviewResult['checklist'],
 ): string[] {
@@ -303,7 +303,7 @@ function checklistFinding(item: string, note: string | undefined): FactoryReview
  * implementer like any high finding, and a `pass` that left one unmet is a
  * `fail`.
  */
-export function withChecklistFindings(result: FactoryReviewResult): FactoryReviewResult {
+function withChecklistFindings(result: FactoryReviewResult): FactoryReviewResult {
   const unmet = (result.checklist ?? []).filter((answer) => !answer.met);
   if (unmet.length === 0) return result;
   return {

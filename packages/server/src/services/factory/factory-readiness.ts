@@ -74,41 +74,59 @@ function branchFiltersRunOn(branch: string, filters: BranchFilters): boolean {
   return passesBranches(branch, branches);
 }
 
-/** Whether one workflow file runs on `branch` for any of `triggers`. */
-function workflowRunsOnBranch(
-  text: string,
-  branch: string,
-  triggers: readonly ('push' | 'pull_request')[],
-): boolean {
+type WorkflowTriggerName = 'push' | 'pull_request';
+
+interface WorkflowOnMapping {
+  push?: unknown;
+  pull_request?: unknown;
+}
+
+type WorkflowOn = string | string[] | WorkflowOnMapping;
+
+/** Parse a workflow YAML file and return its `on` trigger block, or undefined on failure. */
+function parseWorkflowOn(text: string): WorkflowOn | undefined {
   let workflow: unknown;
   try {
     workflow = parseYaml(text);
   } catch {
-    return false;
+    return undefined;
   }
-  if (!isObject(workflow)) return false;
+  if (!isObject(workflow)) return undefined;
   // YAML 1.1 readers turn the key `on` into `true`.
   const on =
     ('on' in workflow ? workflow.on : undefined) ??
     ('true' in workflow ? workflow.true : undefined);
+  if (isString(on)) return on;
+  if (Array.isArray(on)) return on.filter((item): item is string => isString(item));
+  if (!isObject(on)) return undefined;
+  const mapping: WorkflowOnMapping = {};
+  if ('push' in on) mapping.push = on.push;
+  if ('pull_request' in on) mapping.pull_request = on.pull_request;
+  return mapping;
+}
+
+/** Whether a single trigger entry in an `on:` mapping runs on `branch`. */
+function triggerMatchesBranch(
+  on: WorkflowOnMapping,
+  trigger: WorkflowTriggerName,
+  branch: string,
+): boolean {
+  if (!(trigger in on)) return false;
+  const filters = on[trigger];
+  return !isObject(filters) || branchFiltersRunOn(branch, filters);
+}
+
+/** Whether one workflow file runs on `branch` for any of `triggers`. */
+function workflowRunsOnBranch(
+  text: string,
+  branch: string,
+  triggers: readonly WorkflowTriggerName[],
+): boolean {
+  const on = parseWorkflowOn(text);
+  if (on === undefined) return false;
   if (isString(on)) return triggers.some((trigger) => trigger === on);
   if (Array.isArray(on)) return triggers.some((trigger) => on.includes(trigger));
-  if (!isObject(on)) return false;
-  for (const trigger of triggers) {
-    const listed = trigger === 'push' ? 'push' in on : 'pull_request' in on;
-    if (!listed) continue;
-    const filters =
-      trigger === 'push'
-        ? 'push' in on
-          ? on.push
-          : undefined
-        : 'pull_request' in on
-          ? on.pull_request
-          : undefined;
-    if (!isObject(filters)) return true;
-    if (branchFiltersRunOn(branch, filters)) return true;
-  }
-  return false;
+  return triggers.some((trigger) => triggerMatchesBranch(on, trigger, branch));
 }
 
 /** Whether one workflow file runs on a push to a queue branch. */

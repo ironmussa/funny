@@ -477,29 +477,38 @@ export function extractACPToolOutput(result: ACPToolResultData, fallbackTitle: s
   return fallbackTitle || 'Done';
 }
 
+function mcpImageBlockFromAcp(block: JsonObject): JsonObject | null {
+  if (!isString(block.data)) return null;
+  const mimeType = isString(block.mimeType) ? block.mimeType : 'image/png';
+  return { type: 'image', data: block.data, mimeType };
+}
+
+function mcpResourceBlockFromAcp(block: JsonObject): JsonObject | null {
+  if (!isJsonPayloadObject(block.resource)) return null;
+  const r = block.resource;
+  if (!isString(r.uri)) return null;
+  const resource: JsonObject = { uri: r.uri };
+  const mimeType = isString(r.mimeType) ? r.mimeType : undefined;
+  if (mimeType) resource.mimeType = mimeType;
+  const text = isString(r.text) ? r.text : decodeTextBlob(r.blob, mimeType);
+  if (text != null) resource.text = text;
+  return { type: 'resource', resource };
+}
+
 /** The MCP result block for one ACP ContentBlock, or null when it carries nothing to show. */
 function mcpBlockFromAcp(block: JsonObject): JsonObject | null {
-  if (block.type === 'text')
-    return isString(block.text) ? { type: 'text', text: block.text } : null;
-  if (block.type === 'image') {
-    if (!isString(block.data)) return null;
-    const mimeType = isString(block.mimeType) ? block.mimeType : 'image/png';
-    return { type: 'image', data: block.data, mimeType };
+  switch (block.type) {
+    case 'text':
+      return isString(block.text) ? { type: 'text', text: block.text } : null;
+    case 'image':
+      return mcpImageBlockFromAcp(block);
+    case 'resource_link':
+      return isString(block.uri) ? { type: 'resource_link', uri: block.uri } : null;
+    case 'resource':
+      return mcpResourceBlockFromAcp(block);
+    default:
+      return null;
   }
-  if (block.type === 'resource_link') {
-    return isString(block.uri) ? { type: 'resource_link', uri: block.uri } : null;
-  }
-  if (block.type === 'resource' && isJsonPayloadObject(block.resource)) {
-    const r = block.resource;
-    if (!isString(r.uri)) return null;
-    const resource: JsonObject = { uri: r.uri };
-    const mimeType = isString(r.mimeType) ? r.mimeType : undefined;
-    if (mimeType) resource.mimeType = mimeType;
-    const text = isString(r.text) ? r.text : decodeTextBlob(r.blob, mimeType);
-    if (text != null) resource.text = text;
-    return { type: 'resource', resource };
-  }
-  return null;
 }
 
 /** Whether an ACP ContentBlock is a resource carrying a blob instead of text. */
@@ -519,6 +528,31 @@ function decodeTextBlob(blob: JsonValue | undefined, mimeType: string | undefine
   return Buffer.from(blob, 'base64').toString('utf8');
 }
 
+function isMediaMcpBlock(block: JsonObject, item: JsonObject): boolean {
+  return block.type === 'image' || block.type === 'resource_link' || isBlobResource(item);
+}
+
+function mcpTextBlockFromEntry(entry: JsonObject): JsonObject | null {
+  if (entry.type !== 'diff' && entry.type !== 'terminal') return null;
+  const text = entry.type === 'diff' ? (entry.diff ?? entry.newText) : entry.output;
+  return isString(text) && text ? { type: 'text', text } : null;
+}
+
+function collectContentEntryBlocks(entry: JsonObject, blocks: JsonObject[]): boolean {
+  if (entry.type !== 'content' || entry.content == null) return false;
+  const items: unknown[] = Array.isArray(entry.content) ? entry.content : [entry.content];
+  let hasMedia = false;
+  for (const item of items) {
+    if (!isJsonPayloadObject(item)) continue;
+    const b = mcpBlockFromAcp(item);
+    if (!b) continue;
+    blocks.push(b);
+    // A resource sent as a blob (HTML, binary) is lost by the plain-text path.
+    if (isMediaMcpBlock(b, item)) hasMedia = true;
+  }
+  return hasMedia;
+}
+
 /**
  * The ACP tool call content as an MCP result envelope (`{"content":[…]}`, what
  * the client's MCP result renderer reads) when it holds an image or a resource
@@ -530,21 +564,12 @@ function mcpEnvelopeFromAcpContent(content: unknown[] | undefined): string | nul
   let hasMedia = false;
   for (const c of content) {
     if (!isJsonPayloadObject(c)) continue;
-    if (c.type === 'diff' || c.type === 'terminal') {
-      const text = c.type === 'diff' ? (c.diff ?? c.newText) : c.output;
-      if (isString(text) && text) blocks.push({ type: 'text', text });
+    const textBlock = mcpTextBlockFromEntry(c);
+    if (textBlock) {
+      blocks.push(textBlock);
       continue;
     }
-    if (c.type !== 'content' || c.content == null) continue;
-    const items: unknown[] = Array.isArray(c.content) ? c.content : [c.content];
-    for (const item of items) {
-      if (!isJsonPayloadObject(item)) continue;
-      const b = mcpBlockFromAcp(item);
-      if (!b) continue;
-      blocks.push(b);
-      // A resource sent as a blob (HTML, binary) is lost by the plain-text path.
-      if (b.type === 'image' || b.type === 'resource_link' || isBlobResource(item)) hasMedia = true;
-    }
+    if (collectContentEntryBlocks(c, blocks)) hasMedia = true;
   }
   return hasMedia ? JSON.stringify({ content: blocks }) : null;
 }

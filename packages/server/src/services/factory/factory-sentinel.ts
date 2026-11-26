@@ -274,6 +274,33 @@ function noteGreenAfterMerge(repo: string, baseBranch: string, redSha: string): 
   });
 }
 
+/** The recent merges by the base branch they went into (`fallbackBase` for one without a recorded base). */
+function groupMergesByBranch(
+  merges: readonly SentinelMerge[],
+  fallbackBase: string | null,
+): Map<string, SentinelMerge[]> {
+  const byBranch = new Map<string, SentinelMerge[]>();
+  for (const merge of merges) {
+    const branch = merge.baseBranch || fallbackBase;
+    if (!branch) continue;
+    const list = byBranch.get(branch);
+    if (list) list.push(merge);
+    else byBranch.set(branch, [merge]);
+  }
+  return byBranch;
+}
+
+/** The pause of the factory's incident already known, for a tick that cannot read the repository. */
+async function knownIncidentBlock(
+  deps: Pick<SentinelDeps, 'incidents'>,
+  factoryId: string,
+): Promise<Map<string, string>> {
+  const blocked = new Map<string, string>();
+  const known = await deps.incidents.activeForFactory(factoryId);
+  if (known.isOk() && known.value) blocked.set(known.value.baseBranch, incidentReason(known.value));
+  return blocked;
+}
+
 export function createFactorySentinel(deps: SentinelDeps, factory: SentinelFactory, repo: string) {
   const now = deps.now ?? Date.now;
   const count = (event: string) =>
@@ -526,36 +553,30 @@ export function createFactorySentinel(deps: SentinelDeps, factory: SentinelFacto
     const needsFallback = merges.some((merge) => !merge.baseBranch);
     const fallbackBase = needsFallback ? await deps.defaultBranch() : null;
 
-    const byBranch = new Map<string, SentinelMerge[]>();
-    for (const merge of merges) {
-      const branch = merge.baseBranch || fallbackBase;
-      if (!branch) continue;
-      const list = byBranch.get(branch);
-      if (list) list.push(merge);
-      else byBranch.set(branch, [merge]);
-    }
-
+    const byBranch = groupMergesByBranch(merges, fallbackBase);
     const branches = new Set<string>(byBranch.keys());
     for (const incident of openIncidents) branches.add(incident.baseBranch);
 
-    const blocked = new Map<string, string>();
+    // The repository cannot be read now: an incident already known still pauses.
     if (branches.size === 0 && needsFallback && !fallbackBase) {
-      // The repository cannot be read now: an incident already known still pauses.
-      const known = await deps.incidents.activeForFactory(factory.id);
-      if (known.isOk() && known.value) {
-        blocked.set(known.value.baseBranch, incidentReason(known.value));
-      }
-      return blocked;
+      return knownIncidentBlock(deps, factory.id);
     }
 
+    const blocked = new Map<string, string>();
     for (const baseBranch of branches) {
-      const incident = await watch(baseBranch, byBranch.get(baseBranch) ?? []);
-      if (!incident) continue;
-      const latest = await deps.incidents.get(incident.id);
-      const current = latest.isOk() && latest.value ? latest.value : incident;
-      if (current.state !== 'closed') blocked.set(baseBranch, incidentReason(current));
+      const reason = await openReason(baseBranch, byBranch.get(baseBranch) ?? []);
+      if (reason) blocked.set(baseBranch, reason);
     }
     return blocked;
+  }
+
+  /** Why `baseBranch` is paused after this tick's look at it, or null when it is not. */
+  async function openReason(baseBranch: string, branchMerges: SentinelMerge[]) {
+    const incident = await watch(baseBranch, branchMerges);
+    if (!incident) return null;
+    const latest = await deps.incidents.get(incident.id);
+    const current = latest.isOk() && latest.value ? latest.value : incident;
+    return current.state === 'closed' ? null : incidentReason(current);
   }
 
   return {

@@ -30,7 +30,7 @@ import { sandboxThreadOfRunner } from './runner-scope.js';
 
 export type AutomationToolAction = 'list' | 'create' | 'update' | 'delete' | 'trigger';
 
-export type AutomationToolError = {
+type AutomationToolError = {
   kind: 'refused' | 'not-found' | 'invalid' | 'storage';
   message: string;
 };
@@ -46,7 +46,7 @@ export interface AutomationToolThread {
   source: string;
 }
 
-export interface AutomationToolContext {
+interface AutomationToolContext {
   threadId: string;
   runnerId: string;
   runnerOwnerId: string;
@@ -96,8 +96,8 @@ export const agentUpdateAutomationPatch = updateAutomationBody.omit({ projectId:
 
 export const agentCreateAutomationInput = createAutomationBody.omit({ projectId: true });
 
-export type AgentCreateAutomationInput = z.output<typeof agentCreateAutomationInput>;
-export type AgentUpdateAutomationPatch = z.output<typeof agentUpdateAutomationPatch>;
+type AgentCreateAutomationInput = z.output<typeof agentCreateAutomationInput>;
+type AgentUpdateAutomationPatch = z.output<typeof agentUpdateAutomationPatch>;
 
 function refusal(message: string): Result<never, AutomationToolError> {
   return err({ kind: 'refused', message });

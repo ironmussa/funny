@@ -1,5 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
+import { AUTO_RESUME_MESSAGE_AUTHOR } from '@funny/shared';
+
 import { buildVirtualRows } from '@/components/thread/MemoizedMessageList.virtualRows';
 import type { RenderItem } from '@/lib/render-items';
 
@@ -74,6 +76,39 @@ describe('buildVirtualRows turn-end bars', () => {
       'session-summary-u1',
       'turn-end-u1',
       'u2',
+    ]);
+  });
+
+  test('an auto-resume marker stays in the interrupted turn instead of starting a new section', () => {
+    // The runner resumes an interrupted turn with a user-role message. It is a
+    // divider, not a prompt: the sticky card of `u1` must keep owning the rows
+    // after it until the next real prompt.
+    const items: RenderItem[] = [
+      message('u1', 'user', 'First prompt', '2026-10-30T20:00:00.000Z'),
+      message('a1', 'assistant', 'Working', '2026-10-30T20:00:10.000Z'),
+      {
+        type: 'message',
+        msg: {
+          id: 'r1',
+          role: 'user',
+          author: AUTO_RESUME_MESSAGE_AUTHOR,
+          content: 'Continue',
+          timestamp: '2026-10-30T20:01:00.000Z',
+        },
+      },
+      message('a2', 'assistant', 'Resumed', '2026-10-30T20:01:10.000Z'),
+      message('u2', 'user', 'Second prompt', '2026-10-30T20:05:00.000Z'),
+    ];
+
+    const rows = buildVirtualRows(items);
+
+    expect(rows.map((row) => row.key)).toEqual(['u1', 'a1', 'r1', 'a2', 'turn-end-u1', 'u2']);
+    expect(rows.flatMap((row) => (row.type === 'item' ? [[row.key, row.sectionId]] : []))).toEqual([
+      ['u1', 'u1'],
+      ['a1', 'u1'],
+      ['r1', 'u1'],
+      ['a2', 'u1'],
+      ['u2', 'u2'],
     ]);
   });
 });

@@ -1,5 +1,7 @@
 import { useCallback, useImperativeHandle, useMemo, useRef, memo, type CSSProperties } from 'react';
 
+import { isUserCardMessage } from '@/lib/render-items';
+
 import { FrozenViewerContext } from './frozen-message-context';
 import {
   useContainerWidth,
@@ -164,7 +166,7 @@ export const FrozenMessageList = memo(function FrozenMessageList({
   const detachedLastUserItem = useMemo(() => {
     if (
       !lastUserMessage ||
-      lastUserMessage.role !== 'user' ||
+      !isUserCardMessage(lastUserMessage) ||
       messages.some((message) => message.id === lastUserMessage.id)
     ) {
       return null;
@@ -183,7 +185,7 @@ export const FrozenMessageList = memo(function FrozenMessageList({
     let current: { key: string; rows: typeof virtualRows } | null = null;
     for (const row of virtualRows) {
       const isUserRow =
-        row.type === 'item' && row.item.type === 'message' && row.item.msg.role === 'user';
+        row.type === 'item' && row.item.type === 'message' && isUserCardMessage(row.item.msg);
       if (isUserRow || current === null) {
         current = { key: row.key, rows: [row] };
         out.push(current);
@@ -196,7 +198,7 @@ export const FrozenMessageList = memo(function FrozenMessageList({
 
   const renderRow = (row: (typeof virtualRows)[number]) => {
     const userItem =
-      row.type === 'item' && row.item.type === 'message' && row.item.msg.role === 'user'
+      row.type === 'item' && row.item.type === 'message' && isUserCardMessage(row.item.msg)
         ? row.item
         : null;
     const isUserRow = userItem !== null;

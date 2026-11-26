@@ -1,4 +1,4 @@
-import type { ThreadEvent } from '@funny/shared';
+import { AUTO_RESUME_MESSAGE_AUTHOR, type ThreadEvent } from '@funny/shared';
 
 import { isTodoToolName } from '@/components/tool-cards/utils';
 import type { CompactionEvent } from '@/stores/thread-store';
@@ -195,6 +195,18 @@ export function buildRenderItemIdIndexMap(items: RenderItem[]): Map<string, numb
   return map;
 }
 
+/**
+ * True when a message renders as a real `UserMessageCard` that starts a prompt
+ * section (and owns the sticky section header). Excludes runner auto-resume
+ * markers (`author === AUTO_RESUME_MESSAGE_AUTHOR`), which belong to the
+ * interrupted turn rather than starting a new section.
+ */
+export function isUserCardMessage(
+  msg: { role?: string | null; author?: string | null } | null | undefined,
+): boolean {
+  return Boolean(msg && msg.role === 'user' && msg.author !== AUTO_RESUME_MESSAGE_AUTHOR);
+}
+
 /** Find the nearest user-message section owner before a grouped-item index. */
 export function findNearestPrecedingUserMessageItem(
   items: RenderItem[],
@@ -202,7 +214,7 @@ export function findNearestPrecedingUserMessageItem(
 ): UserMessageRenderItem | null {
   for (let i = Math.min(startIndex - 1, items.length - 1); i >= 0; i--) {
     const item = items[i];
-    if (item.type === 'message' && item.msg.role === 'user') {
+    if (item.type === 'message' && isUserCardMessage(item.msg)) {
       return item;
     }
   }

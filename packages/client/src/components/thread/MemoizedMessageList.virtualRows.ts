@@ -4,6 +4,7 @@ import {
   buildRenderItemIdIndexMap,
   getItemKey,
   getItemTimestamp,
+  isUserCardMessage,
   type RenderItem,
 } from '@/lib/render-items';
 import type { SessionChanges } from '@/lib/session-changes-from-events';
@@ -43,7 +44,7 @@ export function getLeadingUserItem(
   leadingUserMessage: any | undefined,
   messages: any[],
 ): MessageItem | null {
-  if (!leadingUserMessage) return null;
+  if (!leadingUserMessage || !isUserCardMessage(leadingUserMessage)) return null;
   if (messages.some((msg) => msg.id === leadingUserMessage.id)) return null;
   return { type: 'message', msg: leadingUserMessage };
 }
@@ -58,13 +59,28 @@ export function buildVirtualRows(
   /** Index in `rows` of the current session's user-message row. */
   let sectionStart = -1;
 
+  // Match snapshots keyed by the real prompt id, plus any legacy snapshot that
+  // was saved under an auto-resume divider's id within the same turn.
+  const findSectionChanges = (): SessionChanges | undefined => {
+    if (!currentUser || !sessionChanges) return undefined;
+    let latest = sessionChanges.get(currentUser.msg.id);
+    for (const sectionItem of currentSessionItems) {
+      if (sectionItem.type !== 'message' || sectionItem.msg.role !== 'user') continue;
+      const resumed = sessionChanges.get(sectionItem.msg.id);
+      if (resumed && (!latest || (resumed.createdAt || '') >= (latest.createdAt || ''))) {
+        latest = resumed;
+      }
+    }
+    return latest;
+  };
+
   // The card goes where its snapshot was taken: after the session's items up
   // to the run that produced it. A background job or watcher wakes the agent
   // without a new user message, so the woken run's items land in the same
   // section and must stay below the card, not above it.
   const appendSessionSummary = () => {
     if (!currentUser) return;
-    const changes = sessionChanges?.get(currentUser.msg.id);
+    const changes = findSectionChanges();
     if (!changes || changes.files.length === 0) return;
     let insertAt = rows.length;
     if (changes.createdAt) {
@@ -107,14 +123,16 @@ export function buildVirtualRows(
       messages: [
         currentUser.msg,
         ...currentSessionItems.flatMap((sectionItem) =>
-          sectionItem.type === 'message' ? [sectionItem.msg] : [],
+          sectionItem.type === 'message' && sectionItem.msg.role !== 'user'
+            ? [sectionItem.msg]
+            : [],
         ),
       ],
     });
   };
 
   groupedItems.forEach((item, itemIndex) => {
-    if (item.type === 'message' && item.msg.role === 'user') {
+    if (item.type === 'message' && isUserCardMessage(item.msg)) {
       appendSessionSummary();
       appendTurnEnd();
       currentUser = item;
@@ -159,9 +177,9 @@ export function shouldReserveLeadingStickySpace(
   return Boolean(
     leadingUserItem &&
     firstRow?.type === 'item' &&
-    // A loaded window can begin with tools or events as well as text.
+    // A loaded window can begin with tools, events, or an auto-resume divider.
     // All need room for the prompt whose original row is outside the window.
-    !(firstRow.item.type === 'message' && firstRow.item.msg.role === 'user'),
+    !(firstRow.item.type === 'message' && isUserCardMessage(firstRow.item.msg)),
   );
 }
 
@@ -174,7 +192,7 @@ export function buildRowKeyIndexMap(virtualRows: VirtualRow[]) {
 export function buildUserRowVirtualIndices(virtualRows: VirtualRow[]) {
   const indices: number[] = [];
   virtualRows.forEach((row, index) => {
-    if (row.type === 'item' && row.item.type === 'message' && row.item.msg.role === 'user') {
+    if (row.type === 'item' && row.item.type === 'message' && isUserCardMessage(row.item.msg)) {
       indices.push(index);
     }
   });

@@ -13,7 +13,7 @@ import {
 import { flushSync } from 'react-dom';
 
 import { useStableCallback } from '@/hooks/use-stable-callback';
-import { findNearestPrecedingUserMessageItem } from '@/lib/render-items';
+import { findNearestPrecedingUserMessageItem, isUserCardMessage } from '@/lib/render-items';
 import { cn } from '@/lib/utils';
 
 import {
@@ -65,7 +65,7 @@ const STICKY_SECTION_VISIBILITY_EPSILON_PX = 1;
 function isUserRow(
   row: VirtualRow,
 ): row is Extract<VirtualRow, { type: 'item' }> & { item: MessageItem } {
-  return row.type === 'item' && row.item.type === 'message' && row.item.msg.role === 'user';
+  return row.type === 'item' && row.item.type === 'message' && isUserCardMessage(row.item.msg);
 }
 
 /** Custom comparator for MemoizedMessageList — avoids re-renders when only
@@ -525,7 +525,7 @@ export const MemoizedMessageList = memo(
     const candidateHiddenSectionUserItem = useMemo(() => {
       if (!firstVisibleRow || !firstVisibleVirtualItem) return null;
       if (firstVisibleRow.type !== 'item') return firstVisibleRow.userItem;
-      if (firstVisibleRow.item.type === 'message' && firstVisibleRow.item.msg.role === 'user') {
+      if (firstVisibleRow.item.type === 'message' && isUserCardMessage(firstVisibleRow.item.msg)) {
         // The real user card is still the first visible row. Showing the sticky
         // copy here creates a duplicate until the virtualizer catches up.
         return null;

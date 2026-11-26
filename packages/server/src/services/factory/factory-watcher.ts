@@ -42,6 +42,7 @@ import { integrateEarly, integrateStacked } from './factory-early-watch.js';
 import { createFactoryFlowRuns } from './factory-flow-runs.js';
 import { type FactoryGithubPort } from './factory-github.js';
 import { createFactoryIncidentsRepository } from './factory-incidents.js';
+import { closeFinishedParents } from './factory-parent-close.js';
 import { prNumberOf } from './factory-pull-requests.js';
 import type { FactoryStepJobBody } from './factory-runner-jobs.js';
 import {
@@ -327,6 +328,7 @@ async function fire(id: string): Promise<void> {
   await reportBlocked(factory.id, incident);
   await reconcileParked(factory, target.repo);
   await retriageAnswered(factory, target.repo);
+  await closeParentsOf(factory, target.repo);
   await resumeRuns(factory, target.repo, target.mode);
   await watchEarlyIntegration(factory, target.repo);
   if (incident) return;
@@ -608,6 +610,35 @@ async function retriageAnswered(factory: WatchedFactory, repo: string): Promise<
       });
     }
   }
+}
+
+/**
+ * Close the issues whose work went to other issues once those are all closed
+ * (`factory-parent-close.ts`), so the issues they block can start.
+ */
+async function closeParentsOf(factory: WatchedFactory, repo: string): Promise<void> {
+  if (!runs || !deps) return;
+  const all = await runs.list(factory.id);
+  if (all.isErr()) return;
+  const repository = runs;
+  await closeFinishedParents(
+    {
+      github: deps.github,
+      activities: deps.activities ?? serverActivities,
+      recordTriage: async (runId, triage) => {
+        const saved = await repository.update(runId, { triage });
+        if (saved.isErr()) {
+          log.warn('Issue factory could not mark a closed parent issue', {
+            namespace: 'factory',
+            runId,
+            error: saved.error.message,
+          });
+        }
+      },
+    },
+    { repo, ownerId: factory.userId, projectId: factory.projectId },
+    all.value,
+  );
 }
 
 /**

@@ -1056,7 +1056,28 @@ const triageItems = z.array(z.string().trim().min(1).max(2000)).min(1).max(20);
 export const factoryTriageResultSchema = z.discriminatedUnion('decision', [
   z.object({ decision: z.literal('ready'), contract: factoryContractSchema }),
   z.object({ decision: z.literal('needs_info'), questions: triageItems }),
-  z.object({ decision: z.literal('too_big'), parts: triageItems }),
+  /**
+   * `parts`: the new issues to open. `existing`: issues that already cover
+   * part of the work (a tracking issue's sub-issues, the parts of an earlier
+   * split); they are named, never opened again. At least one of the two.
+   */
+  z
+    .object({
+      decision: z.literal('too_big'),
+      parts: z.array(z.string().trim().min(1).max(2000)).max(20).default([]),
+      existing: z.array(z.number().int().positive()).max(50).default([]),
+    })
+    .refine((answer) => answer.parts.length + answer.existing.length > 0, {
+      message: 'name at least one part or one existing issue',
+      path: ['parts'],
+    }),
+  /**
+   * What the issue asks is already true of the code (a duplicate already
+   * merged, a fix that landed): the factory says so on the issue, closes it
+   * and ends the run `done`. `evidence`: what shows it (the commit or pull
+   * request, the check that passes now).
+   */
+  z.object({ decision: z.literal('already_done'), evidence: triageItems }),
 ]);
 export type FactoryTriageResult = z.infer<typeof factoryTriageResultSchema>;
 
@@ -1065,25 +1086,33 @@ export type FactoryTriageResult = z.infer<typeof factoryTriageResultSchema>;
  * twice, and the run went on without a contract.
  */
 export const factoryTriageSchema = z.object({
-  decision: z.enum(['ready', 'needs_info', 'too_big', 'none']),
+  decision: z.enum(['ready', 'needs_info', 'too_big', 'already_done', 'none']),
   /** When triage answered; an issue changed after it is triaged again. */
   at: z.string(),
   /** The triage agent's thread. */
   threadId: z.string().optional(),
   /** The contract, for `ready`. */
   contract: factoryContractSchema.optional(),
-  /** What was asked on the issue (`needs_info`) or the proposed split (`too_big`). */
+  /** What was asked on the issue (`needs_info`), the proposed split (`too_big`), or the evidence (`already_done`). */
   items: z.array(z.string()).optional(),
   /**
    * The issue changed since (or a member retried): this answer is kept to show
    * what was asked, and triage runs again on a new thread, not `threadId`.
    */
   superseded: z.boolean().optional(),
+  /** For `too_big`: the existing issues triage said already cover part of the work. */
+  existing: z.array(z.number().int().positive()).optional(),
   /**
    * For `too_big` with the factory's `split` setting: the issues opened for
    * the parts, in the order of `items` (filled as each one is opened).
    */
   splitInto: z.array(z.number().int().positive()).optional(),
+  /**
+   * For a run that handed its issue's work to other issues (`splitInto`,
+   * `existing`): when the factory saw every one of them closed and closed the
+   * issue (or found it closed already). Its work is finished from then on.
+   */
+  partsClosedAt: z.string().optional(),
 });
 export type FactoryTriage = z.infer<typeof factoryTriageSchema>;
 

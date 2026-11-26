@@ -28,6 +28,11 @@ export interface BlockerInput {
   /** The latest run of each issue in this factory. */
   latestRuns: LatestRunState;
   /**
+   * Issues whose latest run ended handing their work to other issues (split,
+   * or tracked by existing issues): not failed, their parts carry the work.
+   */
+  delegated?: ReadonlySet<number>;
+  /**
    * Unfinished same-repository blockers of the issues waiting in the queue,
    * as far as they were read: the edges the cycle check walks.
    */
@@ -61,9 +66,14 @@ const IN_PROGRESS: ReadonlySet<FactoryRunState> = new Set([
   'merging',
 ]);
 
-/** Why one unfinished blocker of this repository holds the issue, from its latest run here. */
-function statusOf(latest: FactoryRunState | undefined): BlockerStatus {
+/**
+ * Why one unfinished blocker of this repository holds the issue, from its
+ * latest run here. A blocker whose run handed its work to other issues is in
+ * progress until its issue closes, never failed.
+ */
+function statusOf(latest: FactoryRunState | undefined, delegated: boolean): BlockerStatus {
   if (latest === undefined) return 'blocker-not-sent';
+  if (delegated) return 'blocker-in-progress';
   if (latest === 'waiting_human') return 'blocker-waiting-merge';
   if (IN_PROGRESS.has(latest)) return 'blocker-in-progress';
   return 'blocker-failed';
@@ -115,7 +125,7 @@ export function waitReasonFor(input: BlockerInput): FactoryWaitReason | null {
   }
   const byStatus = new Map<BlockerStatus, number[]>();
   for (const number of sameRepo) {
-    const status = statusOf(input.latestRuns.get(number));
+    const status = statusOf(input.latestRuns.get(number), input.delegated?.has(number) ?? false);
     byStatus.set(status, [...(byStatus.get(status) ?? []), number]);
   }
   if (otherRepo.length > 0) byStatus.set('blocker-other-repo', otherRepo);

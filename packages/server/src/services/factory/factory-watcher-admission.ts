@@ -42,6 +42,8 @@ export const MAX_ATTEMPTS = 3;
 interface AdmissionContext {
   reader: FactoryRepoReader;
   latestRuns: LatestRunState;
+  /** Issues whose latest run handed its work to other issues (`delegatedWork`). */
+  delegated: ReadonlySet<number>;
   /** Issues waiting in the queue (`requested`). */
   queued: ReadonlySet<number>;
   /** Blockers read this pass, by issue (null: unreadable). */
@@ -54,6 +56,15 @@ interface AdmissionContext {
   approvalHold: { now: number } | null;
 }
 
+/**
+ * A run that ended handing its issue's work to other issues: triage split it
+ * (`splitInto`) or found it tracked by existing issues (`existing`).
+ */
+export function delegatedWork(run: Pick<FactoryRunView, 'state' | 'triage'>): boolean {
+  if (run.state !== 'done') return false;
+  return (run.triage?.splitInto?.length ?? 0) > 0 || (run.triage?.existing?.length ?? 0) > 0;
+}
+
 function admissionContext(
   factory: WatchedFactory,
   repo: string,
@@ -61,13 +72,16 @@ function admissionContext(
 ): AdmissionContext {
   // `list` is newest first: the first run seen for an issue is its latest.
   const latestRuns = new Map<number, FactoryRunState>();
+  const delegated = new Set<number>();
   for (const run of all) {
     if (run.issueNumber === null || latestRuns.has(run.issueNumber)) continue;
     latestRuns.set(run.issueNumber, run.state);
+    if (delegatedWork(run)) delegated.add(run.issueNumber);
   }
   return {
     reader: { repo, ownerId: factory.userId, projectId: factory.projectId },
     latestRuns,
+    delegated,
     queued: new Set(
       all.flatMap((run) =>
         run.state === 'requested' && run.issueNumber !== null ? [run.issueNumber] : [],
@@ -117,6 +131,7 @@ async function blockedReason(
     issue,
     blockers,
     latestRuns: ctx.latestRuns,
+    delegated: ctx.delegated,
     queueGraph: graph,
   });
 }

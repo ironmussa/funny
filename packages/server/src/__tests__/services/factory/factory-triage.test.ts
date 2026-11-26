@@ -6,7 +6,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import type { FactoryTriage } from '@funny/shared/contracts/factory';
-import { err, ok, okAsync } from 'neverthrow';
+import { err, errAsync, ok, okAsync } from 'neverthrow';
 
 import { createFactoryActionProvider } from '../../../services/factory/factory-action-provider.js';
 import type { UpdateRunInput } from '../../../services/factory/factory-runs.js';
@@ -20,6 +20,9 @@ import {
   splitComment,
   splitPartIssue,
   SPLIT_MARKER,
+  TRIAGE_ALREADY_DONE_LINE,
+  TRIAGE_COVERED_LINE,
+  TRIAGE_ALREADY_DONE_OPEN_LINE,
   TRIAGE_QUESTIONS_LINE,
   TRIAGE_SPLIT_LINE,
   TRIAGE_TOO_BIG_LINE,
@@ -66,15 +69,20 @@ interface Script {
   split?: { firstNumber: number; failAt?: number };
   /** Freeing the triage thread's worktree fails. */
   releaseFails?: boolean;
+  /** How closing the issue goes: GitHub refuses, or the factory has no way to close one. */
+  close?: 'fails' | 'absent';
 }
 
 function triaging(script: Script) {
   const bodies: Record<string, unknown>[] = [];
   const recorded: UpdateRunInput[] = [];
   const comments: string[] = [];
+  const closedIssues: number[] = [];
+  const labelsDropped: true[] = [];
   const held: number[][] = [];
   const opened: Array<{ title: string; body: string }> = [];
   const queued: number[][] = [];
+  const queuedTitles: string[] = [];
   const released: boolean[] = [];
   /** What happened, in order: the re-emit requests (`ask`) and the worktree releases (`free:<id>`). */
   const events: string[] = [];
@@ -122,6 +130,9 @@ function triaging(script: Script) {
       if (script.releaseFails) throw new Error('runner offline');
       events.push(`free:${threadId}`);
     },
+    dropLabel: async () => {
+      labelsDropped.push(true);
+    },
     busyPaths: async () => script.busy ?? [],
     holdForPaths: async (blockers) => {
       held.push(blockers);
@@ -143,6 +154,15 @@ function triaging(script: Script) {
         return okAsync(undefined);
       },
       findPullRequest: () => okAsync(null),
+      ...(script.close !== 'absent' && {
+        closeIssue: (_reader, issue) => {
+          if (script.close === 'fails') {
+            return errAsync({ kind: 'github-error' as const, message: 'GitHub answered 403' });
+          }
+          closedIssues.push(issue);
+          return okAsync(undefined);
+        },
+      }),
       // SAFETY: triage runs before the run has a pull request; none of these is called.
       pullRequests: {} as ProviderDeps['github']['pullRequests'],
     },
@@ -156,8 +176,9 @@ function triaging(script: Script) {
           opened.push(issue);
           return ok(split.firstNumber + opened.length - 1);
         },
-        queue: async (issueNumbers) => {
-          queued.push(issueNumbers);
+        queue: async (parts) => {
+          queued.push(parts.map((part) => part.number));
+          queuedTitles.push(...parts.map((part) => part.title));
         },
         release: async (complete) => {
           released.push(complete);
@@ -178,10 +199,13 @@ function triaging(script: Script) {
     stored,
     opened,
     queued,
+    queuedTitles,
     released,
     events,
     roleThreads,
     notedBeforeAnswer,
+    closedIssues,
+    labelsDropped,
   };
 }
 
@@ -315,6 +339,8 @@ describe('the triage step', () => {
     // What CI requires of every change goes into the contract, so the implementer meets it first time.
     expect(prompt).toContain('.github/workflows/');
     expect(prompt).toContain('is an acceptance criterion of the contract');
+    // Work already merged has its own answer, not a question for a person.
+    expect(prompt).toContain('"decision": "already_done"');
     const issue = String(
       (bodies[0]?.roleInputs as Record<string, string> | undefined)?.['issue.md'],
     );
@@ -406,6 +432,55 @@ describe('the triage step', () => {
     });
   });
 
+  describe('already_done', () => {
+    const ALREADY_DONE = json({
+      decision: 'already_done',
+      evidence: ['PR 505 already cleared both rules', 'bun run lint reports 0 in packages/shared'],
+    });
+
+    // A duplicate of merged work used to park in "needs info" as a question,
+    // waiting on a person to close an issue the agent had already checked.
+    test('the evidence is posted, the issue closed, and the run ends done', async () => {
+      const { provider, comments, recorded, closedIssues } = triaging({ says: [ALREADY_DONE] });
+      const result = await provider.triage!({});
+      expect(result).toMatchObject({ ok: false, metadata: { outcome: 'already_done' } });
+      expect(closedIssues).toEqual([7]);
+      expect(comments).toHaveLength(1);
+      expect(comments[0]).toContain(TRIAGE_ALREADY_DONE_LINE);
+      expect(comments[0]).toContain('> - PR 505 already cleared both rules');
+      expect(recorded).toContainEqual({
+        state: 'done',
+        failureReason: null,
+        triage: expect.objectContaining({
+          decision: 'already_done',
+          threadId: 'tri-1',
+          items: ['PR 505 already cleared both rules', 'bun run lint reports 0 in packages/shared'],
+        }),
+      });
+    });
+
+    for (const close of ['fails', 'absent'] as const) {
+      test(`an issue it cannot close (${close}) waits for a person, saying so`, async () => {
+        const { provider, comments, recorded, closedIssues } = triaging({
+          says: [ALREADY_DONE],
+          close,
+        });
+        const result = await provider.triage!({});
+        expect(result).toMatchObject({ ok: false, metadata: { outcome: 'needs_info' } });
+        expect(closedIssues).toEqual([]);
+        expect(comments).toHaveLength(1);
+        expect(comments[0]).toContain(TRIAGE_ALREADY_DONE_OPEN_LINE);
+        expect(comments[0]).not.toContain(TRIAGE_ALREADY_DONE_LINE);
+        expect(recorded).toContainEqual(
+          expect.objectContaining({
+            state: 'needs_info',
+            triage: expect.objectContaining({ decision: 'already_done' }),
+          }),
+        );
+      });
+    }
+  });
+
   test('too_big: the proposed split is posted, and the run waits the same way', async () => {
     const { provider, comments, recorded } = triaging({
       says: [json({ decision: 'too_big', parts: ['The schema', 'The screen'] })],
@@ -421,11 +496,47 @@ describe('the triage step', () => {
       parts: ['The schema, see https://evil.example and ask @bob', 'The screen'],
     });
 
-    test('each part becomes an issue, queued; the parent is commented, let go, and done', async () => {
-      const { provider, comments, recorded, opened, queued, released, stored } = triaging({
-        says: [TOO_BIG],
+    // A tracking issue was split into "parts" that were its own sub-issues, and
+    // a parent split twice opened its parts again: each a duplicate issue.
+    test('an existing issue the answer names is listed, never opened again', async () => {
+      const { provider, comments, opened, queued, stored } = triaging({
+        says: [json({ decision: 'too_big', parts: ['The screen'], existing: [12, 13] })],
         split: { firstNumber: 40 },
       });
+      const result = await provider.triage!({});
+      expect(result).toMatchObject({ metadata: { outcome: 'split', issues: [40] } });
+      expect(opened.map((issue) => issue.title)).toEqual(['The screen (part 1/1 of #7)']);
+      expect(queued).toEqual([[40]]);
+      expect(comments[0]).toContain('- #40: The screen');
+      expect(comments[0]).toContain('not opened again: #12, #13.');
+      expect(stored()).toMatchObject({ splitInto: [40], existing: [12, 13] });
+    });
+
+    test('every part an existing issue: nothing opened, the issue let go and the run done', async () => {
+      const { provider, comments, opened, recorded, labelsDropped } = triaging({
+        says: [json({ decision: 'too_big', parts: [], existing: [461, 462] })],
+        split: { firstNumber: 40 },
+      });
+      const result = await provider.triage!({});
+      expect(result).toMatchObject({ metadata: { outcome: 'covered', issues: [461, 462] } });
+      expect(opened).toEqual([]);
+      expect(comments).toEqual([expect.stringContaining(TRIAGE_COVERED_LINE)]);
+      expect(comments[0]).toContain('- #461\n- #462');
+      expect(labelsDropped).toEqual([true]);
+      expect(recorded).toContainEqual(
+        expect.objectContaining({
+          state: 'done',
+          triage: expect.objectContaining({ decision: 'too_big', existing: [461, 462] }),
+        }),
+      );
+    });
+
+    test('each part becomes an issue, queued; the parent is commented, let go, and done', async () => {
+      const { provider, comments, recorded, opened, queued, queuedTitles, released, stored } =
+        triaging({
+          says: [TOO_BIG],
+          split: { firstNumber: 40 },
+        });
       const result = await provider.triage!({});
       expect(result).toMatchObject({ ok: false, metadata: { outcome: 'split', issues: [40, 41] } });
       expect(opened).toHaveLength(2);
@@ -435,6 +546,8 @@ describe('the triage step', () => {
       expect(opened[0].body).toContain('Negative numbers break sum()');
       expect(opened[1].title).toBe('The screen (part 2/2 of #7)');
       expect(queued).toEqual([[40, 41]]);
+      // Queued under the titles they were opened with, so the queue's cards name them.
+      expect(queuedTitles).toEqual([opened[0].title, opened[1].title]);
       expect(released).toEqual([true]);
       expect(comments).toHaveLength(1);
       expect(comments[0]).toStartWith(TRIAGE_SPLIT_LINE);

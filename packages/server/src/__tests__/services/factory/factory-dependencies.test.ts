@@ -8,7 +8,9 @@ import { describe, expect, test } from 'bun:test';
 import type { IssueBlocker } from '@funny/core/github-app';
 
 import { inCycle, waitReasonFor } from '../../../services/factory/factory-dependencies.js';
+import type { FactoryRunView } from '../../../services/factory/factory-runs.js';
 import type { FactoryRunState } from '../../../services/factory/factory-runs.js';
+import { delegatedWork } from '../../../services/factory/factory-watcher-admission.js';
 
 const open = (number: number, repo = 'o/r'): IssueBlocker => ({ number, repo, open: true });
 const closed = (number: number): IssueBlocker => ({ number, repo: 'o/r', open: false });
@@ -41,6 +43,20 @@ describe('waitReasonFor', () => {
     ['stopped', 'blocker-failed'],
   ] as const)('a blocker whose latest run is %s → %s', (latest, kind) => {
     expect(reason([open(1)], latest ? { 1: latest } : {})).toEqual({ kind, blockers: [1] });
+  });
+
+  test('a blocker whose run handed its work to other issues is in progress, not failed', () => {
+    expect(
+      waitReasonFor({
+        repo: 'o/r',
+        issue: 10,
+        blockers: [open(1)],
+        latestRuns: new Map([[1, 'done']]),
+        delegated: new Set([1]),
+        queueGraph: new Map(),
+      }),
+    ).toEqual({ kind: 'blocker-in-progress', blockers: [1] });
+    expect(reason([open(1)], { 1: 'done' })).toEqual({ kind: 'blocker-failed', blockers: [1] });
   });
 
   test('the most actionable reason is shown when several blockers hold the issue', () => {
@@ -112,5 +128,27 @@ describe('inCycle', () => {
         ]),
       ),
     ).toBe(false);
+  });
+});
+
+describe('delegatedWork', () => {
+  const at = '2026-11-25T00:00:00.000Z';
+  const run = (state: FactoryRunState, triage: FactoryRunView['triage']) => ({ state, triage });
+
+  test('a done run that split its issue or found it tracked elsewhere delegated its work', () => {
+    expect(
+      delegatedWork(run('done', { decision: 'too_big', at, items: [], existing: [542] })),
+    ).toBe(true);
+    expect(
+      delegatedWork(run('done', { decision: 'too_big', at, items: ['a'], splitInto: [40] })),
+    ).toBe(true);
+  });
+
+  test('any other run did not', () => {
+    expect(delegatedWork(run('done', { decision: 'already_done', at, items: ['x'] }))).toBe(false);
+    expect(
+      delegatedWork(run('needs_info', { decision: 'too_big', at, items: ['a'], existing: [5] })),
+    ).toBe(false);
+    expect(delegatedWork(run('failed', null))).toBe(false);
   });
 });

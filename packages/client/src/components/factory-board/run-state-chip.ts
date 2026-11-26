@@ -41,13 +41,38 @@ export interface FactoryRunStateChip {
   detail?: string;
 }
 
-/** What the card's state chip says; a run the factory split says so instead of "Done". */
+/**
+ * What the card's state chip says; a run the factory split, or whose work
+ * existing issues track, says so instead of "Done".
+ */
 export function factoryRunStateChip(
   t: TFunction,
   run: Pick<FactoryRun, 'state' | 'triage'>,
 ): FactoryRunStateChip {
   if ((run.triage?.splitInto?.length ?? 0) > 0 && run.state === 'done') {
     return { label: t('factory.state.split', 'Split'), tone: 'info' };
+  }
+  const existing = run.state === 'done' ? (run.triage?.existing ?? []) : [];
+  if (existing.length > 0) {
+    // Its work is in other issues, still to be done: not "Done".
+    return {
+      label:
+        existing.length === 1
+          ? t('factory.state.tracked', 'Tracked #{{issue}}', { issue: existing[0] })
+          : t('factory.state.trackedMore', 'Tracked #{{issue}} +{{count}}', {
+              issue: existing[0],
+              count: existing.length - 1,
+            }),
+      tone: 'info',
+    };
+  }
+  if (run.triage?.decision === 'already_done') {
+    // Not closed (the factory could not): a person closes the issue.
+    const closed = run.state === 'done';
+    return {
+      label: t('factory.state.alreadyDone', 'Already done'),
+      tone: closed ? 'success' : 'warning',
+    };
   }
   if (run.state === 'needs_info' && run.triage?.decision === 'too_big') {
     return { label: t('factory.state.tooBig', 'Too big'), tone: 'warning' };

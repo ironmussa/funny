@@ -1837,10 +1837,13 @@
       "failed": "Failed",
       "stopped": "Stopped",
       "split": "Split",
+      "tracked": "Tracked #{{issue}}",
+      "trackedMore": "Tracked #{{issue}} +{{count}}",
       "notStarted": "Not started",
       "notStartedQueued": "Taken out of the queue before it started: no agent ran, no branch or pull request",
       "notStartedStopped": "Stopped before its first step: no agent ran, no branch or pull request",
-      "tooBig": "Too big"
+      "tooBig": "Too big",
+      "alreadyDone": "Already done"
     },
     "wait": {
       "pathsAwaitingApproval": "Waiting for {{blockers}}: it holds the same files while it waits for an approval",
@@ -2123,6 +2126,7 @@
       "review": "Review",
       "merge": "Merge",
       "needsPerson": "Needs a person",
+      "waitingParts": "Waiting on parts",
       "done": "Done"
     },
     "emptyColumn": "No runs here",
@@ -2240,7 +2244,8 @@
       "ready": "Contract: what must be true",
       "needsInfo": "Asked on the issue",
       "tooBig": "Proposed split",
-      "none": "Triage gave no contract: the review judges against the issue."
+      "none": "Triage gave no contract: the review judges against the issue.",
+      "alreadyDone": "Already done: the evidence"
     },
     "timeline": {
       "title": "Timeline",

@@ -15,6 +15,7 @@ export type FactoryBoardColumnId =
   | 'review'
   | 'merge'
   | 'needs_person'
+  | 'waiting_parts'
   | 'done';
 
 /** The board's columns, left to right. */
@@ -26,6 +27,7 @@ export const FACTORY_BOARD_COLUMNS: readonly FactoryBoardColumnId[] = [
   'review',
   'merge',
   'needs_person',
+  'waiting_parts',
   'done',
 ];
 
@@ -59,8 +61,48 @@ export function factoryBoardColumn(state: string): FactoryBoardColumnId {
 
 type PlacedRun = Pick<
   FactoryRun,
-  'id' | 'factoryId' | 'issueNumber' | 'state' | 'failureReason' | 'startedAt'
+  'id' | 'factoryId' | 'issueNumber' | 'state' | 'failureReason' | 'startedAt' | 'triage'
 >;
+
+/**
+ * The issues a run handed its issue's work to: the parts triage opened
+ * (`splitInto`) and the existing issues it found tracking the work
+ * (`existing`). Empty unless the run ended `done` that way.
+ */
+function factoryRunDelegatedParts(run: Pick<FactoryRun, 'state' | 'triage'>): number[] {
+  if (run.state !== 'done') return [];
+  return [...new Set([...(run.triage?.splitInto ?? []), ...(run.triage?.existing ?? [])])];
+}
+
+/**
+ * The parts of each delegating run whose work is not finished, as far as the
+ * listed runs say: a part is finished when the latest listed run of its issue,
+ * in the same factory, merged or ended done without delegating in turn.
+ */
+function unfinishedParts<R extends PlacedRun>(runs: readonly R[]): ReadonlyMap<string, number[]> {
+  const latest = new Map<string, R>();
+  for (const run of runs) {
+    if (run.issueNumber === null) continue;
+    const key = `${run.factoryId}#${run.issueNumber}`;
+    const current = latest.get(key);
+    if (!current || Date.parse(run.startedAt) > Date.parse(current.startedAt)) latest.set(key, run);
+  }
+  const finished = (factoryId: string, issue: number): boolean => {
+    const run = latest.get(`${factoryId}#${issue}`);
+    if (!run) return false;
+    return (
+      run.state === 'merged' || (run.state === 'done' && factoryRunDelegatedParts(run).length === 0)
+    );
+  };
+  const open = new Map<string, number[]>();
+  for (const run of runs) {
+    // The factory closed the issue once all its parts were closed.
+    if (run.triage?.partsClosedAt) continue;
+    const parts = factoryRunDelegatedParts(run).filter((n) => !finished(run.factoryId, n));
+    if (parts.length > 0) open.set(run.id, parts);
+  }
+  return open;
+}
 
 type ReplaceableRun = Pick<FactoryRun, 'id' | 'factoryId' | 'issueNumber' | 'startedAt'>;
 
@@ -94,14 +136,20 @@ export function factoryRunReplacements<R extends ReplaceableRun>(
  * Each run's column among the listed runs. A run stopped after a failure still
  * needs fixing, so it waits for a person, not in Done. A run a newer run of
  * its issue replaced (the issue was sent again) asks nothing of anyone: an
- * ended one goes to Done.
+ * ended one goes to Done. A run that handed its issue's work to other issues
+ * (split, or tracked by existing ones) waits for them until each is finished.
  */
 export function placeFactoryRuns<R extends PlacedRun>(
   runs: readonly R[],
 ): Map<string, FactoryBoardColumnId> {
   const superseded = factoryRunReplacements(runs);
+  const waiting = unfinishedParts(runs);
   const placed = new Map<string, FactoryBoardColumnId>();
   for (const run of runs) {
+    if (waiting.has(run.id) && !superseded.has(run.id)) {
+      placed.set(run.id, 'waiting_parts');
+      continue;
+    }
     const column = isFactoryRunStoppedAfterFailure(run)
       ? 'needs_person'
       : factoryBoardColumn(run.state);
@@ -134,6 +182,7 @@ export function layoutFactoryBoard<R extends FactoryRun>(
     review: [],
     merge: [],
     needs_person: [],
+    waiting_parts: [],
     done: [],
   };
   const placed = placeFactoryRuns(runs);

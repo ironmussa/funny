@@ -321,9 +321,11 @@ export interface FactoryActionProviderDeps {
    * before it answers; a thread already recorded is not added twice.
    */
   recordRoleThread?: (role: FactoryRoleThread['role'], threadId: string) => Promise<void>;
+  /** Take only the factory's label off the run's issue, so it is not admitted again. */
+  dropLabel?: () => Promise<void>;
   github: Pick<
     FactoryGithubPort,
-    'findPullRequest' | 'pullRequests' | 'branchAhead' | 'commentOnIssue'
+    'findPullRequest' | 'pullRequests' | 'branchAhead' | 'commentOnIssue' | 'closeIssue'
   >;
   /**
    * Hand the issue back to a person after a run that ended with no change:

@@ -99,6 +99,7 @@ function TriageItems({ triage }: { triage: FactoryTriage }) {
     ready: t('factoryRunDetail.triage.ready', 'Contract: what must be true'),
     needs_info: t('factoryRunDetail.triage.needsInfo', 'Asked on the issue'),
     too_big: t('factoryRunDetail.triage.tooBig', 'Proposed split'),
+    already_done: t('factoryRunDetail.triage.alreadyDone', 'Already done: the evidence'),
   }[triage.decision];
   return (
     <>

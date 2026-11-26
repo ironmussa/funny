@@ -1796,10 +1796,13 @@
       "failed": "Falhou",
       "stopped": "Parada",
       "split": "Dividido",
+      "tracked": "Acompanhado em #{{issue}}",
+      "trackedMore": "Acompanhado em #{{issue}} +{{count}}",
       "notStarted": "Não iniciada",
       "notStartedQueued": "Retirada da fila antes de começar: nenhum agente executou, sem branch nem pull request",
       "notStartedStopped": "Parada antes do primeiro passo: nenhum agente executou, sem branch nem pull request",
-      "tooBig": "Grande demais"
+      "tooBig": "Grande demais",
+      "alreadyDone": "Já feito"
     },
     "wait": {
       "pathsAwaitingApproval": "Aguardando {{blockers}}: reserva os mesmos arquivos enquanto aguarda uma aprovação",
@@ -2082,6 +2085,7 @@
       "review": "Revisão",
       "merge": "Merge",
       "needsPerson": "Precisa de uma pessoa",
+      "waitingParts": "Aguardando as partes",
       "done": "Concluído"
     },
     "emptyColumn": "Nenhuma execução aqui",
@@ -2199,7 +2203,8 @@
       "ready": "Contrato: o que deve ser verdade",
       "needsInfo": "Perguntado na issue",
       "tooBig": "Divisão proposta",
-      "none": "A triagem não deu contrato: a revisão julga contra a issue."
+      "none": "A triagem não deu contrato: a revisão julga contra a issue.",
+      "alreadyDone": "Já feito: as evidências"
     },
     "timeline": {
       "title": "Linha do tempo",

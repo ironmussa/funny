@@ -111,6 +111,52 @@ describe('layoutFactoryBoard', () => {
     expect(columns.done.map((run) => run.id)).toEqual(['stopped']);
   });
 
+  // Issue #464: triage found its work tracked by existing issues, still open,
+  // and its card showed in Done.
+  test('a run that handed its work to other issues waits for them, then is done', () => {
+    const triage = { decision: 'too_big' as const, at: hoursAgo(3), items: [] };
+    const parent = buildFactoryRun({
+      id: 'parent',
+      issueNumber: 464,
+      state: 'done',
+      triage: { ...triage, existing: [542, 544] },
+      completedAt: hoursAgo(2),
+    });
+    const split = buildFactoryRun({
+      id: 'split',
+      issueNumber: 470,
+      state: 'done',
+      triage: { ...triage, items: ['a'], splitInto: [471] },
+      completedAt: hoursAgo(2),
+    });
+    const part = (id: string, issueNumber: number, state: FactoryRun['state']) =>
+      buildFactoryRun({ id, issueNumber, state, completedAt: hoursAgo(1) });
+
+    const waiting = layoutFactoryBoard([
+      parent,
+      split,
+      part('p542', 542, 'merged'),
+      part('p544', 544, 'waiting_human'),
+    ]);
+    expect(waiting.waiting_parts.map((run) => run.id).sort()).toEqual(['parent', 'split']);
+
+    const finished = layoutFactoryBoard([
+      parent,
+      split,
+      part('p542', 542, 'merged'),
+      part('p544', 544, 'merged'),
+      part('p471', 471, 'merged'),
+    ]);
+    expect(finished.waiting_parts).toEqual([]);
+    expect(finished.done.map((run) => run.id)).toContain('parent');
+
+    // Closed by the factory once its parts closed, even ones not on the board.
+    const closed = layoutFactoryBoard([
+      { ...parent, triage: { ...parent.triage!, partsClosedAt: hoursAgo(0) } },
+    ]);
+    expect(closed.done.map((run) => run.id)).toEqual(['parent']);
+  });
+
   test('an ended run a newer run of its issue replaced is done', () => {
     const columns = layoutFactoryBoard([
       buildFactoryRun({
@@ -481,6 +527,46 @@ describe('factoryRunStateChip', () => {
       ),
     ).toEqual({ label: 'Split', tone: 'info' });
   });
+
+  test('an issue whose work existing issues track is not "Done"', () => {
+    const triage = {
+      decision: 'too_big' as const,
+      at: hoursAgo(1),
+      items: [],
+      existing: [542, 544],
+    };
+    expect(factoryRunStateChip(t, buildFactoryRun({ state: 'done', triage }))).toEqual({
+      label: 'Tracked #542 +1',
+      tone: 'info',
+    });
+    expect(
+      factoryRunStateChip(
+        t,
+        buildFactoryRun({ state: 'done', triage: { ...triage, existing: [7] } }),
+      ).label,
+    ).toBe('Tracked #7');
+    expect(factoryRunWaitingText(t, buildFactoryRun({ state: 'done', triage }))).toBe(
+      'Tracked by #542, #544',
+    );
+  });
+
+  test('an issue triage found already done: closed, or left to a person', () => {
+    const triage = { decision: 'already_done' as const, at: hoursAgo(1), items: ['PR 505'] };
+    expect(factoryRunStateChip(t, buildFactoryRun({ state: 'done', triage }))).toEqual({
+      label: 'Already done',
+      tone: 'success',
+    });
+    expect(factoryRunStateChip(t, buildFactoryRun({ state: 'needs_info', triage }))).toEqual({
+      label: 'Already done',
+      tone: 'warning',
+    });
+    expect(factoryRunWaitingText(t, buildFactoryRun({ state: 'done', triage }))).toBe(
+      'Already done: the factory closed the issue',
+    );
+    expect(factoryRunWaitingText(t, buildFactoryRun({ state: 'needs_info', triage }))).toBe(
+      'Triage found it already done; close the issue if you agree',
+    );
+  });
 });
 
 describe('factoryBoardStateChip', () => {
@@ -589,6 +675,15 @@ describe('factoryRunWaitingText', () => {
       ),
     ).toBe('Split into #40, #41');
     expect(factoryRunWaitingText(t, buildFactoryRun({ state: 'done' }))).toBeNull();
+    expect(
+      factoryRunWaitingText(
+        t,
+        buildFactoryRun({
+          state: 'done',
+          triage: { decision: 'too_big', at: hoursAgo(1), items: [], existing: [461, 462] },
+        }),
+      ),
+    ).toBe('Tracked by #461, #462');
   });
 
   test('failed and no-change runs', () => {

@@ -439,7 +439,15 @@ describe('FactoryBoard', () => {
     review: 'reviewing',
     merge: 'merging',
     needs_person: 'waiting_human',
+    waiting_parts: 'done',
     done: 'merged',
+  };
+  // A done run whose work an issue the board does not list still tracks.
+  const trackedTriage = {
+    decision: 'too_big' as const,
+    at: new Date().toISOString(),
+    items: [],
+    existing: [9999],
   };
   const longColumn = (column: FactoryBoardColumnId) =>
     Array.from({ length: 60 }, (_, i) =>
@@ -447,6 +455,7 @@ describe('FactoryBoard', () => {
         issueNumber: 1000 + i,
         queueOrder: i,
         completedAt: column === 'done' ? new Date(Date.now() - i * 60_000).toISOString() : null,
+        triage: column === 'waiting_parts' ? trackedTriage : null,
       }),
     );
   const cardsIn = (column: FactoryBoardColumnId) =>

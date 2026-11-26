@@ -127,6 +127,31 @@ describe('funny_factory_control', () => {
     expect(action?.safeParse('approve-merge').success).toBe(false);
   });
 
+  // A named control the server checks against the run's state, never a state to write.
+  test('offers mark-done and close-replaced-pr, and no state names', () => {
+    const control = factoryToolDefinitions({ threadId: THREAD, userId: 'alice' }, request).find(
+      (definition) => definition.name === 'funny_factory_control',
+    );
+    const action = control?.schema.action;
+    expect(action?.safeParse('mark-done').success).toBe(true);
+    expect(action?.safeParse('close-replaced-pr').success).toBe(true);
+    for (const state of ['done', 'merged', 'failed', 'split']) {
+      expect(action?.safeParse(state).success).toBe(false);
+    }
+  });
+
+  test('says what mark-done did', async () => {
+    request.mockResolvedValue({ run: { ...held, state: 'done', awaitsApproval: false } });
+    const result = await tool('funny_factory_control')({ runId: 'run-1', action: 'mark-done' });
+    expect(request).toHaveBeenCalledWith('data:factory_control_run', {
+      runId: 'run-1',
+      action: 'mark-done',
+      threadId: THREAD,
+    });
+    expect(result.text).toContain('Marked as done.');
+    expect(result.text).toContain('#451 — done');
+  });
+
   test("passes the board's refusal on as an error", async () => {
     request.mockResolvedValue({ error: 'conflict', message: 'The run has already ended.' });
     expect(await tool('funny_factory_control')({ runId: 'run-1', action: 'stop' })).toEqual({

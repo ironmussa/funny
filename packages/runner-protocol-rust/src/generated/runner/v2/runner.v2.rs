@@ -691,7 +691,8 @@ pub struct FactoryListRuns {
     #[prost(string, tag="1")]
     pub thread_id: ::prost::alloc::string::String,
 }
-/// `action` is `retry` or `stop`; anything else is refused.
+/// `action` is one of the agent run controls (retry, stop, mark-done,
+/// close-replaced-pr); anything else is refused.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct FactoryControlRun {
     #[prost(string, tag="1")]

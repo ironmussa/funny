@@ -5,13 +5,15 @@
  * @domain layer: application
  *
  * The issue factory tools of the `funny` MCP server (openspec
- * factory-agent-tools): list the thread owner's runs, retry or stop one, and
+ * factory-agent-tools): list the thread owner's runs, retry, stop or mark one
+ * as done, close the pull request of a replaced run, and
  * ASK the member to approve a held merge. The runner only carries the request:
  * the server takes the actor and the project from the thread's row, decides
  * every refusal, and has no way to approve a merge from this channel.
  *
  * `threadId` comes from the spawn's grant, never from the model. The model
- * supplies a run id and, for the control, `retry` or `stop`.
+ * supplies a run id and, for the control, one of `AGENT_RUN_CONTROLS`: a named
+ * action the server checks against the run's stored state, never a state.
  */
 import { z } from 'zod';
 
@@ -25,8 +27,11 @@ export const FACTORY_TOOL_INSTRUCTIONS =
   'The issue factory of this project is reachable with three tools. ' +
   "funny_factory_runs lists the thread owner's factory runs here: their state, " +
   'why each one waits, its risk class and whether a merge approval was asked or ' +
-  'given. funny_factory_control retries or stops one run, as the thread owner; ' +
-  'use it when the user asks for it. funny_factory_request_approval ASKS the ' +
+  'given. funny_factory_control acts on one run as the thread owner, as the ' +
+  'board does: retry, stop, mark-done (a run that ended with no change or was ' +
+  'stopped, when nothing more is needed) or close-replaced-pr (the pull ' +
+  'request of a run a newer run of its issue replaced); use it when the user ' +
+  'asks for it. funny_factory_request_approval ASKS the ' +
   'user to approve merging a run the factory holds as high risk: the user ' +
   'answers on a card in this thread or on the factory board, and you cannot ' +
   'approve, nor describe the change on the card. It returns at once; read the ' +
@@ -127,9 +132,21 @@ export function describeRun(run: RunSummary): string {
 }
 
 /** The run fields a factory tool sends; the thread id comes from the tool's context. */
+/** The run controls an agent has (the server's `AGENT_RUN_CONTROLS`; it refuses any other). */
+const RUN_CONTROLS = ['retry', 'stop', 'mark-done', 'close-replaced-pr'] as const;
+type RunControl = (typeof RUN_CONTROLS)[number];
+
+/** What each control's answer says it did. */
+const CONTROL_DONE: Record<RunControl, string> = {
+  retry: 'Retried',
+  stop: 'Stopped',
+  'mark-done': 'Marked as done',
+  'close-replaced-pr': 'Closed the pull request of the replaced run',
+};
+
 interface FactoryToolPayload {
   runId?: string;
-  action?: 'retry' | 'stop';
+  action?: RunControl;
 }
 
 /** The fields of a server answer that say whether it refused. */
@@ -211,15 +228,22 @@ export function factoryToolDefinitions(
     {
       name: 'funny_factory_control',
       description:
-        'Retry or stop ONE issue factory run, as the thread owner, exactly as the ' +
-        "factory board's button does. Retry applies to a failed run or one " +
-        'waiting for a person; stop to one that has not ended. A run held as ' +
+        'Act on ONE issue factory run, as the thread owner, exactly as the ' +
+        "factory board's button does. retry: a failed run or one waiting for a " +
+        'person. stop: one that has not ended. mark-done: one that ended with no ' +
+        'change or was stopped, when nothing more is needed (its issue was ' +
+        'closed elsewhere, a duplicate); done is final. close-replaced-pr: close ' +
+        'the pull request (and branch) of a run a newer run of its issue ' +
+        'replaced. The server refuses an action the run is not in a state for. ' +
+        'A run held as ' +
         'high risk is not released by a retry: it needs the approval of a ' +
         'member (funny_factory_request_approval). Every call shows in the ' +
         "owner's activities with this thread.",
       schema: {
         runId: z.string().min(1).describe('The run id, as funny_factory_runs prints it.'),
-        action: z.enum(['retry', 'stop']).describe('retry or stop. There is no approve action.'),
+        action: z
+          .enum(RUN_CONTROLS)
+          .describe('The control to apply. There is no approve action and no way to set a state.'),
       },
       run: async (args) => {
         const { response, error } = await ask(
@@ -235,8 +259,10 @@ export function factoryToolDefinitions(
           refused: !!error,
         });
         if (error) return error;
-        const done = args.action === 'retry' ? 'Retried' : 'Stopped';
-        return text(`${done}. The run is now:\n${describeRun(response.run)}`);
+        const done = RUN_CONTROLS.find((control) => control === args.action);
+        return text(
+          `${done ? CONTROL_DONE[done] : 'Done'}. The run is now:\n${describeRun(response.run)}`,
+        );
       },
     },
     {

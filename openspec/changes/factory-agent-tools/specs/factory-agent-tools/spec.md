@@ -2,7 +2,8 @@
 
 ## Purpose
 
-Lets an agent in a thread read the thread owner's issue factory runs, retry or stop one, and ask
+Lets an agent in a thread read the thread owner's issue factory runs, retry, stop or mark one as
+done, close the pull request of a replaced run, and ask
 the member to approve merging a held high-risk change, without ever being able to approve it.
 
 ## ADDED Requirements
@@ -33,7 +34,9 @@ factory, no run of another project, and no text written outside funny (issue tit
 ### Requirement: An agent retries or stops a run as the thread owner
 
 An agent SHALL be able to retry or stop one run of the thread owner's factory in the thread's
-project. The action SHALL be decided, executed, audited and shown in the owner's activities
+project, mark one that ended with no change or was stopped as done, and close the pull request
+of a run a newer run of its issue replaced. Each is a named control of the board; the agent
+SHALL NOT be able to name a state for a run, a split or a merge approval. The action SHALL be decided, executed, audited and shown in the owner's activities
 exactly as the same action from the board, with the thread that asked recorded on it. It SHALL
 require the thread owner's `steer` on the project at the time of the call. The actor SHALL be
 the thread's owner as the server stores it, never an identity the agent supplies.
@@ -43,6 +46,18 @@ the thread's owner as the server stores it, never an identity the agent supplies
 - **WHEN** an agent retries a run that failed, in a thread whose owner has `steer`
 - **THEN** the run goes back in flight as it does from the board, and the owner's activities
   show the retry and the thread that asked
+
+#### Scenario: Marking a stopped run as done
+
+- **WHEN** an agent marks as done a run that was stopped, in a thread whose owner has `steer`
+- **THEN** the run becomes `done` as it does from the board, and the owner's activities show it
+  and the thread that asked
+
+#### Scenario: Naming a state
+
+- **WHEN** a runner sends a control that is not one of the named controls (`done`, `merged`,
+  `split`, `approve-merge`)
+- **THEN** the server refuses it and the run does not change
 
 #### Scenario: A run that cannot be retried
 

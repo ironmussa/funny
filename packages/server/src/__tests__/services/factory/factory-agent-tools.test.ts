@@ -11,6 +11,7 @@ import { errAsync, okAsync } from 'neverthrow';
 import {
   createFactoryAgentTools,
   factoryToolAccess,
+  isAgentRunControl,
   type FactoryToolAction,
   type ToolThread,
 } from '../../../services/factory/factory-agent-tools.js';
@@ -66,7 +67,13 @@ describe('factoryToolAccess', () => {
   test('a thread shared for steering can list and nothing else', () => {
     const shared = { ...facts, steerShared: true };
     expect(factoryToolAccess(thread(), 'list', shared)).toBeNull();
-    for (const action of ['retry', 'stop', 'request-approval'] as const) {
+    for (const action of [
+      'retry',
+      'stop',
+      'mark-done',
+      'close-replaced-pr',
+      'request-approval',
+    ] as const) {
       expect(factoryToolAccess(thread(), action, shared)).toContain('shared for steering');
     }
   });
@@ -237,6 +244,25 @@ describe('factory agent tools', () => {
     expect(world.controls).toEqual([
       { action: 'retry', userId: 'alice', projectId: 'p1', runId: run.id, threadId: 't1' },
     ]);
+  });
+
+  test('marks a run done as the thread owner, through the board control', async () => {
+    const run = await seedRun(F.alice, 7, 'stopped');
+    const marked = await tools().controlRun(from(), 'mark-done', run.id);
+    expect(marked.isOk()).toBe(true);
+    expect(world.controls).toEqual([
+      { action: 'mark-done', userId: 'alice', projectId: 'p1', runId: run.id, threadId: 't1' },
+    ]);
+  });
+
+  // The data channel names a control, never a state; anything else is refused.
+  test('only named controls are agent controls', () => {
+    for (const control of ['retry', 'stop', 'mark-done', 'close-replaced-pr']) {
+      expect(isAgentRunControl(control)).toBe(true);
+    }
+    for (const other of ['done', 'merged', 'approve-merge', 'split', undefined]) {
+      expect(isAgentRunControl(other)).toBe(false);
+    }
   });
 
   test("passes the board's refusal on, and changes nothing", async () => {

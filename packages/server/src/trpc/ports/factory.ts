@@ -8,7 +8,10 @@
 import { type ApiFailure, type FactoryPort } from '@funny/api';
 import { ResultAsync } from 'neverthrow';
 
-import { factoryAgentToolsWith } from '../../services/factory/factory-agent-tools.js';
+import {
+  factoryAgentToolsWith,
+  type AgentRunControl,
+} from '../../services/factory/factory-agent-tools.js';
 import { createFactoryApprovalRequestsRepository } from '../../services/factory/factory-approval-requests.js';
 import { createFactoryIncidentsRepository } from '../../services/factory/factory-incidents.js';
 import { createFactoryQueue } from '../../services/factory/factory-queue.js';
@@ -46,14 +49,14 @@ function createFactoryParts(
 
   return {
     port,
-    // The two controls an agent has. The action type leaves `approve-merge` out.
+    // The controls an agent has. The action type leaves `approve-merge` and `split` out.
     controlled: (action, userId, projectId, runId, askedByThread) =>
       controlled(action, userId, projectId, runId, { askedByThread }),
   };
 }
 
 type ControlRun = (
-  action: 'retry' | 'stop',
+  action: AgentRunControl,
   userId: string,
   projectId: string,
   runId: string,

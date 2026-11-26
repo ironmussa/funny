@@ -1336,7 +1336,8 @@ export const FactoryListRunsSchema: GenMessage<FactoryListRuns> =
   messageDesc(file_runner_v2_operations, 61);
 
 /**
- * `action` is `retry` or `stop`; anything else is refused.
+ * `action` is one of the agent run controls (retry, stop, mark-done,
+ * close-replaced-pr); anything else is refused.
  *
  * @generated from message runner.v2.FactoryControlRun
  */

@@ -26,7 +26,13 @@ import {
   type FactoryScope,
 } from './factory-port-shared.js';
 
-export type RunControlAction = 'stop' | 'retry' | 'split' | 'approve-merge';
+export type RunControlAction =
+  | 'stop'
+  | 'retry'
+  | 'split'
+  | 'approve-merge'
+  | 'mark-done'
+  | 'close-replaced-pr';
 
 /** A controlled run, and the commit the control was for (only an approval names one). */
 interface ControlledRun {
@@ -47,8 +53,20 @@ const RUN_CONTROL: Record<
       | 'factory.run_stopped'
       | 'factory.run_retried'
       | 'factory.run_split'
-      | 'factory.merge_approved';
-    kind: 'factory.stop' | 'factory.retry' | 'factory.split' | 'factory.approve-merge';
+      | 'factory.merge_approved'
+      | 'factory.run_marked_done'
+      | 'factory.superseded_pr_closed';
+    /**
+     * The member's activity row, or null when the control records its own
+     * (closing a pull request records `factory.close-pr` where it closes it).
+     */
+    kind:
+      | 'factory.stop'
+      | 'factory.retry'
+      | 'factory.split'
+      | 'factory.approve-merge'
+      | 'factory.mark-done'
+      | null;
     /** `label` names the run: `for issue #12`, or its id when it has no issue. */
     auditDetail: (label: string, sha: string | null) => string;
     /** Past tense when it worked; what was asked when it did not (the row shows why). */
@@ -84,6 +102,20 @@ const RUN_CONTROL: Record<
     title: (issue, sha, done) =>
       `${done ? 'Approved merging' : 'Approve merging'}${issue ? ` #${issue}` : ''}, a high-risk change${sha ? ` (${sha.slice(0, 7)})` : ''}`,
   },
+  'mark-done': {
+    audit: 'factory.run_marked_done',
+    kind: 'factory.mark-done',
+    auditDetail: (label) => `Factory run ${label} marked as done: nothing more was needed`,
+    title: (issue, _sha, done) =>
+      `${done ? 'Marked' : 'Mark'} the factory run${issue ? ` for #${issue}` : ''} as done`,
+  },
+  'close-replaced-pr': {
+    audit: 'factory.superseded_pr_closed',
+    kind: null,
+    auditDetail: (label) => `Pull request of replaced factory run ${label} closed`,
+    title: (issue, _sha, done) =>
+      `${done ? 'Closed' : 'Close'} the pull request of the replaced run${issue ? ` for #${issue}` : ''}`,
+  },
 };
 
 /** The run control as a row of the member's activities; recording never fails the control. */
@@ -98,6 +130,7 @@ function recordRunControl(
   askedByThread?: string,
 ): Promise<void> {
   const { kind, title } = RUN_CONTROL[action];
+  if (!kind) return Promise.resolve();
   return recordServerActivity(
     {
       kind,
@@ -124,7 +157,8 @@ interface RunControlOptions {
 }
 
 /**
- * A member's control over one run (stop, retry, approve a held merge): run,
+ * A member's control over one run (stop, retry, split, approve a held merge,
+ * mark as done, close a replaced run's pull request): run,
  * audited, and shown in their activities whether it worked or not
  * (track-funny-actions).
  */
@@ -146,6 +180,9 @@ export function createRunControl(
           retry: () => control.retry(factoryId, runId).map(withoutSha),
           split: () => control.split(factoryId, runId).map(withoutSha),
           'approve-merge': () => control.approveMerge(userId, factoryId, runId, expectedSha),
+          'mark-done': () => control.markDone(factoryId, runId).map(withoutSha),
+          'close-replaced-pr': () =>
+            control.closeReplacedPr(factoryId, runId).map(({ run }) => withoutSha(run)),
         }[action];
         return run().mapErr(controlFailure);
       })
@@ -313,16 +350,7 @@ export function runPortMethods(
     },
 
     async markRunDone(userId, projectId, runId) {
-      return ownFactory(userId, projectId)
-        .andThen((factoryId) => control.markDone(factoryId, runId).mapErr(controlFailure))
-        .andTee((run) =>
-          audit({
-            action: 'factory.run_marked_done',
-            actorId: userId,
-            detail: `Factory run ${factoryRunLabel(run)} marked as done: no change was needed`,
-            meta: { projectId, runId, issueNumber: run.issueNumber },
-          }),
-        );
+      return controlled('mark-done', userId, projectId, runId);
     },
 
     async closeReplacedPr(userId, projectId, runId) {

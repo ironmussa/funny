@@ -244,8 +244,8 @@ describe('dedicated runner data scope', () => {
     seedRunner(db, { id: 'bob-laptop', userId: 'bob', token: 'tok-b', hostname: 'b' });
     expect(await handleDataMessageWithAck('bob-laptop', 'bob', list)).toEqual(FORBIDDEN);
 
-    // The only actions are retry and stop: a runner cannot name an approval.
-    for (const action of ['approve-merge', 'approve', '']) {
+    // Only the named run controls: a runner cannot name an approval, a split or a state.
+    for (const action of ['approve-merge', 'approve', 'split', 'done', '']) {
       const res = await send('rx', {
         type: 'data:factory_control_run',
         threadId: 'tx',
@@ -256,7 +256,7 @@ describe('dedicated runner data scope', () => {
       expect(res).toEqual({
         type: 'data:factory_control_run_response',
         error: 'refused',
-        message: 'The action must be retry or stop.',
+        message: 'The action must be one of: retry, stop, mark-done, close-replaced-pr.',
       });
     }
 

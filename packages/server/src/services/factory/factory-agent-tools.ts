@@ -8,7 +8,8 @@
  * (openspec factory-agent-tools), behind the runner's data channel:
  *
  * - list the owner's runs in the thread's project,
- * - retry or stop one, through the same control as the board,
+ * - retry, stop or mark one as done, or close the pull request of a replaced
+ *   run, through the same control as the board,
  * - ask the member to approve merging a held high-risk change.
  *
  * Nothing here approves a merge: there is no code path from this module to
@@ -39,10 +40,20 @@ import {
 import { createFactoryRunsRepository, type FactoryRunView } from './factory-runs.js';
 import { createFactorySettingsService } from './factory-settings.js';
 
-export type FactoryToolAction = 'list' | 'retry' | 'stop' | 'request-approval';
+/**
+ * The controls an agent has: the board's, each a legal transition decided by
+ * the run control, never a state the agent names. A merge approval and a
+ * split (it opens issues) are not among them.
+ */
+export const AGENT_RUN_CONTROLS = ['retry', 'stop', 'mark-done', 'close-replaced-pr'] as const;
+export type AgentRunControl = (typeof AGENT_RUN_CONTROLS)[number];
 
-/** The two controls an agent has. A merge approval is not one of them. */
-export type AgentRunControl = 'retry' | 'stop';
+export type FactoryToolAction = 'list' | AgentRunControl | 'request-approval';
+
+/** Whether a data-channel value names one of the agent's controls. */
+export function isAgentRunControl(value: unknown): value is AgentRunControl {
+  return AGENT_RUN_CONTROLS.some((control) => control === value);
+}
 
 export type FactoryToolError = {
   kind: 'refused' | 'not-found' | 'conflict' | 'storage';
@@ -196,7 +207,7 @@ export interface FactoryAgentToolsDeps {
   factoryId: (userId: string, projectId: string) => ResultAsync<string | null, { message: string }>;
   runs: Pick<ReturnType<typeof createFactoryRunsRepository>, 'list' | 'get'>;
   requests: ReturnType<typeof createFactoryApprovalRequestsRepository>;
-  /** The board's retry and stop (audited, in the member's activities). */
+  /** The board's run controls (audited, in the member's activities). */
   control: ControlRun;
 }
 
@@ -342,7 +353,7 @@ export function createFactoryAgentTools(deps: FactoryAgentToolsDeps) {
       );
     },
 
-    /** Retry or stop one run as the thread's owner, exactly as the board does. */
+    /** Retry, stop, mark done or close a replaced PR, as the thread's owner, exactly as the board does. */
     controlRun(
       request: FactoryToolRequest,
       action: AgentRunControl,

@@ -195,6 +195,14 @@ export const ACTIVITY_KINDS = {
     record: 'always',
     input: z.object({ issueNumber: z.number().int().optional() }),
   },
+  // A run that ended with no change, or was stopped, marked as done by a member.
+  'factory.mark-done': {
+    scope: 'project',
+    // Only the run's state changes; nothing on GitHub or in a checkout.
+    destructive: false,
+    record: 'always',
+    input: z.object({ issueNumber: z.number().int().optional() }),
+  },
   // A parked too-large run split into its parts' issues by a member.
   'factory.split': {
     scope: 'project',

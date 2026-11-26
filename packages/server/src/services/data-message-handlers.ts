@@ -651,9 +651,15 @@ const DATA_MESSAGE_HANDLERS: DataMessageHandlers = {
   },
   'data:factory_control_run': async ({ runnerId, ownerId, data }) => {
     const type = 'data:factory_control_run_response';
-    const action = data.action === 'retry' || data.action === 'stop' ? data.action : null;
+    const { isAgentRunControl, AGENT_RUN_CONTROLS } =
+      await import('./factory/factory-agent-tools.js');
+    const action = isAgentRunControl(data.action) ? data.action : null;
     if (!action) {
-      return { type, error: 'refused', message: 'The action must be retry or stop.' };
+      return {
+        type,
+        error: 'refused',
+        message: `The action must be one of: ${AGENT_RUN_CONTROLS.join(', ')}.`,
+      };
     }
     const { factoryAgentTools } = await import('../trpc/ports/factory.js');
     const controlled = await factoryAgentTools.controlRun(

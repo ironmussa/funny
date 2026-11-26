@@ -5,7 +5,12 @@
  * these types without pulling in a concrete process implementation.
  */
 
-import type { AgentAccountInfo, AgentPlanUsage, ContextBreakdown } from '@funny/shared';
+import type {
+  AgentAccountInfo,
+  AgentPlanUsage,
+  AgentProvider,
+  ContextBreakdown,
+} from '@funny/shared';
 
 // ── CLI Message Types ──────────────────────────────────────────────
 
@@ -49,7 +54,7 @@ export interface CLIAssistantMessage {
       | { type: 'text'; text: string }
       | { type: 'tool_use'; id: string; name: string; input: unknown }
     >;
-    usage?: { input_tokens: number; output_tokens: number };
+    usage?: { input_tokens: number; output_tokens: number; max_tokens?: number };
   };
   parent_tool_use_id?: string | null;
 }
@@ -105,11 +110,13 @@ export interface CLIRateLimitMessage {
 }
 
 /**
- * The account the provider CLI is logged in with (Claude SDK `accountInfo()`)
- * and its plan usage (`/usage`; absent when plan limits do not apply).
+ * The account the provider CLI is logged in with (e.g. Claude SDK `accountInfo()`
+ * or ACP session `_meta`) and its plan usage (`/usage`; absent when plan limits
+ * do not apply or the provider does not report them).
  */
 export interface CLIAccountMessage {
   type: 'account';
+  provider?: AgentProvider;
   info: AgentAccountInfo;
   usage?: AgentPlanUsage;
 }

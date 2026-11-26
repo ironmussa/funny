@@ -690,6 +690,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
     if (this.isAborted) return;
     this.emit('message', {
       type: 'account',
+      provider: 'claude',
       info: toAgentAccountInfo(info),
       usage: usage ? toAgentPlanUsage(usage) : undefined,
     });

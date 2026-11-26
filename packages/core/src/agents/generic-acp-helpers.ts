@@ -7,8 +7,12 @@
 
 import { randomUUID } from 'crypto';
 
+import type { AgentAccountInfo } from '@funny/shared';
 import type { JsonObject } from '@funny/shared/json';
+import { parseStoredJson } from '@funny/shared/json-validation';
+import { z } from 'zod';
 
+import type { DebugLogger } from '../debug.js';
 import {
   buildTodoWriteInputFromRaw,
   enrichTodoWriteInputFromOutput,
@@ -39,6 +43,7 @@ export type ACPSessionConfigOptions = readonly ACPSessionConfigOption[] | null |
 /** Context for calling agent-side ACP methods on a live connection. */
 export type ACPAgentContext = ACPConnection['agent'];
 export type ACPMethods = ACPSDK['methods'];
+export type ACPMeta = import('@agentclientprotocol/sdk/unstable').InitializeResponse['_meta'];
 
 export type ACPUpdateOf<K extends ACPSessionUpdate['sessionUpdate']> = Extract<
   ACPSessionUpdate,
@@ -120,8 +125,17 @@ export function formatPlanChecklist(items: Array<[string | undefined, unknown]>)
 /**
  * Whether a built tool input has the primary field its client card needs to
  * render a meaningful summary. Used by `deferUnrenderableToolInput` providers.
+ *
+ * When `isTerminal` is `false`, an `Edit` call that has `file_path` but no diff
+ * payload yet (`new_string` or `changes`) stays deferred so a follow-up
+ * `tool_call_update` carrying the ACP `diff` content block is not dropped; at
+ * terminal status or turn flush, `file_path` alone is enough to render the card.
  */
-export function isRenderableToolInput(toolName: string, input: JsonObject): boolean {
+export function isRenderableToolInput(
+  toolName: string,
+  input: JsonObject,
+  isTerminal = true,
+): boolean {
   const has = (key: string) => {
     const value = input[key];
     return isString(value) && value.length > 0;
@@ -129,8 +143,10 @@ export function isRenderableToolInput(toolName: string, input: JsonObject): bool
   switch (toolName) {
     case 'Read':
     case 'Write':
-    case 'Edit':
       return has('file_path');
+    case 'Edit':
+      if (!has('file_path')) return false;
+      return isTerminal || isString(input.new_string) || input.changes != null;
     case 'Bash':
       return has('command');
     case 'Glob':
@@ -145,14 +161,18 @@ export function isRenderableToolInput(toolName: string, input: JsonObject): bool
 
 /**
  * Merge a buffered tool input with a freshly built one, preferring non-empty
- * values from `next` (e.g. a file_path the initial deferred event was missing).
+ * values from `next` (e.g. a file_path the initial deferred event was missing),
+ * while still preserving an explicit empty string (e.g. `old_string: ''` or
+ * `new_string: ''` on a creation/deletion diff) when `prev` had no value.
  */
 export function mergeToolInput(prev: JsonObject, next: JsonObject): JsonObject {
   const merged = { ...prev };
   for (const [key, value] of Object.entries(next)) {
-    if (value !== undefined && value !== null && value !== '') {
-      merged[key] = value;
+    if (value === undefined || value === null) continue;
+    if (value === '' && merged[key] !== undefined && merged[key] !== null && merged[key] !== '') {
+      continue;
     }
+    merged[key] = value;
   }
   return merged;
 }
@@ -264,6 +284,97 @@ function collectSelectValueIds(options: ACPSessionConfigSelectOptions | undefine
   };
   collect(options);
   return valueIds;
+}
+
+const optionalNonEmptyString = z
+  .string()
+  .transform((s) => s.trim())
+  .transform((s) => (s.length > 0 ? s : undefined))
+  .catch(undefined);
+
+const acpAccountFieldsSchema = z.object({
+  email: optionalNonEmptyString,
+  userEmail: optionalNonEmptyString,
+  organization: optionalNonEmptyString,
+  org: optionalNonEmptyString,
+  subscriptionType: optionalNonEmptyString,
+  plan: optionalNonEmptyString,
+  tier: optionalNonEmptyString,
+  apiProvider: optionalNonEmptyString,
+});
+
+const acpAccountMetaSchema = acpAccountFieldsSchema.extend({
+  account: acpAccountFieldsSchema.optional().catch(undefined),
+  user: acpAccountFieldsSchema.optional().catch(undefined),
+});
+
+/**
+ * Extract provider account metadata from an ACP `initialize`, `session/new`,
+ * or `session/load` `_meta` bag. Returns `null` when no known account fields
+ * are present.
+ */
+export function extractACPAccountInfo(meta: ACPMeta): AgentAccountInfo | null {
+  const parsed = acpAccountMetaSchema.safeParse(meta);
+  if (!parsed.success) return null;
+  const record = parsed.data;
+  const nested = record.account ?? record.user;
+
+  const email = nested?.email ?? record.email ?? record.userEmail;
+  const organization = nested?.organization ?? nested?.org ?? record.organization;
+  const subscriptionType =
+    nested?.subscriptionType ??
+    nested?.plan ??
+    nested?.tier ??
+    record.subscriptionType ??
+    record.plan ??
+    record.tier;
+  const apiProvider = nested?.apiProvider ?? record.apiProvider;
+
+  if (!email && !organization && !subscriptionType && !apiProvider) return null;
+  const info: AgentAccountInfo = {};
+  if (email) info.email = email;
+  if (organization) info.organization = organization;
+  if (subscriptionType) info.subscriptionType = subscriptionType;
+  if (apiProvider) info.apiProvider = apiProvider;
+  return info;
+}
+
+const geminiTrustedFoldersSchema = z.record(z.string(), z.string());
+
+/**
+ * Mark the cwd as a trusted folder for gemini's `--yolo` mode by writing to
+ * `~/.gemini/trustedFolders.json`. gemini-cli silently downgrades `--yolo` to
+ * default approval unless the folder is pre-trusted. The ONLY imperative
+ * prelaunch selector — named in core, never authored by a manifest.
+ */
+export async function ensureGeminiTrustedFolder(cwd: string, dlog: DebugLogger): Promise<void> {
+  try {
+    const os = await import('os');
+    const path = await import('path');
+    const fs = await import('fs/promises');
+    const trustedPath = path.join(os.homedir(), '.gemini', 'trustedFolders.json');
+    let trusted: Record<string, string> = {};
+    try {
+      // gemini writes trustedFolders.json as a folder → trust-level map; anything
+      // else is replaced by a fresh map.
+      const parsed = parseStoredJson(
+        geminiTrustedFoldersSchema,
+        await fs.readFile(trustedPath, 'utf-8'),
+        trustedPath,
+      );
+      if (parsed.ok) trusted = parsed.value;
+    } catch {
+      // file missing / unreadable — start fresh
+    }
+    if (trusted[cwd] === 'TRUST_FOLDER') return;
+    trusted[cwd] = 'TRUST_FOLDER';
+    await fs.mkdir(path.dirname(trustedPath), { recursive: true });
+    await fs.writeFile(trustedPath, JSON.stringify(trusted, null, 2));
+    dlog.info('marked folder as TRUST_FOLDER for gemini yolo mode', { cwd, trustedPath });
+  } catch (e) {
+    // SAFETY: fs and JSON errors are Error instances; the message is only logged.
+    dlog.warn('failed to mark gemini trusted folder', { cwd, error: (e as Error)?.message });
+  }
 }
 
 function isString<T>(value: T): value is T & string {

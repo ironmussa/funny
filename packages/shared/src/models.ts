@@ -571,9 +571,13 @@ export function getProviderModelsWithLabels(provider: AgentProvider): ModelInfo[
   }));
 }
 
-/** Get the context window for a model (falls back to 200k if unknown). */
+/** Get the context window for a model (falls back to provider sentinel, then 200k). */
 export function getModelContextWindow(provider: AgentProvider, model: AgentModel): number {
-  return getModelDefinition(provider, model)?.contextWindow ?? 200_000;
+  return (
+    getModelDefinition(provider, model)?.contextWindow ??
+    getModelDefinition(provider, 'default')?.contextWindow ??
+    200_000
+  );
 }
 
 /**

@@ -9,7 +9,7 @@ import { buildThreadRecord, createThreadManagerFake } from '../helpers/builders.
 
 const THREAD_ID = 'thread-compact';
 
-function makeHandler() {
+function makeHandler(thread: Parameters<typeof buildThreadRecord>[0] = {}) {
   const state = new AgentStateTracker();
   // Pre-seed the cached userId so emitWS doesn't hit the DB.
   state.threadUserIds.set(THREAD_ID, 'user-1');
@@ -22,7 +22,9 @@ function makeHandler() {
     }),
   };
   const threadManager = createThreadManagerFake({
-    getThread: vi.fn(async () => buildThreadRecord({ id: THREAD_ID, userId: 'user-1' })),
+    getThread: vi.fn(async () =>
+      buildThreadRecord({ id: THREAD_ID, userId: 'user-1', provider: 'claude', ...thread }),
+    ),
     insertMessage: vi.fn(async () => 'db-msg-1'),
     updateMessage: vi.fn(async () => undefined),
   });
@@ -114,7 +116,8 @@ describe('AgentMessageHandler — context breakdown', () => {
 
     const usageEvents = emitted.filter((e) => e.type === 'agent:context_usage');
     expect(usageEvents).toHaveLength(1);
-    expect(usageEvents[0].data).toEqual({
+    expect(usageEvents[0].data).toMatchObject({
+      provider: 'claude',
       inputTokens: 50_000,
       outputTokens: 0,
       cumulativeInputTokens: 50_000,
@@ -129,5 +132,79 @@ describe('AgentMessageHandler — context breakdown', () => {
 
     const [event] = emitted.filter((e) => e.type === 'agent:context_usage');
     expect(event.data.cumulativeInputTokens).toBe(48_000);
+  });
+});
+
+describe('AgentMessageHandler — agent account provider scoping', () => {
+  test('includes the message provider on agent:account events', async () => {
+    const { handler, emitted } = makeHandler();
+
+    await handler.handle(THREAD_ID, {
+      type: 'account',
+      provider: 'antigravity',
+      info: { email: 'dev@google.com' },
+    });
+
+    const [event] = emitted.filter((e) => e.type === 'agent:account');
+    expect(event.data).toMatchObject({
+      provider: 'antigravity',
+      account: { email: 'dev@google.com' },
+    });
+  });
+
+  test('falls back to the thread provider when the account message omits one', async () => {
+    const { handler, emitted } = makeHandler();
+
+    await handler.handle(THREAD_ID, {
+      type: 'account',
+      info: { email: 'dev@example.com' },
+    });
+
+    const [event] = emitted.filter((e) => e.type === 'agent:account');
+    expect(event.data).toMatchObject({
+      provider: 'claude',
+      account: { email: 'dev@example.com' },
+    });
+  });
+});
+
+describe('AgentMessageHandler — context usage run scoping', () => {
+  test('tags usage with the run provider and model and forwards the reported window', async () => {
+    const { handler, emitted } = makeHandler({ provider: 'antigravity', model: 'default' });
+
+    await handler.handle(THREAD_ID, {
+      type: 'assistant',
+      message: {
+        id: 'cli-1',
+        content: [{ type: 'text', text: 'Hi' }],
+        usage: { input_tokens: 30_000, output_tokens: 0, max_tokens: 1_048_576 },
+      },
+    });
+
+    const [event] = emitted.filter((e) => e.type === 'agent:context_usage');
+    expect(event.data).toMatchObject({
+      provider: 'antigravity',
+      model: 'default',
+      maxTokens: 1_048_576,
+      cumulativeInputTokens: 30_000,
+    });
+  });
+
+  test('omits maxTokens when the provider does not report a window', async () => {
+    const { handler, emitted } = makeHandler();
+
+    await handler.handle(
+      THREAD_ID,
+      assistantMsg([{ type: 'text', text: 'Hello' }], {
+        input_tokens: 100,
+        cache_read_input_tokens: 0,
+        cache_creation_input_tokens: 0,
+        output_tokens: 1,
+      }),
+    );
+
+    const [event] = emitted.filter((e) => e.type === 'agent:context_usage');
+    expect(event.data.maxTokens).toBeUndefined();
+    expect(event.data.provider).toBe('claude');
   });
 });

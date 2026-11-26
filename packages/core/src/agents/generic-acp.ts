@@ -19,6 +19,7 @@
 import { spawn, type ChildProcess } from 'child_process';
 import { randomUUID } from 'crypto';
 
+import type { AgentAccountInfo } from '@funny/shared';
 import type { JsonObject } from '@funny/shared/json';
 import type { ProviderManifest } from '@funny/shared/provider-manifest';
 import { resolveSpawnCommand, type SpawnCommand } from '@funny/shared/provider-manifest';
@@ -36,6 +37,8 @@ import {
 } from './acp-tool-input.js';
 import { BaseAgentProcess, killProcessTree } from './base-process.js';
 import {
+  ensureGeminiTrustedFolder,
+  extractACPAccountInfo,
   readToolCallFields,
   isTerminalToolStatus,
   finalizeTodoInput,
@@ -278,6 +281,9 @@ export class GenericACPProcess extends BaseAgentProcess {
         });
       }
 
+      const initAccount = extractACPAccountInfo(initResult._meta);
+      let sessionAccount: AgentAccountInfo | null = null;
+
       const isResume = Boolean(this.options.sessionId && supportsLoadSession);
       if (isResume) {
         this.activeSessionId = this.options.sessionId!;
@@ -288,6 +294,7 @@ export class GenericACPProcess extends BaseAgentProcess {
             cwd: this.options.cwd,
             mcpServers: mcpServerList,
           });
+          sessionAccount = extractACPAccountInfo(loadResponse?._meta);
           // `loadSession` returns the same `configOptions` as `newSession`
           // (ACP 0.26+). Capture them here too, otherwise `applyModelSelection`
           // has no model config option to set on resume and silently falls back
@@ -303,6 +310,7 @@ export class GenericACPProcess extends BaseAgentProcess {
           mcpServers: mcpServerList,
         });
         this.activeSessionId = sessionResponse.sessionId;
+        sessionAccount = extractACPAccountInfo(sessionResponse._meta);
         this.captureSessionConfigOptions(sessionResponse.configOptions);
       }
 
@@ -312,6 +320,15 @@ export class GenericACPProcess extends BaseAgentProcess {
         this.options.model ?? 'default',
         this.options.cwd,
       );
+
+      const accountInfo = sessionAccount ? { ...initAccount, ...sessionAccount } : initAccount;
+      if (accountInfo) {
+        this.emit('message', {
+          type: 'account',
+          provider: this.manifest.id,
+          info: accountInfo,
+        });
+      }
 
       await this.applyModelSelection(agent, methods);
       await this.applyThoughtLevelSelection(agent, methods);
@@ -989,7 +1006,7 @@ export class GenericACPProcess extends BaseAgentProcess {
     isTerminal: boolean,
   ): boolean {
     if (!this.manifest.quirks.deferUnrenderableToolInput) return false;
-    if (isRenderableToolInput(toolName, input)) return false;
+    if (isRenderableToolInput(toolName, input, isTerminal)) return false;
     if (isTerminal) {
       this.deferredToolInputs.delete(toolCallId);
     } else {
@@ -1057,39 +1074,5 @@ export class GenericACPProcess extends BaseAgentProcess {
       commands,
       sessionId: this.activeSessionId ?? '',
     });
-  }
-}
-
-// ── Helpers ─────────────────────────────────────────────────────
-
-/**
- * Mark the cwd as a trusted folder for gemini's `--yolo` mode by writing to
- * `~/.gemini/trustedFolders.json`. gemini-cli silently downgrades `--yolo` to
- * default approval unless the folder is pre-trusted. The ONLY imperative
- * prelaunch selector — named in core, never authored by a manifest.
- */
-async function ensureGeminiTrustedFolder(cwd: string, dlog: DebugLogger): Promise<void> {
-  try {
-    const os = await import('os');
-    const path = await import('path');
-    const fs = await import('fs/promises');
-    const trustedPath = path.join(os.homedir(), '.gemini', 'trustedFolders.json');
-    let trusted: Record<string, string> = {};
-    try {
-      // SAFETY: gemini writes trustedFolders.json as a folder → trust-level map; if the
-      // file holds something else, indexing or writing it below throws into the outer
-      // catch, which only logs a warning.
-      trusted = JSON.parse(await fs.readFile(trustedPath, 'utf-8')) as Record<string, string>;
-    } catch {
-      // file missing / unreadable — start fresh
-    }
-    if (trusted[cwd] === 'TRUST_FOLDER') return;
-    trusted[cwd] = 'TRUST_FOLDER';
-    await fs.mkdir(path.dirname(trustedPath), { recursive: true });
-    await fs.writeFile(trustedPath, JSON.stringify(trusted, null, 2));
-    dlog.info('marked folder as TRUST_FOLDER for gemini yolo mode', { cwd, trustedPath });
-  } catch (e) {
-    // SAFETY: fs and JSON errors are Error instances; the message is only logged.
-    dlog.warn('failed to mark gemini trusted folder', { cwd, error: (e as Error)?.message });
   }
 }

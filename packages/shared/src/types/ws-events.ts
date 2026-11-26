@@ -1,6 +1,12 @@
 // WebSocket event payloads and the `WSEvent` union (re-exported from `../types.js`).
 import type { JsonObject } from '../json.js';
-import type { PermissionMode, ThreadStage, ThreadStatus, WaitingReason } from '../primitives.js';
+import type {
+  AgentProvider,
+  PermissionMode,
+  ThreadStage,
+  ThreadStatus,
+  WaitingReason,
+} from '../primitives.js';
 import type { TeamRole } from './auth.js';
 import type {
   WSActivityProgressData,
@@ -172,6 +178,12 @@ export interface WSContextUsageData {
   inputTokens: number;
   outputTokens: number;
   cumulativeInputTokens: number;
+  /** Provider whose run produced this usage snapshot (scopes window + breakdown). */
+  provider?: AgentProvider;
+  /** Model selected for the run that produced this usage snapshot. */
+  model?: string;
+  /** Live context window reported by the provider (e.g. ACP `usage_update.size`). */
+  maxTokens?: number;
   /** Present on the end-of-turn snapshot from providers that report it (Claude SDK). */
   breakdown?: ContextBreakdown;
 }
@@ -331,12 +343,16 @@ export interface AgentPlanUsage {
 
 /**
  * The account a run uses, sent at session start and after every turn.
- * `profileId` / `profileName` name the funny execution profile
- * (CLAUDE_CONFIG_DIR); both null for the runner's default Claude login.
- * `usage` is absent when plan limits do not apply (API key, Bedrock, …) or the
- * request failed.
+ * `provider` identifies the agent provider (`claude`, `antigravity`, …) so
+ * accounts and plan limits stay scoped per provider. `profileId` /
+ * `profileName` name the funny execution profile (e.g. CLAUDE_CONFIG_DIR);
+ * both null for the runner's default login. `usage` is absent when plan
+ * limits do not apply (API key, Bedrock, …) or the provider does not report
+ * them.
  */
 export interface WSAgentAccountData {
+  /** Agent provider whose account / plan limits this snapshot describes. */
+  provider?: AgentProvider;
   profileId: string | null;
   profileName: string | null;
   account: AgentAccountInfo;

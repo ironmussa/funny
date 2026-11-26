@@ -8,7 +8,13 @@
  */
 
 import type { CLIMessage } from '@funny/core/agents';
-import type { ThreadStatus, WaitingReason, WSEvent } from '@funny/shared';
+import type {
+  AgentProvider,
+  ThreadStatus,
+  WaitingReason,
+  WSContextUsageData,
+  WSEvent,
+} from '@funny/shared';
 import { parseStoredJson } from '@funny/shared/json-validation';
 import { z } from 'zod';
 
@@ -45,6 +51,9 @@ interface AssistantMessageUsage {
   input_tokens?: number;
   inputTokens?: number;
   used?: number;
+  max_tokens?: number;
+  maxTokens?: number;
+  size?: number;
   cache_read_input_tokens?: number;
   cachedReadTokens?: number;
   cacheReadTokens?: number;
@@ -60,6 +69,15 @@ interface AssistantMessageUsage {
  * assistant text/tool_use, user tool_result, and result.
  */
 export type ProjectLookup = (id: string) => HandlerProject | undefined;
+
+/** Tag a context-usage event with the provider and model of the run that produced it. */
+function setUsageRun(
+  data: WSContextUsageData,
+  run: { provider?: AgentProvider; model?: string },
+): void {
+  if (run.provider) data.provider = run.provider;
+  if (run.model) data.model = run.model;
+}
 
 /** The message's `subtype`, for the debug log; only some CLI messages have one. */
 function messageSubtype(msg: CLIMessage): string | undefined {
@@ -290,8 +308,11 @@ export class AgentMessageHandler {
     }
 
     if (msg.type === 'account') {
+      const runProfile = await this.runAgentProfile(threadId);
       await this.emitWS(threadId, 'agent:account', {
-        ...(await this.runAgentProfile(threadId)),
+        provider: msg.provider ?? runProfile.provider,
+        profileId: runProfile.profileId,
+        profileName: runProfile.profileName,
         account: msg.info,
         usage: msg.usage,
       });
@@ -313,12 +334,14 @@ export class AgentMessageHandler {
     msg: Extract<CLIMessage, { type: 'context_breakdown' }>,
   ): Promise<void> {
     const cumulative = this.state.cumulativeInputTokens.get(threadId) ?? msg.breakdown.totalTokens;
-    await this.emitWS(threadId, 'agent:context_usage', {
+    const data: WSContextUsageData = {
       inputTokens: cumulative,
       outputTokens: 0,
       cumulativeInputTokens: cumulative,
       breakdown: msg.breakdown,
-    });
+    };
+    setUsageRun(data, await this.runAgentProfile(threadId));
+    await this.emitWS(threadId, 'agent:context_usage', data);
   }
 
   /** Rate limit — claude.ai subscription quota update. */
@@ -343,9 +366,12 @@ export class AgentMessageHandler {
    * key the account's usage by profile rather than by thread. Read from the thread
    * row (written before the agent starts) once per run.
    */
-  private async runAgentProfile(
-    threadId: string,
-  ): Promise<{ profileId: string | null; profileName: string | null }> {
+  private async runAgentProfile(threadId: string): Promise<{
+    provider?: AgentProvider;
+    model?: string;
+    profileId: string | null;
+    profileName: string | null;
+  }> {
     const cached = this.state.runAgentProfiles.get(threadId);
     if (cached) return cached;
     let thread;
@@ -360,6 +386,8 @@ export class AgentMessageHandler {
       return { profileId: null, profileName: null };
     }
     const ref = {
+      provider: thread?.provider,
+      model: thread?.model,
       profileId: thread?.agentProfileId ?? null,
       profileName: thread?.agentProfileName ?? null,
     };
@@ -544,6 +572,11 @@ export class AgentMessageHandler {
       const cacheCreation =
         usage.cache_creation_input_tokens ?? usage.cachedWriteTokens ?? usage.cacheWriteTokens ?? 0;
       const outputTokens = usage.output_tokens ?? usage.outputTokens ?? 0;
+      const reportedMax = usage.max_tokens ?? usage.maxTokens ?? usage.size;
+      const maxTokens =
+        reportedMax !== undefined && Number.isFinite(reportedMax) && reportedMax > 0
+          ? reportedMax
+          : undefined;
       const totalInputTokens = inputTokens + cacheRead + cacheCreation;
 
       log.info('Assistant message usage (DEBUG)', {
@@ -561,11 +594,15 @@ export class AgentMessageHandler {
       // Each API response reports the full context window size (not a delta),
       // so just store the latest value instead of accumulating.
       this.state.cumulativeInputTokens.set(threadId, totalInputTokens);
-      void this.emitWS(threadId, 'agent:context_usage', {
+      // Cached per run: one thread read at the first usage event.
+      const data: WSContextUsageData = {
         inputTokens: totalInputTokens,
         outputTokens,
         cumulativeInputTokens: totalInputTokens,
-      });
+      };
+      setUsageRun(data, await this.runAgentProfile(threadId));
+      if (maxTokens) data.maxTokens = maxTokens;
+      void this.emitWS(threadId, 'agent:context_usage', data);
     } else {
       log.debug('No usage data in assistant message', { namespace: 'agent', threadId });
     }

@@ -11,6 +11,7 @@ import { describe, expect, test } from 'bun:test';
 import type { SessionUpdate } from '@agentclientprotocol/sdk/unstable';
 
 import { AntigravityACPProcess } from '../agents/antigravity-acp.js';
+import { extractACPAccountInfo } from '../agents/generic-acp-helpers.js';
 import type { CLIMessage } from '../agents/types.js';
 
 function makeProcess(
@@ -191,5 +192,130 @@ describe('AntigravityACPProcess.translateUpdate', () => {
       old_string: 'hello world\n',
       new_string: 'hello there\n',
     });
+  });
+
+  test('in-progress edit_file populates old_string and new_string from Target and Replacement', () => {
+    const { proc, messages } = makeProcess();
+
+    translate(proc, {
+      sessionUpdate: 'tool_call',
+      toolCallId: 'call-edit-raw',
+      kind: 'edit',
+      title: 'File a.txt',
+      status: 'in_progress',
+      locations: [{ path: '/repo/a.txt' }],
+      rawInput: { Path: '/repo/a.txt', Target: 'hello world', Replacement: 'hello there' },
+    });
+
+    const block = firstToolUse(messages);
+    expect(block.name).toBe('Edit');
+    expect(block.input).toMatchObject({
+      file_path: '/repo/a.txt',
+      old_string: 'hello world',
+      new_string: 'hello there',
+    });
+  });
+
+  test('in-progress write_file populates new_string from Content', () => {
+    const { proc, messages } = makeProcess();
+
+    translate(proc, {
+      sessionUpdate: 'tool_call',
+      toolCallId: 'call-write-raw',
+      kind: 'edit',
+      title: 'Write a.txt',
+      status: 'in_progress',
+      locations: [{ path: '/repo/a.txt' }],
+      rawInput: { Path: '/repo/a.txt', Content: 'export const x = 1;\n', Overwrite: true },
+    });
+
+    const block = firstToolUse(messages);
+    expect(block.name).toBe('Edit');
+    expect(block.input).toMatchObject({
+      file_path: '/repo/a.txt',
+      new_string: 'export const x = 1;\n',
+    });
+  });
+
+  test('defers an in-progress edit without diff text until tool_call_update delivers the diff', () => {
+    const { proc, messages } = makeProcess();
+
+    translate(proc, {
+      sessionUpdate: 'tool_call',
+      toolCallId: 'call-edit-deferred',
+      kind: 'edit',
+      title: 'File a.txt',
+      status: 'in_progress',
+      locations: [{ path: '/repo/a.txt' }],
+      rawInput: {},
+    });
+    expect(messages).toHaveLength(0);
+
+    translate(proc, {
+      sessionUpdate: 'tool_call_update',
+      toolCallId: 'call-edit-deferred',
+      status: 'completed',
+      content: [
+        {
+          type: 'diff',
+          path: '/repo/a.txt',
+          oldText: 'before\n',
+          newText: '',
+        },
+      ],
+    });
+
+    const block = firstToolUse(messages);
+    expect(block.name).toBe('Edit');
+    expect(block.input).toMatchObject({
+      file_path: '/repo/a.txt',
+      old_string: 'before\n',
+      new_string: '',
+    });
+  });
+
+  test('still emits a deferred edit at completion when only file_path was provided', () => {
+    const { proc, messages } = makeProcess();
+
+    translate(proc, {
+      sessionUpdate: 'tool_call',
+      toolCallId: 'call-edit-path-only',
+      kind: 'edit',
+      title: 'File a.txt',
+      status: 'in_progress',
+      locations: [{ path: '/repo/a.txt' }],
+      rawInput: {},
+    });
+    expect(messages).toHaveLength(0);
+
+    translate(proc, {
+      sessionUpdate: 'tool_call_update',
+      toolCallId: 'call-edit-path-only',
+      status: 'completed',
+      rawOutput: 'Edited',
+    });
+
+    const block = firstToolUse(messages);
+    expect(block.name).toBe('Edit');
+    expect(block.input).toMatchObject({ file_path: '/repo/a.txt' });
+  });
+});
+
+describe('extractACPAccountInfo', () => {
+  test('extracts nested account fields from ACP _meta', () => {
+    expect(
+      extractACPAccountInfo({
+        account: { email: 'dev@google.com', org: 'Google', tier: 'pro' },
+      }),
+    ).toEqual({
+      email: 'dev@google.com',
+      organization: 'Google',
+      subscriptionType: 'pro',
+    });
+  });
+
+  test('returns null when _meta has no account fields', () => {
+    expect(extractACPAccountInfo(undefined)).toBeNull();
+    expect(extractACPAccountInfo({ version: '1.5.14' })).toBeNull();
   });
 });

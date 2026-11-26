@@ -5,7 +5,12 @@
  * @domain layer: domain
  */
 
-import type { FileDiffSummary, PendingPermissionRequest, WaitingReason } from '@funny/shared';
+import type {
+  AgentProvider,
+  FileDiffSummary,
+  PendingPermissionRequest,
+  WaitingReason,
+} from '@funny/shared';
 
 import { log } from '../lib/logger.js';
 import { metric } from '../lib/telemetry.js';
@@ -117,12 +122,18 @@ export class AgentStateTracker {
   readonly supportedSlashCommands = new Map<string, Set<string>>();
 
   /**
-   * Execution profile of the thread's current run, cached for the account and
-   * rate-limit events (run-scoped: the next run may use another profile).
+   * Execution profile, provider, and model of the thread's current run, cached
+   * for account, rate-limit, and context-usage events (run-scoped: the next
+   * run may use another profile/provider/model).
    */
   readonly runAgentProfiles = new Map<
     string,
-    { profileId: string | null; profileName: string | null }
+    {
+      provider?: AgentProvider;
+      model?: string;
+      profileId: string | null;
+      profileName: string | null;
+    }
   >();
 
   /** Cached userId per thread — avoids DB reads on every WS emission */

@@ -306,18 +306,25 @@ export abstract class BaseAgentProcess extends EventEmitter {
     outputTokens?: number;
     cacheReadTokens?: number;
     cacheWriteTokens?: number;
+    maxTokens?: number;
   }): void {
     const inputTokens = params.inputTokens;
     if (!Number.isFinite(inputTokens) || inputTokens <= 0) return;
 
     // The cache fields ride along for the runtime's context ring; they are
     // extra fields on top of the declared `usage` shape.
-    const usage = {
+    const tokens = {
       input_tokens: inputTokens,
       output_tokens: params.outputTokens ?? 0,
       cache_read_input_tokens: params.cacheReadTokens ?? 0,
       cache_creation_input_tokens: params.cacheWriteTokens ?? 0,
     };
+    // The window the provider reported (ACP `usage_update.size`), when it did.
+    const maxTokens = params.maxTokens;
+    const usage =
+      maxTokens !== undefined && Number.isFinite(maxTokens) && maxTokens > 0
+        ? { ...tokens, max_tokens: maxTokens }
+        : tokens;
     const msg: CLIAssistantMessage = {
       type: 'assistant',
       message: { id: randomUUID(), content: [], usage },
@@ -326,10 +333,17 @@ export abstract class BaseAgentProcess extends EventEmitter {
   }
 
   /** Handle ACP `sessionUpdate: "usage_update"`. Returns true when handled. */
-  protected handleAcpUsageUpdate(update: { sessionUpdate?: string; used?: number }): boolean {
+  protected handleAcpUsageUpdate(update: {
+    sessionUpdate?: string;
+    used?: number;
+    size?: number;
+  }): boolean {
     if (update.sessionUpdate !== 'usage_update') return false;
     if (isNumber(update.used)) {
-      this.emitContextUsageMessage({ inputTokens: update.used });
+      this.emitContextUsageMessage({
+        inputTokens: update.used,
+        maxTokens: isNumber(update.size) && update.size > 0 ? update.size : undefined,
+      });
     }
     return true;
   }

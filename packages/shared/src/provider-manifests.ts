@@ -284,6 +284,7 @@ export const antigravityManifest: ProviderManifest = {
   auth: { mode: 'runner-preauth' },
   quirks: {
     planRender: 'todoCard',
+    deferUnrenderableToolInput: true,
     synthToolUseFromOrphanUpdate: true,
     permissionModel: 'gated',
   },

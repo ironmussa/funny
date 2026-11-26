@@ -14,7 +14,8 @@ import { retargetPullRequestsOn } from './pull-request-base.js';
 import type { GithubCallError, GithubRequestBody, RepoGithub } from './repo-github.js';
 
 /** A failed check and the end of its log (or its summary). */
-export interface FailingCheck {
+// A type, not an interface: it is carried as plain JSON in a step's metadata.
+export type FailingCheck = {
   name: string;
   /** GitHub's conclusion (`failure`, `timed_out`, …). */
   conclusion: string;
@@ -23,7 +24,7 @@ export interface FailingCheck {
   url?: string;
   /** The first job step that failed, for a GitHub Actions check. */
   failedStep?: string;
-}
+};
 
 export type CiState =
   /** Checks still running (or not reported yet). */

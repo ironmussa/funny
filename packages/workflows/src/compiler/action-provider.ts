@@ -17,6 +17,7 @@ import type { NodeRunInfo, ProgressReporter } from '@funny/pipelines';
  */
 export type ActionExecution = NodeRunInfo;
 import type { AgentDefinition, EffortLevel, PermissionMode } from '@funny/shared';
+import type { JsonObject } from '@funny/shared/json';
 
 // ── Action results ──────────────────────────────────────────
 
@@ -28,7 +29,7 @@ export interface ActionResult {
   /** Error message on failure. */
   error?: string;
   /** Arbitrary metadata from the action. */
-  metadata?: Record<string, unknown>;
+  metadata?: JsonObject;
 }
 
 // ── Action option types ─────────────────────────────────────

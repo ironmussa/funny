@@ -12,6 +12,7 @@ import {
   runPipeline,
   type PipelineRunOptions,
 } from '@funny/pipelines';
+import type { JsonObject } from '@funny/shared/json';
 
 import type { ActionProvider, ActionResult, SpawnAgentOpts } from '../compiler/action-provider.js';
 import { compileYamlPipeline, type YamlPipelineContext } from '../compiler/yaml-compiler.js';
@@ -53,7 +54,7 @@ function compile(yaml: string) {
 function run(
   yaml: string,
   p: ActionProvider,
-  inputs: Record<string, unknown> = {},
+  inputs: JsonObject = {},
   opts: PipelineRunOptions<YamlPipelineContext> = {},
 ) {
   const ctx: YamlPipelineContext = {

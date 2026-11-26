@@ -47,6 +47,7 @@ import {
   type FactoryTriage,
   type FactoryTriageResult,
 } from '@funny/shared/contracts/factory';
+import { definedJsonFields } from '@funny/shared/json';
 import type { ActionResult, TriageOpts } from '@funny/workflows/compiler';
 import { err, ok, type Result } from 'neverthrow';
 
@@ -490,11 +491,11 @@ function proceed(triage: FactoryTriage): ActionResult {
   return {
     ok: true,
     output: triage.decision,
-    metadata: {
+    metadata: definedJsonFields({
       decision: triage.decision,
       contract: contract ? contractText(contract) : '',
       threadId: triage.threadId,
-    },
+    }),
   };
 }
 

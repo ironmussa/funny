@@ -1,7 +1,7 @@
 import type { ClientPlatform, StoreApi, AuthSessionState } from '@funny/client-core';
 import type { SafeUser, UserProfile } from '@funny/shared';
 import { retryAsync } from '@funny/shared/async';
-import type { JsonObject } from '@funny/shared/json';
+import type { JsonObject, JsonValue } from '@funny/shared/json';
 
 import type { NativeCookieJar } from '../platform/transport';
 import { NativeApiError, nativeJsonRequest } from './native-api';
@@ -144,11 +144,11 @@ export class NativeAuthService {
     this.options.state.getState().becomeAnonymous();
   }
 
-  private request<T = unknown>(path: string, method?: string, body?: unknown): Promise<T> {
+  private request<T = unknown>(path: string, method?: string, body?: JsonValue): Promise<T> {
     return nativeJsonRequest<T>({ ...this.options, path, method, body });
   }
 
-  private report(operation: string, error: unknown): void {
-    this.options.platform.diagnostics.report({ capability: 'transport', operation, error });
+  private report(operation: string, cause: unknown): void {
+    this.options.platform.diagnostics.report({ capability: 'transport', operation, error: cause });
   }
 }

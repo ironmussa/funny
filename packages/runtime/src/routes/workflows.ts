@@ -51,7 +51,7 @@ const saveSchema = z.object({
 const runSchema = z.object({
   threadId: z.string().min(1),
   prompt: z.string().optional(),
-  inputs: z.record(z.string(), z.unknown()).optional(),
+  inputs: z.record(z.string(), z.json()).optional(),
 });
 
 /** The run request's workflow inputs, as the caller sent them. */

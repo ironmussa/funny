@@ -319,8 +319,8 @@ const pipelineCallAction = z
   .object({
     /** Named pipeline to invoke (loaded from the same `.funny/workflows/` dir). */
     name: z.string(),
-    /** Optional input overrides for the called pipeline. */
-    inputs: z.record(z.string(), z.unknown()).optional(),
+    /** Optional input overrides for the called pipeline: plain JSON, like the run's inputs. */
+    inputs: z.record(z.string(), z.json()).optional(),
   })
   .strict();
 
@@ -433,7 +433,7 @@ const inputDef = z
   .object({
     type: z.enum(['string', 'number', 'boolean', 'object', 'array']),
     required: z.boolean().optional(),
-    default: z.unknown().optional(),
+    default: z.json().optional(),
     description: z.string().optional(),
   })
   .strict();

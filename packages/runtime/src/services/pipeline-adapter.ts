@@ -16,6 +16,7 @@ import { gitRead, runHookCommand, invalidateStatusCache } from '@funny/core/git'
 import type { ProgressReporter, StepProgressData } from '@funny/pipelines';
 import type { PermissionMode, WSEvent, WorkflowNodeRunStatus } from '@funny/shared';
 import { sleep as effectSleep } from '@funny/shared/async';
+import { definedJsonFields } from '@funny/shared/json';
 import { ApprovalTimeoutError } from '@funny/workflows/compiler';
 import type {
   ActionProvider,
@@ -223,7 +224,7 @@ export class RuntimeActionProvider implements ActionProvider {
         return {
           ok: true,
           output: result.value.output,
-          metadata: { sha: result.value.sha },
+          metadata: definedJsonFields({ sha: result.value.sha }),
         };
       }
 
@@ -247,7 +248,7 @@ export class RuntimeActionProvider implements ActionProvider {
       });
       const sha = shaResult.exitCode === 0 ? shaResult.stdout.trim() : undefined;
 
-      return { ok: true, output: result.value, metadata: { sha } };
+      return { ok: true, output: result.value, metadata: definedJsonFields({ sha }) };
     } catch (err) {
       return {
         ok: false,
@@ -466,7 +467,7 @@ export class RuntimeActionProvider implements ActionProvider {
         status: opts.value,
         reason: opts.reason,
       });
-      return { ok: true, output: opts.value, metadata: { reason: opts.reason } };
+      return { ok: true, output: opts.value, metadata: definedJsonFields({ reason: opts.reason }) };
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
@@ -496,7 +497,7 @@ export class RuntimeActionProvider implements ActionProvider {
         stage: opts.value,
         reason: opts.reason,
       });
-      return { ok: true, output: opts.value, metadata: { reason: opts.reason } };
+      return { ok: true, output: opts.value, metadata: definedJsonFields({ reason: opts.reason }) };
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }

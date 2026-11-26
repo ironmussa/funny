@@ -10,6 +10,8 @@
  * When disabled (default), zero overhead — the functions are no-ops.
  */
 
+import type { JsonFields } from '@funny/shared/json';
+
 const envFlag = process.env.DEBUG_AGENT ?? '';
 const enableAll = envFlag === '1' || envFlag === '*' || envFlag === 'true';
 const enabledNamespaces = enableAll
@@ -27,7 +29,13 @@ function isEnabled(namespace: string): boolean {
   return enabledNamespaces.has(namespace.toLowerCase());
 }
 
-type LogFn = (message: string, data?: Record<string, unknown>) => void;
+/**
+ * Structured fields of a log line: plain JSON, printed with `JSON.stringify` and
+ * forwarded to the server's log sink. An `undefined` field is left out.
+ */
+export type LogContext = JsonFields;
+
+type LogFn = (message: string, data?: LogContext) => void;
 
 export interface DebugLogger {
   debug: LogFn;
@@ -45,7 +53,7 @@ type LogSink = (
   level: 'debug' | 'info' | 'warn' | 'error',
   namespace: string,
   message: string,
-  data?: Record<string, unknown>,
+  data?: LogContext,
 ) => void;
 
 let logSink: LogSink | null = null;
@@ -58,7 +66,7 @@ export function createDebugLogger(namespace: string): DebugLogger {
   const enabled = isEnabled(namespace);
   const prefix = `[${namespace}]`;
 
-  const fmt = (msg: string, data?: Record<string, unknown>): string => {
+  const fmt = (msg: string, data?: LogContext): string => {
     if (!data || Object.keys(data).length === 0) return `${prefix} ${msg}`;
     return `${prefix} ${msg} ${JSON.stringify(data)}`;
   };

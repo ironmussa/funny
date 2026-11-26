@@ -170,7 +170,10 @@ async function createThreadFromAnnotations(
 // Message handlers
 // ---------------------------------------------------------------------------
 
-type MessageHandler = (msg: any, sender: chrome.runtime.MessageSender) => Promise<unknown>;
+/** What a handler answers: the object `sendResponse` posts back to the sender. */
+type MessageResponse = object;
+
+type MessageHandler = (msg: any, sender: chrome.runtime.MessageSender) => Promise<MessageResponse>;
 
 /** Answers `{ success: true, ...data }`, or `{ success: false, error }` when the call fails. */
 function answer(call: () => Promise<object>): Promise<object> {
@@ -294,8 +297,8 @@ async function handleGetFullConfig() {
       projects: projectsData.projects ?? [],
       providers: toProviderMap(modelsData),
     }),
-    (err: unknown) => {
-      const failure = connectionFailure(err);
+    (cause: unknown) => {
+      const failure = connectionFailure(cause);
       return {
         connected: false,
         projects: [],

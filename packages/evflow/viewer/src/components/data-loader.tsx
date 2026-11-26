@@ -68,9 +68,9 @@ export function DataLoader() {
         setConverting(true);
         await convertTsModel(file)
           .then(loadJSON)
-          .catch((err: unknown) => {
+          .catch((cause: unknown) => {
             alert(
-              `Failed to convert .ts file:\n\n${err instanceof Error ? err.message : err}\n\n` +
+              `Failed to convert .ts file:\n\n${cause instanceof Error ? cause.message : cause}\n\n` +
                 `Make sure the file exports a function that returns an EventModel ` +
                 `(e.g. export function createRuntimeModel())`,
             );

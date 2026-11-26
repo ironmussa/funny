@@ -443,6 +443,8 @@ async function enableFactory(
     mode?: 'manual' | 'automatic';
     stageLimits?: Record<string, number>;
     dependencies?: 'wait' | 'stack';
+    laneLabelPrefix?: string;
+    laneBranchPrefix?: string;
   } = {},
 ) {
   const settings = createFactorySettingsService();
@@ -452,6 +454,10 @@ async function enableFactory(
     enabled: true,
     mode: 'automatic',
     batch: { size: 1, waitSeconds: 0 },
+    // The lane tests name lanes `feature:<name>` on `feature/<name>`, the
+    // prefixes a factory saved before D11 keeps; the defaults have their own test.
+    laneLabelPrefix: 'feature:',
+    laneBranchPrefix: 'feature/',
     ...opts,
   });
   if (saved.isErr()) throw new Error(saved.error.message);
@@ -761,8 +767,12 @@ describe('factory watcher', () => {
       { number: 3, title: 'c', url: 'u/3' },
     ];
 
-    async function tickWith(script: GithubScript, issues = three) {
-      const factoryId = await enableFactory({ maxConcurrent: 5 });
+    async function tickWith(
+      script: GithubScript,
+      issues = three,
+      factory: Parameters<typeof enableFactory>[0] = {},
+    ) {
+      const factoryId = await enableFactory({ maxConcurrent: 5, ...factory });
       const poll = fakePoll();
       const launcher = fakeLauncher();
       const github = fakeGithub('acme/repo', issues, { mergeInto: { branch: 'dev' }, ...script });
@@ -837,6 +847,48 @@ describe('factory watcher', () => {
       const { createFactoryLanesRepository } =
         await import('../../../services/factory/factory-lanes.js');
       expect((await createFactoryLanesRepository().list(factoryId))._unsafeUnwrap()).toEqual([]);
+    });
+
+    // D11: a new factory's lanes are `lane:<name>`, so a team's `feature:` label makes none.
+    test('with the default prefixes, `lane:` makes a lane and a `feature:` label does not', async () => {
+      const { github, runOf } = await tickWith(
+        { labels: { 1: ['lane:auth'], 2: ['feature:billing'] } },
+        three.slice(0, 2),
+        { laneLabelPrefix: undefined, laneBranchPrefix: undefined },
+      );
+      expect(runOf(1)).toMatchObject({ baseBranch: 'lane/auth', lane: 'auth' });
+      expect(runOf(2)).toMatchObject({ baseBranch: 'dev', lane: null });
+      expect(github.ensuredBranches).toEqual(['lane/auth']);
+    });
+
+    // D12: two members' factories must not share a lane branch.
+    test("a lane whose branch is another member's lane keeps the issue queued, and makes no lane", async () => {
+      seedProjectMember(testDb.db, { projectId: 'p1', userId: 'bob', role: 'member' });
+      const settings = createFactorySettingsService();
+      (
+        await settings.save('bob', 'p1', {
+          enabled: false,
+          laneLabelPrefix: 'feature:',
+          laneBranchPrefix: 'feature/',
+        })
+      )._unsafeUnwrap();
+      const bobs = (await settings.factoryId('bob', 'p1'))._unsafeUnwrap()!;
+      (
+        await createFactoryLanesRepository().ensure(bobs, { name: 'auth', branch: 'feature/auth' })
+      )._unsafeUnwrap();
+
+      const { factoryId, launcher, github, runOf } = await tickWith(
+        { labels: { 1: ['feature:auth'], 2: ['feature:search'] } },
+        three.slice(0, 2),
+      );
+      expect(runOf(1)).toMatchObject({ state: 'requested', waitReason: { kind: 'lane-invalid' } });
+      expect(runOf(1).waitReason?.detail).toContain('feature/auth');
+      // A branch no other factory runs a lane on is still made (or adopted).
+      expect(runOf(2)).toMatchObject({ baseBranch: 'feature/search', lane: 'search' });
+      expect(github.ensuredBranches).toEqual(['feature/search']);
+      expect(launcher.calls).toHaveLength(1);
+      const own = (await createFactoryLanesRepository().list(factoryId))._unsafeUnwrap();
+      expect(own.map((lane) => lane.name)).toEqual(['search']);
     });
 
     test('a label changed after admission does not move the run', async () => {

@@ -411,6 +411,17 @@ async function baseFor(
   if (known.value?.state === 'finished') return { branch: own, lane: null };
   if (known.value) return { branch: known.value.branch, lane: known.value.name };
 
+  // D12: never adopt the branch another member's factory runs a lane on.
+  const taken = await lanes.branchOfAnotherFactory(factory.id, factory.projectId, choice.branch);
+  if (taken.isErr()) return { wait: laneUnusable(taken.error.message) };
+  if (taken.value) {
+    return {
+      wait: laneUnusable(
+        `the branch ${choice.branch} is a lane of another member's factory on this project; change this factory's lane prefixes or the lane's name`,
+      ),
+    };
+  }
+
   // The first issue of the lane: its branch first, so a lane's row means a branch exists.
   if (!deps!.github.ensureBranch)
     return { wait: laneUnusable('this factory cannot make branches') };

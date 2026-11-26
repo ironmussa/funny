@@ -8,22 +8,20 @@ const ANTI_SLOP_ERROR = [
   'no-array-filter-map',
   'no-chained-type-assertions',
   'no-conditional-empty-object-spread',
+  'no-known-value-widening',
   'no-object-parameters',
   'no-reduce-accumulator-copy',
   'no-reflect-apply',
   'no-reflect-get',
-  'no-shape-in-symbol-names',
-  'no-unknown-type-aliases',
-  'no-widen-then-assert',
-];
-const ANTI_SLOP_WARN = [
-  'no-known-value-widening',
   'no-runtime-typeof',
+  'no-shape-in-symbol-names',
   'no-unknown-parameters',
   'no-unknown-returns',
-  'no-unsafe-dictionary-type',
+  'no-unknown-type-aliases',
+  'no-widen-then-assert',
   'require-safety-comment-for-type-assertion',
 ];
+const ANTI_SLOP_WARN = ['no-unsafe-dictionary-type'];
 // Off on purpose: the formatter (bun fmt) owns blank lines (require-readable-spacing), and the
 // tests mock modules with vi.mock by design (no-module-mocking).
 const ANTI_SLOP_OFF = ['require-readable-spacing', 'no-module-mocking'];
@@ -35,8 +33,13 @@ const ANTI_SLOP_EFFECT_ERROR = [
   'prefer-effect-match',
 ];
 const ANTI_SLOP_EFFECT_WARN: string[] = [];
-const SHADCN_ERROR = ['no-raw-colors', 'no-unknown-classes', 'require-static-classes'];
-const SHADCN_WARN = ['no-restyle', 'no-inline-styles'];
+const SHADCN_ERROR = [
+  'no-inline-styles',
+  'no-raw-colors',
+  'no-unknown-classes',
+  'require-static-classes',
+];
+const SHADCN_WARN = ['no-restyle'];
 // Off: the font-size rule in CLAUDE.md requires arbitrary values such as
 // `text-[length:var(--diff-font-size)]`.
 const SHADCN_OFF = ['no-arbitrary-values'];
@@ -64,7 +67,7 @@ const existing = {
     ...severity('anti-slop', ANTI_SLOP_ERROR, 'error'),
     ...severity('anti-slop', ANTI_SLOP_WARN, 'warn'),
     // A `typeof` inside a `value is T` guard is the decoder the rule asks for.
-    'anti-slop/no-runtime-typeof': ['warn', { allowInTypeGuards: true }],
+    'anti-slop/no-runtime-typeof': ['error', { allowInTypeGuards: true }],
     ...severity('anti-slop', ANTI_SLOP_OFF, 'off'),
     ...severity('anti-slop-effect', ANTI_SLOP_EFFECT_ERROR, 'error'),
     ...severity('anti-slop-effect', ANTI_SLOP_EFFECT_WARN, 'warn'),
@@ -88,9 +91,9 @@ const existing = {
     'react/no-deriving-state-in-effects': 'error',
     'react/preserve-manual-memoization': 'error',
     'react/purity': 'error',
-    'react/refs': 'warn',
+    'react/refs': 'error',
     'react/rule-suppression': 'error',
-    'react/set-state-in-effect': 'warn',
+    'react/set-state-in-effect': 'error',
     'react/set-state-in-render': 'error',
     'react/static-components': 'error',
     'react/syntax': 'error',
@@ -209,7 +212,7 @@ const existing = {
     'zod/no-throw-in-refine': 'error',
     'zod/no-transform-in-record-key': 'error',
     'max-lines': [
-      'warn',
+      'error',
       {
         max: 800,
         skipBlankLines: true,
@@ -217,7 +220,7 @@ const existing = {
       },
     ],
     'max-lines-per-function': [
-      'warn',
+      'error',
       {
         max: 250,
         skipBlankLines: true,

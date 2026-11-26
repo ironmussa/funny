@@ -498,6 +498,28 @@ function proceed(triage: FactoryTriage): ActionResult {
   };
 }
 
+/** A ready run waits when its paths overlap a run in progress; null when it may go on. */
+async function heldForPaths(
+  deps: FactoryTriageDeps,
+  triage: FactoryTriage,
+): Promise<ActionResult | null> {
+  const paths = triage.contract?.likelyPaths ?? [];
+  if (paths.length === 0 || !deps.busyPaths || !deps.hold) return null;
+  const busy = await deps.busyPaths();
+  const blockers = overlappingIssues(paths, busy);
+  if (blockers.length === 0) return null;
+  if (!(await deps.hold(blockers))) return null;
+  await deps.count('triage_path_hold');
+  const named = blockers.map((issue) => `#${issue}`).join(', ');
+  return {
+    ok: false,
+    error: allAwaitApproval(blockers, busy)
+      ? `Waiting for ${named}: it waits for a member's approval and holds the same files.`
+      : `Waiting for ${named}: it works on the same files.`,
+    metadata: { outcome: 'path_hold', blockers },
+  };
+}
+
 export function createFactoryTriage(deps: FactoryTriageDeps) {
   const { scope } = deps;
   const exclusive = deps.exclusive ?? (<T>(work: () => Promise<T>) => work());
@@ -643,25 +665,6 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
     };
   }
 
-  /** A ready run waits when its paths overlap a run in progress; null when it may go on. */
-  async function heldForPaths(triage: FactoryTriage): Promise<ActionResult | null> {
-    const paths = triage.contract?.likelyPaths ?? [];
-    if (paths.length === 0 || !deps.busyPaths || !deps.hold) return null;
-    const busy = await deps.busyPaths();
-    const blockers = overlappingIssues(paths, busy);
-    if (blockers.length === 0) return null;
-    if (!(await deps.hold(blockers))) return null;
-    await deps.count('triage_path_hold');
-    const named = blockers.map((issue) => `#${issue}`).join(', ');
-    return {
-      ok: false,
-      error: allAwaitApproval(blockers, busy)
-        ? `Waiting for ${named}: it waits for a member's approval and holds the same files.`
-        : `Waiting for ${named}: it works on the same files.`,
-      metadata: { outcome: 'path_hold', blockers },
-    };
-  }
-
   /** The triage thread: one this run already launched, else a new one. */
   async function startThread(opts: TriageOpts): Promise<Result<string, string>> {
     const busy = (await deps.busyPaths?.()) ?? [];
@@ -760,7 +763,7 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
     };
     return exclusive(async () => {
       const triage = await keep(ready);
-      return (await heldForPaths(triage)) ?? proceed(triage);
+      return (await heldForPaths(deps, triage)) ?? proceed(triage);
     });
   }
 
@@ -790,7 +793,7 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
       if (current?.decision === 'ready' || current?.decision === 'none') {
         const decided = current;
         if (decided.decision === 'ready') await deps.record({ state: 'triaging' });
-        return exclusive(async () => (await heldForPaths(decided)) ?? proceed(decided));
+        return exclusive(async () => (await heldForPaths(deps, decided)) ?? proceed(decided));
       }
       const thread = await startThread(opts);
       if (thread.isErr()) {

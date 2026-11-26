@@ -342,6 +342,60 @@ export function groupFactoryRuns<R extends FactoryRun>(
 /** Sentinel lane filter value matching runs that have no lane (target the factory's main branch). */
 export const FACTORY_NO_LANE = '~none';
 
+/**
+ * A lane filter value (openspec factory-lanes D10). A lane is unique per
+ * factory only, and the view spans projects, so the value names both:
+ * `auth` of project A and `auth` of project B are two values.
+ */
+export function factoryLaneKey(projectId: string, lane: string | null): string {
+  return lane === null ? FACTORY_NO_LANE : `${projectId}:${lane}`;
+}
+
+/** One option of the lane filter. */
+export interface FactoryLaneOption {
+  value: string;
+  /** The lane's name, with its project's when more than one project is shown. */
+  label: string;
+  /** The lane's label and branch, when its row is known. */
+  detail?: string;
+}
+
+/**
+ * The lane filter's options (D10): the lanes of the caller's factories, with
+ * or without loaded runs, plus the lanes of the loaded runs (a removed lane's
+ * runs stay filterable), one per project and lane, sorted by name.
+ */
+export function factoryLaneOptions(
+  lanes: readonly { projectId: string; name: string; label: string; branch: string }[],
+  runs: readonly { projectId: string; lane: string | null }[],
+  projectNameById: ReadonlyMap<string, string>,
+): FactoryLaneOption[] {
+  const byKey = new Map<string, { projectId: string; name: string; detail?: string }>();
+  for (const lane of lanes) {
+    byKey.set(factoryLaneKey(lane.projectId, lane.name), {
+      projectId: lane.projectId,
+      name: lane.name,
+      detail: `${lane.label} → ${lane.branch}`,
+    });
+  }
+  for (const run of runs) {
+    if (run.lane === null) continue;
+    const key = factoryLaneKey(run.projectId, run.lane);
+    if (!byKey.has(key)) byKey.set(key, { projectId: run.projectId, name: run.lane });
+  }
+  const projects = new Set([...byKey.values()].map((lane) => lane.projectId));
+  const named = projects.size > 1;
+  return [...byKey.entries()]
+    .map(([value, lane]) => ({
+      value,
+      label: named
+        ? `${lane.name} · ${projectNameById.get(lane.projectId) ?? lane.projectId}`
+        : lane.name,
+      detail: lane.detail,
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
+
 /** What the factory view filters its runs by. */
 export interface FactoryRunFilter {
   /** Matches the issue number (a leading `#` is ignored), the project name, the lane or the current step. */
@@ -351,7 +405,7 @@ export interface FactoryRunFilter {
   states: ReadonlySet<string>;
   /** The projects to keep; empty keeps every project. */
   projectIds: ReadonlySet<string>;
-  /** The lanes to keep (`FACTORY_NO_LANE` matches unlaned runs); empty keeps every lane. */
+  /** The lanes to keep (`factoryLaneKey` values; `FACTORY_NO_LANE` matches unlaned runs); empty keeps every lane. */
   lanes?: ReadonlySet<string>;
   projectNameById: ReadonlyMap<string, string>;
   /** Hide the runs that finished without needing anyone (merged, no change, stopped). */
@@ -384,7 +438,7 @@ export function filterFactoryRuns<R extends FactoryRun & { projectId: string }>(
     fold(run.lane ?? '').includes(needle) ||
     fold(run.currentStep ?? '').includes(needle);
   const matchesLane = (run: R) =>
-    !lanes || lanes.size === 0 || lanes.has(run.lane ?? FACTORY_NO_LANE);
+    !lanes || lanes.size === 0 || lanes.has(factoryLaneKey(run.projectId, run.lane));
   const kept = runs.filter(
     (run) =>
       !(activeOnly && SETTLED.has(run.state)) &&

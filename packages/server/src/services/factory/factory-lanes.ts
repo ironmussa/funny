@@ -13,20 +13,24 @@
  * `resolveLane` is the one place that reads a lane out of an issue's labels.
  * The repository below only stores what it decided.
  */
-import { factoryBaseBranchSchema, type FactoryLaneConflict } from '@funny/shared/contracts/factory';
+import {
+  DEFAULT_LANE_LABEL_PREFIX,
+  factoryBaseBranchSchema,
+  type FactoryLaneConflict,
+} from '@funny/shared/contracts/factory';
 import { errorMessage } from '@funny/shared/errors';
 import { parseStoredJson } from '@funny/shared/json-validation';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, ne } from 'drizzle-orm';
 import { ResultAsync } from 'neverthrow';
 import { z } from 'zod';
 
 import { db } from '../../db/index.js';
-import { factoryLanes } from '../../db/schema.js';
+import { factoryLanes, factorySettings } from '../../db/schema.js';
 
 export interface LanePrefixes {
-  /** What a lane label starts with (`feature:`). */
+  /** What a lane label starts with (`lane:`). */
   laneLabelPrefix: string;
-  /** What a lane's branch starts with (`feature/`). */
+  /** What a lane's branch starts with (`lane/`). */
   laneBranchPrefix: string;
 }
 
@@ -178,6 +182,66 @@ export function createFactoryLanesRepository(
           .orderBy(asc(factoryLanes.createdAt), asc(factoryLanes.name)),
         storage,
       ).map((rows) => rows.map(toView));
+    },
+
+    /**
+     * The lanes of every factory `userId` owns, across projects, with the
+     * project and the label prefix of their factory (the factory view's lane
+     * filter, D10). Scoped by factory owner, like the view's run list.
+     */
+    forOwner(
+      userId: string,
+    ): ResultAsync<
+      Array<FactoryLaneView & { projectId: string; laneLabelPrefix: string }>,
+      FactoryLanesError
+    > {
+      return ResultAsync.fromPromise(
+        db
+          .select({
+            lane: factoryLanes,
+            projectId: factorySettings.projectId,
+            laneLabelPrefix: factorySettings.laneLabelPrefix,
+          })
+          .from(factoryLanes)
+          .innerJoin(factorySettings, eq(factorySettings.id, factoryLanes.factoryId))
+          .where(eq(factorySettings.userId, userId))
+          .orderBy(asc(factoryLanes.name), asc(factorySettings.projectId)),
+        storage,
+      ).map((rows) =>
+        rows.map(({ lane, projectId, laneLabelPrefix }) => ({
+          ...toView(lane),
+          projectId,
+          laneLabelPrefix: laneLabelPrefix ?? DEFAULT_LANE_LABEL_PREFIX,
+        })),
+      );
+    },
+
+    /**
+     * Whether an active lane of ANOTHER factory of the same project uses
+     * `branch` (D12): two members' factories must not sync, merge into and
+     * finish one branch. A branch no factory uses as a lane may be adopted.
+     */
+    branchOfAnotherFactory(
+      factoryId: string,
+      projectId: string,
+      branch: string,
+    ): ResultAsync<boolean, FactoryLanesError> {
+      return ResultAsync.fromPromise(
+        db
+          .select({ id: factoryLanes.id })
+          .from(factoryLanes)
+          .innerJoin(factorySettings, eq(factorySettings.id, factoryLanes.factoryId))
+          .where(
+            and(
+              eq(factorySettings.projectId, projectId),
+              ne(factoryLanes.factoryId, factoryId),
+              eq(factoryLanes.branch, branch),
+              eq(factoryLanes.state, 'active'),
+            ),
+          )
+          .limit(1),
+        storage,
+      ).map((rows) => rows.length > 0);
     },
 
     /**

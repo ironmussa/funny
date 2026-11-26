@@ -1,16 +1,20 @@
 import { Check, ChevronDown } from 'lucide-react';
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
+import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 
 interface Props {
   label: string;
-  options: { value: string; label: string }[];
+  /** `detail` is a second, muted line under the option's label. */
+  options: { value: string; label: string; detail?: string }[];
   selected: Set<string>;
   onToggle: (value: string) => void;
   counts?: Record<string, number>;
   testId?: string;
+  /** Puts a field at the top of the menu that narrows the options by label and detail. */
+  search?: { placeholder: string };
 }
 
 /**
@@ -18,9 +22,23 @@ interface Props {
  * AllThreadsView. Extracted so the parent doesn't import Popover + the
  * ChevronDown / Check icons just for this component.
  */
-export function FilterDropdown({ label, options, selected, onToggle, counts, testId }: Props) {
+export function FilterDropdown({
+  label,
+  options,
+  selected,
+  onToggle,
+  counts,
+  testId,
+  search,
+}: Props) {
   const activeCount = selected.size;
   const listRef = useRef<HTMLDivElement>(null);
+  const [query, setQuery] = useState('');
+  const needle = query.trim().toLowerCase();
+  const shownOptions =
+    search && needle
+      ? options.filter((o) => `${o.label} ${o.detail ?? ''}`.toLowerCase().includes(needle))
+      : options;
   const triggerLabel =
     // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
     activeCount === 0
@@ -52,7 +70,7 @@ export function FilterDropdown({ label, options, selected, onToggle, counts, tes
   }, []);
 
   return (
-    <Popover>
+    <Popover onOpenChange={(open) => !open && setQuery('')}>
       <PopoverTrigger asChild>
         <button
           data-testid={testId}
@@ -74,18 +92,37 @@ export function FilterDropdown({ label, options, selected, onToggle, counts, tes
         onKeyDown={handleKeyDown}
         onOpenAutoFocus={(e) => {
           e.preventDefault();
+          // With a search field, typing is the first thing to do.
+          if (search) return;
           const first = listRef.current?.querySelector<HTMLElement>('[role="menuitemcheckbox"]');
           first?.focus();
         }}
       >
-        <div ref={listRef} role="menu">
-          {options.map((opt) => {
+        {search && (
+          <Input
+            autoFocus
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key !== 'ArrowDown') return;
+              e.preventDefault();
+              listRef.current?.querySelector<HTMLElement>('[role="menuitemcheckbox"]')?.focus();
+            }}
+            placeholder={search.placeholder}
+            aria-label={search.placeholder}
+            className="mb-1 h-7"
+            data-testid={testId ? `${testId}-search` : undefined}
+          />
+        )}
+        <div ref={listRef} role="menu" className={cn(search && 'max-h-72 overflow-y-auto')}>
+          {shownOptions.map((opt) => {
             const isActive = selected.has(opt.value);
             const count = counts?.[opt.value];
             return (
               <button
                 key={opt.value}
                 role="menuitemcheckbox"
+                data-testid={testId ? `${testId}-option-${opt.value}` : undefined}
                 aria-checked={isActive}
                 tabIndex={-1}
                 onClick={() => onToggle(opt.value)}
@@ -106,7 +143,14 @@ export function FilterDropdown({ label, options, selected, onToggle, counts, tes
                 >
                   {isActive && <Check className="icon-2xs" />}
                 </span>
-                <span className="flex-1">{opt.label}</span>
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span>{opt.label}</span>
+                  {opt.detail && (
+                    <span className="text-muted-foreground text-2xs truncate font-mono">
+                      {opt.detail}
+                    </span>
+                  )}
+                </span>
                 {count != null && count > 0 && (
                   <span className="text-muted-foreground tabular-nums">{count}</span>
                 )}

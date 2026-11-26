@@ -2135,13 +2135,14 @@
   "factoryView": {
     "title": "Factory queue",
     "summary": "{{projects}} projects · {{runs}} runs",
-    "searchPlaceholder": "Filter by issue, project or step",
+    "searchPlaceholder": "Filter by issue, project, lane or step",
     "empty": "Nothing in the factory",
     "emptyDescription": "Issues sent to a project factory show here while they wait and run.",
     "issueTitle": "Issue #{{number}}",
     "issueTitleNamed": "#{{number}} {{title}}",
     "showAll": "All",
     "showActive": "Active",
+    "runsFilter": "Runs",
     "layoutList": "List",
     "layoutBoard": "Board",
     "layoutAnalytics": "Analytics",
@@ -2166,7 +2167,8 @@
     "showActiveTooltip": "Show only the runs that have not ended",
     "clearFiltersTooltip": "Remove the project, state and lane filters",
     "filterLane": "Lane",
-    "noLane": "No lane"
+    "noLane": "No lane",
+    "searchLanes": "Search lanes"
   },
   "factoryBoard": {
     "laneConflicts": "Conflicts with {{lanes}}",

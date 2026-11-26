@@ -6,6 +6,7 @@ import type {
   FactoryIssueBlockers,
   FactoryIssuelessFlow,
   FactoryLane,
+  FactoryQueueLane,
   FactoryQueueRun,
   FactoryReadiness,
   FactoryRun,
@@ -31,6 +32,7 @@ import {
   factoryIssuelessFlowQuery,
   factoryLanesQuery,
   factoryTriggersQuery,
+  factoryQueueLanesQuery,
   factoryQueueRunsQuery,
   factoryReadinessQuery,
   factoryRunsQuery,
@@ -116,6 +118,11 @@ export function useActiveFactoryRunForThread(thread: {
 /** The factory view's runs across projects, newest first; `undefined` while loading. */
 export function useFactoryQueueRuns(): FactoryQueueRun[] | undefined {
   return useDataQuery(factoryQueueRunsQuery()).data;
+}
+
+/** The lanes of the caller's factories across projects (the lane filter); `undefined` while loading. */
+export function useFactoryQueueLanes(): FactoryQueueLane[] | undefined {
+  return useDataQuery(factoryQueueLanesQuery()).data;
 }
 
 /** The flows a send may pick; `undefined` while loading. */

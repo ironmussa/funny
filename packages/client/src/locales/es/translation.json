@@ -2128,13 +2128,14 @@
   "factoryView": {
     "title": "Cola del factory",
     "summary": "{{projects}} proyectos · {{runs}} ejecuciones",
-    "searchPlaceholder": "Filtrar por issue, proyecto o paso",
+    "searchPlaceholder": "Filtrar por issue, proyecto, carril o paso",
     "empty": "No hay nada en el factory",
     "emptyDescription": "Los issues enviados al factory de un proyecto aparecen aquí mientras esperan y se ejecutan.",
     "issueTitle": "Issue #{{number}}",
     "issueTitleNamed": "#{{number}} {{title}}",
     "showAll": "Todos",
     "showActive": "Activos",
+    "runsFilter": "Runs",
     "layoutList": "Lista",
     "layoutBoard": "Tablero",
     "layoutAnalytics": "Analíticas",
@@ -2159,7 +2160,8 @@
     "showActiveTooltip": "Mostrar solo las runs que no han terminado",
     "clearFiltersTooltip": "Quitar los filtros de proyecto, estado y carril",
     "filterLane": "Carril",
-    "noLane": "Sin carril"
+    "noLane": "Sin carril",
+    "searchLanes": "Buscar carriles"
   },
   "factoryBoard": {
     "laneConflicts": "Choca con {{lanes}}",

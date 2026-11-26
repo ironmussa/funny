@@ -45,6 +45,7 @@ export const factoryApi = {
   listRuns: (projectId: string) => trpcCall(() => procedures.runs.query({ projectId })),
   listActiveRuns: () => trpcCall(() => procedures.activeRuns.query()),
   listQueueRuns: () => trpcCall(() => procedures.queueRuns.query()),
+  listQueueLanes: () => trpcCall(() => procedures.queueLanes.query()),
   stopRun: (projectId: string, runId: string) =>
     trpcCall(() => procedures.stopRun.mutate({ projectId, runId })),
   retryRun: (projectId: string, runId: string) =>

@@ -62,6 +62,7 @@ import type {
   FactoryIssueBlockers,
   FactoryIssuelessFlow,
   FactoryLane,
+  FactoryQueueLane,
   FactoryLaneFinishResult,
   FactoryLaneSyncResult,
   FactoryQueueClearResult,
@@ -455,6 +456,11 @@ export interface FactoryPort {
    * that have not ended (queued too) or failed recently, newest first.
    */
   queueRuns(userId: string): PortResult<FactoryQueueRun[]>;
+  /**
+   * The lanes of all the caller's factories, across projects, active and
+   * finished: the factory view's lane filter (openspec factory-lanes D10).
+   */
+  queueLanes(userId: string): PortResult<FactoryQueueLane[]>;
   /** Stop one run of the caller's factory and its agent threads; audited. */
   stopRun(userId: string, projectId: string, runId: string): PortResult<FactoryRun>;
   /** Put a failed (or waiting) run of the caller's factory back in flight; audited. */

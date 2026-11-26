@@ -2,7 +2,8 @@
  * The factory view's Active filter, list / board / analytics switch and the
  * board's column picker (openspec factory-pipeline-board).
  */
-import { BarChart3, KanbanSquare, List, SlidersHorizontal } from 'lucide-react';
+import { BarChart3, Check, ChevronDown, KanbanSquare, List, SlidersHorizontal } from 'lucide-react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { FilterDropdown } from '@/components/all-threads/FilterDropdown';
@@ -16,10 +17,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useTooltipMenu } from '@/hooks/use-tooltip-menu';
-import { FACTORY_NO_LANE } from '@/lib/factory-run-labels';
+import { FACTORY_NO_LANE, type FactoryLaneOption } from '@/lib/factory-run-labels';
+import { cn } from '@/lib/utils';
 import { type FactoryViewLayout, useFactoryViewStore } from '@/stores/factory-view-store';
 
 import { FACTORY_BOARD_COLUMNS } from './board-columns';
@@ -86,24 +89,29 @@ export function FactoryBoardColumnsMenu() {
   );
 }
 
+/** With more options than this, the lane filter's menu gets a search field. */
+const LANE_SEARCH_MIN_OPTIONS = 8;
+
+/**
+ * The factory view's lane filter (openspec factory-lanes D10): one option per
+ * project and lane, from the factories' lanes and the loaded runs. Hidden only
+ * when there is no lane at all and none is selected.
+ */
 export function FactoryLaneFilter({
   lanes,
   selected,
   onToggle,
   counts,
 }: {
-  /** Distinct lane names present in the runs, sorted. */
-  lanes: readonly string[];
+  /** From `factoryLaneOptions`, sorted. */
+  lanes: readonly FactoryLaneOption[];
   selected: Set<string>;
   onToggle: (lane: string) => void;
   counts: Record<string, number>;
 }) {
   const { t } = useTranslation();
   if (lanes.length === 0 && selected.size === 0) return null;
-  const options = [
-    ...lanes.map((name) => ({ value: name, label: name })),
-    { value: FACTORY_NO_LANE, label: t('factoryView.noLane', 'No lane') },
-  ];
+  const options = [...lanes, { value: FACTORY_NO_LANE, label: t('factoryView.noLane', 'No lane') }];
   return (
     <FilterDropdown
       testId="factory-view-lane-filter"
@@ -112,10 +120,19 @@ export function FactoryLaneFilter({
       selected={selected}
       onToggle={onToggle}
       counts={counts}
+      search={
+        lanes.length > LANE_SEARCH_MIN_OPTIONS
+          ? { placeholder: t('factoryView.searchLanes', 'Search lanes') }
+          : undefined
+      }
     />
   );
 }
 
+/**
+ * All runs or only the ones that have not ended, as a single-choice dropdown
+ * styled like the view's other filters.
+ */
 export function FactoryActiveToggle({
   activeOnly,
   onChange,
@@ -124,35 +141,70 @@ export function FactoryActiveToggle({
   onChange: (activeOnly: boolean) => void;
 }) {
   const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const options = [
+    {
+      value: false,
+      testId: 'factory-view-show-all',
+      label: t('factoryView.showAll', 'All'),
+      detail: t('factoryView.showAllTooltip', 'Show every run, ended ones too'),
+    },
+    {
+      value: true,
+      testId: 'factory-view-show-active',
+      label: t('factoryView.showActive', 'Active'),
+      detail: t('factoryView.showActiveTooltip', 'Show only the runs that have not ended'),
+    },
+  ];
+  const current = options.find((option) => option.value === activeOnly) ?? options[0];
   return (
-    <ToggleGroup
-      type="single"
-      size="sm"
-      variant="outline"
-      value={activeOnly ? 'active' : 'all'}
-      onValueChange={(value) => value && onChange(value === 'active')}
-    >
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <ToggleGroupItem value="all" data-testid="factory-view-show-all">
-            {t('factoryView.showAll', 'All')}
-          </ToggleGroupItem>
-        </TooltipTrigger>
-        <TooltipContent>
-          {t('factoryView.showAllTooltip', 'Show every run, ended ones too')}
-        </TooltipContent>
-      </Tooltip>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <ToggleGroupItem value="active" data-testid="factory-view-show-active">
-            {t('factoryView.showActive', 'Active')}
-          </ToggleGroupItem>
-        </TooltipTrigger>
-        <TooltipContent>
-          {t('factoryView.showActiveTooltip', 'Show only the runs that have not ended')}
-        </TooltipContent>
-      </Tooltip>
-    </ToggleGroup>
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          data-testid="factory-view-active-filter"
+          className={cn(
+            'inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md border transition-colors whitespace-nowrap',
+            activeOnly
+              ? 'bg-accent text-accent-foreground border-accent-foreground/20'
+              : 'bg-transparent text-muted-foreground border-border hover:bg-accent/50 hover:text-foreground',
+          )}
+        >
+          {t('factoryView.runsFilter', 'Runs')}: {current.label}
+          <ChevronDown className="icon-xs opacity-50" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" padding="xs" className="w-64">
+        <div role="menu">
+          {options.map((option) => {
+            const checked = option.value === activeOnly;
+            return (
+              <button
+                key={option.testId}
+                type="button"
+                role="menuitemradio"
+                aria-checked={checked}
+                data-testid={option.testId}
+                onClick={() => {
+                  onChange(option.value);
+                  setOpen(false);
+                }}
+                className={cn(
+                  'flex w-full items-start gap-2 rounded-sm px-2 py-1.5 text-left text-xs outline-none',
+                  'hover:bg-accent focus-visible:bg-accent',
+                )}
+              >
+                <Check className={cn('icon-xs mt-0.5 shrink-0', !checked && 'invisible')} />
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span>{option.label}</span>
+                  <span className="text-muted-foreground text-2xs">{option.detail}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 

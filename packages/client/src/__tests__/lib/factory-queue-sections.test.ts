@@ -4,6 +4,7 @@ import { buildFactoryRun } from '@/data/factory/testing';
 import type { FactoryRun } from '@/lib/api/factory';
 import {
   FACTORY_NO_LANE,
+  factoryLaneOptions,
   factoryRunSteps,
   filterFactoryRuns,
   groupFactoryRuns,
@@ -138,12 +139,71 @@ describe('filterFactoryRuns lanes (openspec factory-lanes)', () => {
   });
 
   test('keeps only the chosen lanes, and the unlaned runs under the no-lane value', () => {
-    expect(ids(['payments'])).toEqual(['pay']);
+    expect(ids(['p1:payments'])).toEqual(['pay']);
     expect(ids([FACTORY_NO_LANE])).toEqual(['main']);
-    expect(ids(['auth', FACTORY_NO_LANE])).toEqual(['auth', 'main']);
+    expect(ids(['p1:auth', FACTORY_NO_LANE])).toEqual(['auth', 'main']);
+  });
+
+  test('a lane is chosen per project: the same name in another project is another value', () => {
+    const twoProjects = [
+      ...runs,
+      { ...buildFactoryRun({ id: 'auth2', state: 'working', lane: 'auth' }), projectId: 'p2' },
+    ];
+    const kept = (lanes: string[]) =>
+      filterFactoryRuns(twoProjects, {
+        search: '',
+        caseSensitive: false,
+        states: new Set(),
+        projectIds: new Set(),
+        lanes: new Set(lanes),
+        projectNameById: new Map(),
+      }).map((run) => run.id);
+    expect(kept(['p1:auth'])).toEqual(['auth']);
+    expect(kept(['p2:auth'])).toEqual(['auth2']);
   });
 
   test('the search matches the lane name', () => {
     expect(ids(undefined, 'paym')).toEqual(['pay']);
+  });
+});
+
+describe('factoryLaneOptions (openspec factory-lanes D10)', () => {
+  const names = new Map([
+    ['p1', 'Phone'],
+    ['p2', 'Web'],
+  ]);
+  const lane = (projectId: string, name: string) => ({
+    projectId,
+    name,
+    label: `lane:${name}`,
+    branch: `lane/${name}`,
+  });
+
+  test('a lane with no loaded run is an option, with its label and branch', () => {
+    expect(factoryLaneOptions([lane('p1', 'auth')], [], names)).toEqual([
+      { value: 'p1:auth', label: 'auth', detail: 'lane:auth → lane/auth' },
+    ]);
+  });
+
+  test("a loaded run's lane with no row (a removed lane) is an option too", () => {
+    expect(factoryLaneOptions([], [{ projectId: 'p1', lane: 'old' }], names)).toEqual([
+      { value: 'p1:old', label: 'old', detail: undefined },
+    ]);
+  });
+
+  test('no lanes at all: no options', () => {
+    expect(factoryLaneOptions([], [{ projectId: 'p1', lane: null }], names)).toEqual([]);
+  });
+
+  test('the same name in two projects is two options, each named with its project', () => {
+    const options = factoryLaneOptions(
+      [lane('p1', 'auth'), lane('p2', 'auth')],
+      [{ projectId: 'p1', lane: 'auth' }],
+      names,
+    );
+    expect(options.map((option) => [option.value, option.label])).toEqual([
+      ['p1:auth', 'auth · Phone'],
+      ['p2:auth', 'auth · Web'],
+    ]);
   });
 });

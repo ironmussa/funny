@@ -53,6 +53,11 @@ export const factoryRouter = router({
   queueRuns: protectedProcedure.query(async ({ ctx }) =>
     unwrap(await ctx.ports.factory.queueRuns(ctx.userId)),
   ),
+  // The factory view's lane filter: the lanes of the caller's own factories,
+  // with or without runs on screen. Scoped by factory owner, like `queueRuns`.
+  queueLanes: protectedProcedure.query(async ({ ctx }) =>
+    unwrap(await ctx.ports.factory.queueLanes(ctx.userId)),
+  ),
   // Stopping or retrying acts on the caller's own factory, which runs in their
   // name: the same `steer` as saving it.
   stopRun: projectProcedure('steer', CONTROL_FORBIDDEN)

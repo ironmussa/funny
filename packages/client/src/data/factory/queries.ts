@@ -6,6 +6,7 @@ import type {
   FactoryIssueBlockers,
   FactoryIssuelessFlow,
   FactoryLane,
+  FactoryQueueLane,
   FactoryQueueRun,
   FactoryReadiness,
   FactoryRun,
@@ -119,6 +120,21 @@ export function factoryQueueRunsQuery() {
     queryFn: (): Promise<FactoryQueueRun[]> => unwrapResult(factoryApi.listQueueRuns()),
     staleTime: 10_000,
     refetchInterval: 15_000,
+  };
+}
+
+const queueLanesKey = ['factory', 'queue-lanes'] as const;
+
+/**
+ * The lanes of the caller's factories across projects, with or without runs
+ * on screen: the factory view's lane filter (openspec factory-lanes D10).
+ */
+export function factoryQueueLanesQuery() {
+  return {
+    queryKey: queueLanesKey,
+    queryFn: (): Promise<FactoryQueueLane[]> => unwrapResult(factoryApi.listQueueLanes()),
+    staleTime: 30_000,
+    refetchInterval: 60_000,
   };
 }
 

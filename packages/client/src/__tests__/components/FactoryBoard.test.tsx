@@ -6,6 +6,7 @@
 import { beforeEach, describe, expect, mock, test, vi } from 'bun:test';
 
 import type { Thread } from '@funny/shared';
+import type { FactoryQueueLane } from '@funny/shared/contracts/factory';
 import { fireEvent, render, screen, within } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
 import { MemoryRouter, useLocation } from 'react-router-dom';
@@ -17,6 +18,7 @@ import type { FactoryQueueRun, FactoryRun, FactorySettings } from '@/lib/api/fac
 
 const mocks = ((): {
   queue: FactoryQueueRun[];
+  lanes: FactoryQueueLane[];
   threads: Record<string, Thread>;
   settings: Partial<FactorySettings> | null;
   requests: Record<string, { id: string; sha: string }>;
@@ -27,6 +29,7 @@ const mocks = ((): {
   release: ReturnType<typeof vi.fn>;
 } => ({
   queue: [],
+  lanes: [],
   threads: {},
   settings: null,
   requests: {},
@@ -39,6 +42,7 @@ const mocks = ((): {
 
 mock.module('@/data/factory/hooks', () => ({
   useFactoryQueueRuns: () => mocks.queue,
+  useFactoryQueueLanes: () => mocks.lanes,
   useFactorySettings: () => mocks.settings,
   // Only asked for a run that waits for an approval.
   usePendingApprovalRequestOfRun: (_projectId: string, runId: string, enabled: boolean) =>
@@ -137,6 +141,7 @@ const renderBoard = (runs: FactoryQueueRun[], singleProjectId: string | null = n
 
 beforeEach(() => {
   mocks.queue = [];
+  mocks.lanes = [];
   mocks.threads = {};
   mocks.settings = null;
   mocks.navigate = vi.fn();
@@ -792,6 +797,7 @@ describe('FactoryQueueView layouts', () => {
     fireEvent.click(screen.getByTestId('factory-view-layout-board'));
     expect(screen.getByTestId('factory-board')).toBeTruthy();
     expect(screen.getByTestId('factory-board-card-merged')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('factory-view-active-filter'));
     fireEvent.click(screen.getByTestId('factory-view-show-active'));
     expect(screen.queryByTestId('factory-board-card-merged')).toBeNull();
     expect(screen.getByTestId('factory-board-card-busy')).toBeTruthy();
@@ -854,6 +860,7 @@ describe('FactoryQueueView layouts', () => {
     expect(screen.queryByTestId('factory-board-card-busy')).toBeNull();
     expect(screen.queryByTestId('factory-board-card-other')).toBeNull();
 
+    fireEvent.click(screen.getByTestId('factory-view-active-filter'));
     fireEvent.click(screen.getByTestId('factory-view-show-active'));
     expect(search().get('active')).toBe('1');
     fireEvent.click(screen.getByTestId('factory-view-clear-filters'));
@@ -861,5 +868,78 @@ describe('FactoryQueueView layouts', () => {
     expect(params.get('project')).toBeNull();
     expect(params.get('status')).toBeNull();
     expect(params.get('view')).toBe('board');
+  });
+});
+
+// openspec factory-lanes D10: the lane filter lists the factories' lanes, per project.
+describe('FactoryQueueView lane filter', () => {
+  const lane = (projectId: string, name: string): FactoryQueueLane => ({
+    projectId,
+    name,
+    label: `lane:${name}`,
+    branch: `lane/${name}`,
+    state: 'active',
+  });
+  const renderView = () =>
+    render(
+      <MemoryRouter>
+        <TooltipProvider>
+          <FactoryQueueView />
+        </TooltipProvider>
+      </MemoryRouter>,
+    );
+  const openFilter = () => fireEvent.click(screen.getByTestId('factory-view-lane-filter'));
+
+  test('no lane anywhere: the filter is hidden', () => {
+    mocks.queue = [queueRun('busy', 'working')];
+    renderView();
+    expect(screen.queryByTestId('factory-view-lane-filter')).toBeNull();
+  });
+
+  test('a lane with no loaded run is an option, with its label and branch', () => {
+    mocks.queue = [queueRun('busy', 'working')];
+    mocks.lanes = [lane('p1', 'auth')];
+    renderView();
+    openFilter();
+    const option = screen.getByTestId('factory-view-lane-filter-option-p1:auth');
+    expect(option).toHaveTextContent('auth');
+    expect(option).toHaveTextContent('lane:auth → lane/auth');
+  });
+
+  test('two projects with a lane of the same name: two options, each keeping its own runs', () => {
+    mocks.queue = [
+      queueRun('a1', 'working', { lane: 'auth' }),
+      queueRun('a2', 'working', { lane: 'auth', projectId: 'p2' }),
+    ];
+    mocks.lanes = [lane('p1', 'auth'), lane('p2', 'auth')];
+    renderView();
+    openFilter();
+    expect(screen.getByTestId('factory-view-lane-filter-option-p1:auth')).toHaveTextContent(
+      'auth · funny',
+    );
+    fireEvent.click(screen.getByTestId('factory-view-lane-filter-option-p2:auth'));
+    expect(screen.queryByTestId('factory-view-run-a1')).toBeNull();
+    expect(screen.getByTestId('factory-view-run-a2')).toBeTruthy();
+  });
+
+  test('with more than eight lanes the menu gets a search field that narrows the options', () => {
+    mocks.queue = [queueRun('busy', 'working')];
+    mocks.lanes = Array.from({ length: 9 }, (_, i) => lane('p1', `lane${i}`)).concat(
+      lane('p1', 'payments'),
+    );
+    renderView();
+    openFilter();
+    fireEvent.change(screen.getByTestId('factory-view-lane-filter-search'), {
+      target: { value: 'paym' },
+    });
+    expect(screen.getByTestId('factory-view-lane-filter-option-p1:payments')).toBeTruthy();
+    expect(screen.queryByTestId('factory-view-lane-filter-option-p1:lane0')).toBeNull();
+  });
+
+  test('a few lanes: no search field', () => {
+    mocks.lanes = [lane('p1', 'auth')];
+    renderView();
+    openFilter();
+    expect(screen.queryByTestId('factory-view-lane-filter-search')).toBeNull();
   });
 });

@@ -103,7 +103,7 @@ describe('factory port lanes (3.3, 6.6, 8.1)', () => {
     expect(aliceLanes[0]).toMatchObject({
       id: lane.id,
       name: 'auth',
-      label: 'feature:auth',
+      label: 'lane:auth',
       branch: 'feature/auth',
       state: 'active',
       openRuns: ['#12'],
@@ -118,6 +118,43 @@ describe('factory port lanes (3.3, 6.6, 8.1)', () => {
     expect((await port.removeLane('bob', 'p1', 'auth'))._unsafeUnwrapErr().status).toBe(404);
     expect((await port.syncLane('bob', 'p1', 'auth'))._unsafeUnwrapErr().status).toBe(404);
     expect((await port.finishLane('bob', 'p1', 'auth'))._unsafeUnwrapErr().status).toBe(404);
+  });
+
+  test('queueLanes lists every lane of the caller factories, with or without runs, and no one else lanes (13.1)', async () => {
+    const { github } = makeFakeGithub();
+    const { settings, lanes, port } = makePort(github, []);
+    seedProject(testDb.db, { id: 'p2', userId: 'alice' });
+
+    // p1 keeps the prefixes of a factory saved before D11; p2 has the defaults.
+    (
+      await settings.save('alice', 'p1', {
+        enabled: true,
+        laneLabelPrefix: 'feature:',
+        laneBranchPrefix: 'feature/',
+      })
+    )._unsafeUnwrap();
+    (await settings.save('alice', 'p2', { enabled: true }))._unsafeUnwrap();
+    (await settings.save('bob', 'p1', { enabled: true }))._unsafeUnwrap();
+    const p1 = (await settings.factoryId('alice', 'p1'))._unsafeUnwrap()!;
+    const p2 = (await settings.factoryId('alice', 'p2'))._unsafeUnwrap()!;
+    const bobs = (await settings.factoryId('bob', 'p1'))._unsafeUnwrap()!;
+    // No run was ever admitted to any of these lanes.
+    (await lanes.ensure(p1, { name: 'auth', branch: 'feature/auth' }))._unsafeUnwrap();
+    (await lanes.ensure(p2, { name: 'auth', branch: 'lane/auth' }))._unsafeUnwrap();
+    (await lanes.ensure(bobs, { name: 'billing', branch: 'feature/billing' }))._unsafeUnwrap();
+
+    const listed = (await port.queueLanes('alice'))._unsafeUnwrap();
+    expect(listed).toEqual([
+      {
+        projectId: 'p1',
+        name: 'auth',
+        label: 'feature:auth',
+        branch: 'feature/auth',
+        state: 'active',
+      },
+      { projectId: 'p2', name: 'auth', label: 'lane:auth', branch: 'lane/auth', state: 'active' },
+    ]);
+    expect((await port.queueLanes('carol'))._unsafeUnwrap()).toEqual([]);
   });
 
   test('syncLane requests sync for idle, retries needs_human, wakes watcher, and records factory.lane_sync activity', async () => {

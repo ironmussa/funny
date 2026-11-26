@@ -9,7 +9,7 @@
  * factory-pipeline-board) shows the same filtered runs in stage columns, and
  * the analytics layout the factory's health and integration figures.
  */
-import { implementingThreadOf } from '@funny/shared/contracts/factory';
+import { type FactoryQueueLane, implementingThreadOf } from '@funny/shared/contracts/factory';
 import type { TFunction } from 'i18next';
 import { Clock, Factory, PanelRight, Play } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
@@ -45,13 +45,15 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchBar } from '@/components/ui/search-bar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
-import { useFactoryQueueRuns } from '@/data/factory/hooks';
+import { useFactoryQueueLanes, useFactoryQueueRuns } from '@/data/factory/hooks';
 import { useProjects } from '@/data/projects/hooks';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import type { FactoryQueueRun, FactoryRun } from '@/lib/api/factory';
 import {
-  FACTORY_NO_LANE,
+  factoryLaneKey,
+  type FactoryLaneOption,
+  factoryLaneOptions,
   factoryRunStateLabel,
   factoryRunStateVariant,
   factoryWaitReasonText,
@@ -297,6 +299,7 @@ function ClearFilters({ shown, onClear }: { shown: boolean; onClear: () => void 
 /** How many runs each state, project and lane has, and the project/lane options. */
 function useFactoryQueueCounts(
   runs: FactoryQueueRun[] | undefined,
+  lanes: FactoryQueueLane[] | undefined,
   projectNameById: ReadonlyMap<string, string>,
 ) {
   return useMemo(() => {
@@ -306,17 +309,15 @@ function useFactoryQueueCounts(
     for (const run of runs ?? []) {
       stateCounts[run.state] = (stateCounts[run.state] ?? 0) + 1;
       projectCounts[run.projectId] = (projectCounts[run.projectId] ?? 0) + 1;
-      const laneKey = run.lane ?? FACTORY_NO_LANE;
+      const laneKey = factoryLaneKey(run.projectId, run.lane);
       laneCounts[laneKey] = (laneCounts[laneKey] ?? 0) + 1;
     }
     const projectOptions = Object.keys(projectCounts)
       .map((id) => ({ value: id, label: projectNameById.get(id) ?? id }))
       .sort((a, b) => a.label.localeCompare(b.label));
-    const laneNames = Object.keys(laneCounts)
-      .filter((key) => key !== FACTORY_NO_LANE)
-      .sort((a, b) => a.localeCompare(b));
-    return { stateCounts, projectCounts, projectOptions, laneCounts, laneNames };
-  }, [runs, projectNameById]);
+    const laneOptions = factoryLaneOptions(lanes ?? [], runs ?? [], projectNameById);
+    return { stateCounts, projectCounts, projectOptions, laneCounts, laneOptions };
+  }, [runs, lanes, projectNameById]);
 }
 
 interface ToolbarProps {
@@ -334,8 +335,8 @@ interface ToolbarProps {
   /** The projects that have runs, by name. */
   projectOptions: { value: string; label: string }[];
   projectCounts: Record<string, number>;
-  /** Distinct lane names present in the runs, sorted. */
-  laneNames: string[];
+  /** The lane filter's options: one per project and lane (D10). */
+  laneOptions: FactoryLaneOption[];
   laneCounts: Record<string, number>;
   /** How many runs the filters keep, of how many. */
   shown: number;
@@ -372,7 +373,7 @@ function FactoryQueueSearch({
       onCaseSensitiveChange={onCaseSensitiveChange}
       onClose={search ? () => onSearchChange('') : undefined}
       autoFocus={false}
-      placeholder={t('factoryView.searchPlaceholder', 'Filter by issue, project or step')}
+      placeholder={t('factoryView.searchPlaceholder', 'Filter by issue, project, lane or step')}
       testIdPrefix="factory-view-search"
       variant="outline"
       className="h-7 w-72 shrink-0"
@@ -389,7 +390,7 @@ function FactoryQueueFilters({
   onLaneFilterChange,
   projectOptions,
   projectCounts,
-  laneNames,
+  laneOptions,
   laneCounts,
   stateCounts,
 }: Pick<
@@ -402,7 +403,7 @@ function FactoryQueueFilters({
   | 'onLaneFilterChange'
   | 'projectOptions'
   | 'projectCounts'
-  | 'laneNames'
+  | 'laneOptions'
   | 'laneCounts'
   | 'stateCounts'
 >) {
@@ -429,7 +430,7 @@ function FactoryQueueFilters({
         counts={stateCounts}
       />
       <FactoryLaneFilter
-        lanes={laneNames}
+        lanes={laneOptions}
         selected={laneFilter}
         onToggle={(lane) => onLaneFilterChange(toggled(laneFilter, lane))}
         counts={laneCounts}
@@ -569,6 +570,7 @@ function FactoryQueueContent({
 
 export function FactoryQueueView() {
   const runs = useFactoryQueueRuns();
+  const lanes = useFactoryQueueLanes();
   const projects = useProjects();
   const now = useMinuteTick();
 
@@ -576,7 +578,7 @@ export function FactoryQueueView() {
     () => new Map(projects.map((project) => [project.id, project.name])),
     [projects],
   );
-  const counts = useFactoryQueueCounts(runs, projectNameById);
+  const counts = useFactoryQueueCounts(runs, lanes, projectNameById);
   const { filtered, toolbar, layout, singleProjectId, shown } = useFactoryQueueFilters(
     runs,
     projectNameById,

@@ -445,6 +445,7 @@ describe('the analytics layout', () => {
     ];
     renderView('/factory?view=analytics');
     expect(screen.getByTestId('factory-view-health-in-flight')).toHaveTextContent('1');
+    fireEvent.click(screen.getByTestId('factory-view-active-filter'));
     fireEvent.click(screen.getByTestId('factory-view-show-active'));
     fireEvent.change(screen.getByTestId('factory-view-search-input'), {
       target: { value: '#999' },

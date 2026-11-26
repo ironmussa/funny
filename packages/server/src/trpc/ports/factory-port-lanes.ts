@@ -8,6 +8,7 @@ import type {
   FactoryLane,
   FactoryLaneConflict,
   FactoryLaneSyncState,
+  FactoryQueueLane,
   FactoryQueueRun,
 } from '@funny/shared/contracts/factory';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
@@ -80,7 +81,7 @@ export interface LanePortOverrides {
 export function lanePortMethods(
   { settings }: FactoryPortDeps,
   overrides: LanePortOverrides = {},
-): Pick<FactoryPort, 'lanes' | 'removeLane' | 'syncLane' | 'finishLane'> {
+): Pick<FactoryPort, 'lanes' | 'queueLanes' | 'removeLane' | 'syncLane' | 'finishLane'> {
   const getGithub = overrides.github ?? factoryGithubPort;
   const lanesRepo = overrides.lanes ?? createFactoryLanesRepository();
   const wake = overrides.wake ?? pokeFactory;
@@ -111,6 +112,21 @@ export function lanePortMethods(
               );
             });
         });
+    },
+
+    async queueLanes(userId) {
+      return lanesRepo
+        .forOwner(userId)
+        .mapErr((error) => failure(500, error.message))
+        .map((rows) =>
+          rows.map((lane): FactoryQueueLane => ({
+            projectId: lane.projectId,
+            name: lane.name,
+            label: `${lane.laneLabelPrefix}${lane.name}`,
+            branch: lane.branch,
+            state: lane.state,
+          })),
+        );
     },
 
     async removeLane(userId, projectId, name) {

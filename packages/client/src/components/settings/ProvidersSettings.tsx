@@ -254,7 +254,7 @@ export function ProvidersSettings() {
                 disabled={removing === p.id}
                 data-testid={`provider-remove-${p.id}`}
               >
-                <Trash2 className="icon-base text-destructive" />
+                <Trash2 className="icon-base" />
               </TooltipIconButton>
             </div>
           ))}

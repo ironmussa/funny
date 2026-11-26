@@ -193,7 +193,7 @@ export function ExtensionsSettings() {
                   disabled={removing === ext.name}
                   data-testid={`extension-remove-${ext.name}`}
                 >
-                  <Trash2 className="icon-base text-destructive" />
+                  <Trash2 className="icon-base" />
                 </TooltipIconButton>
               )}
             </div>

@@ -39,7 +39,7 @@ describe('ConfirmDialog warning and confirm styles', () => {
     expect(screen.getByText('2 unpushed commits').className).toContain('text-xs');
   });
 
-  test('the destructive confirm button keeps the destructive button look', () => {
+  test('the destructive confirm button is not red', () => {
     render(
       <ConfirmDialog
         open
@@ -52,9 +52,9 @@ describe('ConfirmDialog warning and confirm styles', () => {
     );
 
     const confirm = screen.getByTestId('confirm-dialog-confirm');
-    expect(confirm.className).toContain('bg-destructive');
-    expect(confirm.className).toContain('text-destructive-foreground');
-    expect(confirm.className).not.toContain('bg-primary');
+    expect(confirm.className).not.toContain('bg-destructive');
+    expect(confirm.className).not.toContain('text-destructive');
+    expect(confirm.className).toContain('bg-primary');
   });
 });
 

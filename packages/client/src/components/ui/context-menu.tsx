@@ -30,12 +30,13 @@ function ContextMenuContent({
 function ContextMenuItem({
   className,
   inset,
-  variant = 'default',
+  // Kept so callers can mark delete items; it no longer changes the look.
+  variant: _variant = 'default',
   ref,
   ...props
 }: React.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.Item> & {
   inset?: boolean;
-  /** `destructive` for an item that closes or deletes something. */
+  /** `destructive` for an item that closes or deletes something (not tinted red). */
   variant?: 'default' | 'destructive';
 } & { ref?: React.Ref<React.ElementRef<typeof ContextMenuPrimitive.Item>> }) {
   return (
@@ -44,7 +45,6 @@ function ContextMenuItem({
       className={cn(
         'relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-hidden focus:bg-accent focus:text-accent-foreground data-disabled:pointer-events-none data-disabled:opacity-50',
         inset && 'pl-8',
-        variant === 'destructive' && 'text-destructive focus:text-destructive',
         className,
       )}
       {...props}

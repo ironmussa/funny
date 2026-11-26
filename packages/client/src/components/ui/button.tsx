@@ -12,16 +12,17 @@ const buttonVariants = cva(
     variants: {
       variant: {
         default: 'bg-primary text-primary-foreground hover:bg-primary/90',
-        destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
+        // A confirm action that deletes or discards: same look as `default`, not red.
+        destructive: 'bg-primary text-primary-foreground hover:bg-primary/90',
         outline: 'border border-input bg-background hover:bg-accent hover:text-accent-foreground',
         secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/80',
         ghost: 'hover:bg-accent hover:text-accent-foreground',
         // Toolbar and row actions: a ghost button that stays quiet until hovered.
         muted: 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
-        // Row actions that remove something: quiet until hovered, then red.
-        'muted-destructive': 'text-muted-foreground hover:bg-accent hover:text-status-error',
+        // Row actions that remove something: quiet until hovered.
+        'muted-destructive': 'text-muted-foreground hover:bg-accent hover:text-foreground',
         // A text action that destroys something (delete, discard).
-        'ghost-destructive': 'text-destructive hover:bg-accent hover:text-destructive',
+        'ghost-destructive': 'text-foreground hover:bg-accent hover:text-accent-foreground',
         link: 'text-primary underline-offset-4 hover:underline',
         // A ghost toolbar button for the view or panel that is showing now.
         active: 'text-foreground hover:bg-accent hover:text-accent-foreground',
@@ -44,7 +45,7 @@ const buttonVariants = cva(
           'border border-status-warning/30 bg-background text-status-warning hover:bg-status-warning/10 hover:text-accent-foreground',
         // An outlined action that destroys or stops something (stop all).
         'outline-destructive':
-          'border border-destructive/40 bg-background text-destructive hover:bg-destructive/10 hover:text-destructive',
+          'border border-input bg-background text-foreground hover:bg-accent hover:text-accent-foreground',
         // An outlined secondary action (cancel) that stays quiet until hovered.
         'outline-muted':
           'border border-input bg-background text-muted-foreground hover:bg-accent hover:text-foreground',

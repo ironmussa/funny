@@ -57,11 +57,10 @@ const dropdownMenuItemVariants = cva(
         sm: 'gap-2 px-2 py-1.5 text-sm [&>svg]:size-3.5 [&>svg]:shrink-0',
         xs: 'gap-1.5 px-1.5 py-1 text-xs [&>svg]:size-3 [&>svg]:shrink-0',
       },
-      // Items that delete or discard: red, and they stay red when highlighted.
+      // Items that delete or discard. Not tinted red: they look like any other item.
       variant: {
         default: '',
-        destructive:
-          'text-status-error hover:text-status-error focus:text-status-error focus-visible:text-status-error data-[highlighted]:text-status-error',
+        destructive: '',
       },
     },
     defaultVariants: {

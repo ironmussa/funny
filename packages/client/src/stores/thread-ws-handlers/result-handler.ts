@@ -232,7 +232,8 @@ export function handleWSResult(get: Get, set: Set, threadId: string, data: any):
   // patched scratchThreads above, and scratch threads have no project so a
   // bare scheduleProjectRefresh() would just storm every loaded project.
   if (sidebarHitScratch) {
-    notifyThreadResult(threadId, resultStatus, get, data.errorReason);
+    if (!data.backgroundJobPending)
+      notifyThreadResult(threadId, resultStatus, get, data.errorReason);
     return;
   }
 
@@ -252,6 +253,10 @@ export function handleWSResult(get: Get, set: Set, threadId: string, data: any):
     // (e.g. Chrome extension ingest). Debounce refresh to avoid API storm.
     scheduleProjectRefresh(get);
   }
+
+  // A background job of the thread wakes the agent when it ends: the run is
+  // not over, so do not announce it as finished.
+  if (data.backgroundJobPending) return;
 
   // Toast notification
   notifyThreadResult(threadId, resultStatus, get, data.errorReason);

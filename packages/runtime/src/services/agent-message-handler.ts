@@ -923,6 +923,8 @@ export class AgentMessageHandler {
     // Re-fetch thread only if we didn't already in the block above
     const threadWithStage =
       finalStatus !== 'waiting' ? await this.threadManager.getThread(threadId) : preThread;
+    const backgroundJobPending =
+      finalStatus === 'completed' && (await this.hasRunningBackgroundJob(threadId));
 
     await this.emitWS(threadId, 'agent:result', {
       result: msg.result ? decodeUnicodeEscapes(msg.result) : msg.result,
@@ -935,6 +937,7 @@ export class AgentMessageHandler {
       permissionRequest: permReq
         ? { toolName: permReq.toolName, toolInput: permReq.toolInput }
         : undefined,
+      ...(backgroundJobPending ? { backgroundJobPending: true } : null),
     });
 
     if (permReq) {
@@ -959,6 +962,26 @@ export class AgentMessageHandler {
 
     // Emit git status for worktree threads (async, non-blocking)
     this.emitGitStatus(threadId).catch(() => {});
+  }
+
+  /**
+   * Whether the thread has a background job still running (`funny_run_checks`
+   * / `funny_spawn` with `background: true`). Its end wakes the agent again
+   * (`agent-job-manager.ts`), so the turn that just ended is not the end of the
+   * run. A failed lookup answers false: the result is then announced as before.
+   */
+  private async hasRunningBackgroundJob(threadId: string): Promise<boolean> {
+    try {
+      const running = await getServices().jobs.listRunningJobs();
+      return running.some((job) => job.threadId === threadId);
+    } catch (err) {
+      log.warn('Running background jobs lookup failed', {
+        namespace: 'agent-message',
+        threadId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return false;
+    }
   }
 
   // ── Changed-files session summary ──────────────────────────────

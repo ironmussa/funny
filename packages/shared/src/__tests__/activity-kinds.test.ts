@@ -131,6 +131,23 @@ describe('parseActivityInput for the new kinds', () => {
     'github.write': { action: 'pr-merge', prNumber: 7, repo: 'o/r' },
     'git.destructive': { action: 'discard', paths: ['a.ts', 'b.ts'] },
     'pipeline.run': { pipelineId: 'pl1', commitSha: 'abc123' },
+    'factory.mark-done': { issueNumber: 12 },
+    'factory.hold': { issueNumber: 12 },
+    'factory.release': { issueNumber: 12 },
+    'factory.lane_sync': {
+      lane: 'payments',
+      branch: 'feature/payments',
+      event: 'conflict',
+      to: 'resolving',
+      prNumber: 81,
+    },
+    'factory.finish_lane': {
+      lane: 'payments',
+      branch: 'feature/payments',
+      base: 'dev',
+      prNumber: 90,
+      stage: 'opened',
+    },
   };
 
   test('every kind has a sample', () => {

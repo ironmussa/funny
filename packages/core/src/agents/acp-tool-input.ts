@@ -155,6 +155,15 @@ function firstDefined(
   return undefined;
 }
 
+/** First string value among `keys` (including `''`), or undefined when none. */
+function firstString(input: JsonObject, keys: readonly string[]): string | undefined {
+  for (const key of keys) {
+    const value = input[key];
+    if (isString(value)) return value;
+  }
+  return undefined;
+}
+
 /** Provider aliases for the file path, in priority order (Cursor-specific, then Antigravity's `Path`). */
 const FILE_PATH_ALIASES = [
   'path',
@@ -167,6 +176,17 @@ const FILE_PATH_ALIASES = [
   'relative_workspace_path',
   // Antigravity (`agy`) uses PascalCase argument names.
   'Path',
+] as const;
+
+/** Provider aliases for before/after edit text (Antigravity `edit_file`/`write_file` and ACP variants). */
+const OLD_STRING_ALIASES = ['Target', 'oldText', 'old_text', 'oldString'] as const;
+const NEW_STRING_ALIASES = [
+  'Replacement',
+  'newText',
+  'new_text',
+  'newString',
+  'Content',
+  'content',
 ] as const;
 
 type DiffBlock = { path?: string; oldText?: string; newText?: string };
@@ -196,24 +216,32 @@ function resolveFilePath(
 }
 
 /**
- * Surface the diff's before/after text so the EditFileCard can render an
- * inline diff (it needs file_path + old_string + new_string).
+ * Surface before/after edit text so `EditFileCard` can render an inline diff
+ * (`file_path` + `old_string` + `new_string`). Prefers the ACP `diff` content
+ * block over rawInput aliases (e.g. Antigravity's `Target` / `Replacement` /
+ * `Content`) because `diff` carries the exact applied text when present.
  */
-function fillDiffText(input: JsonObject, diff: DiffBlock): void {
-  if (input.old_string == null && isString(diff.oldText)) {
-    input.old_string = diff.oldText;
+function fillEditText(input: JsonObject, diff: DiffBlock | null): void {
+  if (input.old_string == null) {
+    const oldText = isString(diff?.oldText) ? diff.oldText : firstString(input, OLD_STRING_ALIASES);
+    if (oldText !== undefined) input.old_string = oldText;
   }
-  if (input.new_string == null && isString(diff.newText)) {
-    input.new_string = diff.newText;
+  if (input.new_string == null) {
+    const newText = isString(diff?.newText) ? diff.newText : firstString(input, NEW_STRING_ALIASES);
+    if (newText !== undefined) input.new_string = newText;
   }
 }
 
 const fillFileTool: ToolInputFiller = (input, data, toolName) => {
-  // Cursor reports edits as a `diff` content block carrying the path plus
-  // the before/after text — the only place the path appears for an edit.
+  // Cursor and Antigravity report edits via a `diff` content block carrying the
+  // path plus before/after text; Antigravity also sends PascalCase arguments
+  // (`Path`, `Target`, `Replacement`, `Content`) on the initial `tool_call`.
   const diff = extractDiffBlock(data.content);
   fillFilePath(input, data, diff);
-  if (toolName !== 'Read' && diff) fillDiffText(input, diff);
+  if (toolName === 'Write' && input.content == null && isString(input.Content)) {
+    input.content = input.Content;
+  }
+  if (toolName !== 'Read') fillEditText(input, diff);
   return undefined;
 };
 

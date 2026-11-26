@@ -189,6 +189,37 @@ describe('buildACPToolInput — per-tool canonical fields', () => {
     expect(kept.new_string).toBe('new');
   });
 
+  test('Edit maps Antigravity Target/Replacement/Content aliases when no diff block is present', () => {
+    const edit = buildACPToolInput('Edit', {
+      title: 'Edit',
+      rawInput: { Path: '/a.ts', Target: 'old', Replacement: '' },
+    });
+    expect(edit).toMatchObject({
+      file_path: '/a.ts',
+      old_string: 'old',
+      new_string: '',
+    });
+
+    const writeAsEdit = buildACPToolInput('Edit', {
+      title: 'Write',
+      rawInput: { Path: '/b.ts', Content: 'hello\n' },
+    });
+    expect(writeAsEdit).toMatchObject({
+      file_path: '/b.ts',
+      new_string: 'hello\n',
+    });
+    expect(writeAsEdit.old_string).toBeUndefined();
+
+    const write = buildACPToolInput('Write', {
+      title: 'Write',
+      rawInput: { Path: '/c.ts', Content: 'body\n' },
+    });
+    expect(write).toMatchObject({
+      file_path: '/c.ts',
+      content: 'body\n',
+    });
+  });
+
   test('Bash command falls back through cmd / shell_command / script / title', () => {
     const cmd = (rawInput: unknown, title = 't') =>
       buildACPToolInput('Bash', { title, rawInput }).command;

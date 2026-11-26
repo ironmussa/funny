@@ -9,7 +9,9 @@ import { fileURLToPath } from 'node:url';
 // and server-probe's `env`). The rule is a warning in oxlint.config.ts, so
 // `bun run lint` alone would not fail on a new one;
 // scripts/fitness/check-unknown-parameters.ts runs the vendored rule itself.
-const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
+// It lives here, next to the packages/client/src guard of the same rule,
+// because the factory's regression proof only runs tests under packages/.
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../../../..');
 const SCRIPT = 'scripts/fitness/check-unknown-parameters.ts';
 const LINT_TIMEOUT_MS = 120_000;
 

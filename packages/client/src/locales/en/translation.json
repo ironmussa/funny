@@ -2071,7 +2071,16 @@
     "holdTitleNoIssue": "Put this run on hold?",
     "holdBody": "The run leaves \"Needs a person\" and waits in \"On hold\" until you release it. Its issue gets the on-hold label instead of the factory label, so the factory does not take it again. Releasing it sends it back to the queue, to be triaged again.",
     "holdReason": "Reason",
-    "holdReasonPlaceholder": "Why? e.g. blocked by an upstream bug"
+    "holdReasonPlaceholder": "Why? e.g. blocked by an upstream bug",
+    "specRequest": {
+      "title": "Spec of #{{issue}} waits for your approval",
+      "approvedTitle": "You approved the spec of #{{issue}}",
+      "declinedTitle": "You declined the spec of #{{issue}}",
+      "expiredTitle": "The request to approve the spec expired",
+      "asked": "Asked by the agent of this thread. Nothing is approved until you approve it.",
+      "stale": "The spec changed after the agent asked, so this request no longer applies. The run panel shows the latest draft.",
+      "declinedNote": "Nothing was approved. The run still waits on its spec."
+    }
   },
   "projectSecrets": {
     "title": "Secrets",

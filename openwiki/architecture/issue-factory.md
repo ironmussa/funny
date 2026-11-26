@@ -588,7 +588,8 @@ no path from this channel to `approveMerge` or `approveSpec`: the control's acti
 names an approval. On a `needs_spec` run with a draft, `funny_factory_request_approval` creates a
 request of kind `spec` for that draft's revision (stored as `spec:<revision>` in the request's
 `sha` column), which expires when the revision changes or the run leaves `needs_spec`; the member
-answers it with `approveSpec`. `funny_factory_run` returns the run's spec (questions, draft,
+answers it with `approveSpec` on its card in the thread (`FactorySpecRequestCard.tsx`: the
+run's stored draft for that revision, Approve / Decline for a member with `steer`). `funny_factory_run` returns the run's spec (questions, draft,
 problem) and its approval.
 
 `factoryToolAccess` decides where the tools are refused: a sandbox thread or runner (also refused

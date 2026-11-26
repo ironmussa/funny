@@ -49,7 +49,7 @@ function SpecList({ title, items, testId }: { title: string; items: string[]; te
 }
 
 /** A spec draft (or the approved spec), section by section. */
-function SpecBody({ spec }: { spec: FactorySpec }) {
+export function SpecBody({ spec }: { spec: FactorySpec }) {
   const { t } = useTranslation();
   return (
     <div className="flex flex-col gap-1.5" data-testid="factory-spec-body">

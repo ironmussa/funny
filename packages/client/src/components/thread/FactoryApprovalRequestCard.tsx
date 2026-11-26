@@ -19,6 +19,7 @@ import { factoryRunStateChip } from '@/components/factory-board/run-state-chip';
 import { factoryRunWaitingText } from '@/components/factory-board/run-waiting';
 import { PRBadge } from '@/components/PRBadge';
 import { pullRequestNumber, useFactoryRunActions } from '@/components/thread/FactoryRunControls';
+import { FactorySpecRequestCard } from '@/components/thread/FactorySpecRequestCard';
 import { Button } from '@/components/ui/button';
 import { LabelBadge } from '@/components/ui/label-badge';
 import { declineFactoryApprovalRequest } from '@/data/factory/actions';
@@ -100,6 +101,10 @@ export function FactoryApprovalRequestCard({
         </p>
       </CardFrame>
     );
+  }
+  // A spec draft, not a held commit (openspec factory-spec-stage): its own card.
+  if (request.kind === 'spec') {
+    return <FactorySpecRequestCard projectId={projectId} request={request} run={run} />;
   }
   const outcome = outcomeOf(request, run);
   const title =

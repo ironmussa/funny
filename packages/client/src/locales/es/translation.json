@@ -2064,7 +2064,16 @@
     "holdTitleNoIssue": "¿Pausar esta run?",
     "holdBody": "La run sale de \"Necesita una persona\" y espera en \"En pausa\" hasta que la reanudes. Su issue recibe la etiqueta on-hold en lugar de la de la fábrica, para que la fábrica no lo vuelva a tomar. Al reanudarla vuelve a la cola y se tría de nuevo.",
     "holdReason": "Motivo",
-    "holdReasonPlaceholder": "¿Por qué? p. ej. bloqueado por un bug upstream"
+    "holdReasonPlaceholder": "¿Por qué? p. ej. bloqueado por un bug upstream",
+    "specRequest": {
+      "title": "La especificación de #{{issue}} espera tu aprobación",
+      "approvedTitle": "Aprobaste la especificación de #{{issue}}",
+      "declinedTitle": "Rechazaste la especificación de #{{issue}}",
+      "expiredTitle": "La solicitud para aprobar la especificación caducó",
+      "asked": "La pidió el agente de este hilo. Nada se aprueba hasta que tú lo apruebes.",
+      "stale": "La especificación cambió después de que el agente la pidiera, así que esta solicitud ya no aplica. El panel de la ejecución muestra el último borrador.",
+      "declinedNote": "No se aprobó nada. La ejecución sigue esperando su especificación."
+    }
   },
   "projectSecrets": {
     "title": "Secretos",

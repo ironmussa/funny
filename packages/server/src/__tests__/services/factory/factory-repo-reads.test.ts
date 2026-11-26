@@ -198,4 +198,27 @@ describe('factory repo reads', () => {
       expect((await reads.ensureBranch('feature/a')).isErr()).toBe(true);
     });
   });
+
+  // openspec factory-lanes, D5: whether what a run merged is in another branch.
+  test('a branch contains a commit when the commit is behind it or identical to it', async () => {
+    const { reads } = readsOver({
+      '/repos/o/r/compare/feature/a...in': { status: 'behind' },
+      '/repos/o/r/compare/feature/a...head': { status: 'identical' },
+      '/repos/o/r/compare/feature/a...out': { status: 'diverged' },
+      '/repos/o/r/compare/feature/a...new': { status: 'ahead' },
+    });
+    expect((await reads.branchContains('feature/a', 'in'))._unsafeUnwrap()).toBe(true);
+    expect((await reads.branchContains('feature/a', 'head'))._unsafeUnwrap()).toBe(true);
+    expect((await reads.branchContains('feature/a', 'out'))._unsafeUnwrap()).toBe(false);
+    expect((await reads.branchContains('feature/a', 'new'))._unsafeUnwrap()).toBe(false);
+  });
+
+  test('a merged pull request names the commit its merge made; an open one names none', async () => {
+    const { reads } = readsOver({
+      '/repos/o/r/pulls/9': { merged: true, merge_commit_sha: 'abc' },
+      '/repos/o/r/pulls/10': { merged: false, merge_commit_sha: 'test-merge' },
+    });
+    expect((await reads.mergeCommit(9))._unsafeUnwrap()).toBe('abc');
+    expect((await reads.mergeCommit(10))._unsafeUnwrap()).toBeNull();
+  });
 });

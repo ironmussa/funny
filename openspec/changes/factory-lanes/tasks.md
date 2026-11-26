@@ -13,7 +13,7 @@ Phase 2 is groups 9–10. Phase 3 is group 11. Group 12 closes each phase.
 - [x] 2.1 Add an optional `baseBranch` to `FactoryRepoReader` and make `reads(reader)` in `factory-github.ts` prefer it over `factoryBaseBranchOf`; verify a unit test where a reader with `baseBranch` answers it from `defaultBranch()` and `branchAhead`
 - [x] 2.2 Write `base_branch` in the admission compare-and-set (watcher and manual queue), resolved from the factory's setting (no lanes yet); verify a test that a run admitted while the factory merges into `develop` keeps `develop` after the setting changes to `main`
 - [x] 2.3 Build the action provider's and `factory-flow-runs.ts`'s reader from the run's `base_branch` (null → factory setting), so the worktree start, triage/review checkouts, integrate, stacking, `create_pr`'s retarget and the merge lane name use it; verify the existing factory flow tests pass and a new resume test keeps the recorded base
-- [ ] 2.4 Read a merged run's merge commit from its pull request (`merge_commit_sha`) the first time a dependency on another branch needs it, and keep it in `factory_runs.merge_sha` (done with 5.1; no write in the merge paths, so a batch, GitHub's merge queue and a person's merge are covered alike); verify a test that the commit is read once and reused
+- [x] 2.4 Read a merged run's merge commit from its pull request (`merge_commit_sha`) the first time a dependency on another branch needs it, and keep it in `factory_runs.merge_sha` (done with 5.1; no write in the merge paths, so a batch, GitHub's merge queue and a person's merge are covered alike); verify a test that the commit is read once and reused
 - [x] 2.5 Record the lane a run was admitted to (`factory_runs.lane`) and show its base as a `BranchBadge` on the run card when it has one; verify a component test
 - [x] 2.6 Update the "merge into" section of `openwiki/architecture/issue-factory.md` to say the base is frozen on the run; verify the doc names `factory_runs.base_branch`
 
@@ -34,8 +34,8 @@ Phase 2 is groups 9–10. Phase 3 is group 11. Group 12 closes each phase.
 
 ## 5. Dependencies across branches (D5)
 
-- [ ] 5.1 Pass each blocker run's `baseBranch`, `mergeSha` and "contained in the candidate's base" (GitHub compare, cached per tick) to `factory-dependencies.ts`, and add `blocker-on-other-branch` (contract, board label, i18n); verify the pure tests for: same base (unchanged), other lane not contained, unlaned blocker not yet synced into the lane, other base contained, blocker closed without a run
-- [ ] 5.2 Make `factory-stacking.ts` refuse a blocker with another base before stacking; verify a stacking test where `stack` mode does not stack across lanes
+- [x] 5.1 Pass each blocker run's `baseBranch`, `mergeSha` and "contained in the candidate's base" (GitHub compare, cached per tick) to `factory-dependencies.ts`, and add `blocker-on-other-branch` (contract, board label, i18n); verify the pure tests for: same base (unchanged), other lane not contained, unlaned blocker not yet synced into the lane, other base contained, blocker closed without a run
+- [x] 5.2 Make `factory-stacking.ts` refuse a blocker with another base before stacking; verify a stacking test where `stack` mode does not stack across lanes
 
 ## 6. Lane sync (D4)
 

@@ -37,6 +37,13 @@ export interface BlockerInput {
    * as far as they were read: the edges the cycle check walks.
    */
   queueGraph: ReadonlyMap<number, readonly number[]>;
+  /**
+   * Blockers whose latest run is on another base branch than the candidate's
+   * and whose work is not in the candidate's base yet (openspec factory-lanes,
+   * D5): a run in another lane still working, or one that merged there. They
+   * hold the candidate whether their issue is open or closed.
+   */
+  otherBranch?: ReadonlySet<number>;
 }
 
 type BlockerStatus = Exclude<
@@ -50,6 +57,7 @@ const PRIORITY: BlockerStatus[] = [
   'blocker-failed',
   'blocker-waiting-merge',
   'blocker-in-progress',
+  'blocker-on-other-branch',
   'blocker-other-repo',
 ];
 
@@ -71,8 +79,19 @@ const IN_PROGRESS: ReadonlySet<FactoryRunState> = new Set([
  * latest run here. A blocker whose run handed its work to other issues is in
  * progress until its issue closes, never failed.
  */
-function statusOf(latest: FactoryRunState | undefined, delegated: boolean): BlockerStatus {
+function statusOf(
+  latest: FactoryRunState | undefined,
+  delegated: boolean,
+  otherBranch: boolean,
+): BlockerStatus {
   if (latest === undefined) return 'blocker-not-sent';
+  // Its work goes to another branch: waiting for its run to merge is not enough.
+  if (
+    otherBranch &&
+    (latest === 'merged' || latest === 'waiting_human' || IN_PROGRESS.has(latest))
+  ) {
+    return 'blocker-on-other-branch';
+  }
   if (delegated) return 'blocker-in-progress';
   if (latest === 'waiting_human') return 'blocker-waiting-merge';
   if (IN_PROGRESS.has(latest)) return 'blocker-in-progress';
@@ -90,16 +109,23 @@ export function unfinishedBlockers(
   repo: string,
   blockers: readonly IssueBlocker[],
   latestRuns: LatestRunState,
+  /** Same-repository blockers whose work is on another branch (`BlockerInput.otherBranch`). */
+  otherBranch: ReadonlySet<number> = NONE,
 ): UnfinishedBlockers {
   const sameRepo: number[] = [];
   const otherRepo: number[] = [];
   for (const blocker of blockers) {
-    if (!blocker.open) continue;
-    if (blocker.repo !== repo) otherRepo.push(blocker.number);
+    const elsewhere = blocker.repo === repo && otherBranch.has(blocker.number);
+    // A closed or merged blocker is finished, unless what it merged is on another branch.
+    if (elsewhere) sameRepo.push(blocker.number);
+    else if (!blocker.open) continue;
+    else if (blocker.repo !== repo) otherRepo.push(blocker.number);
     else if (latestRuns.get(blocker.number) !== 'merged') sameRepo.push(blocker.number);
   }
   return { sameRepo, otherRepo };
 }
+
+const NONE: ReadonlySet<number> = new Set();
 
 /** Whether `issue` reaches itself through the queue's blocker edges. */
 export function inCycle(issue: number, graph: ReadonlyMap<number, readonly number[]>): boolean {
@@ -118,14 +144,23 @@ export function inCycle(issue: number, graph: ReadonlyMap<number, readonly numbe
 /** Why the issue must wait, or null when every blocker is finished. */
 export function waitReasonFor(input: BlockerInput): FactoryWaitReason | null {
   if (input.blockers === null) return { kind: 'blockers-unreadable', blockers: [] };
-  const { sameRepo, otherRepo } = unfinishedBlockers(input.repo, input.blockers, input.latestRuns);
+  const { sameRepo, otherRepo } = unfinishedBlockers(
+    input.repo,
+    input.blockers,
+    input.latestRuns,
+    input.otherBranch,
+  );
   if (sameRepo.length === 0 && otherRepo.length === 0) return null;
   if (inCycle(input.issue, input.queueGraph)) {
     return { kind: 'circular', blockers: sameRepo };
   }
   const byStatus = new Map<BlockerStatus, number[]>();
   for (const number of sameRepo) {
-    const status = statusOf(input.latestRuns.get(number), input.delegated?.has(number) ?? false);
+    const status = statusOf(
+      input.latestRuns.get(number),
+      input.delegated?.has(number) ?? false,
+      input.otherBranch?.has(number) ?? false,
+    );
     byStatus.set(status, [...(byStatus.get(status) ?? []), number]);
   }
   if (otherRepo.length > 0) byStatus.set('blocker-other-repo', otherRepo);

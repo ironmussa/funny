@@ -25,6 +25,7 @@ import {
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
 import { isString } from '../../lib/value-guards.js';
+import { createFactoryBranchReads } from './factory-branch-reads.js';
 import type { FactoryIssueText } from './factory-issue-text.js';
 
 /** An issue as the factory admits it (`FactoryIssue`), with what a send checks. */
@@ -167,39 +168,7 @@ export function createFactoryRepoReads(
       return mergeTarget();
     },
 
-    /**
-     * Make `branch` from the head of the branch the factory merges into, when
-     * GitHub has no such branch (change factory-lanes, D1): `created`, or
-     * `exists` when it was there already (also when another admission made it
-     * a moment ago).
-     */
-    ensureBranch(branch: string): ResultAsync<'created' | 'exists', GithubCallError> {
-      const ref = (name: string) =>
-        `/repos/${repo}/git/ref/heads/${name.split('/').map(encodeURIComponent).join('/')}`;
-      const made = (): ResultAsync<'created' | 'exists', GithubCallError> =>
-        mergeTarget()
-          .andThen((base) => github.json<{ object: { sha: string } }>(repo, 'GET', ref(base)))
-          .andThen((head) =>
-            github
-              .json(repo, 'POST', `/repos/${repo}/git/refs`, {
-                ref: `refs/heads/${branch}`,
-                sha: head.object.sha,
-              })
-              .map(() => 'created' as const)
-              // 422: the reference exists already.
-              .orElse((error) =>
-                error.status === 422
-                  ? okAsync<'created' | 'exists', GithubCallError>('exists')
-                  : errAsync<'created' | 'exists', GithubCallError>(error),
-              ),
-          );
-      return github
-        .json(repo, 'GET', ref(branch))
-        .map(() => 'exists' as const)
-        .orElse((error) =>
-          error.status === 404 ? made() : errAsync<'created' | 'exists', GithubCallError>(error),
-        );
-    },
+    ...createFactoryBranchReads(repo, github, mergeTarget),
 
     /** The commit a branch is at, and the verdict of its checks. */
     branchState(branch: string): ResultAsync<{ sha: string; ci: CiState }, GithubCallError> {

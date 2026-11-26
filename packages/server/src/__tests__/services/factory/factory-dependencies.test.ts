@@ -25,6 +25,47 @@ function reason(blockers: IssueBlocker[] | null, latest: Record<number, FactoryR
   });
 }
 
+// openspec factory-lanes, D5: what a blocker merged or runs on another branch counts for.
+describe('a blocker on another branch', () => {
+  const across = (
+    blockers: IssueBlocker[],
+    latest: Record<number, FactoryRunState>,
+    otherBranch: number[],
+  ) =>
+    waitReasonFor({
+      repo: 'o/r',
+      issue: 10,
+      blockers,
+      latestRuns: new Map(Object.entries(latest).map(([n, state]) => [Number(n), state])),
+      queueGraph: new Map(),
+      otherBranch: new Set(otherBranch),
+    });
+
+  test('merged into another branch: the issue waits, even when the blocker is closed', () => {
+    const waits = { kind: 'blocker-on-other-branch' as const, blockers: [1] };
+    expect(across([open(1)], { 1: 'merged' }, [1])).toEqual(waits);
+    expect(across([closed(1)], { 1: 'merged' }, [1])).toEqual(waits);
+  });
+
+  test('still working in another lane: the same reason, so nothing is stacked on it', () => {
+    expect(across([open(1)], { 1: 'working' }, [1])?.kind).toBe('blocker-on-other-branch');
+    expect(across([open(1)], { 1: 'waiting_human' }, [1])?.kind).toBe('blocker-on-other-branch');
+  });
+
+  test('failed in another lane is still a failure to look at', () => {
+    expect(across([open(1)], { 1: 'failed' }, [1])).toEqual({
+      kind: 'blocker-failed',
+      blockers: [1],
+    });
+  });
+
+  test('on the same branch, or once its merge reached this one: as before', () => {
+    expect(across([open(1)], { 1: 'merged' }, [])).toBeNull();
+    expect(across([closed(1)], {}, [])).toBeNull();
+    expect(across([open(1)], { 1: 'working' }, [])?.kind).toBe('blocker-in-progress');
+  });
+});
+
 describe('waitReasonFor', () => {
   test('no blockers, or only finished ones, let the issue start', () => {
     expect(reason([])).toBeNull();

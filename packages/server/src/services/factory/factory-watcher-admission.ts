@@ -23,6 +23,7 @@ import {
 import { flowReadsOf, loadFactoryFlow } from './factory-flow.js';
 import { READY_ISSUES_PAGE, type FactoryIssue, type FactoryRepoReader } from './factory-github.js';
 import { createFactoryLanesRepository, resolveLane } from './factory-lanes.js';
+import { prNumberOf } from './factory-pull-requests.js';
 import {
   factoryRunBranch,
   NO_FREE_SLOT,
@@ -49,6 +50,8 @@ interface AdmissionContext {
   queued: ReadonlySet<number>;
   /** Blockers read this pass, by issue (null: unreadable). */
   blockers: Map<number, Promise<IssueBlocker[] | null>>;
+  /** Whether a base branch contains a merge commit, read once per pass (`<branch>:<sha>`). */
+  contained: Map<string, Promise<boolean>>;
   /** Whether each flow read this pass is proof-ready, by name. */
   proofReady: Map<string, Promise<boolean>>;
   /** Every run of the factory, as read for this pass (their likely paths). */
@@ -89,6 +92,7 @@ function admissionContext(
       ),
     ),
     proofReady: new Map(),
+    contained: new Map(),
     blockers: new Map(),
     runs: all,
     approvalHold: factory.holdPathsAwaitingApproval ? { now: Date.now() } : null,
@@ -115,15 +119,25 @@ function blockersOf(ctx: AdmissionContext, issue: number): Promise<IssueBlocker[
 async function blockedReason(
   ctx: AdmissionContext,
   issue: number,
+  /** The branch the candidate runs on; null when it is unknown (no check across branches). */
+  base: { branch: string | null; own: string | null } = { branch: null, own: null },
 ): Promise<FactoryRunView['waitReason']> {
   const blockers = await blockersOf(ctx, issue);
+  const otherBranch = await blockersOnOtherBranch(ctx, blockers ?? [], base);
   const graph = new Map<number, number[]>();
   const pending = [issue];
   while (pending.length > 0) {
     const next = pending.pop()!;
     if (graph.has(next)) continue;
     const own = next === issue ? blockers : await blockersOf(ctx, next);
-    const edges = own ? unfinishedBlockers(ctx.reader.repo, own, ctx.latestRuns).sameRepo : [];
+    const edges = own
+      ? unfinishedBlockers(
+          ctx.reader.repo,
+          own,
+          ctx.latestRuns,
+          next === issue ? otherBranch : undefined,
+        ).sameRepo
+      : [];
     graph.set(next, edges);
     pending.push(...edges.filter((n) => ctx.queued.has(n) && !graph.has(n)));
   }
@@ -134,10 +148,69 @@ async function blockedReason(
     latestRuns: ctx.latestRuns,
     delegated: ctx.delegated,
     queueGraph: graph,
+    otherBranch,
   });
 }
 
 /** How many more runs may start now (0 when the count cannot be read). */
+/**
+ * The blockers whose work is on another branch than the candidate's and not in
+ * the candidate's base yet (openspec factory-lanes, D5). A blocker's run that
+ * has not merged counts by its branch alone. One that merged counts until the
+ * commit it made is in the candidate's base: read from its pull request the
+ * first time and kept on the run, then asked of GitHub once per pass. What
+ * cannot be read counts as "not yet": the candidate waits.
+ */
+async function blockersOnOtherBranch(
+  ctx: AdmissionContext,
+  blockers: readonly IssueBlocker[],
+  base: { branch: string | null; own: string | null },
+): Promise<Set<number>> {
+  const elsewhere = new Set<number>();
+  if (!base.branch) return elsewhere;
+  for (const blocker of blockers) {
+    if (blocker.repo !== ctx.reader.repo) continue;
+    // `runs` is newest first: the blocker's latest run.
+    const run = ctx.runs.find((one) => one.issueNumber === blocker.number);
+    // A run from before runs recorded a base ran on the factory's own branch.
+    const ranOn = run ? (run.baseBranch ?? base.own) : null;
+    if (!run || !ranOn || ranOn === base.branch) continue;
+    if (run.state !== 'merged' || !(await mergeIsIn(ctx, run, base.branch))) {
+      elsewhere.add(blocker.number);
+    }
+  }
+  return elsewhere;
+}
+
+/** Whether what `run` merged is in `branch`. */
+async function mergeIsIn(
+  ctx: AdmissionContext,
+  run: FactoryRunView,
+  branch: string,
+): Promise<boolean> {
+  const sha = run.mergeSha ?? (await readMergeCommit(ctx, run));
+  if (!sha || !deps?.github.branchContains) return false;
+  const key = `${branch}:${sha}`;
+  let read = ctx.contained.get(key);
+  if (!read) {
+    read = Promise.resolve(deps.github.branchContains(ctx.reader, branch, sha)).then((result) =>
+      result.isOk() ? result.value : false,
+    );
+    ctx.contained.set(key, read);
+  }
+  return read;
+}
+
+/** The commit a merged run's pull request made, kept on the run once read. */
+async function readMergeCommit(ctx: AdmissionContext, run: FactoryRunView): Promise<string | null> {
+  const number = prNumberOf(run.prUrl);
+  if (number === null || !deps?.github.mergeCommit) return null;
+  const sha = await deps.github.mergeCommit(ctx.reader, number);
+  if (sha.isErr() || !sha.value) return null;
+  await runs?.update(run.id, { mergeSha: sha.value });
+  return sha.value;
+}
+
 async function freeSlots(factory: WatchedFactory): Promise<number> {
   const active = await runs!.countActive(factory.id);
   if (active.isOk()) return factory.maxConcurrent - active.value;
@@ -259,7 +332,11 @@ async function admitQueued(
     return false;
   }
 
-  const blocked = await blockedReason(ctx, issue.number);
+  const blocked = await blockedReason(ctx, issue.number, {
+    branch: base.branch,
+    // Only a lane's issue can be blocked from another branch by an older run.
+    own: base.lane ? await baseBranchFor(factory, repo) : base.branch,
+  });
   const stackedOn = stackTarget(factory, ctx, blocked);
   const reason = (stackedOn ? null : blocked) ?? pathsHeld(ctx, run, stackedOn);
   await noteWaitReason(run, reason);

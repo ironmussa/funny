@@ -184,6 +184,17 @@ export interface FactoryGithubPort {
     reader: FactoryRepoReader,
     branch: string,
   ): ResultAsync<'created' | 'exists', GithubCallError>;
+  /** Whether `branch` contains commit `sha`. Absent: unknown, read as "not yet". */
+  branchContains?(
+    reader: FactoryRepoReader,
+    branch: string,
+    sha: string,
+  ): ResultAsync<boolean, GithubCallError>;
+  /** The commit merged pull request `number` made, or null when it is not merged. */
+  mergeCommit?(
+    reader: FactoryRepoReader,
+    number: number,
+  ): ResultAsync<string | null, GithubCallError>;
   /** CI state and merge of a run's pull request (`wait_ci` / `merge`). */
   pullRequests: FactoryPullRequests;
 }
@@ -331,6 +342,8 @@ export function createFactoryGithub(
     createIssue: (reader, issue) => reads(reader).createIssue(issue),
     closeIssue: (reader, issueNumber) => reads(reader).closeIssue(issueNumber),
     ensureBranch: (reader, branch) => reads(reader).ensureBranch(branch),
+    branchContains: (reader, branch, sha) => reads(reader).branchContains(branch, sha),
+    mergeCommit: (reader, number) => reads(reader).mergeCommit(number),
     branchState: (reader, branch) => reads(reader).branchState(branch),
     mergeCommitState: (reader, number) => reads(reader).mergeCommitState(number),
     issueText: (reader, issueNumber) => reads(reader).issueText(issueNumber),

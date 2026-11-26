@@ -147,6 +147,10 @@ interface GithubScript {
   baseCi?: CiState;
   /** The factory's "merge into" branch as GitHub reads resolve it now (default `main`). */
   mergeInto?: { branch: string };
+  /** The commit each merged pull request made, by number. */
+  mergeCommits?: Record<number, string>;
+  /** The branches that contain each commit. */
+  contains?: Record<string, string[]>;
   /** GitHub refuses to make a branch. */
   branchesRefused?: boolean;
   /** Each issue's labels as GitHub reads the issue back. */
@@ -187,6 +191,8 @@ type FakeGithub = FactoryGithubPort & {
   baseBranches: string[];
   /** Branches the factory asked to exist (a lane's), in order. */
   ensuredBranches: string[];
+  /** How many times a merged pull request's commit was read. */
+  mergeCommitReads: number;
 };
 
 function fakeGithub(
@@ -208,6 +214,13 @@ function fakeGithub(
     closedReplaced: [],
     baseBranches: [],
     ensuredBranches: [],
+    mergeCommitReads: 0,
+    mergeCommit: (_reader: unknown, number: number) => {
+      port.mergeCommitReads += 1;
+      return okAsync(script.mergeCommits?.[number] ?? null);
+    },
+    branchContains: (_reader: unknown, branch: string, sha: string) =>
+      okAsync(script.contains?.[sha]?.includes(branch) ?? false),
     ensureBranch: (_reader: unknown, branch: string) => {
       if (script.branchesRefused) return errAsync({ message: 'GitHub answered 403', status: 403 });
       const existed = port.ensuredBranches.includes(branch);
@@ -369,6 +382,7 @@ async function enableFactory(
     flowName?: string;
     mode?: 'manual' | 'automatic';
     stageLimits?: Record<string, number>;
+    dependencies?: 'wait' | 'stack';
   } = {},
 ) {
   const settings = createFactorySettingsService();
@@ -772,6 +786,118 @@ describe('factory watcher', () => {
       await poll.ticks[0]!();
       const [run] = (await createFactoryRunsRepository().list(factoryId))._unsafeUnwrap();
       expect(run).toMatchObject({ baseBranch: 'feature/a', lane: 'a' });
+    });
+
+    // D5: a blocker's work on another branch counts only once it is in this run's base.
+    describe('a blocker on another branch', () => {
+      async function withMergedBlocker(blocker: { baseBranch: string; lane: string | null }) {
+        const factoryId = await enableFactory({ maxConcurrent: 5, dependencies: 'stack' });
+        const blockerRun = (
+          await createFactoryRunsRepository().start({
+            factoryId,
+            issueNumber: 40,
+            state: 'merged',
+            ...blocker,
+          })
+        )._unsafeUnwrap();
+        await createFactoryRunsRepository().update(blockerRun.id, {
+          prUrl: 'https://github.com/acme/repo/pull/400',
+        });
+        const contains: Record<string, string[]> = { 'sha-40': [blocker.baseBranch] };
+        const poll = fakePoll();
+        const launcher = fakeLauncher();
+        const github = fakeGithub('acme/repo', [{ number: 31, title: 'x', url: 'u/31' }], {
+          mergeInto: { branch: 'dev' },
+          labels: { 31: ['feature:a'] },
+          blockers: { 31: [{ number: 40, repo: 'acme/repo', open: false }] },
+          mergeCommits: { 400: 'sha-40' },
+          contains,
+        });
+        await startWatcherWithProof({
+          ports,
+          github,
+          createPoll: poll.createPoll,
+          launch: launcher.launch,
+          resolveRuntime,
+          waitThread: pendingThreads,
+        });
+        const run31 = async () =>
+          (await createFactoryRunsRepository().list(factoryId))
+            ._unsafeUnwrap()
+            .find((run) => run.issueNumber === 31)!;
+        return { poll, launcher, github, contains, run31 };
+      }
+
+      test('merged into another lane: the issue waits until its own branch has that merge', async () => {
+        const { poll, launcher, github, contains, run31 } = await withMergedBlocker({
+          baseBranch: 'feature/b',
+          lane: 'b',
+        });
+
+        await poll.ticks[0]!();
+        expect(launcher.calls).toHaveLength(0);
+        expect((await run31()).waitReason).toEqual({
+          kind: 'blocker-on-other-branch',
+          blockers: [40],
+        });
+
+        // The other lane was finished into dev, and dev synced into feature/a.
+        contains['sha-40'] = ['feature/b', 'dev', 'feature/a'];
+        await poll.ticks[0]!();
+        expect(launcher.calls).toHaveLength(1);
+        expect(await run31()).toMatchObject({ baseBranch: 'feature/a', waitReason: null });
+        // The merge commit was read from the pull request once, then kept on the run.
+        expect(github.mergeCommitReads).toBe(1);
+      });
+
+      test("merged into the factory's own branch: a lane's issue waits for its next sync", async () => {
+        const { poll, launcher, run31 } = await withMergedBlocker({
+          baseBranch: 'dev',
+          lane: null,
+        });
+        await poll.ticks[0]!();
+        expect(launcher.calls).toHaveLength(0);
+        expect((await run31()).waitReason?.kind).toBe('blocker-on-other-branch');
+      });
+
+      test('a blocker still working in another lane is not stacked on', async () => {
+        const factoryId = await enableFactory({ maxConcurrent: 5, dependencies: 'stack' });
+        const blockerRun = (
+          await createFactoryRunsRepository().start({
+            factoryId,
+            issueNumber: 40,
+            state: 'reviewing',
+            baseBranch: 'feature/b',
+            lane: 'b',
+          })
+        )._unsafeUnwrap();
+        await createFactoryRunsRepository().update(blockerRun.id, {
+          prUrl: 'https://github.com/acme/repo/pull/400',
+        });
+        const poll = fakePoll();
+        const launcher = fakeLauncher();
+        await startWatcherWithProof({
+          ports,
+          github: fakeGithub('acme/repo', [{ number: 31, title: 'x', url: 'u/31' }], {
+            mergeInto: { branch: 'dev' },
+            labels: { 31: ['feature:a'] },
+            blockers: { 31: [{ number: 40, repo: 'acme/repo', open: true }] },
+          }),
+          createPoll: poll.createPoll,
+          launch: launcher.launch,
+          resolveRuntime,
+          waitThread: pendingThreads,
+        });
+        await poll.ticks[0]!();
+        const queued = (await createFactoryRunsRepository().list(factoryId))
+          ._unsafeUnwrap()
+          .find((run) => run.issueNumber === 31)!;
+        expect(queued).toMatchObject({
+          state: 'requested',
+          stackedOn: null,
+          waitReason: { kind: 'blocker-on-other-branch', blockers: [40] },
+        });
+      });
     });
 
     test("a finished lane's label sends the issue to the factory's own branch", async () => {

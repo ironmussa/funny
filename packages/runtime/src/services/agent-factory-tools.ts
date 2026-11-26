@@ -24,10 +24,13 @@ import { sendRemoteData } from './remote-data-channel.js';
 import type { RemoteDataRequest } from './remote-thread-data-client.js';
 
 export const FACTORY_TOOL_INSTRUCTIONS =
-  'The issue factory of this project is reachable with three tools. ' +
+  'The issue factory of this project is reachable with four tools. ' +
   "funny_factory_runs lists the thread owner's factory runs here: their state, " +
   'why each one waits, its risk class and whether a merge approval was asked or ' +
-  'given. funny_factory_control acts on one run as the thread owner, as the ' +
+  'given. funny_factory_run reads ONE run in detail: its steps, triage, ' +
+  'reviews, its threads by role, and who stopped, retried or marked it and ' +
+  "from which thread; use it instead of reading funny's database. " +
+  'funny_factory_control acts on one run as the thread owner, as the ' +
   'board does: retry, stop, mark-done (a run that ended with no change or was ' +
   'stopped, when nothing more is needed) or close-replaced-pr (the pull ' +
   'request of a run a newer run of its issue replaced); use it when the user ' +
@@ -131,6 +134,89 @@ export function describeRun(run: RunSummary): string {
   return lines.join('\n');
 }
 
+/** One run in detail, as the server answers it (`AgentRunDetail` in the server). */
+interface RunDetail extends RunSummary {
+  issueTitle: string | null;
+  flowName: string | null;
+  flowSteps: string[];
+  startedAt: string;
+  admittedAt: string | null;
+  completedAt: string | null;
+  triage: {
+    decision: string;
+    at: string;
+    items: string[];
+    existing: number[];
+    splitInto: number[];
+    partsClosedAt: string | null;
+  } | null;
+  reviews: { sha: string; verdict: string; reviewedAt: string; findings: number }[];
+  threads: { role: string; threadId: string }[];
+  history: {
+    kind: string;
+    title: string;
+    status: string;
+    origin: string;
+    threadId: string | null;
+    at: string;
+    error: string | null;
+  }[];
+}
+
+const issues = (numbers: number[]) => numbers.map((n) => `#${n}`).join(', ');
+
+/** What triage decided, on a few lines. */
+function describeTriage(triage: NonNullable<RunDetail['triage']>): string[] {
+  const lines = [`  triage: ${triage.decision} at ${triage.at}`];
+  for (const item of triage.items) lines.push(`    - ${item}`);
+  if (triage.splitInto.length > 0) lines.push(`    split into ${issues(triage.splitInto)}`);
+  if (triage.existing.length > 0) lines.push(`    tracked by ${issues(triage.existing)}`);
+  if (triage.partsClosedAt) lines.push(`    parts all closed at ${triage.partsClosedAt}`);
+  return lines;
+}
+
+/** Who applied a control: a member, an agent (and its thread), or the factory. */
+function appliedBy(entry: RunDetail['history'][number]): string {
+  if (entry.origin === 'implicit') return `asked by an agent in thread ${entry.threadId ?? '?'}`;
+  if (entry.origin === 'system') return 'by the factory';
+  return 'by a member';
+}
+
+/** Who applied which control to the run, and from where. */
+function describeHistory(history: RunDetail['history']): string[] {
+  if (history.length === 0) return ['  history: no control recorded'];
+  return [
+    '  history:',
+    ...history.map((entry) => {
+      const by = appliedBy(entry);
+      const failed = entry.error ? ` — failed: ${entry.error}` : '';
+      return `    ${entry.at} ${entry.kind} (${entry.status}, ${by}): ${entry.title}${failed}`;
+    }),
+  ];
+}
+
+/** One run in detail, on lines an agent can quote. */
+export function describeRunDetail(run: RunDetail): string {
+  const lines = [describeRun(run)];
+  if (run.issueTitle) lines.push(`  title: ${run.issueTitle}`);
+  if (run.flowName) lines.push(`  flow: ${run.flowName} (${run.flowSteps.join(' → ')})`);
+  const ended = run.completedAt ? `, ended ${run.completedAt}` : '';
+  lines.push(
+    `  started ${run.startedAt}${run.admittedAt ? `, admitted ${run.admittedAt}` : ''}${ended}`,
+  );
+  if (run.triage) lines.push(...describeTriage(run.triage));
+  for (const review of run.reviews) {
+    lines.push(
+      `  review ${review.verdict} at ${short(review.sha)} (${review.findings} finding(s), ${review.reviewedAt})`,
+    );
+  }
+  if (run.threads.length > 0) {
+    lines.push(`  threads: ${run.threads.map((t) => `${t.role} ${t.threadId}`).join(', ')}`);
+  }
+  lines.push(...describeHistory(run.history));
+  return lines.join('\n');
+}
+
 /** The run fields a factory tool sends; the thread id comes from the tool's context. */
 /** The run controls an agent has (the server's `AGENT_RUN_CONTROLS`; it refuses any other). */
 const RUN_CONTROLS = ['retry', 'stop', 'mark-done', 'close-replaced-pr'] as const;
@@ -223,6 +309,33 @@ export function factoryToolDefinitions(
         });
         if (runs.length === 0) return text('The factory has no runs.');
         return text(`${runs.length} factory run(s):\n${runs.map(describeRun).join('\n')}`);
+      },
+    },
+    {
+      name: 'funny_factory_run',
+      description:
+        "Read ONE of the thread owner's issue factory runs in THIS project in detail: " +
+        'its state and steps, what triage decided, its reviews, the threads it ' +
+        'started by role, and the controls applied to it (stop, retry, mark done, ' +
+        'approve) with who applied them and from which thread. Reads only; use ' +
+        'it to explain why a run is where it is.',
+      schema: {
+        runId: z.string().min(1).describe('The run id, as funny_factory_runs prints it.'),
+      },
+      run: async (args) => {
+        const { response, error } = await ask(
+          'data:factory_get_run',
+          { runId: args.runId },
+          'Could not read the run.',
+        );
+        log.info('funny_factory_run', {
+          namespace: 'agent',
+          threadId,
+          runId: args.runId,
+          refused: !!error,
+        });
+        if (error) return error;
+        return text(describeRunDetail(response.run));
       },
     },
     {

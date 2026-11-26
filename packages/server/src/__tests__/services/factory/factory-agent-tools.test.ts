@@ -96,6 +96,7 @@ describe('factory agent tools', () => {
       threadId: string;
     }>;
     controlFails?: { status: number; message: string };
+    historyAsked: Array<{ userId: string; projectId: string; issueNumber: number }>;
   };
 
   beforeEach(async () => {
@@ -129,6 +130,7 @@ describe('factory agent tools', () => {
       canSteer: true,
       factories: { 'alice:p1': F.alice, 'bob:p1': F.bob, 'alice:p2': F.alice2 },
       controls: [],
+      historyAsked: [],
     };
   });
 
@@ -141,6 +143,20 @@ describe('factory agent tools', () => {
       factoryId: (userId, projectId) => okAsync(world.factories[`${userId}:${projectId}`] ?? null),
       runs,
       requests,
+      runHistory: async (userId, projectId, issueNumber) => {
+        world.historyAsked.push({ userId, projectId, issueNumber });
+        return [
+          {
+            kind: 'factory.stop',
+            title: 'Stopped the factory run for #7\n(asked by an agent)',
+            status: 'succeeded',
+            origin: 'implicit',
+            threadId: 't-agent',
+            at: '2026-11-26T01:51:52.037Z',
+            error: null,
+          },
+        ];
+      },
       control: (action, userId, projectId, runId, threadId) => {
         world.controls.push({ action, userId, projectId, runId, threadId });
         if (world.controlFails) return errAsync(world.controlFails);
@@ -263,6 +279,45 @@ describe('factory agent tools', () => {
     for (const other of ['done', 'merged', 'approve-merge', 'split', undefined]) {
       expect(isAgentRunControl(other)).toBe(false);
     }
+  });
+
+  // What an agent used to read from the server's database by hand (#532).
+  test('reads one run in detail, with the controls applied to it', async () => {
+    const run = await seedRun(F.alice, 7, 'stopped');
+    await runs.update(run.id, {
+      triage: {
+        decision: 'needs_info',
+        at: '2026-11-26T01:51:25Z',
+        threadId: 't-triage',
+        items: ['Which rules does\n#462 cover?'],
+      },
+    });
+    const got = (await tools().getRun(from(), run.id))._unsafeUnwrap();
+    expect(got).toMatchObject({
+      id: run.id,
+      issueNumber: 7,
+      state: 'stopped',
+      triage: { decision: 'needs_info', items: ['Which rules does #462 cover?'] },
+      threads: [{ role: 'triage', threadId: 't-triage' }],
+      history: [
+        {
+          kind: 'factory.stop',
+          title: 'Stopped the factory run for #7 (asked by an agent)',
+          origin: 'implicit',
+          threadId: 't-agent',
+        },
+      ],
+    });
+    expect(world.historyAsked).toEqual([{ userId: 'alice', projectId: 'p1', issueNumber: 7 }]);
+    expect(world.controls).toEqual([]);
+  });
+
+  test("a steer-shared thread may read a run; another factory's run is not found", async () => {
+    world.steerShared = true;
+    const mine = await seedRun(F.alice, 7, 'failed');
+    expect((await tools().getRun(from(), mine.id)).isOk()).toBe(true);
+    const bobs = await seedRun(F.bob, 8, 'failed');
+    expect((await tools().getRun(from(), bobs.id))._unsafeUnwrapErr().kind).toBe('not-found');
   });
 
   test("passes the board's refusal on, and changes nothing", async () => {

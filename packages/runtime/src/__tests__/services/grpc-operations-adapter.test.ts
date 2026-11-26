@@ -167,6 +167,10 @@ describe('GrpcOperationsAdapter mapping', () => {
         kind: 'factoryRequestApproval',
         value: { threadId: 't1', runId: 'run1' },
       },
+      'data:factory_get_run': {
+        kind: 'factoryGetRun',
+        value: { threadId: 't1', runId: 'run1' },
+      },
     };
     expect(Object.keys(expected).sort()).toEqual([...RUNNER_OPERATION_EVENT_TYPES].sort());
     for (const eventType of RUNNER_OPERATION_EVENT_TYPES) {

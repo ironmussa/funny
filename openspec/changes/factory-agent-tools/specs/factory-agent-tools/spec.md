@@ -31,6 +31,20 @@ factory, no run of another project, and no text written outside funny (issue tit
 - **WHEN** the thread owner has no factory in the thread's project
 - **THEN** the tool answers that there is no factory, and returns no run
 
+### Requirement: An agent reads one run in detail
+
+An agent SHALL be able to read one run of the thread owner's factory in the thread's project in
+detail: its state, flow steps and times, what triage decided, its newest reviews, the threads it
+started by role, and the controls members or agents applied to it (from the owner's activities),
+with the thread that asked for each. It SHALL only read, SHALL be allowed where listing is
+(a thread shared for steering included), and SHALL answer "not found" for a run of another
+project or another member's factory.
+
+#### Scenario: Why a run stopped
+
+- **WHEN** an agent reads a run that another thread's agent stopped
+- **THEN** the answer shows the stop, that an agent asked for it, and that thread's id
+
 ### Requirement: An agent retries or stops a run as the thread owner
 
 An agent SHALL be able to retry or stop one run of the thread owner's factory in the thread's

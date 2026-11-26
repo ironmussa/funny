@@ -7,7 +7,8 @@
  * What an agent in a thread may do on the thread owner's issue factory
  * (openspec factory-agent-tools), behind the runner's data channel:
  *
- * - list the owner's runs in the thread's project,
+ * - list the owner's runs in the thread's project, or read one in detail
+ *   (its steps, triage, reviews, threads and the controls applied to it),
  * - retry, stop or mark one as done, or close the pull request of a replaced
  *   run, through the same control as the board,
  * - ask the member to approve merging a held high-risk change.
@@ -22,11 +23,13 @@ import {
   type FactoryRunState,
   type FactoryWaitReason,
 } from '@funny/shared/contracts/factory';
-import { and, eq } from 'drizzle-orm';
+import { parseStoredJson } from '@funny/shared/json-validation';
+import { and, asc, eq, gte, like } from 'drizzle-orm';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
+import { z } from 'zod';
 
 import { db } from '../../db/index.js';
-import { threads, threadShares } from '../../db/schema.js';
+import { activities, threads, threadShares } from '../../db/schema.js';
 import { audit } from '../../lib/audit.js';
 import { log } from '../../lib/logger.js';
 import { projectRole } from '../../lib/server-authorizer.js';
@@ -48,7 +51,7 @@ import { createFactorySettingsService } from './factory-settings.js';
 export const AGENT_RUN_CONTROLS = ['retry', 'stop', 'mark-done', 'close-replaced-pr'] as const;
 export type AgentRunControl = (typeof AGENT_RUN_CONTROLS)[number];
 
-export type FactoryToolAction = 'list' | AgentRunControl | 'request-approval';
+export type FactoryToolAction = 'list' | 'get' | AgentRunControl | 'request-approval';
 
 /** Whether a data-channel value names one of the agent's controls. */
 export function isAgentRunControl(value: unknown): value is AgentRunControl {
@@ -96,7 +99,7 @@ export function factoryToolAccess(
   if (thread.source === 'factory') {
     return 'A thread the factory started cannot control the factory.';
   }
-  if (action !== 'list' && facts.steerShared) {
+  if (action !== 'list' && action !== 'get' && facts.steerShared) {
     return 'This thread is shared for steering, so its agent can only list the factory runs. Use the factory board.';
   }
   return null;
@@ -131,6 +134,98 @@ export interface AgentRunSummary {
   awaitsApproval: boolean;
   /** Its newest approval request, or null. */
   approvalRequest: { id: string; state: FactoryApprovalRequestState; sha: string } | null;
+}
+
+/** A control a member or an agent applied to the run, from the owner's activities. */
+export interface AgentRunHistoryEntry {
+  kind: string;
+  title: string;
+  status: string;
+  /** `user` (a member on the board), `implicit` (asked by an agent), `system`. */
+  origin: string;
+  /** The thread whose agent asked, when one did. */
+  threadId: string | null;
+  at: string;
+  error: string | null;
+}
+
+/** One run in detail (`funny_factory_run`): what the list shows, and how it got there. */
+export interface AgentRunDetail extends AgentRunSummary {
+  issueTitle: string | null;
+  flowName: string | null;
+  flowSteps: string[];
+  startedAt: string;
+  admittedAt: string | null;
+  completedAt: string | null;
+  triage: {
+    decision: string;
+    at: string;
+    items: string[];
+    existing: number[];
+    splitInto: number[];
+    partsClosedAt: string | null;
+  } | null;
+  /** The newest reviews, newest last. */
+  reviews: { sha: string; verdict: string; reviewedAt: string; findings: number }[];
+  /** Every thread the run started, by role. */
+  threads: { role: string; threadId: string }[];
+  /** The newest controls applied to it, oldest first. */
+  history: AgentRunHistoryEntry[];
+}
+
+const MAX_DETAIL_ITEMS = 10;
+const MAX_DETAIL_REVIEWS = 5;
+const MAX_HISTORY = 20;
+
+/** The run's threads by role: triage and reviewers from their records, the rest as steps. */
+function threadsOf(run: FactoryRunView): AgentRunDetail['threads'] {
+  const seen = new Set<string>();
+  const out: AgentRunDetail['threads'] = [];
+  const add = (role: string, threadId: string | undefined) => {
+    if (!threadId || seen.has(threadId)) return;
+    seen.add(threadId);
+    out.push({ role, threadId });
+  };
+  add('triage', run.triage?.threadId);
+  for (const one of run.roleThreads) add(one.role, one.threadId);
+  for (const review of run.reviews) add('review', review.threadId);
+  for (const threadId of run.threadIds) add('step', threadId);
+  return out;
+}
+
+function detail(run: FactoryRunView, history: AgentRunHistoryEntry[]): AgentRunDetail {
+  const triage = run.triage;
+  return {
+    ...summarize(run, undefined),
+    issueTitle: oneLine(run.issueTitle ?? null),
+    flowName: run.flowName ?? null,
+    flowSteps: run.flowSteps ?? [],
+    startedAt: run.startedAt,
+    admittedAt: run.admittedAt ?? null,
+    completedAt: run.completedAt ?? null,
+    triage: triage
+      ? {
+          decision: triage.decision,
+          at: triage.at,
+          items: (triage.items ?? []).slice(0, MAX_DETAIL_ITEMS).map((item) => oneLine(item) ?? ''),
+          existing: triage.existing ?? [],
+          splitInto: triage.splitInto ?? [],
+          partsClosedAt: triage.partsClosedAt ?? null,
+        }
+      : null,
+    reviews: run.reviews.slice(-MAX_DETAIL_REVIEWS).map((review) => ({
+      sha: review.sha,
+      verdict: review.verdict,
+      reviewedAt: review.reviewedAt,
+      findings: review.findings.length,
+    })),
+    threads: threadsOf(run),
+    history: history.slice(-MAX_HISTORY).map((entry) => ({
+      ...entry,
+      title: oneLine(entry.title) ?? '',
+      error: oneLine(entry.error),
+    })),
+  };
 }
 
 /** Ended for good: shown only among the most recent runs. */
@@ -207,6 +302,13 @@ export interface FactoryAgentToolsDeps {
   factoryId: (userId: string, projectId: string) => ResultAsync<string | null, { message: string }>;
   runs: Pick<ReturnType<typeof createFactoryRunsRepository>, 'list' | 'get'>;
   requests: ReturnType<typeof createFactoryApprovalRequestsRepository>;
+  /** The owner's factory activities about one issue since `since`, oldest first. */
+  runHistory: (
+    userId: string,
+    projectId: string,
+    issueNumber: number,
+    since: string,
+  ) => Promise<AgentRunHistoryEntry[]>;
   /** The board's run controls (audited, in the member's activities). */
   control: ControlRun;
 }
@@ -249,6 +351,50 @@ async function threadHasSteerShare(threadId: string): Promise<boolean> {
     .where(and(eq(threadShares.threadId, threadId), eq(threadShares.level, 'steer')))
     .limit(1);
   return rows.length > 0;
+}
+
+/**
+ * The owner's factory activities about one issue in the project since the run
+ * started: the board's and agents' controls, and what the factory recorded.
+ */
+/** The issue an activity's input names (`factory.*` kinds carry `issueNumber`). */
+const activityIssueSchema = z.object({ issueNumber: z.number().int().optional() }).passthrough();
+
+async function readRunHistory(
+  userId: string,
+  projectId: string,
+  issueNumber: number,
+  since: string,
+): Promise<AgentRunHistoryEntry[]> {
+  const rows = await db
+    .select({
+      kind: activities.kind,
+      title: activities.title,
+      status: activities.status,
+      origin: activities.origin,
+      threadId: activities.threadId,
+      at: activities.startedAt,
+      error: activities.error,
+      input: activities.input,
+    })
+    .from(activities)
+    .where(
+      and(
+        eq(activities.userId, userId),
+        eq(activities.projectId, projectId),
+        like(activities.kind, 'factory.%'),
+        gte(activities.startedAt, since),
+      ),
+    )
+    .orderBy(asc(activities.startedAt))
+    .limit(500);
+  const issueOf = (input: string): number | null => {
+    const parsed = parseStoredJson(activityIssueSchema, input, 'activity input');
+    return parsed.ok ? (parsed.value.issueNumber ?? null) : null;
+  };
+  return rows
+    .filter((row) => issueOf(row.input) === issueNumber)
+    .map(({ input: _input, ...entry }) => entry);
 }
 
 export function createFactoryAgentTools(deps: FactoryAgentToolsDeps) {
@@ -353,6 +499,23 @@ export function createFactoryAgentTools(deps: FactoryAgentToolsDeps) {
       );
     },
 
+    /** One run of the owner's factory in the thread's project, in detail. Reads only. */
+    getRun(
+      request: FactoryToolRequest,
+      runId: string,
+    ): ResultAsync<AgentRunDetail, FactoryToolError> {
+      return admitted(request, 'get').andThen(({ userId, projectId }) =>
+        ownRun(userId, projectId, runId).andThen(({ run }) =>
+          ResultAsync.fromPromise(
+            run.issueNumber === null
+              ? Promise.resolve([])
+              : deps.runHistory(userId, projectId, run.issueNumber, run.startedAt),
+            (error) => storage(error instanceof Error ? error : new Error(String(error))),
+          ).map((history) => detail(run, history)),
+        ),
+      );
+    },
+
     /** Retry, stop, mark done or close a replaced PR, as the thread's owner, exactly as the board does. */
     controlRun(
       request: FactoryToolRequest,
@@ -452,6 +615,7 @@ export function factoryAgentToolsWith(control: ControlRun): FactoryAgentTools {
     factoryId: (userId, projectId) => settings.factoryId(userId, projectId),
     runs: createFactoryRunsRepository(),
     requests: createFactoryApprovalRequestsRepository(),
+    runHistory: readRunHistory,
     control,
   });
 }

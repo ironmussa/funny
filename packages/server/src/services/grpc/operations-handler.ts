@@ -211,6 +211,7 @@ const OPERATION_KINDS = [
   'factoryListRuns',
   'factoryControlRun',
   'factoryRequestApproval',
+  'factoryGetRun',
 ] as const;
 
 function requestKind(request: WireRequest): string | undefined {
@@ -398,6 +399,11 @@ const LEGACY_MAPPERS: Record<OperationKind, LegacyMapper> = {
   }),
   factoryRequestApproval: (value) => ({
     type: 'data:factory_request_approval',
+    threadId: value.threadId,
+    runId: value.runId,
+  }),
+  factoryGetRun: (value) => ({
+    type: 'data:factory_get_run',
     threadId: value.threadId,
     runId: value.runId,
   }),

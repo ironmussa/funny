@@ -186,6 +186,9 @@ message FactoryListRuns { string thread_id = 1; }
 message FactoryControlRun { string thread_id = 1; string run_id = 2; string action = 3; }
 // Asks the member to approve a held merge. It never approves one.
 message FactoryRequestApproval { string thread_id = 1; string run_id = 2; }
+// One run in detail: its steps, triage, reviews, threads by role and the
+// controls members or agents applied to it. Read-only.
+message FactoryGetRun { string thread_id = 1; string run_id = 2; }
 // Background activities (track-background-activities). The server takes the
 // user and runner from the session, never from the payload.
 message ActivityStart { google.protobuf.Struct activity = 1; }
@@ -280,6 +283,7 @@ message OperationsRequest {
     FactoryListRuns factory_list_runs = 90;
     FactoryControlRun factory_control_run = 91;
     FactoryRequestApproval factory_request_approval = 92;
+    FactoryGetRun factory_get_run = 93;
   }
 }
 

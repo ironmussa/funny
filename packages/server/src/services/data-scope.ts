@@ -58,6 +58,7 @@ const NEVER_FROM_SANDBOX_TYPES = new Set([
   'data:factory_list_runs',
   'data:factory_control_run',
   'data:factory_request_approval',
+  'data:factory_get_run',
 ]);
 
 export const DATA_SCOPE_RULES: DataScopeRules = {
@@ -121,6 +122,7 @@ export const DATA_SCOPE_RULES: DataScopeRules = {
   'data:factory_list_runs': 'refs',
   'data:factory_control_run': 'refs',
   'data:factory_request_approval': 'refs',
+  'data:factory_get_run': 'refs',
   // The handler adds the owner check `refs` does not make (project-secrets).
   'data:get_project_secrets': 'refs',
   'data:get_minimax_api_key': 'user',

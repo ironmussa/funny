@@ -82,6 +82,7 @@ export const RUNNER_OPERATION_EVENT_TYPES = [
   'data:factory_list_runs',
   'data:factory_control_run',
   'data:factory_request_approval',
+  'data:factory_get_run',
 ] as const;
 
 export type RunnerOperationEventType = (typeof RUNNER_OPERATION_EVENT_TYPES)[number];
@@ -400,6 +401,10 @@ const OPERATION_MAPPINGS: Record<RunnerOperationEventType, OperationMapping> = {
   ],
   'data:factory_request_approval': [
     'factoryRequestApproval',
+    (input) => ({ threadId: input.threadId, runId: input.runId }),
+  ],
+  'data:factory_get_run': [
+    'factoryGetRun',
     (input) => ({ threadId: input.threadId, runId: input.runId }),
   ],
   'data:activity_start': ['activityStart', (_input, payload) => ({ activity: payload })],

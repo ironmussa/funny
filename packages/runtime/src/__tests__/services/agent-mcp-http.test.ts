@@ -49,6 +49,7 @@ describe('funny MCP servers over HTTP', () => {
     expect((await listTools(expectHttpMcpEntry(all.funny))).sort()).toEqual([
       'funny_factory_control',
       'funny_factory_request_approval',
+      'funny_factory_run',
       'funny_factory_runs',
       'funny_run_checks',
       'funny_search_threads',
@@ -110,6 +111,7 @@ describe('funny MCP servers over HTTP', () => {
     expect((await listTools(expectHttpMcpEntry(servers.funny))).sort()).toEqual([
       'funny_factory_control',
       'funny_factory_request_approval',
+      'funny_factory_run',
       'funny_factory_runs',
       'funny_run_checks',
       'funny_search_threads',

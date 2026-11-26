@@ -161,6 +161,62 @@ describe('funny_factory_control', () => {
   });
 });
 
+describe('funny_factory_run', () => {
+  test('reads one run for the granted thread and says who controlled it, and from where', async () => {
+    request.mockResolvedValue({
+      run: {
+        ...held,
+        state: 'done',
+        awaitsApproval: false,
+        issueTitle: 'Fix the parser',
+        flowName: 'issue-to-merge',
+        flowSteps: ['triage', 'implement'],
+        startedAt: '2026-11-26T01:49:41Z',
+        admittedAt: null,
+        completedAt: '2026-11-26T01:51:52Z',
+        triage: {
+          decision: 'too_big',
+          at: '2026-11-26T01:51:25Z',
+          items: [],
+          existing: [461, 462],
+          splitInto: [],
+          partsClosedAt: null,
+        },
+        reviews: [],
+        threads: [{ role: 'triage', threadId: 't-triage' }],
+        history: [
+          {
+            kind: 'factory.stop',
+            title: 'Stopped the factory run for #451 (asked by an agent)',
+            status: 'succeeded',
+            origin: 'implicit',
+            threadId: 't-agent',
+            at: '2026-11-26T01:51:52Z',
+            error: null,
+          },
+        ],
+      },
+    });
+    const result = await tool('funny_factory_run')({ runId: 'run-1', threadId: 'other' });
+    expect(request).toHaveBeenCalledWith('data:factory_get_run', {
+      runId: 'run-1',
+      threadId: THREAD,
+    });
+    expect(result.isError).toBeUndefined();
+    expect(result.text).toContain('tracked by #461, #462');
+    expect(result.text).toContain('threads: triage t-triage');
+    expect(result.text).toContain('factory.stop (succeeded, asked by an agent in thread t-agent)');
+  });
+
+  test('a run of another factory is an error the agent can read', async () => {
+    request.mockResolvedValue({ error: 'not-found', message: 'Run not found.' });
+    expect(await tool('funny_factory_run')({ runId: 'nope' })).toEqual({
+      isError: true,
+      text: 'Run not found.',
+    });
+  });
+});
+
 describe('funny_factory_request_approval', () => {
   test('asks, and says nothing is approved', async () => {
     request.mockResolvedValue({

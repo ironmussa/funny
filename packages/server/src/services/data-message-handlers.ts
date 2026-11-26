@@ -671,6 +671,17 @@ const DATA_MESSAGE_HANDLERS: DataMessageHandlers = {
       ? { type, run: controlled.value }
       : { type, error: controlled.error.kind, message: controlled.error.message };
   },
+  'data:factory_get_run': async ({ runnerId, ownerId, data }) => {
+    const type = 'data:factory_get_run_response';
+    const { factoryAgentTools } = await import('../trpc/ports/factory.js');
+    const got = await factoryAgentTools.getRun(
+      { threadId: String(data.threadId), runnerId, runnerOwnerId: ownerId },
+      String(data.runId),
+    );
+    return got.isOk()
+      ? { type, run: got.value }
+      : { type, error: got.error.kind, message: got.error.message };
+  },
   'data:factory_request_approval': async ({ runnerId, ownerId, data }) => {
     const type = 'data:factory_request_approval_response';
     const { factoryAgentTools } = await import('../trpc/ports/factory.js');

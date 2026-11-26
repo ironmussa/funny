@@ -14,6 +14,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { runPipeline, nullReporter } from '@funny/pipelines';
+import type { JsonObject } from '@funny/shared/json';
 import { mocked } from '@funny/test-kit';
 import type { ActionProvider, ActionResult } from '@funny/workflows/compiler';
 import type { YamlPipelineContext } from '@funny/workflows/compiler';
@@ -69,7 +70,7 @@ async function loadBuiltins() {
   return result.pipelines;
 }
 
-function ctx(provider: ActionProvider, inputs: Record<string, unknown>): YamlPipelineContext {
+function ctx(provider: ActionProvider, inputs: JsonObject): YamlPipelineContext {
   return {
     provider,
     progress: nullReporter,

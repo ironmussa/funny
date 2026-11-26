@@ -25,6 +25,13 @@ function isDuplexMethod(
 }
 
 export type RunnerGrpcStreamName = 'operations' | 'events' | 'tunnel' | 'terminal';
+/**
+ * A runner.v2 message in its proto3 JSON form (`toJson` on receive,
+ * `fromJsonString` on send). One type serves every stream and message, and
+ * buf generates no JSON types for runner.v2, so each adapter reads the oneof
+ * case of its own stream.
+ */
+// oxlint-disable-next-line anti-slop/no-unsafe-dictionary-type -- untyped by design: proto3 JSON of every runner.v2 message, read per stream by its adapter
 export type RunnerGrpcWireMessage = Record<string, any>;
 
 export interface RunnerGrpcDuplexStream {

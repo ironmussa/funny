@@ -28,6 +28,7 @@ import {
   runPipeline,
   type CompiledPredicate,
   type NodeConcurrency,
+  type NodeData,
   type NodeRetryConfig,
   type NodeRunInfo,
   type PipelineDefinition,
@@ -35,7 +36,12 @@ import {
   type TemplateScope,
 } from '@funny/pipelines';
 import type { AgentDefinition, PermissionMode } from '@funny/shared';
-import type { JsonObject } from '@funny/shared/json';
+import {
+  definedJsonFields,
+  isJsonObject,
+  type JsonObject,
+  type JsonValue,
+} from '@funny/shared/json';
 
 import type { ParsedNode, ParsedWorkflow } from '../schema.js';
 import type {
@@ -70,7 +76,7 @@ export class YamlCompileError extends Error {
  * `node-id.output.field` (JSONata).
  */
 export interface YamlPipelineContext extends PipelineContext {
-  inputs: Record<string, unknown>;
+  inputs: JsonObject;
   outputs: Record<string, NodeOutput>;
   /**
    * The execution of the node being dispatched (set only while its action
@@ -80,14 +86,18 @@ export interface YamlPipelineContext extends PipelineContext {
   execution?: NodeRunInfo;
 }
 
-export interface NodeOutput {
-  /** Raw output payload — string for shell/agent, object for parsed JSON. */
-  output: unknown;
+// A type, not an interface, so a node output is itself JSON (`TemplateScope`).
+export type NodeOutput = {
+  /**
+   * Raw output payload — string for shell/agent, object for parsed JSON.
+   * Absent when the action gave none (JSON drops an undefined output).
+   */
+  output?: JsonValue;
   /** Optional structured fields when `output_format` was set on the node. */
-  json?: Record<string, unknown>;
+  json?: JsonObject;
   /** Captured stderr/error text when the action failed but `on_error` recovered. */
   error?: string;
-}
+};
 
 // ── Resolver: agent registry → AgentDefinition ──────────────
 
@@ -263,12 +273,35 @@ function isString(value: unknown): value is string {
   return typeof value === 'string';
 }
 
-/** The output a batch leader settled for a member, as this node's output. */
-function asNodeOutput<Output>(output: Output): NodeOutput {
-  if (isObject(output) && 'output' in output) {
-    return output;
+/** `data` as JSON: an undefined field is left out and an undefined item is null, as `JSON.stringify` writes them. */
+function nodeDataAsJson(data: NodeData): JsonValue | undefined {
+  if (data === undefined) return undefined;
+  if (Array.isArray(data)) return data.map((item) => nodeDataAsJson(item) ?? null);
+  if (isObject(data)) {
+    const fields: JsonObject = {};
+    for (const [key, value] of Object.entries(data)) {
+      const json = nodeDataAsJson(value);
+      if (json !== undefined) fields[key] = json;
+    }
+    return fields;
   }
-  return { output };
+  return data;
+}
+
+/** The output a batch leader settled for a member, as this node's output. */
+function asNodeOutput(data: NodeData): NodeOutput {
+  const value = nodeDataAsJson(data);
+  if (!isJsonObject(value) || !('output' in value)) return { output: value };
+  const { output, json, error } = value;
+  return {
+    output,
+    ...(isJsonObject(json) && { json }),
+    ...(isJsonString(error) && { error }),
+  };
+}
+
+function isJsonString(value: JsonValue | undefined): value is string {
+  return typeof value === 'string';
 }
 
 // ── Action dispatch ─────────────────────────────────────────
@@ -297,7 +330,10 @@ async function dispatchThreadLifecycleNode(
     reason: opts.reason,
   });
   if (!result.ok) throw new Error(`${action.name}[${yamlNode.id}] failed: ${result.error}`);
-  return { output: opts.value, json: { value: opts.value, reason: opts.reason } };
+  return {
+    output: opts.value,
+    json: definedJsonFields({ value: opts.value, reason: opts.reason }),
+  };
 }
 
 /**

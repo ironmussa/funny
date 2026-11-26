@@ -27,7 +27,7 @@ import {
   getAdvertisedProviders,
   loadProviderExtensions,
 } from '@funny/core/agents';
-import type { Project, WSEvent } from '@funny/shared';
+import type { AgentModel, Project, WSEvent } from '@funny/shared';
 import { errorMessage } from '@funny/shared/errors';
 import { GATEABLE_ACP_PROVIDER_IDS } from '@funny/shared/provider-manifests';
 
@@ -50,6 +50,7 @@ import {
 import type { RunnerControlCommandResult } from './runner-control-dispatcher.js';
 import { RunnerEnrollmentClient } from './runner-enrollment-client.js';
 import { getServices } from './service-registry.js';
+import { startAgentCommandSchema, type StartAgentCommand } from './start-agent-command.js';
 
 /**
  * The provider state advertised to the server on register + heartbeat: external
@@ -243,23 +244,21 @@ async function applyPersistedBuiltinProviders(): Promise<void> {
 }
 
 /** The `startAgent` control command; a failed start fails the command. */
-async function startAgentForControl(
-  input: Record<string, any>,
-  signal: AbortSignal,
-): Promise<void> {
+async function startAgentForControl(input: StartAgentCommand, signal: AbortSignal): Promise<void> {
   const { startAgent, stopAgent } = await import('./agent-runner-control.js');
-  const threadId = String(input.threadId ?? '');
-  signal.addEventListener('abort', () => void stopAgent(threadId), { once: true });
+  signal.addEventListener('abort', () => void stopAgent(input.threadId), { once: true });
   const started = await startAgent(
-    threadId,
-    String(input.prompt ?? ''),
-    String(input.cwd ?? ''),
-    input.model || undefined,
-    input.permissionMode || undefined,
+    input.threadId,
+    input.prompt,
+    input.cwd,
+    // SAFETY: the server sends the model it stored for the thread, validated
+    // when the thread was created; the wire carries it as a plain string.
+    input.model as AgentModel | undefined,
+    input.permissionMode,
     input.images,
     input.disallowedTools,
     input.allowedTools,
-    input.provider || undefined,
+    input.provider,
   );
   if (started.isErr()) throw new Error(started.error.message);
 }
@@ -271,7 +270,7 @@ async function handleGrpcControl(
   if (signal.aborted) throw new Error('runner command cancelled');
 
   if (command.startAgent) {
-    await startAgentForControl(command.startAgent, signal);
+    await startAgentForControl(startAgentCommandSchema.parse(command.startAgent), signal);
     return {};
   }
 

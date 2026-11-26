@@ -19,15 +19,13 @@ const PROMOTED = [
   'anti-slop/no-runtime-typeof',
   'anti-slop/no-unknown-parameters',
   'anti-slop/no-unknown-returns',
+  'anti-slop/no-unsafe-dictionary-type',
   'anti-slop/require-safety-comment-for-type-assertion',
   'react/refs',
   'react/set-state-in-effect',
   'max-lines',
   'max-lines-per-function',
 ];
-
-/** Rules that still have findings (#465's pull request lists them with their counts). */
-const STILL_WARN = ['anti-slop/no-unsafe-dictionary-type'];
 
 const rules: Record<string, RuleSetting> = config.rules;
 
@@ -45,10 +43,6 @@ function clientRules(): Record<string, RuleSetting> {
 describe('lint severity (#465)', () => {
   test.each(PROMOTED)('%s is an error', (rule) => {
     expect(level(rules[rule])).toBe('error');
-  });
-
-  test.each(STILL_WARN)('%s stays a warning', (rule) => {
-    expect(level(rules[rule])).toBe('warn');
   });
 
   test('no-runtime-typeof keeps allowInTypeGuards', () => {

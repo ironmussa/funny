@@ -41,6 +41,7 @@ import {
   type FactoryRisk,
 } from '@funny/shared/contracts/factory';
 import { errorMessage } from '@funny/shared/errors';
+import { definedJsonFields } from '@funny/shared/json';
 import type { ActionResult, ReviewOpts } from '@funny/workflows/compiler';
 import { err, ok, type Result } from 'neverthrow';
 
@@ -345,7 +346,7 @@ function verdictResult(verdict: FactoryReviewVerdict): ActionResult {
   return {
     ok: true,
     output: allowsMerge ? 'pass' : 'fail',
-    metadata: {
+    metadata: definedJsonFields({
       verdict: verdict.verdict,
       allowsMerge,
       // For templates: a section that shows only when the review sends the change back.
@@ -353,7 +354,7 @@ function verdictResult(verdict: FactoryReviewVerdict): ActionResult {
       sha: verdict.sha,
       feedback: reviewFeedback(verdict),
       threadId: verdict.threadId,
-    },
+    }),
   };
 }
 

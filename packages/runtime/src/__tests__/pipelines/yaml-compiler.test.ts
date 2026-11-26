@@ -12,6 +12,7 @@
 import { describe, expect, test, vi } from 'bun:test';
 
 import { runPipeline, nullReporter } from '@funny/pipelines';
+import type { JsonObject } from '@funny/shared/json';
 import { mocked } from '@funny/test-kit';
 import { parseWorkflowYaml } from '@funny/workflows';
 import type { ActionProvider } from '@funny/workflows/compiler';
@@ -42,10 +43,7 @@ function compile(yaml: string) {
   return compileYamlPipeline(parsed.workflow);
 }
 
-function ctxOf(
-  provider: ActionProvider,
-  inputs: Record<string, unknown> = {},
-): YamlPipelineContext {
+function ctxOf(provider: ActionProvider, inputs: JsonObject = {}): YamlPipelineContext {
   return {
     provider,
     progress: nullReporter,

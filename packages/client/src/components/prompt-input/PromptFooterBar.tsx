@@ -201,6 +201,7 @@ export function PromptFooterBar(props: PromptFooterBarProps) {
             threadId={props.powerlineThread?.id}
             agentProfileId={props.powerlineThread?.agentProfileId}
             agentProfileName={props.powerlineThread?.agentProfileName}
+            provider={props.powerlineThread?.provider}
           />
         </div>
       )}

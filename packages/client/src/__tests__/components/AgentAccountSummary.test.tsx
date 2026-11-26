@@ -73,4 +73,12 @@ describe('AgentAccountSummary', () => {
     expect(screen.queryByTestId('agent-account-usage')).toBeNull();
     expect(screen.queryByText(/Plan limits do not apply/)).toBeNull();
   });
+
+  test('falls back to the provider label when no profile name is set', () => {
+    render(<AgentAccountSummary provider="antigravity" />);
+
+    expect(screen.getByTestId('agent-account-profile').textContent).toBe('Antigravity');
+    expect(screen.queryByTestId('agent-account-plan')).toBeNull();
+    expect(screen.queryByTestId('agent-account-usage')).toBeNull();
+  });
 });

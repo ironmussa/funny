@@ -1,4 +1,4 @@
-import type { ContextBreakdown } from '@funny/shared';
+import type { AgentProvider, ContextBreakdown } from '@funny/shared';
 
 import { AgentAccountSummary } from '@/components/thread/AgentAccountSummary';
 import { ContextBreakdownPanel, formatTokens } from '@/components/thread/ContextBreakdownPanel';
@@ -19,6 +19,8 @@ interface Props {
   /** The thread's recorded execution profile, used before a run reports its account. */
   agentProfileId?: string | null;
   agentProfileName?: string | null;
+  /** The thread's agent provider, used to scope account lookup and fallback labels. */
+  provider?: AgentProvider;
 }
 
 const SIZE = 12;
@@ -88,8 +90,9 @@ export function ContextUsageRing({
   threadId,
   agentProfileId,
   agentProfileName,
+  provider,
 }: Props) {
-  const account = useThreadAgentAccount(threadId, agentProfileId);
+  const account = useThreadAgentAccount(threadId, agentProfileId, provider);
   const clamped = Math.max(0, Math.min(100, pct));
   const remaining = Math.max(0, Math.round(100 - clamped));
 
@@ -117,7 +120,13 @@ export function ContextUsageRing({
         className={cn(breakdown || account ? 'w-80' : 'w-64')}
       >
         <div className="text-sm">
-          {threadId && <AgentAccountSummary account={account} profileName={agentProfileName} />}
+          {threadId && (
+            <AgentAccountSummary
+              account={account}
+              profileName={agentProfileName}
+              provider={provider}
+            />
+          )}
           <p className="font-medium">{remaining}% of context remaining until auto-compact.</p>
           <TokenLine usedTokens={usedTokens} maxTokens={maxTokens} />
           <p className="text-muted-foreground mt-1 text-xs">Click to compact now.</p>

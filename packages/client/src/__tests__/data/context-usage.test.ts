@@ -93,4 +93,61 @@ describe('context-usage collection', () => {
     installTestDataLayer('user-2');
     expect(read('t1')).toBeUndefined();
   });
+
+  test('keeps the reported window across events of the same run', () => {
+    applyContextUsageEvent('t1', {
+      inputTokens: 10,
+      outputTokens: 0,
+      cumulativeInputTokens: 10,
+      provider: 'antigravity',
+      model: 'gemini-3-pro',
+      maxTokens: 1_048_576,
+    });
+    applyContextUsageEvent('t1', { inputTokens: 20, outputTokens: 0, cumulativeInputTokens: 20 });
+
+    expect(read('t1')).toMatchObject({
+      provider: 'antigravity',
+      model: 'gemini-3-pro',
+      maxTokens: 1_048_576,
+      cumulativeInputTokens: 20,
+    });
+  });
+
+  test('drops the breakdown and window of another provider', () => {
+    applyContextUsageEvent('t1', {
+      inputTokens: 12_000,
+      outputTokens: 0,
+      cumulativeInputTokens: 12_000,
+      provider: 'claude',
+      maxTokens: 200_000,
+      breakdown,
+    });
+    applyContextUsageEvent('t1', {
+      inputTokens: 5_000,
+      outputTokens: 0,
+      cumulativeInputTokens: 5_000,
+      provider: 'antigravity',
+    });
+
+    expect(read('t1')?.provider).toBe('antigravity');
+    expect(read('t1')?.breakdown).toBeUndefined();
+    expect(read('t1')?.maxTokens).toBeUndefined();
+  });
+
+  test('a compaction keeps the run provider and window', () => {
+    applyContextUsageEvent('t1', {
+      inputTokens: 900_000,
+      outputTokens: 0,
+      cumulativeInputTokens: 900_000,
+      provider: 'antigravity',
+      maxTokens: 1_048_576,
+    });
+    resetContextUsage('t1', 40_000);
+
+    expect(read('t1')).toMatchObject({
+      cumulativeInputTokens: 40_000,
+      provider: 'antigravity',
+      maxTokens: 1_048_576,
+    });
+  });
 });

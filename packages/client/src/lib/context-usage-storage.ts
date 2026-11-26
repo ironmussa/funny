@@ -25,12 +25,16 @@ export function loadContextUsage(threadId: string): ContextUsage | undefined {
       localStorage.removeItem(KEY_PREFIX + threadId);
       return undefined;
     }
-    return {
+    const usage: ContextUsage = {
       cumulativeInputTokens: parsed.cumulativeInputTokens,
       lastInputTokens: parsed.lastInputTokens,
       lastOutputTokens: parsed.lastOutputTokens,
       breakdown: parsed.breakdown || undefined,
     };
+    if (parsed.provider) usage.provider = parsed.provider;
+    if (parsed.model) usage.model = parsed.model;
+    if (isNumber(parsed.maxTokens) && parsed.maxTokens > 0) usage.maxTokens = parsed.maxTokens;
+    return usage;
   } catch (err) {
     log.warn('load failed', { threadId, error: String(err) });
     return undefined;

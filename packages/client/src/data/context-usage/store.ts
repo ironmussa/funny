@@ -36,6 +36,18 @@ function write(threadId: string, usage: ContextUsage, layer: DataLayer): Context
   return usage;
 }
 
+/** Add the run's provider, model and reported context size to a row, when known. */
+function setRunScope(
+  row: ContextUsage,
+  provider: ContextUsage['provider'],
+  model: string | undefined,
+  maxTokens: number | undefined,
+): void {
+  if (provider) row.provider = provider;
+  if (model) row.model = model;
+  if (maxTokens) row.maxTokens = maxTokens;
+}
+
 /**
  * Apply an `agent:context_usage` event. Per-message events carry no
  * breakdown; keep the last end-of-turn snapshot until the next one replaces it.
@@ -45,17 +57,25 @@ export function applyContextUsageEvent(
   data: WSContextUsageData,
   layer: DataLayer = getDataLayer(),
 ): ContextUsage {
-  const breakdown = data.breakdown ?? getContextUsageStore(layer).getSynced(threadId)?.breakdown;
-  return write(
-    threadId,
-    {
-      cumulativeInputTokens: data.cumulativeInputTokens,
-      lastInputTokens: data.inputTokens,
-      lastOutputTokens: data.outputTokens,
-      breakdown: breakdown || undefined,
-    },
-    layer,
-  );
+  const prev = getContextUsageStore(layer).getSynced(threadId);
+  // A snapshot from another provider or model describes another context size:
+  // carry its breakdown and size forward only while the run stays the same.
+  const sameRun =
+    !!prev &&
+    (!data.provider || !prev.provider || prev.provider === data.provider) &&
+    (!data.model || !prev.model || prev.model === data.model);
+  const breakdown = data.breakdown ?? (sameRun ? prev?.breakdown : undefined);
+  const provider = data.provider ?? (sameRun ? prev?.provider : undefined);
+  const model = data.model ?? (sameRun ? prev?.model : undefined);
+  const maxTokens = data.maxTokens ?? (sameRun ? prev?.maxTokens : undefined);
+  const row: ContextUsage = {
+    cumulativeInputTokens: data.cumulativeInputTokens,
+    lastInputTokens: data.inputTokens,
+    lastOutputTokens: data.outputTokens,
+    breakdown: breakdown || undefined,
+  };
+  setRunScope(row, provider, model, maxTokens);
+  return write(threadId, row, layer);
 }
 
 /**
@@ -68,11 +88,15 @@ export function resetContextUsage(
   postTokens: number,
   layer: DataLayer = getDataLayer(),
 ): ContextUsage {
-  return write(
-    threadId,
-    { cumulativeInputTokens: postTokens, lastInputTokens: postTokens, lastOutputTokens: 0 },
-    layer,
-  );
+  const prev = getContextUsageStore(layer).getSynced(threadId);
+  const row: ContextUsage = {
+    cumulativeInputTokens: postTokens,
+    lastInputTokens: postTokens,
+    lastOutputTokens: 0,
+  };
+  // Compaction shrinks the context, not its limit: keep the run's scope.
+  setRunScope(row, prev?.provider, prev?.model, prev?.maxTokens);
+  return write(threadId, row, layer);
 }
 
 /**

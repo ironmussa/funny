@@ -1,3 +1,5 @@
+import type { AgentProvider } from '@funny/shared';
+import { PROVIDER_LABELS } from '@funny/shared/models';
 import { UserRound } from 'lucide-react';
 import { useState } from 'react';
 
@@ -17,6 +19,8 @@ interface Props {
   account?: AgentAccountRow;
   /** The thread's recorded execution profile name, shown before any report. */
   profileName?: string | null;
+  /** The thread's agent provider, used as fallback header when no profile is set. */
+  provider?: AgentProvider;
 }
 
 /** Bar tone per window: red from 90 %, amber from 70 %. */
@@ -98,11 +102,15 @@ function thirdPartyProvider(info: AccountInfo | undefined): string | null {
 }
 
 /**
- * The account a thread runs on — funny execution profile, Claude login and
+ * The account a thread runs on — funny execution profile, provider login and
  * plan — and the account's total plan usage. Top of the context usage card.
  */
-export function AgentAccountSummary({ account, profileName }: Props) {
-  const name = account?.profileName ?? profileName ?? 'Default profile';
+export function AgentAccountSummary({ account, profileName, provider }: Props) {
+  const resolvedProvider = account?.provider ?? provider;
+  const fallbackName = resolvedProvider
+    ? (PROVIDER_LABELS[resolvedProvider] ?? resolvedProvider)
+    : 'Default profile';
+  const name = account?.profileName ?? profileName ?? fallbackName;
   const info = account?.account;
   const plan = planLabel(info?.subscriptionType);
   const identity = [info?.email, info?.organization].filter(Boolean).join(' · ');
@@ -110,7 +118,7 @@ export function AgentAccountSummary({ account, profileName }: Props) {
   const [now] = useState(() => Date.now());
   const windows = account?.usage?.windows ?? [];
 
-  const provider = account && windows.length === 0 ? thirdPartyProvider(info) : null;
+  const apiProvider = account && windows.length === 0 ? thirdPartyProvider(info) : null;
 
   return (
     <div data-testid="agent-account-summary" className="border-border mb-3 border-b pb-3">
@@ -135,9 +143,9 @@ export function AgentAccountSummary({ account, profileName }: Props) {
           </p>
         </div>
       )}
-      {provider && (
+      {apiProvider && (
         <p className="text-muted-foreground mt-1 pl-6 text-xs">
-          Plan limits do not apply ({provider}).
+          Plan limits do not apply ({apiProvider}).
         </p>
       )}
     </div>

@@ -1,21 +1,28 @@
-import type { AgentAccountInfo, AgentPlanUsage, WSAgentAccountData } from '@funny/shared';
+import type {
+  AgentAccountInfo,
+  AgentPlanUsage,
+  AgentProvider,
+  WSAgentAccountData,
+} from '@funny/shared';
 
 import type { DataLayer } from '../data-layer';
 import { ownEntityStore, type EntityStore } from '../entities';
 import { getDataLayer } from '../runtime';
 
 /**
- * The agent account (Claude login + plan usage) per funny execution profile.
- * The runtime pushes it over WS (`agent:account`) at session start and after
- * every turn; there is no endpoint. Rows are keyed by account, not by thread,
- * so every thread on the same profile shows the account's latest usage. A
- * second store links each thread to the account its last run used.
+ * The agent account (provider login + plan usage) per provider and funny
+ * execution profile. The runtime pushes it over WS (`agent:account`) at
+ * session start and after every turn; there is no endpoint. Rows are keyed by
+ * provider + profile, not by thread, so every thread on the same provider and
+ * profile shows the account's latest usage without bleeding across providers.
+ * A second store links each thread to the account its last run used.
  * Persisting across reloads is the caller's job (`restoreAgentAccounts`).
  */
 
 export interface AgentAccountRow {
-  /** {@link accountKey} of the profile. */
+  /** {@link accountKey} of the provider and profile. */
   id: string;
+  provider?: AgentProvider;
   profileId: string | null;
   profileName: string | null;
   account: AgentAccountInfo;
@@ -31,9 +38,13 @@ interface ThreadAccountLink {
 
 const DEFAULT_ACCOUNT_KEY = 'default';
 
-/** Rows key: the execution profile, or the runner's default login. */
-export function accountKey(profileId: string | null | undefined): string {
-  return profileId ? `profile:${profileId}` : DEFAULT_ACCOUNT_KEY;
+/** Rows key: scoped by provider when known, plus execution profile or default login. */
+export function accountKey(
+  profileId: string | null | undefined,
+  provider?: AgentProvider | null,
+): string {
+  const base = profileId ? `profile:${profileId}` : DEFAULT_ACCOUNT_KEY;
+  return provider ? `${provider}:${base}` : base;
 }
 
 export function getAgentAccountStore(
@@ -60,13 +71,15 @@ export function applyAgentAccountEvent(
   layer: DataLayer = getDataLayer(),
 ): AgentAccountRow[] {
   const store = getAgentAccountStore(layer);
-  const key = accountKey(data.profileId);
+  const key = accountKey(data.profileId, data.provider);
   const previous = store.getSynced(key);
-  const sameLogin = previous?.account.email === data.account.email;
+  const sameLogin =
+    previous?.account.email === data.account.email && previous?.provider === data.provider;
   const usage = data.usage ?? (sameLogin ? previous?.usage : undefined);
   store.upsert([
     {
       id: key,
+      provider: data.provider,
       profileId: data.profileId,
       profileName: data.profileName,
       account: data.account,

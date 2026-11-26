@@ -14,6 +14,7 @@ import { installTestDataLayer, resetTestDataLayer } from '../helpers/data-layer-
 
 const usage = { windows: [{ key: 'five_hour', utilization: 40, resetsAt: null }] };
 const event = (over: Partial<WSAgentAccountData> = {}): WSAgentAccountData => ({
+  provider: 'claude',
   profileId: 'p1',
   profileName: 'Work',
   account: { email: 'work@example.com', subscriptionType: 'max' },
@@ -27,13 +28,42 @@ beforeEach(() => {
 afterEach(() => resetTestDataLayer());
 
 describe('agent account store', () => {
-  test('keys the account by profile and links the thread to it', () => {
+  test('keys the account by provider and profile and links the thread to it', () => {
     applyAgentAccountEvent('t1', event(), 1000);
     applyAgentAccountEvent('t2', event({ profileId: null, profileName: null }), 1000);
 
-    expect(getAgentAccountStore().read('profile:p1')?.usage).toEqual(usage);
-    expect(getThreadAccountStore().read('t1')?.accountKey).toBe('profile:p1');
-    expect(getThreadAccountStore().read('t2')?.accountKey).toBe(accountKey(null));
+    expect(getAgentAccountStore().read('claude:profile:p1')?.usage).toEqual(usage);
+    expect(getThreadAccountStore().read('t1')?.accountKey).toBe('claude:profile:p1');
+    expect(getThreadAccountStore().read('t2')?.accountKey).toBe(accountKey(null, 'claude'));
+  });
+
+  test('isolates default accounts across different providers', () => {
+    applyAgentAccountEvent(
+      't-claude',
+      event({ provider: 'claude', profileId: null, profileName: null }),
+      1000,
+    );
+    applyAgentAccountEvent(
+      't-agy',
+      event({
+        provider: 'antigravity',
+        profileId: null,
+        profileName: null,
+        account: { email: 'dev@google.com' },
+        usage: undefined,
+      }),
+      1500,
+    );
+
+    expect(getAgentAccountStore().read(accountKey(null, 'claude'))?.account.email).toBe(
+      'work@example.com',
+    );
+    expect(getAgentAccountStore().read(accountKey(null, 'claude'))?.usage).toEqual(usage);
+    expect(getAgentAccountStore().read(accountKey(null, 'antigravity'))?.account.email).toBe(
+      'dev@google.com',
+    );
+    expect(getAgentAccountStore().read(accountKey(null, 'antigravity'))?.usage).toBeUndefined();
+    expect(getAgentAccountStore().read(accountKey(null, 'codex'))).toBeUndefined();
   });
 
   test('a later event from another thread updates the shared account usage', () => {
@@ -41,7 +71,7 @@ describe('agent account store', () => {
     const next = { windows: [{ key: 'five_hour', utilization: 55, resetsAt: null }] };
     applyAgentAccountEvent('t2', event({ usage: next }), 2000);
 
-    const row = getAgentAccountStore().read('profile:p1');
+    const row = getAgentAccountStore().read('claude:profile:p1');
     expect(row?.usage).toEqual(next);
     expect(row?.capturedAt).toBe(2000);
   });
@@ -50,7 +80,7 @@ describe('agent account store', () => {
     applyAgentAccountEvent('t1', event(), 1000);
     applyAgentAccountEvent('t1', event({ usage: undefined }), 2000);
 
-    const row = getAgentAccountStore().read('profile:p1');
+    const row = getAgentAccountStore().read('claude:profile:p1');
     expect(row?.usage).toEqual(usage);
     expect(row?.capturedAt).toBe(1000);
   });
@@ -63,7 +93,7 @@ describe('agent account store', () => {
       2000,
     );
 
-    expect(getAgentAccountStore().read('profile:p1')?.usage).toBeUndefined();
+    expect(getAgentAccountStore().read('claude:profile:p1')?.usage).toBeUndefined();
   });
 
   test('restores persisted rows only into an empty session', () => {
@@ -72,9 +102,9 @@ describe('agent account store', () => {
     installTestDataLayer();
 
     restoreAgentAccounts(() => saved);
-    expect(getAgentAccountStore().read('profile:p1')?.usage).toEqual(usage);
+    expect(getAgentAccountStore().read('claude:profile:p1')?.usage).toEqual(usage);
 
     restoreAgentAccounts(() => []);
-    expect(getAgentAccountStore().read('profile:p1')).toBeDefined();
+    expect(getAgentAccountStore().read('claude:profile:p1')).toBeDefined();
   });
 });

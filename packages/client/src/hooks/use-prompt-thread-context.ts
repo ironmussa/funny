@@ -12,6 +12,7 @@ import { useContextUsage } from '@/data/context-usage/hooks';
 import { useGitStatusForThread } from '@/data/git-status/hooks';
 import { useProjects } from '@/data/projects/hooks';
 import { useProjectThreadMode } from '@/data/runner/hooks';
+import type { ContextUsage } from '@/lib/context-usage-types';
 import { normalizeEffort } from '@/lib/providers';
 import { resolveThreadBranch } from '@/lib/utils';
 import { useProjectStore } from '@/stores/project-store';
@@ -47,6 +48,21 @@ function resolveModeDefaults(project: Project | undefined) {
 }
 
 /**
+ * Whether a usage snapshot was reported by the thread's current provider and
+ * model. A snapshot with no provider (older runtimes, persisted rows) matches.
+ */
+function usageMatchesRun(
+  usage: ContextUsage | undefined,
+  provider: AgentProvider | null | undefined,
+  model: AgentModel | null | undefined,
+): boolean {
+  if (!usage) return false;
+  if (usage.provider && provider && usage.provider !== provider) return false;
+  if (usage.model && model && usage.model !== model) return false;
+  return true;
+}
+
+/**
  * Context-window usage percentage for the ring. Hidden until the agent has
  * actually reported usage: new and forked threads start at 0 and the displayed
  * % would be misleading (a fork inherits real context but no usage event has
@@ -58,9 +74,12 @@ function computeContextUsage(
   provider: AgentProvider | null | undefined,
   model: AgentModel | null | undefined,
   tokens: number,
+  usage: ContextUsage | undefined,
 ) {
+  const reportedMax = usageMatchesRun(usage, provider, model) ? usage?.maxTokens : undefined;
   const contextMaxTokens =
-    provider && model ? getModelContextWindow(provider, model) : DEFAULT_CONTEXT_WINDOW;
+    reportedMax ??
+    (provider && model ? getModelContextWindow(provider, model) : DEFAULT_CONTEXT_WINDOW);
   const contextPct =
     provider !== 'codex' && tokens > 0
       ? Math.min(100, (tokens / contextMaxTokens) * 100)
@@ -184,7 +203,15 @@ export function usePromptActiveThread(
   const contextUsage = useContextUsage(threadId);
   const activeThreadContextTokens =
     o.contextUsage?.cumulativeInputTokens ?? contextUsage?.cumulativeInputTokens ?? 0;
-  const activeThreadContextBreakdown = contextUsage?.breakdown;
+  // The breakdown describes the run that reported it: hide it once the thread
+  // moved to another provider or model.
+  const activeThreadContextBreakdown = usageMatchesRun(
+    contextUsage,
+    identity.activeThreadProvider,
+    identity.activeThreadModel,
+  )
+    ? contextUsage?.breakdown
+    : undefined;
   const activeThreadLastEffort = useThreadSelector((t) => t?.lastUserMessage?.effort);
   const activeThreadRuntime = useThreadSelector((t) => t?.runtime);
   const updateThreadPermissionMode = useThreadStore((s) => s.updateThreadPermissionMode);
@@ -206,6 +233,7 @@ export function usePromptActiveThread(
       identity.activeThreadProvider,
       identity.activeThreadModel,
       activeThreadContextTokens,
+      contextUsage,
     ),
   };
 }

@@ -8,7 +8,7 @@
  * Constructs conversation history for session recovery.
  */
 
-import type { Message, ToolCall } from '@funny/shared';
+import { AUTO_RESUME_MESSAGE_AUTHOR, type Message, type ToolCall } from '@funny/shared';
 import { parseStoredJson } from '@funny/shared/json-validation';
 import { z } from 'zod';
 
@@ -24,6 +24,55 @@ const MAX_CONTEXT_MESSAGES = 40;
 
 /** Maximum total character length for the recovered context string. */
 const MAX_CONTEXT_LENGTH = 200_000;
+
+/**
+ * How far back to look for the user's request when the recent window holds
+ * none: pages of older messages, read newest first.
+ */
+const TASK_LOOKUP_PAGE_SIZE = 100;
+const TASK_LOOKUP_MAX_PAGES = 10;
+
+type ContextMessage = Pick<Message, 'role' | 'content' | 'images'> & {
+  author?: string | null;
+  timestamp?: string;
+  toolCalls?: ToolCall[];
+};
+
+/**
+ * A message the user wrote, as opposed to the `continue` the runner sends to
+ * resume a thread its restart interrupted.
+ */
+function isUserRequest(msg: ContextMessage): boolean {
+  return msg.role === 'user' && msg.author !== AUTO_RESUME_MESSAGE_AUTHOR;
+}
+
+/**
+ * The user's latest request before `before`, read from older history. An agent
+ * that records one message per tool call (ACP providers) fills the recent
+ * window within one turn, and runner restarts add only `continue` prompts, so
+ * without this the recovered agent no longer knows what it was asked to do.
+ */
+async function findEarlierUserRequest(
+  threadId: string,
+  before: string,
+): Promise<ContextMessage | null> {
+  let cursor = before;
+  for (let page = 0; page < TASK_LOOKUP_MAX_PAGES; page++) {
+    const older = await tm.getThreadMessages({
+      threadId,
+      cursor,
+      limit: TASK_LOOKUP_PAGE_SIZE,
+      direction: 'before',
+    });
+    const messages: ContextMessage[] = older.messages;
+    const request = [...messages].reverse().find(isUserRequest);
+    if (request) return request;
+    const oldest = messages[0]?.timestamp;
+    if (!older.hasMore || !oldest) return null;
+    cursor = oldest;
+  }
+  return null;
+}
 
 export async function buildThreadContext(threadId: string): Promise<string | null> {
   // Only the most recent messages are used (avoids OOM in the agent
@@ -51,6 +100,20 @@ export async function buildThreadContext(threadId: string): Promise<string | nul
       `[NOTE: Showing last ${messages.length} of ${total} messages. Earlier messages were omitted to save memory.]`,
     );
   }
+  const oldestLoaded = messages[0]?.timestamp;
+  const currentTask =
+    truncated && oldestLoaded && !messages.some(isUserRequest)
+      ? await findEarlierUserRequest(threadId, oldestLoaded)
+      : null;
+  if (currentTask) {
+    parts.push('');
+    parts.push("=== CURRENT TASK (the user's last request, older than the history below) ===");
+    parts.push('');
+    appendMessage(parts, currentTask);
+    parts.push('');
+    parts.push('=== END CURRENT TASK ===');
+  }
+
   parts.push('');
   parts.push('=== CONVERSATION HISTORY ===');
   parts.push('');
@@ -92,10 +155,7 @@ function appendToolCalls(parts: string[], toolCalls: ToolCall[]): void {
   }
 }
 
-function appendMessage(
-  parts: string[],
-  msg: Pick<Message, 'role' | 'content' | 'images'> & { toolCalls?: ToolCall[] },
-): void {
+function appendMessage(parts: string[], msg: ContextMessage): void {
   if (msg.role === 'user') {
     parts.push('USER:', msg.content);
     if (msg.images?.length) {

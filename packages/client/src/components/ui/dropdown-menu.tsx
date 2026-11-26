@@ -1,6 +1,6 @@
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
 import { cva, type VariantProps } from 'class-variance-authority';
-import { ChevronRight } from 'lucide-react';
+import { Check, ChevronRight } from 'lucide-react';
 import * as React from 'react';
 
 import { cn } from '@/lib/utils';
@@ -95,18 +95,58 @@ function DropdownMenuItem({
     />
   );
 }
+const dropdownMenuLabelVariants = cva('font-semibold', {
+  variants: {
+    size: {
+      default: 'px-2 py-1.5 text-xs',
+      sm: 'px-2 py-1.5 text-xs',
+      xs: 'px-1.5 py-1 text-2xs',
+    },
+  },
+  defaultVariants: {
+    size: 'sm',
+  },
+});
+
+function DropdownMenuCheckboxItem({
+  className,
+  size,
+  children,
+  ref,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.CheckboxItem> &
+  VariantProps<typeof dropdownMenuItemVariants> & {
+    ref?: React.Ref<React.ComponentRef<typeof DropdownMenuPrimitive.CheckboxItem>>;
+  }) {
+  return (
+    <DropdownMenuPrimitive.CheckboxItem
+      ref={ref}
+      className={cn(dropdownMenuItemVariants({ size }), 'pl-7', className)}
+      {...props}
+    >
+      <span className="absolute left-2 flex size-3.5 items-center justify-center">
+        <DropdownMenuPrimitive.ItemIndicator>
+          <Check className="size-3.5" />
+        </DropdownMenuPrimitive.ItemIndicator>
+      </span>
+      {children}
+    </DropdownMenuPrimitive.CheckboxItem>
+  );
+}
 function DropdownMenuLabel({
   className,
   inset,
+  size,
   ref,
   ...props
-}: React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Label> & {
-  inset?: boolean;
-} & { ref?: React.Ref<React.ComponentRef<typeof DropdownMenuPrimitive.Label>> }) {
+}: React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Label> &
+  VariantProps<typeof dropdownMenuLabelVariants> & {
+    inset?: boolean;
+  } & { ref?: React.Ref<React.ComponentRef<typeof DropdownMenuPrimitive.Label>> }) {
   return (
     <DropdownMenuPrimitive.Label
       ref={ref}
-      className={cn('px-2 py-1.5 text-xs font-semibold', inset && 'pl-8', className)}
+      className={cn(dropdownMenuLabelVariants({ size }), inset && 'pl-8', className)}
       {...props}
     />
   );
@@ -196,6 +236,7 @@ export {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuCheckboxItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuGroup,

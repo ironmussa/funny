@@ -214,10 +214,10 @@ function ViewportMenu() {
       >
         {item(DESKTOP_PRESET)}
         <DropdownMenuSeparator />
-        <DropdownMenuLabel className="text-2xs px-1.5 py-1">Phones</DropdownMenuLabel>
+        <DropdownMenuLabel size="xs">Phones</DropdownMenuLabel>
         {BROWSER_SESSION_PHONE_PRESETS.map(item)}
         <DropdownMenuSeparator />
-        <DropdownMenuLabel className="text-2xs px-1.5 py-1">Tablets</DropdownMenuLabel>
+        <DropdownMenuLabel size="xs">Tablets</DropdownMenuLabel>
         {BROWSER_SESSION_TABLET_PRESETS.map(item)}
       </DropdownMenuContent>
     </DropdownMenu>

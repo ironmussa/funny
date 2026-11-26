@@ -26,7 +26,11 @@ const Toaster = ({ ...props }: ToasterProps) => {
         classNames: {
           toast:
             'group toast group-[.toaster]:bg-background! group-[.toaster]:text-foreground! group-[.toaster]:border-border! group-[.toaster]:shadow-lg',
-          description: 'group-[.toast]:text-muted-foreground!',
+          // Every toast gets the same bound: a long message (a git hook's
+          // whole output, say) is cut at a few lines instead of filling the
+          // screen, and a long word (a path, a URL) wraps instead of overflowing.
+          title: 'line-clamp-4 break-words',
+          description: 'group-[.toast]:text-muted-foreground! line-clamp-4 break-words',
           actionButton: 'group-[.toast]:bg-primary! group-[.toast]:text-primary-foreground!',
           cancelButton: 'group-[.toast]:bg-muted! group-[.toast]:text-muted-foreground!',
         },

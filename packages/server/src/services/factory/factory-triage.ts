@@ -21,6 +21,15 @@
  *   issue is never split by itself again (`SPLIT_MARKER`): triage comments the
  *   split on it instead. Nothing opened: the split is commented as without
  *   the setting.
+ * - `too_big` naming `existing` issues (a tracking issue's sub-issues, the
+ *   parts of an earlier split): they are listed, never opened again. When
+ *   every part is an existing issue, nothing is opened: the issue is
+ *   commented, let go and the run ends `done`.
+ * - `already_done`: what the issue asks is already true of the code. The
+ *   server comments the agent's evidence on the issue (the same sanitized
+ *   items), closes it as completed and ends the run `done`. When it cannot
+ *   close the issue, the run parks in `needs_info` with the evidence posted,
+ *   so a person closes it.
  * - No valid result after one request to emit it again: the run goes on
  *   without a contract (the reviewer then judges against the issue).
  * - A ready run whose likely paths overlap those of a run in progress leaves
@@ -63,6 +72,10 @@ export const TRIAGE_QUESTIONS_LINE =
   'The issue factory needs more information before it can work on this issue:';
 export const TRIAGE_TOO_BIG_LINE =
   'The issue factory found this issue too large to work in one change. A possible split:';
+export const TRIAGE_ALREADY_DONE_LINE =
+  'The issue factory found that what this issue asks is already done, and closed it:';
+export const TRIAGE_ALREADY_DONE_OPEN_LINE =
+  'The issue factory found that what this issue asks is already done, but could not close it. Close it if you agree:';
 export const TRIAGE_SPLIT_LINE =
   'The issue factory found this issue too large to work in one change, and opened its parts as issues:';
 /**
@@ -76,6 +89,8 @@ const MAX_PARENT_BODY = 20_000;
 const MAX_PART_TITLE = 120;
 const TRIAGE_FOOTER =
   '_Edit the issue or comment here; the factory looks at it again when the issue changes._';
+const ALREADY_DONE_FOOTER =
+  '_Reopen the issue and say what is still missing if this is wrong; the factory picks it up again when it carries its label._';
 
 const WILDCARD = /[*?[{]/;
 
@@ -137,18 +152,37 @@ export function publicItems(items: readonly string[]): string[] {
     .slice(0, MAX_TRIAGE_ITEMS);
 }
 
+const COMMENT_FIRST_LINE = {
+  needs_info: TRIAGE_QUESTIONS_LINE,
+  too_big: TRIAGE_TOO_BIG_LINE,
+  already_done: TRIAGE_ALREADY_DONE_LINE,
+  already_done_open: TRIAGE_ALREADY_DONE_OPEN_LINE,
+} as const;
+
+type TriageCommentKind = keyof typeof COMMENT_FIRST_LINE;
+
+type TooBigAnswer = Extract<FactoryTriageResult, { decision: 'too_big' }>;
+
+/** The parts posted on a parked issue, then the existing issues that cover the rest. */
+const withExisting = (answer: TooBigAnswer): string[] =>
+  answer.existing.length > 0 ? [...answer.parts, existingLine(answer.existing)] : [...answer.parts];
+
+/** Why the flow stopped on a run parked on its issue. */
+const PARKED_ERROR = {
+  needs_info: 'The issue needs more information',
+  too_big: 'The issue is too large for one change',
+  already_done: 'The issue looks already done; a person closes it',
+} as const;
+
 /** The issue comment: a fixed template around the sanitized items. */
-export function triageComment(
-  decision: 'needs_info' | 'too_big',
-  items: readonly string[],
-): string {
-  const first = decision === 'needs_info' ? TRIAGE_QUESTIONS_LINE : TRIAGE_TOO_BIG_LINE;
+export function triageComment(decision: TriageCommentKind, items: readonly string[]): string {
+  const first = COMMENT_FIRST_LINE[decision];
   return [
     first,
     publicItems(items)
       .map((item) => `> - ${item}`)
       .join('\n'),
-    TRIAGE_FOOTER,
+    decision === 'already_done' ? ALREADY_DONE_FOOTER : TRIAGE_FOOTER,
   ].join('\n\n');
 }
 
@@ -200,11 +234,16 @@ export function splitPartIssue(input: {
 }
 
 /** The comment on a split issue: the parts opened, and the ones that could not be. */
-export function splitComment(parts: readonly string[], opened: readonly number[]): string {
+export function splitComment(
+  parts: readonly string[],
+  opened: readonly number[],
+  existing: readonly number[] = [],
+): string {
   const missing = parts.slice(opened.length);
   return [
     TRIAGE_SPLIT_LINE,
     opened.map((number, index) => `- #${number}: ${parts[index]}`).join('\n'),
+    ...(existing.length > 0 ? [existingLine(existing)] : []),
     ...(missing.length > 0
       ? [
           'These parts could not be opened; open them by hand:',
@@ -215,8 +254,24 @@ export function splitComment(parts: readonly string[], opened: readonly number[]
   ].join('\n\n');
 }
 
+/** The existing issues a split names instead of opening them again. */
+const existingLine = (existing: readonly number[]): string =>
+  `Already tracked by existing issues, not opened again: ${existing.map((n) => `#${n}`).join(', ')}.`;
+
+export const TRIAGE_COVERED_LINE =
+  'The issue factory found that the work of this issue is already tracked by existing issues, so it opened none:';
+
+/** The comment on an issue whose every part is an existing issue. */
+function coveredComment(existing: readonly number[]): string {
+  return [
+    TRIAGE_COVERED_LINE,
+    existing.map((n) => `- #${n}`).join('\n'),
+    '_The factory works on those issues and no longer on this one. Close it when they are done._',
+  ].join('\n\n');
+}
+
 const RESULT_FORMAT = [
-  'One of these three, as a fenced json block:',
+  'One of these four, as a fenced json block:',
   '```json',
   '{ "decision": "ready", "contract": { "acceptanceCriteria": ["<what must be true when it is done>"], "likelyPaths": ["<glob of files the change will probably touch>"], "riskHints": ["<why it may be risky, if it is>"], "lintCleanup": false, "lintRules": [] } }',
   '```',
@@ -224,7 +279,10 @@ const RESULT_FORMAT = [
   '{ "decision": "needs_info", "questions": ["<one question the issue must answer>"] }',
   '```',
   '```json',
-  '{ "decision": "too_big", "parts": ["<one part that could be its own issue>"] }',
+  '{ "decision": "too_big", "parts": ["<one part that could be its own issue>"], "existing": [123] }',
+  '```',
+  '```json',
+  '{ "decision": "already_done", "evidence": ["<what shows it is done: the commit or pull request, the check that passes now>"] }',
   '```',
 ].join('\n');
 
@@ -258,7 +316,8 @@ function triagePrompt(input: {
     '- `ready`: an agent can do it without asking anyone. Write its contract: acceptance criteria someone could check against the code, the files it will probably touch (globs, at most 50), and risk hints only when the change is risky (it changes a migration, authentication, a public API, CI, or deletes data).',
     'Set `lintCleanup` to true only when the issue asks for nothing but clearing lint or type-check warnings and must not change what the code does (for example "clear rule X in package Y"). A feature, a bug fix or a refactor that also changes behavior is false, whatever it is called. When true, list in `lintRules` every rule the issue asks to clear, as the linter names it (`eslint/max-lines`, `anti-slop/no-unknown-returns`); when the issue does not name its rules, list the ones its warnings come from. The factory does not hold a lint cleanup for its size only when every rule is one whose fix cannot change behavior (splitting long functions or files, sorting imports), so name them all and add a risk hint about the size only when one of them can change behavior.',
     '- `needs_info`: something the issue must say is missing or ambiguous, and a wrong guess would waste the work. Ask at most five short questions. Do not ask what the code already answers.',
-    '- `too_big`: it is several independent changes. Propose the parts.',
+    "- `too_big`: it is several independent changes. Propose the parts. A part an existing issue already covers (a sub-issue the issue lists, a part of an earlier split, an issue it names as already opened) is not a part: put that issue's number in `existing` and do not describe it in `parts`. When every part is an existing issue, `parts` is empty. Never write a part that only points at another issue.",
+    '- `already_done`: what the issue asks is already true of the code in the checkout (it duplicates work already merged, or a fix already landed), so there is nothing to change. Run the check the issue names (its lint, test or command) in the checkout and see it pass: that output is the evidence, with the commit or pull request that did the work. Files, tests or commits that merely exist are not evidence, and neither is another issue being closed. The factory closes the issue on your answer: when you could not run the check, or it does not pass, it is not `already_done`.',
     'Prefer `ready` when a reasonable decision can be made and stated.',
     ...(busy ? ['', busy] : []),
     '',
@@ -271,8 +330,8 @@ function triagePrompt(input: {
 export interface FactorySplitDeps {
   /** Open one issue in the run's repository; its number. */
   openIssue(issue: { title: string; body: string }): Promise<Result<number, string>>;
-  /** Queue the opened parts in this factory, with the run's flow. */
-  queue(issueNumbers: number[]): Promise<void>;
+  /** Queue the opened parts in this factory, with the run's flow, under their titles. */
+  queue(parts: { number: number; title: string }[]): Promise<void>;
   /**
    * Take the factory's label off the parent, so it is not admitted again. When
    * some part could not be opened (`complete: false`), hand it to a person too.
@@ -306,6 +365,10 @@ export interface FactoryTriageDeps {
   releaseWorkspace?(threadId: string): Promise<void>;
   /** Post a comment on the run's issue. */
   comment(body: string): Promise<Result<void, string>>;
+  /** Take the factory's label off the issue, so it is not admitted again. */
+  dropLabel?(): Promise<void>;
+  /** Close the run's issue as completed (`already_done`); absent: a person closes it. */
+  closeIssue?(): Promise<Result<void, string>>;
   /** Present when the factory opens a too-large issue's parts as issues (its `split` setting). */
   split?: FactorySplitDeps;
   /** When the issue last changed, by GitHub's clock (read after the comment); null when unreadable. */
@@ -353,6 +416,8 @@ export interface SplitWork {
   parts: string[];
   /** Issues opened for the first parts by an earlier attempt, in order. */
   opened: readonly number[];
+  /** Existing issues that cover the rest of the work: named, never opened. */
+  existing?: readonly number[];
 }
 
 /**
@@ -399,8 +464,15 @@ export async function announceSplit(
   work: SplitWork,
   opened: readonly number[],
 ): Promise<void> {
-  await split.queue(opened.slice(work.opened.length));
-  const commented = await comment(splitComment(work.parts, opened));
+  const first = work.opened.length;
+  await split.queue(
+    opened.slice(first).map((number, offset) => ({
+      number,
+      title: splitPartIssue({ parent: work.parent, parts: work.parts, index: first + offset })
+        .title,
+    })),
+  );
+  const commented = await comment(splitComment(work.parts, opened, work.existing));
   if (commented.isErr()) {
     log.warn('Issue factory could not comment the split on the issue', {
       namespace: 'factory',
@@ -507,13 +579,14 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
 
   /** Ask on the issue and park the run there. Not ok: the flow stops here. */
   async function askOnIssue(
-    decision: 'needs_info' | 'too_big',
+    decision: 'needs_info' | 'too_big' | 'already_done',
     items: readonly string[],
     threadId: string,
   ): Promise<ActionResult> {
     const shown = publicItems(items);
+    const kind = decision === 'already_done' ? 'already_done_open' : decision;
     warnIfFailed(
-      await deps.comment(triageComment(decision, items)),
+      await deps.comment(triageComment(kind, items)),
       'Issue factory could not post the triage comment',
     );
     // The baseline a later change is compared with is GitHub's own time of the
@@ -525,10 +598,7 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
     await deps.count(`triage_${decision}`);
     return {
       ok: false,
-      error:
-        decision === 'needs_info'
-          ? `The issue needs more information: ${shown.join(' / ')}`
-          : `The issue is too large for one change: ${shown.join(' / ')}`,
+      error: `${PARKED_ERROR[decision]}: ${shown.join(' / ')}`,
       metadata: { outcome: 'needs_info', decision },
     };
   }
@@ -541,26 +611,28 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
    */
   async function splitIssue(
     split: FactorySplitDeps,
-    parts: readonly string[],
+    answer: TooBigAnswer,
     threadId: string,
     issue: FactoryIssueText | null,
   ): Promise<ActionResult> {
-    const shown = publicItems(parts);
+    const shown = publicItems(answer.parts);
+    const existing = answer.existing;
     const at = new Date().toISOString();
     const work: SplitWork = {
       runId: scope.runId,
       parent: splitParent(scope, issue),
       parts: shown,
       opened: resumedParts(deps.stored, threadId),
+      existing,
     };
     const opened = await openSplitParts(split, work, async (splitInto) => {
-      current = { decision: 'too_big', at, threadId, items: shown, splitInto };
+      current = { decision: 'too_big', at, threadId, items: shown, existing, splitInto };
       await deps.record({ triage: current });
     });
-    if (opened.length === 0) return askOnIssue('too_big', parts, threadId);
+    if (opened.length === 0) return askOnIssue('too_big', withExisting(answer), threadId);
 
     await announceSplit(split, deps.comment, work, opened);
-    current = { decision: 'too_big', at, threadId, items: shown, splitInto: opened };
+    current = { decision: 'too_big', at, threadId, items: shown, existing, splitInto: opened };
     await deps.record({ state: 'done', failureReason: null, triage: current });
     await deps.count('triage_too_big');
     await deps.count('triage_split');
@@ -602,14 +674,75 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
     );
   }
 
+  /**
+   * What the issue asks is already done: post the evidence, close the issue
+   * and end the run. An issue the factory cannot close is left to a person:
+   * the run parks on it with the evidence posted, like a question.
+   */
+  async function alreadyDone(evidence: readonly string[], threadId: string): Promise<ActionResult> {
+    const closed = deps.closeIssue ? await deps.closeIssue() : err('no way to close the issue');
+    if (closed.isErr()) {
+      log.warn('Issue factory could not close an issue triage found already done', {
+        namespace: 'factory',
+        runId: scope.runId,
+        error: closed.error,
+      });
+      return askOnIssue('already_done', evidence, threadId);
+    }
+    const shown = publicItems(evidence);
+    warnIfFailed(
+      await deps.comment(triageComment('already_done', evidence)),
+      'Issue factory could not post the triage comment',
+    );
+    current = { decision: 'already_done', at: new Date().toISOString(), threadId, items: shown };
+    await deps.record({ state: 'done', failureReason: null, triage: current });
+    await deps.count('triage_already_done');
+    return {
+      ok: false,
+      error: `The issue is already done: ${shown.join(' / ')}`,
+      metadata: { outcome: 'already_done', decision: 'already_done' },
+    };
+  }
+
   /** A too-large issue: open its parts when the factory splits, else ask on it. */
-  async function tooBig(parts: readonly string[], threadId: string): Promise<ActionResult> {
+  async function tooBig(answer: TooBigAnswer, threadId: string): Promise<ActionResult> {
+    if (answer.parts.length === 0) return coveredByExisting(answer.existing, threadId);
     const split = deps.split;
     const issue = split ? await issueText() : null;
     // A part is never split again by itself; one whose text is unreadable is not split either.
     return split && issue && !isSplitPart(issue)
-      ? splitIssue(split, parts, threadId, issue)
-      : askOnIssue('too_big', parts, threadId);
+      ? splitIssue(split, answer, threadId, issue)
+      : askOnIssue('too_big', withExisting(answer), threadId);
+  }
+
+  /**
+   * Every part of the issue is an existing issue (a tracking issue): open
+   * nothing, say which issues carry the work, let the issue go and end the run.
+   */
+  async function coveredByExisting(
+    existing: readonly number[],
+    threadId: string,
+  ): Promise<ActionResult> {
+    warnIfFailed(
+      await deps.comment(coveredComment(existing)),
+      'Issue factory could not post the triage comment',
+    );
+    await deps.dropLabel?.();
+    current = {
+      decision: 'too_big',
+      at: new Date().toISOString(),
+      threadId,
+      items: [],
+      existing: [...existing],
+    };
+    await deps.record({ state: 'done', failureReason: null, triage: current });
+    await deps.count('triage_too_big');
+    await deps.count('triage_covered');
+    return {
+      ok: false,
+      error: `The issue is tracked by ${existing.map((n) => `#${n}`).join(', ')}; nothing was opened.`,
+      metadata: { outcome: 'covered', decision: 'too_big', issues: [...existing] },
+    };
   }
 
   /** Act on triage's valid answer. */
@@ -617,7 +750,8 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
     if (answer.decision === 'needs_info') {
       return askOnIssue('needs_info', answer.questions, threadId);
     }
-    if (answer.decision === 'too_big') return tooBig(answer.parts, threadId);
+    if (answer.decision === 'too_big') return tooBig(answer, threadId);
+    if (answer.decision === 'already_done') return alreadyDone(answer.evidence, threadId);
     const ready: FactoryTriage = {
       decision: 'ready',
       at: new Date().toISOString(),

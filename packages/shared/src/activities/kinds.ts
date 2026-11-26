@@ -231,6 +231,18 @@ export const ACTIVITY_KINDS = {
       baseFiles: z.array(z.string()).max(20).optional(),
     }),
   },
+  // An issue whose work went to other issues (split, or tracked by existing
+  // ones), closed by the factory once every one of them was closed.
+  'factory.close_parent': {
+    scope: 'project',
+    // It closes an issue on GitHub; reopening it undoes that.
+    destructive: false,
+    record: 'always',
+    input: z.object({
+      issueNumber: z.number().int(),
+      parts: z.array(z.number().int()).max(100),
+    }),
+  },
   // flow-triggers: a schedule occurrence that started no run.
   'factory.trigger_skipped': {
     scope: 'project',

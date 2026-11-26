@@ -164,6 +164,11 @@ export interface FactoryGithubPort {
     reader: FactoryRepoReader,
     issue: { title: string; body: string },
   ): ResultAsync<{ number: number; url: string }, GithubCallError>;
+  /**
+   * Close an issue as completed, as the App with the token capped by
+   * `reader.ownerId`'s own access. Absent in fakes that never close one.
+   */
+  closeIssue?(reader: FactoryRepoReader, issueNumber: number): ResultAsync<void, GithubCallError>;
   /** CI state and merge of a run's pull request (`wait_ci` / `merge`). */
   pullRequests: FactoryPullRequests;
 }
@@ -297,6 +302,7 @@ export function createFactoryGithub(
     relabelIssue: (reader, issueNumber, labels) => reads(reader).relabelIssue(issueNumber, labels),
     commentOnIssue: (reader, issueNumber, body) => reads(reader).commentOnIssue(issueNumber, body),
     createIssue: (reader, issue) => reads(reader).createIssue(issue),
+    closeIssue: (reader, issueNumber) => reads(reader).closeIssue(issueNumber),
     branchState: (reader, branch) => reads(reader).branchState(branch),
     mergeCommitState: (reader, number) => reads(reader).mergeCommitState(number),
     issueText: (reader, issueNumber) => reads(reader).issueText(issueNumber),

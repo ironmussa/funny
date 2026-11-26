@@ -107,11 +107,16 @@ describe('factoryTriageResultSchema', () => {
     ).toEqual({ decision: 'needs_info', questions: ['Which API?'] });
     expect(
       factoryTriageResultSchema.parse({ decision: 'too_big', parts: ['Schema', 'UI'] }),
-    ).toEqual({ decision: 'too_big', parts: ['Schema', 'UI'] });
+    ).toEqual({ decision: 'too_big', parts: ['Schema', 'UI'], existing: [] });
     expect(factoryTriageResultSchema.safeParse({ decision: 'needs_info' }).success).toBe(false);
     expect(factoryTriageResultSchema.safeParse({ decision: 'too_big', parts: [] }).success).toBe(
       false,
-    );
+    ); // A tracking issue whose work is all in issues that exist: nothing new to open.
+    expect(factoryTriageResultSchema.parse({ decision: 'too_big', existing: [461, 462] })).toEqual({
+      decision: 'too_big',
+      parts: [],
+      existing: [461, 462],
+    });
   });
 
   test('an unknown decision is refused', () => {

@@ -1,15 +1,14 @@
-import { Code, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { useMemo } from 'react';
 
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 
 import { EVFLOW_ICONS } from '../../../src/generators/react-flow';
 import type { ElementKind } from '../../../src/types';
 import { useViewerStore } from '../stores/viewer-store';
+import { SelectedElementDetails } from './sidebar-selected-element';
 
 const ALL_KINDS: ElementKind[] = [
   'command',
@@ -251,149 +250,12 @@ export function Sidebar() {
 
       {/* Selected element details */}
       {selectedEl && (
-        <ScrollArea edgeFade className="flex-1">
-          <div className="p-2">
-            <div className="mb-1.5 flex items-center justify-between">
-              <span className="text-muted-foreground text-[10px] tracking-wider uppercase">
-                Selected
-              </span>
-              <Button
-                variant="ghost"
-                size="xs"
-                onClick={() => setSelectedNode(null)}
-                className="h-5 px-1 text-[10px]"
-                data-testid="viewer-selection-clear"
-              >
-                clear
-              </Button>
-            </div>
-            <div className="space-y-2">
-              <p className="text-sm font-medium">{selectedEl[0]}</p>
-              <Badge variant="outline" className="text-[10px]">
-                {selectedEl[1].kind}
-              </Badge>
-              {selectedEl[1].description && (
-                <p className="text-muted-foreground text-xs">{selectedEl[1].description}</p>
-              )}
-              {'fields' in selectedEl[1] && selectedEl[1].fields && (
-                <div>
-                  <span className="text-muted-foreground mb-1 block text-[10px] uppercase">
-                    Fields
-                  </span>
-                  {Object.entries(selectedEl[1].fields).map(([k, v]) => (
-                    <p key={k} className="text-muted-foreground text-xs">
-                      <span className="text-foreground">{k}</span>: {v}
-                    </p>
-                  ))}
-                </div>
-              )}
-              {'invariants' in selectedEl[1] && selectedEl[1].invariants?.length > 0 && (
-                <div>
-                  <span className="text-muted-foreground mb-1 block text-[10px] uppercase">
-                    Invariants
-                  </span>
-                  {selectedEl[1].invariants.map((inv, i) => (
-                    <p key={i} className="text-muted-foreground text-xs">
-                      - {inv}
-                    </p>
-                  ))}
-                </div>
-              )}
-              {'handles' in selectedEl[1] && (
-                <div>
-                  <span className="text-muted-foreground mb-1 block text-[10px] uppercase">
-                    Handles
-                  </span>
-                  {selectedEl[1].handles.map((h, i) => (
-                    <p key={i} className="text-muted-foreground text-xs">
-                      {h}
-                    </p>
-                  ))}
-                </div>
-              )}
-              {'emits' in selectedEl[1] && selectedEl[1].emits?.length > 0 && (
-                <div>
-                  <span className="text-muted-foreground mb-1 block text-[10px] uppercase">
-                    Emits
-                  </span>
-                  {selectedEl[1].emits.map((e, i) => (
-                    <p key={i} className="text-muted-foreground text-xs">
-                      {e}
-                    </p>
-                  ))}
-                </div>
-              )}
-              {'from' in selectedEl[1] && (
-                <div>
-                  <span className="text-muted-foreground mb-1 block text-[10px] uppercase">
-                    Projects from
-                  </span>
-                  {selectedEl[1].from.map((f, i) => (
-                    <p key={i} className="text-muted-foreground text-xs">
-                      {f}
-                    </p>
-                  ))}
-                </div>
-              )}
-              {'displays' in selectedEl[1] && (
-                <div>
-                  <span className="text-muted-foreground mb-1 block text-[10px] uppercase">
-                    Displays
-                  </span>
-                  {selectedEl[1].displays.map((d, i) => (
-                    <p key={i} className="text-muted-foreground text-xs">
-                      {d}
-                    </p>
-                  ))}
-                </div>
-              )}
-              {'triggers' in selectedEl[1] && (
-                <div>
-                  <span className="text-muted-foreground mb-1 block text-[10px] uppercase">
-                    Triggers
-                  </span>
-                  {(Array.isArray(selectedEl[1].triggers)
-                    ? selectedEl[1].triggers
-                    : [selectedEl[1].triggers]
-                  ).map((t: string, i: number) => (
-                    <p key={i} className="text-muted-foreground text-xs">
-                      {t}
-                    </p>
-                  ))}
-                </div>
-              )}
-              {'on' in selectedEl[1] && (
-                <div>
-                  <span className="text-muted-foreground mb-1 block text-[10px] uppercase">
-                    Listens to
-                  </span>
-                  {(Array.isArray(selectedEl[1].on) ? selectedEl[1].on : [selectedEl[1].on]).map(
-                    (o: string, i: number) => (
-                      <p key={i} className="text-muted-foreground text-xs">
-                        {o}
-                      </p>
-                    ),
-                  )}
-                </div>
-              )}
-              {selectedEl[1].source && (
-                <div>
-                  <Separator className="my-2" />
-                  <Button
-                    variant="outline"
-                    size="xs"
-                    onClick={() => fetchSource(selectedEl[1].source!)}
-                    className="w-full gap-1.5"
-                    data-testid="viewer-source-open"
-                  >
-                    <Code className="h-3 w-3" />
-                    <span className="truncate text-[10px]">{selectedEl[1].source.file}</span>
-                  </Button>
-                </div>
-              )}
-            </div>
-          </div>
-        </ScrollArea>
+        <SelectedElementDetails
+          name={selectedEl[0]}
+          el={selectedEl[1]}
+          onClear={() => setSelectedNode(null)}
+          onOpenSource={fetchSource}
+        />
       )}
     </div>
   );

@@ -14,6 +14,20 @@
 /** Plain JSON data: what a step's progress metadata carries to the UI. */
 type JsonValue = string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 
+/**
+ * Plain data a node hands the engine to keep or pass on: what it checkpoints
+ * in the journal, what a batch leader settles as a member's output. JSON
+ * values; a field may be left undefined.
+ */
+export type NodeData =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | NodeData[]
+  | { [key: string]: NodeData };
+
 /** Status of a pipeline step. */
 export type StepStatus = 'pending' | 'running' | 'completed' | 'failed' | 'skipped';
 
@@ -70,14 +84,14 @@ export const nullReporter: ProgressReporter = {
 export type OnErrorStrategy = 'fail' | 'retry' | 'skip';
 
 /** Per-step retry/error configuration. */
-export interface StepErrorConfig {
+export interface StepErrorConfig<T extends object = object> {
   /** What to do when this step fails. Default: 'fail'. */
   strategy: OnErrorStrategy;
   /** Max retries (only applies when strategy is 'retry'). Default: 3. */
   maxRetries?: number;
   /**
    * Optional recovery function that runs before each retry.
-   * Receives the error and can modify context before retry.
+   * Receives the error and the context, and resolves with the context to retry with.
    */
-  recover?: (error: string, ctx: unknown) => Promise<unknown>;
+  recover?: (error: string, ctx: T) => Promise<T>;
 }

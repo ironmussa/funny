@@ -42,11 +42,11 @@ function safeId(value: string): string {
   return value;
 }
 
-function isNumber(value: unknown): value is number {
+function isNumber(value: Row[string] | undefined): value is number {
   return typeof value === 'number';
 }
 
-function seconds(ms: unknown): string {
+function seconds(ms: Row[string] | undefined): string {
   return isNumber(ms) ? `${(ms / 1000).toFixed(1)}s` : '—';
 }
 

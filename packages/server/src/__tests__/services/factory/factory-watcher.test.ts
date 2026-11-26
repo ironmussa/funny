@@ -572,6 +572,36 @@ describe('factory watcher', () => {
     expect(launcher.calls).toHaveLength(0);
   });
 
+  // A run merged its pull request, and the next tick still lists the issue
+  // labelled and open (GitHub closes it a moment later): the label queued a
+  // second run that was then stopped, and the board showed the issue as done
+  // with no work on it.
+  test('does not re-queue an issue whose run already merged', async () => {
+    const factoryId = await enableFactory();
+    const runs = createFactoryRunsRepository();
+    const first = (
+      await runs.start({ factoryId, issueNumber: 7, threadIds: [], currentStep: 'merge' })
+    )._unsafeUnwrap();
+    await runs.updateInFlight(first.id, { state: 'merged' });
+
+    const poll = fakePoll();
+    const launcher = fakeLauncher();
+    await startWatcherWithProof({
+      ports,
+      github: fakeGithub('acme/repo', [{ number: 7, title: 'Fix it', url: 'u/7' }]),
+      createPoll: poll.createPoll,
+      launch: launcher.launch,
+      resolveRuntime,
+      waitThread: pendingThreads,
+    });
+
+    await poll.ticks[0]!();
+
+    expect(launcher.calls).toHaveLength(0);
+    const listed = (await runs.list(factoryId))._unsafeUnwrap();
+    expect(listed.map((run) => run.state)).toEqual(['merged']);
+  });
+
   test('admits at most maxConcurrent issues per tick', async () => {
     await enableFactory({ maxConcurrent: 1 });
     const poll = fakePoll();

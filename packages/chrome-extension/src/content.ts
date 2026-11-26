@@ -10,63 +10,37 @@
  * Uses Shadow DOM to isolate styles from the host page.
  */
 
+import { registerContentActions } from './content/actions';
+import { createElement, loadStyles, safeSendMessage } from './content/dom';
+import { clearDrawing, createDrawToolbar, toggleDrawMode } from './content/drawing';
+import { createHistoryPanel, hideHistoryPanel } from './content/history';
 import {
-  cssSelectorFull,
-  formatAccessibility,
-  formatStyles,
-  getFullPath,
-  getNearbyElements,
-  getNearbyText,
-} from '@funny/shared/dom/extract';
-import { DEFAULT_THREAD_MODE } from '@funny/shared/models';
-
-import { hasProjectDefaults, isPermissionError, type ProviderInfo, threadUrl } from './api';
-
-// ---------------------------------------------------------------------------
-// Interfaces
-// ---------------------------------------------------------------------------
-
-interface BoundingBox {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-interface ElementData {
-  element: string;
-  elementPath: string;
-  elementName: string;
-  x: number;
-  y: number;
-  boundingBox: BoundingBox;
-  componentTree: string;
-  cssClasses: string;
-  computedStyles: string;
-  accessibility: string;
-  nearbyText: string;
-  isFixed: boolean;
-  fullPath: string;
-  nearbyElements: string;
-  outerHTML: string;
-  domElement: Element; // private ref, not serialized
-}
-
-interface Annotation {
-  id: string;
-  prompt: string;
-  timestamp: number;
-  url: string;
-  selectedText: string;
-  status: string;
-  elements: ElementData[];
-}
-
-interface AnnotationOverlay {
-  hl: HTMLDivElement;
-  badge: HTMLDivElement;
-  element: Element;
-}
+  clearMultiSelect,
+  hideHoverHighlight,
+  onScrollOrResize,
+  renderAnnotations,
+  renderMultiSelectHighlights,
+  showHoverHighlight,
+} from './content/overlays';
+import {
+  createPopover,
+  hidePopover,
+  positionPopoverAtPoint,
+  showPopoverForEdit,
+  showPopoverForElement,
+  showPopoverForMultiSelect,
+} from './content/popover';
+import { copyScreenshotToClipboard, generateMarkdown, sendToFunny } from './content/send';
+import { createSettingsPanel, hideSettingsPanel } from './content/settings';
+import { st } from './content/state';
+import { clearTestIdLabels } from './content/testid-labels';
+import {
+  createToolbar,
+  loadToolbarProjectName,
+  toggleBrowseMode,
+  updateToolbarCount,
+  updateToolbarProjectName,
+} from './content/toolbar';
 
 // ---------------------------------------------------------------------------
 // Prevent double-injection
@@ -81,2392 +55,74 @@ window.__funnyAnnotatorActive = true;
 console.info('[Funny Annotator] v2.1 loaded', new Date().toISOString());
 
 // ---------------------------------------------------------------------------
-// State
-// ---------------------------------------------------------------------------
-let isActive = false;
-let annotations: Annotation[] = [];
-let hoveredElement: Element | null = null;
-let isPaused = false;
-let isBrowsing = false;
-let annotationsVisible = true;
-let isDragging = false;
-let dragOffset = { x: 0, y: 0 };
-let scrollRafId: number | null = null;
-let runtimeDisconnected = false;
-
-// Drawing mode state
-let isDrawing = false;
-let isDrawingStroke = false;
-let drawingCanvas: HTMLCanvasElement;
-let drawingCtx: CanvasRenderingContext2D;
-let hasDrawingContent = false;
-let drawColor = '#ef4444';
-let drawToolbar: HTMLDivElement;
-let drawPromptInput: HTMLTextAreaElement;
-const DRAW_COLORS = ['#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#ffffff'] as const;
-
-// Test ID label overlay state
-let testIdLabelsVisible = false;
-let testIdContainer: HTMLDivElement;
-let testIdObserver: MutationObserver | null = null;
-let testIdScrollHandler: (() => void) | null = null;
-
-// Multi-select state (Ctrl+click)
-let multiSelectElements: Element[] = [];
-let multiSelectOverlays: AnnotationOverlay[] = [];
-let pendingMultiSelectElements: Element[] | null = null;
-let multiSelectContainer: HTMLDivElement;
-
-// Cache for component name lookups (WeakMap so GC can collect removed elements)
-const componentNameCache = new WeakMap<Element, string>();
-
-/** An SVG element's `className` is an SVGAnimatedString, not a string. */
-function isString(value: unknown): value is string {
-  return typeof value === 'string';
-}
-const componentTreeCache = new WeakMap<Element, string>();
-
-// DOM refs (created once, reused)
-let shadowHost: HTMLDivElement;
-let shadowRoot: ShadowRoot;
-let toolbarEl: HTMLDivElement;
-let hoverHighlight: HTMLDivElement;
-let hoverLabel: HTMLDivElement;
-let popover: HTMLDivElement;
-let settingsPanel: HTMLDivElement;
-let historyPanel: HTMLDivElement;
-let badgeContainer: HTMLDivElement;
-let highlightContainer: HTMLDivElement;
-
-// Cached popover element refs (set after createPopover)
-let popoverTextarea: HTMLTextAreaElement;
-let popoverError: HTMLDivElement;
-let popoverElementName: HTMLSpanElement;
-let popoverElementList: HTMLDivElement;
-let popoverAddBtn: HTMLButtonElement;
-let popoverDeleteBtn: HTMLButtonElement;
-let popoverProjectName: HTMLSpanElement;
-let popoverSendBtn: HTMLButtonElement;
-
-// Drag listener refs (for cleanup)
-let dragMoveHandler: ((e: MouseEvent) => void) | null = null;
-let dragUpHandler: (() => void) | null = null;
-
-// ---------------------------------------------------------------------------
 // Shadow DOM setup
 // ---------------------------------------------------------------------------
 async function createShadowHost() {
-  shadowHost = document.createElement('div');
-  shadowHost.id = 'funny-annotator-host';
-  shadowHost.style.cssText =
+  st.shadowHost = document.createElement('div');
+  st.shadowHost.id = 'funny-annotator-host';
+  st.shadowHost.style.cssText =
     'all:initial; position:fixed; top:0; left:0; width:0; height:0; z-index:2147483647; pointer-events:none;';
-  document.documentElement.appendChild(shadowHost);
-  shadowRoot = shadowHost.attachShadow({ mode: 'open' });
+  document.documentElement.appendChild(st.shadowHost);
+  st.shadowRoot = st.shadowHost.attachShadow({ mode: 'open' });
 
   const style = document.createElement('style');
   style.textContent = await loadStyles();
-  shadowRoot.appendChild(style);
+  st.shadowRoot.appendChild(style);
 
   // Containers
-  highlightContainer = createElement('div', 'highlight-container');
-  badgeContainer = createElement('div', 'badge-container');
-  multiSelectContainer = createElement('div', 'multi-select-container');
-  shadowRoot.appendChild(highlightContainer);
-  shadowRoot.appendChild(badgeContainer);
-  shadowRoot.appendChild(multiSelectContainer);
+  st.highlightContainer = createElement('div', 'highlight-container');
+  st.badgeContainer = createElement('div', 'badge-container');
+  st.multiSelectContainer = createElement('div', 'multi-select-container');
+  st.shadowRoot.appendChild(st.highlightContainer);
+  st.shadowRoot.appendChild(st.badgeContainer);
+  st.shadowRoot.appendChild(st.multiSelectContainer);
 
   // Hover highlight
-  hoverHighlight = createElement('div', 'hover-highlight');
-  hoverLabel = createElement('div', 'hover-label');
-  hoverHighlight.appendChild(hoverLabel);
-  shadowRoot.appendChild(hoverHighlight);
+  st.hoverHighlight = createElement('div', 'hover-highlight');
+  st.hoverLabel = createElement('div', 'hover-label');
+  st.hoverHighlight.appendChild(st.hoverLabel);
+  st.shadowRoot.appendChild(st.hoverHighlight);
 
   // Popover (hidden by default)
-  popover = createPopover();
-  shadowRoot.appendChild(popover);
+  st.popover = createPopover();
+  st.shadowRoot.appendChild(st.popover);
 
   // Settings panel (hidden by default, positioned above toolbar)
-  settingsPanel = createSettingsPanel();
-  shadowRoot.appendChild(settingsPanel);
+  st.settingsPanel = createSettingsPanel();
+  st.shadowRoot.appendChild(st.settingsPanel);
 
   // History panel (hidden by default)
-  historyPanel = createHistoryPanel();
-  shadowRoot.appendChild(historyPanel);
+  st.historyPanel = createHistoryPanel();
+  st.shadowRoot.appendChild(st.historyPanel);
 
   // Test ID labels container
-  testIdContainer = createElement('div', 'testid-container');
-  shadowRoot.appendChild(testIdContainer);
+  st.testIdContainer = createElement('div', 'testid-container');
+  st.shadowRoot.appendChild(st.testIdContainer);
 
   // Drawing canvas (full-screen, hidden by default)
-  drawingCanvas = document.createElement('canvas');
-  drawingCanvas.className = 'drawing-canvas';
-  drawingCanvas.style.display = 'none';
-  shadowRoot.appendChild(drawingCanvas);
-  drawingCtx = drawingCanvas.getContext('2d')!;
+  st.drawingCanvas = document.createElement('canvas');
+  st.drawingCanvas.className = 'drawing-canvas';
+  st.drawingCanvas.style.display = 'none';
+  st.shadowRoot.appendChild(st.drawingCanvas);
+  st.drawingCtx = st.drawingCanvas.getContext('2d')!;
 
   // Drawing toolbar (color picker + prompt + clear)
-  drawToolbar = createDrawToolbar();
-  shadowRoot.appendChild(drawToolbar);
+  st.drawToolbar = createDrawToolbar();
+  st.shadowRoot.appendChild(st.drawToolbar);
 
   // Toolbar
-  toolbarEl = createToolbar();
-  shadowRoot.appendChild(toolbarEl);
-}
-
-function createElement<K extends keyof HTMLElementTagNameMap>(
-  tag: K,
-  className?: string,
-): HTMLElementTagNameMap[K] {
-  const el = document.createElement(tag);
-  if (className) el.className = className;
-  return el;
-}
-
-// ---------------------------------------------------------------------------
-// Element info extraction
-// ---------------------------------------------------------------------------
-function getElementName(el: Element): string {
-  // Try framework component name first (React, Vue, Angular, Svelte)
-  const compName = getComponentName(el);
-  if (compName) return compName;
-
-  // Fallback: tag + class or id
-  const tag = el.tagName.toLowerCase();
-  if (el.id) return `${tag}#${el.id}`;
-  if (el.className && isString(el.className)) {
-    const cls = el.className
-      .split(/\s+/)
-      .filter((c) => c && !c.startsWith('funny-'))
-      .slice(0, 2)
-      .join('.');
-    if (cls) return `${tag}.${cls}`;
-  }
-  // Aria / role
-  const role = el.getAttribute('role');
-  if (role) return `${tag}[role="${role}"]`;
-  // Use text content for small elements
-  const text = el.textContent?.trim();
-  if (text && text.length < 30 && text.length > 0) return `${tag} "${text.slice(0, 20)}"`;
-  return tag;
-}
-
-// Framework component access via page-bridge.js (MAIN world).
-// Content scripts can't see framework internals directly (isolated world).
-// We communicate with page-bridge.js via CustomEvents + DOM attributes.
-// Results are cached per-element in WeakMaps to avoid repeated DOM events.
-
-function queryComponentInfo(el: Element) {
-  // Single bridge call that populates both caches
-  if (componentNameCache.has(el)) return;
-  try {
-    const uid = '__funny_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
-    el.setAttribute(uid, '');
-    document.documentElement.setAttribute('data-funny-target', uid);
-    document.dispatchEvent(new Event('__funny_get_component_info'));
-    componentNameCache.set(el, el.getAttribute('data-funny-component') || '');
-    componentTreeCache.set(el, el.getAttribute('data-funny-tree') || '');
-    el.removeAttribute(uid);
-    el.removeAttribute('data-funny-component');
-    el.removeAttribute('data-funny-tree');
-    document.documentElement.removeAttribute('data-funny-target');
-  } catch {
-    componentNameCache.set(el, '');
-    componentTreeCache.set(el, '');
-  }
-}
-
-function getComponentName(el: Element): string | null {
-  queryComponentInfo(el);
-  return componentNameCache.get(el) || null;
-}
-
-function getComponentTree(el: Element): string {
-  queryComponentInfo(el);
-  return componentTreeCache.get(el) || '';
-}
-
-// CSS selector, computed-style + accessibility formatters, nearby-text / path
-// helpers live in `@funny/shared/dom/extract` — single source of truth shared
-// with the in-app browser panel. See top-of-file imports.
-
-// ---------------------------------------------------------------------------
-// Hover highlight
-// ---------------------------------------------------------------------------
-function showHoverHighlight(el: Element) {
-  if (!el || el === hoveredElement) return;
-  hoveredElement = el;
-  const rect = el.getBoundingClientRect();
-  hoverHighlight.style.cssText = `
-    position: fixed;
-    top: ${rect.top}px;
-    left: ${rect.left}px;
-    width: ${rect.width}px;
-    height: ${rect.height}px;
-    display: block;
-    pointer-events: none;
-  `;
-  hoverLabel.textContent = getElementName(el);
-}
-
-function hideHoverHighlight() {
-  hoveredElement = null;
-  hoverHighlight.style.display = 'none';
-}
-
-// ---------------------------------------------------------------------------
-// Annotation highlights + badges (persistent, for annotated elements)
-// ---------------------------------------------------------------------------
-
-// Stored DOM refs for annotation overlays (avoid recreating on scroll)
-let annotationOverlays: AnnotationOverlay[] = [];
-
-function renderAnnotations() {
-  // Full rebuild: clears and recreates all overlays.
-  // Called when annotations array changes (add/edit/delete/toggle visibility).
-  annotationOverlays = [];
-  highlightContainer.innerHTML = '';
-  badgeContainer.innerHTML = '';
-
-  if (!annotationsVisible) return;
-
-  annotations.forEach((ann, i) => {
-    // Each annotation can have one or more elements
-    for (const elemData of ann.elements) {
-      const el = elemData.domElement;
-      if (!el || !document.contains(el)) continue;
-      const rect = el.getBoundingClientRect();
-
-      // Persistent highlight (green dashed border)
-      const hl = createElement('div', 'annotation-highlight');
-      hl.style.cssText = `
-        position: fixed;
-        top: ${rect.top}px;
-        left: ${rect.left}px;
-        width: ${rect.width}px;
-        height: ${rect.height}px;
-        pointer-events: none;
-      `;
-      highlightContainer.appendChild(hl);
-
-      // Badge (same number for all elements in the group)
-      const badge = createElement('div', 'annotation-badge');
-      badge.textContent = String(i + 1);
-      badge.style.cssText = `
-        position: fixed;
-        top: ${rect.top - 10}px;
-        left: ${rect.right - 10}px;
-        pointer-events: auto;
-        cursor: pointer;
-      `;
-      badge.addEventListener('click', (e) => {
-        e.stopPropagation();
-        showPopoverForEdit(ann, i, e.clientX, e.clientY);
-      });
-      badgeContainer.appendChild(badge);
-
-      annotationOverlays.push({ hl, badge, element: el });
-    }
-  });
-}
-
-function repositionAnnotations() {
-  // Fast path: move existing overlay DOM nodes without rebuilding.
-  for (const { hl, badge, element } of annotationOverlays) {
-    if (!document.contains(element)) continue;
-    const rect = element.getBoundingClientRect();
-    hl.style.top = `${rect.top}px`;
-    hl.style.left = `${rect.left}px`;
-    hl.style.width = `${rect.width}px`;
-    hl.style.height = `${rect.height}px`;
-    badge.style.top = `${rect.top - 10}px`;
-    badge.style.left = `${rect.right - 10}px`;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Multi-select highlights (Ctrl+click pending selection)
-// ---------------------------------------------------------------------------
-function renderMultiSelectHighlights() {
-  multiSelectOverlays = [];
-  multiSelectContainer.innerHTML = '';
-
-  multiSelectElements.forEach((el, i) => {
-    if (!document.contains(el)) return;
-    const rect = el.getBoundingClientRect();
-
-    const hl = createElement('div', 'multi-select-highlight');
-    hl.style.cssText = `
-      position: fixed;
-      top: ${rect.top}px;
-      left: ${rect.left}px;
-      width: ${rect.width}px;
-      height: ${rect.height}px;
-      pointer-events: none;
-    `;
-    multiSelectContainer.appendChild(hl);
-
-    const badge = createElement('div', 'multi-select-badge');
-    badge.textContent = String(i + 1);
-    badge.style.cssText = `
-      position: fixed;
-      top: ${rect.top - 10}px;
-      left: ${rect.right - 10}px;
-      pointer-events: none;
-    `;
-    multiSelectContainer.appendChild(badge);
-
-    multiSelectOverlays.push({ hl, badge, element: el });
-  });
-}
-
-function repositionMultiSelectHighlights() {
-  for (const { hl, badge, element } of multiSelectOverlays) {
-    if (!document.contains(element)) continue;
-    const rect = element.getBoundingClientRect();
-    hl.style.top = `${rect.top}px`;
-    hl.style.left = `${rect.left}px`;
-    hl.style.width = `${rect.width}px`;
-    hl.style.height = `${rect.height}px`;
-    badge.style.top = `${rect.top - 10}px`;
-    badge.style.left = `${rect.right - 10}px`;
-  }
-}
-
-function clearMultiSelect() {
-  multiSelectElements = [];
-  multiSelectOverlays = [];
-  pendingMultiSelectElements = null;
-  multiSelectContainer.innerHTML = '';
-}
-
-// Reposition on scroll/resize (throttled via rAF)
-function onScrollOrResize() {
-  if (!isActive) return;
-  if (scrollRafId) return; // already scheduled
-  scrollRafId = requestAnimationFrame(() => {
-    scrollRafId = null;
-    // Move existing overlays (no DOM rebuild)
-    repositionAnnotations();
-    repositionMultiSelectHighlights();
-    // Update hover highlight position
-    if (hoveredElement && document.contains(hoveredElement)) {
-      const rect = hoveredElement.getBoundingClientRect();
-      hoverHighlight.style.top = `${rect.top}px`;
-      hoverHighlight.style.left = `${rect.left}px`;
-      hoverHighlight.style.width = `${rect.width}px`;
-      hoverHighlight.style.height = `${rect.height}px`;
-    }
-    // Update popover position
-    if (
-      popover.style.display !== 'none' &&
-      pendingAnnotationElement &&
-      document.contains(pendingAnnotationElement)
-    ) {
-      const r = pendingAnnotationElement.getBoundingClientRect();
-      positionPopoverAtPoint(r.left, r.top);
-    }
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Popover (annotation form)
-// ---------------------------------------------------------------------------
-
-function resetDetailsCollapsed() {
-  const body = popover.querySelector<HTMLDivElement>('.popover-details-body');
-  const arrow = popover.querySelector<SVGElement>('.popover-details-arrow');
-  if (body) body.style.display = 'none';
-  if (arrow) arrow.classList.remove('popover-details-arrow-open');
-}
-
-function loadPopoverProjectName() {
-  safeSendMessage({ type: 'GET_CONFIG' }, (config: any) => {
-    const currentUrl = window.location.href;
-
-    // Ask the server to resolve the project by URL
-    safeSendMessage({ type: 'RESOLVE_PROJECT', url: currentUrl }, (result: any) => {
-      if (result?.success && result.project && result.source === 'url_match') {
-        // Auto-select the matched project if it differs from current config
-        if (config?.projectId !== result.project.id) {
-          safeSendMessage({
-            type: 'SAVE_CONFIG',
-            config: { ...config, projectId: result.project.id },
-          });
-        }
-        popoverProjectName.textContent = result.project.name;
-        popoverProjectName.classList.remove('popover-project-empty');
-        return;
-      }
-
-      // No URL match — fall back to the user's manually-selected project
-      if (!config?.projectId) {
-        popoverProjectName.textContent = 'No project';
-        popoverProjectName.classList.add('popover-project-empty');
-        return;
-      }
-
-      // Fetch projects to resolve the name of the configured project
-      safeSendMessage({ type: 'FETCH_PROJECTS' }, (projResult: any) => {
-        if (!projResult?.success || !projResult.projects) {
-          popoverProjectName.textContent = 'No project';
-          popoverProjectName.classList.add('popover-project-empty');
-          return;
-        }
-        const project = projResult.projects.find((p: any) => p.id === config.projectId);
-        popoverProjectName.textContent = project?.name || 'No project';
-        popoverProjectName.classList.toggle('popover-project-empty', !project);
-      });
-    });
-  });
-}
-
-function createPopover(): HTMLDivElement {
-  const pop = createElement('div', 'popover');
-  pop.style.display = 'none';
-  pop.innerHTML = `
-    <button class="popover-close-btn" title="Close">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
-        <line x1="18" y1="6" x2="6" y2="18"></line>
-        <line x1="6" y1="6" x2="18" y2="18"></line>
-      </svg>
-    </button>
-    <div class="popover-project">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-      </svg>
-      <span class="popover-project-name">Loading...</span>
-    </div>
-    <div class="popover-header">
-      <button class="popover-element-toggle">
-        <span class="popover-element-name"></span>
-        <svg class="popover-details-arrow" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-          <polyline points="9 18 15 12 9 6"></polyline>
-        </svg>
-      </button>
-      <div class="popover-details-body" style="display:none">
-        <div class="popover-detail-row"><span class="popover-detail-label">Selector</span><code class="popover-detail-value popover-detail-selector"></code></div>
-        <div class="popover-detail-row"><span class="popover-detail-label">Classes</span><code class="popover-detail-value popover-detail-classes"></code></div>
-        <div class="popover-detail-row popover-detail-component-row" style="display:none"><span class="popover-detail-label">Component</span><code class="popover-detail-value popover-detail-component"></code></div>
-        <div class="popover-detail-section">
-          <span class="popover-detail-label">Styles</span>
-          <div class="popover-detail-styles"></div>
-        </div>
-        <div class="popover-detail-row popover-detail-a11y-row" style="display:none"><span class="popover-detail-label">Accessibility</span><span class="popover-detail-value popover-detail-a11y"></span></div>
-      </div>
-    </div>
-    <div class="popover-element-list" style="display:none"></div>
-    <textarea class="popover-textarea" placeholder="What should be done with this element?" rows="3"></textarea>
-    <div class="popover-error" style="display:none">Please describe the action needed.</div>
-    <div class="popover-actions">
-      <button class="popover-delete" style="display:none">Delete</button>
-      <div class="popover-actions-right">
-        <button class="popover-add">Add</button>
-        <button class="popover-send-btn">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="22" y1="2" x2="11" y2="13"></line>
-            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-          </svg>
-          Send
-        </button>
-        <button class="popover-cancel">Cancel</button>
-      </div>
-    </div>
-  `;
-
-  // Cache element refs
-  popoverTextarea = pop.querySelector<HTMLTextAreaElement>('.popover-textarea')!;
-  popoverError = pop.querySelector<HTMLDivElement>('.popover-error')!;
-  popoverElementName = pop.querySelector<HTMLSpanElement>('.popover-element-name')!;
-  popoverElementList = pop.querySelector<HTMLDivElement>('.popover-element-list')!;
-  popoverAddBtn = pop.querySelector<HTMLButtonElement>('.popover-add')!;
-  popoverDeleteBtn = pop.querySelector<HTMLButtonElement>('.popover-delete')!;
-  popoverProjectName = pop.querySelector<HTMLSpanElement>('.popover-project-name')!;
-  popoverSendBtn = pop.querySelector<HTMLButtonElement>('.popover-send-btn')!;
-
-  // Send to Funny from popover
-  popoverSendBtn.addEventListener('click', () => {
-    // First add the current annotation, then send all
-    addAnnotationFromPopover();
-    if (annotations.length > 0) {
-      sendToFunny();
-    }
-  });
-
-  // Element name toggles details
-  const elementToggle = pop.querySelector<HTMLButtonElement>('.popover-element-toggle')!;
-  const detailsBody = pop.querySelector<HTMLDivElement>('.popover-details-body')!;
-  const detailsArrow = pop.querySelector<SVGElement>('.popover-details-arrow')!;
-  elementToggle.addEventListener('click', () => {
-    const open = detailsBody.style.display !== 'none';
-    detailsBody.style.display = open ? 'none' : 'block';
-    detailsArrow.classList.toggle('popover-details-arrow-open', !open);
-  });
-
-  // Events
-  pop.querySelector('.popover-cancel')!.addEventListener('click', () => hidePopover());
-  pop.querySelector('.popover-close-btn')!.addEventListener('click', () => hidePopover());
-  popoverAddBtn.addEventListener('click', () => addAnnotationFromPopover());
-  popoverDeleteBtn.addEventListener('click', () => deleteAnnotationFromPopover());
-
-  // Clear validation error on input
-  popoverTextarea.addEventListener('input', () => {
-    if (popoverTextarea.value.trim()) {
-      popoverTextarea.classList.remove('popover-textarea-error');
-      popoverError.style.display = 'none';
-    }
-  });
-
-  // Enter to submit
-  popoverTextarea.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault();
-      addAnnotationFromPopover();
-    }
-  });
-
-  return pop;
-}
-
-let pendingAnnotationElement: Element | null = null;
-let editingAnnotationIndex = -1;
-
-function populateElementDetails(el: Element) {
-  const tag = el.tagName.toLowerCase();
-  const classes = (isString(el.className) ? el.className : '').trim();
-  const component = getComponentTree(el);
-  const a11y = formatAccessibility(el);
-
-  // Selector
-  popover.querySelector<HTMLElement>('.popover-detail-selector')!.textContent =
-    tag + (el.id ? `#${el.id}` : '');
-
-  // Classes
-  const classesEl = popover.querySelector<HTMLElement>('.popover-detail-classes')!;
-  classesEl.textContent = classes || 'none';
-
-  // Component tree (only show if detected)
-  const compRow = popover.querySelector<HTMLDivElement>('.popover-detail-component-row')!;
-  if (component) {
-    compRow.style.display = '';
-    popover.querySelector<HTMLElement>('.popover-detail-component')!.textContent = component;
-  } else {
-    compRow.style.display = 'none';
-  }
-
-  // Computed styles as individual rows
-  const stylesContainer = popover.querySelector<HTMLDivElement>('.popover-detail-styles')!;
-  stylesContainer.innerHTML = '';
-  const cs = window.getComputedStyle(el);
-  const styleGroups = [
-    {
-      label: 'Layout',
-      props: [
-        'display',
-        'position',
-        'width',
-        'height',
-        'flex-direction',
-        'justify-content',
-        'align-items',
-        'gap',
-      ],
-    },
-    { label: 'Spacing', props: ['margin', 'padding'] },
-    {
-      label: 'Typography',
-      props: ['font-family', 'font-size', 'font-weight', 'line-height', 'color'],
-    },
-    {
-      label: 'Visual',
-      props: ['background-color', 'border', 'border-radius', 'opacity', 'overflow'],
-    },
-  ];
-  const skip = new Set(['none', 'normal', 'auto', '0px', 'rgba(0, 0, 0, 0)', 'visible', 'static']);
-  for (const group of styleGroups) {
-    const entries: { prop: string; value: string }[] = [];
-    for (const p of group.props) {
-      const v = cs.getPropertyValue(p);
-      if (!v || skip.has(v)) continue;
-      entries.push({ prop: p, value: v });
-    }
-    if (entries.length === 0) continue;
-    const groupEl = document.createElement('div');
-    groupEl.className = 'popover-style-group';
-    groupEl.innerHTML = `<span class="popover-style-group-label">${group.label}</span>`;
-    for (const { prop, value } of entries) {
-      const row = document.createElement('div');
-      row.className = 'popover-style-row';
-      row.innerHTML = `<span class="popover-style-prop">${prop}</span><span class="popover-style-val">${value}</span>`;
-      groupEl.appendChild(row);
-    }
-    stylesContainer.appendChild(groupEl);
-  }
-
-  // Accessibility (only show if meaningful)
-  const a11yRow = popover.querySelector<HTMLDivElement>('.popover-detail-a11y-row')!;
-  if (a11y && a11y !== 'none') {
-    a11yRow.style.display = '';
-    popover.querySelector<HTMLElement>('.popover-detail-a11y')!.textContent = a11y;
-  } else {
-    a11yRow.style.display = 'none';
-  }
-}
-
-function showPopoverForElement(el: Element, clickX: number, clickY: number) {
-  pendingAnnotationElement = el;
-  editingAnnotationIndex = -1;
-  pendingMultiSelectElements = null;
-
-  popoverElementName.textContent = getElementName(el);
-  popoverElementList.style.display = 'none';
-  popoverElementList.innerHTML = '';
-  popoverTextarea.value = '';
-  popoverTextarea.placeholder = 'What should be done with this element?';
-  popoverTextarea.classList.remove('popover-textarea-error');
-  popoverError.style.display = 'none';
-  popoverAddBtn.textContent = 'Add';
-  popoverDeleteBtn.style.display = 'none';
-  resetDetailsCollapsed();
-  const header = popover.querySelector<HTMLDivElement>('.popover-header');
-  if (header) header.style.display = '';
-  populateElementDetails(el);
-
-  loadPopoverProjectName();
-  positionPopoverAtPoint(clickX, clickY);
-  popover.style.display = 'block';
-  popoverTextarea.focus();
-}
-
-function showPopoverForEdit(ann: Annotation, index: number, clickX: number, clickY: number) {
-  editingAnnotationIndex = index;
-  popoverTextarea.value = ann.prompt;
-  popoverTextarea.classList.remove('popover-textarea-error');
-  popoverError.style.display = 'none';
-  popoverAddBtn.textContent = 'Update';
-  popoverDeleteBtn.style.display = 'inline-block';
-
-  if (ann.elements.length > 1) {
-    // Multi-element annotation: show chips, hide details
-    pendingAnnotationElement = null;
-    pendingMultiSelectElements = ann.elements.map((e) => e.domElement);
-    popoverElementName.textContent = `${ann.elements.length} elements selected`;
-    popoverTextarea.placeholder = 'What should be done with these elements?';
-    popoverElementList.innerHTML = '';
-    popoverElementList.style.display = 'flex';
-    ann.elements.forEach((elemData) => {
-      const chip = createElement('span', 'popover-element-chip');
-      const nameSpan = document.createElement('span');
-      nameSpan.textContent = elemData.elementName;
-      nameSpan.style.cssText = 'overflow:hidden;text-overflow:ellipsis;';
-      chip.appendChild(nameSpan);
-      popoverElementList.appendChild(chip);
-    });
-    const header = popover.querySelector<HTMLDivElement>('.popover-header');
-    if (header) header.style.display = 'none';
-  } else {
-    // Single-element annotation
-    const elemData = ann.elements[0];
-    pendingAnnotationElement = elemData.domElement;
-    pendingMultiSelectElements = null;
-    popoverElementName.textContent = elemData.elementName;
-    popoverTextarea.placeholder = 'What should be done with this element?';
-    popoverElementList.style.display = 'none';
-    popoverElementList.innerHTML = '';
-    resetDetailsCollapsed();
-    const header = popover.querySelector<HTMLDivElement>('.popover-header');
-    if (header) header.style.display = '';
-    populateElementDetails(elemData.domElement);
-  }
-
-  loadPopoverProjectName();
-  positionPopoverAtPoint(clickX, clickY);
-  popover.style.display = 'block';
-  popoverTextarea.focus();
-}
-
-function showPopoverForMultiSelect(clickX: number, clickY: number) {
-  pendingAnnotationElement = null;
-  editingAnnotationIndex = -1;
-  pendingMultiSelectElements = [...multiSelectElements];
-
-  // Header shows count
-  popoverElementName.textContent = `${pendingMultiSelectElements.length} elements selected`;
-
-  // Populate chip list
-  popoverElementList.innerHTML = '';
-  popoverElementList.style.display = 'flex';
-  pendingMultiSelectElements.forEach((el, i) => {
-    const chip = createElement('span', 'popover-element-chip');
-    const nameSpan = document.createElement('span');
-    nameSpan.textContent = getElementName(el);
-    nameSpan.style.cssText = 'overflow:hidden;text-overflow:ellipsis;';
-    chip.appendChild(nameSpan);
-
-    const removeBtn = createElement('button', 'popover-chip-remove');
-    removeBtn.innerHTML = '&times;';
-    removeBtn.title = 'Remove';
-    removeBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      removeFromMultiSelect(i);
-    });
-    chip.appendChild(removeBtn);
-    popoverElementList.appendChild(chip);
-  });
-
-  popoverTextarea.value = '';
-  popoverTextarea.placeholder = 'What should be done with these elements?';
-  popoverTextarea.classList.remove('popover-textarea-error');
-  popoverError.style.display = 'none';
-  popoverAddBtn.textContent = 'Add';
-  popoverDeleteBtn.style.display = 'none';
-
-  // Hide element header (not useful for multi-select, chips are shown instead)
-  const header = popover.querySelector<HTMLDivElement>('.popover-header');
-  if (header) header.style.display = 'none';
-
-  loadPopoverProjectName();
-  positionPopoverAtPoint(clickX, clickY);
-  popover.style.display = 'block';
-  popoverTextarea.focus();
-}
-
-function removeFromMultiSelect(index: number) {
-  if (!pendingMultiSelectElements) return;
-
-  // Remove from pending list
-  pendingMultiSelectElements.splice(index, 1);
-
-  // Also remove from the live multi-select array
-  multiSelectElements = [...pendingMultiSelectElements];
-  renderMultiSelectHighlights();
-
-  if (pendingMultiSelectElements.length === 0) {
-    // No elements left, close popover
-    hidePopover();
-    return;
-  }
-
-  // Re-render chips
-  popoverElementName.textContent = `${pendingMultiSelectElements.length} elements selected`;
-  popoverElementList.innerHTML = '';
-  pendingMultiSelectElements.forEach((el, i) => {
-    const chip = createElement('span', 'popover-element-chip');
-    const nameSpan = document.createElement('span');
-    nameSpan.textContent = getElementName(el);
-    nameSpan.style.cssText = 'overflow:hidden;text-overflow:ellipsis;';
-    chip.appendChild(nameSpan);
-
-    const removeBtn = createElement('button', 'popover-chip-remove');
-    removeBtn.innerHTML = '&times;';
-    removeBtn.title = 'Remove';
-    removeBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      removeFromMultiSelect(i);
-    });
-    chip.appendChild(removeBtn);
-    popoverElementList.appendChild(chip);
-  });
-}
-
-function positionPopoverAtPoint(x: number, y: number) {
-  const pw = 320;
-  const ph = 260;
-  // Position below and to the right of the click point
-  let top = y + 12;
-  let left = x + 12;
-
-  // If it overflows bottom, place above the click
-  if (top + ph > window.innerHeight) top = y - ph - 12;
-  // If it overflows right, place to the left of the click
-  if (left + pw > window.innerWidth) left = x - pw - 12;
-  if (left < 8) left = 8;
-  if (top < 8) top = 8;
-
-  popover.style.top = `${top}px`;
-  popover.style.left = `${left}px`;
-}
-
-function hidePopover() {
-  popover.style.display = 'none';
-  pendingAnnotationElement = null;
-  editingAnnotationIndex = -1;
-  pendingMultiSelectElements = null;
-  hideHoverHighlight();
-  // Clear multi-select visuals if popover is dismissed
-  if (multiSelectElements.length > 0) {
-    clearMultiSelect();
-  }
-}
-
-function buildElementData(el: Element): ElementData {
-  const rect = el.getBoundingClientRect();
-  return {
-    element: el.tagName.toLowerCase(),
-    elementPath: cssSelectorFull(el, { excludeClassPrefix: 'funny-' }),
-    elementName: getElementName(el),
-    x: Math.round(((rect.left + rect.width / 2) / window.innerWidth) * 100 * 10) / 10,
-    y: Math.round(rect.top + window.scrollY),
-    boundingBox: {
-      x: Math.round(rect.x),
-      y: Math.round(rect.y),
-      width: Math.round(rect.width),
-      height: Math.round(rect.height),
-    },
-    componentTree: getComponentTree(el),
-    cssClasses: (isString(el.className) ? el.className : '').trim(),
-    computedStyles: formatStyles(el),
-    accessibility: formatAccessibility(el),
-    nearbyText: getNearbyText(el),
-    isFixed: ['fixed', 'sticky'].includes(window.getComputedStyle(el).position),
-    fullPath: getFullPath(el),
-    nearbyElements: getNearbyElements(el),
-    outerHTML: el.outerHTML.slice(0, 2000),
-    domElement: el,
-  };
-}
-
-function buildAnnotation(prompt: string, elements: Element[]): Annotation {
-  return {
-    id: `ann_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-    prompt,
-    timestamp: Date.now(),
-    url: window.location.href,
-    selectedText: window.getSelection()?.toString()?.trim() || '',
-    status: 'pending',
-    elements: elements.map(buildElementData),
-  };
-}
-
-function addAnnotationFromPopover() {
-  const prompt = popoverTextarea.value.trim();
-
-  // Validate: prompt is required
-  if (!prompt) {
-    popoverTextarea.classList.add('popover-textarea-error');
-    popoverError.style.display = 'block';
-    popoverTextarea.focus();
-    return;
-  }
-
-  // Editing an existing annotation (single or multi-element)
-  if (editingAnnotationIndex >= 0) {
-    const existing = annotations[editingAnnotationIndex];
-    const elements = existing.elements.map((e) => e.domElement);
-    annotations[editingAnnotationIndex] = buildAnnotation(prompt, elements);
-  } else if (pendingMultiSelectElements && pendingMultiSelectElements.length > 0) {
-    // New multi-select annotation
-    annotations.push(buildAnnotation(prompt, pendingMultiSelectElements));
-    clearMultiSelect();
-  } else {
-    // New single-element annotation
-    const el = pendingAnnotationElement;
-    if (!el) return;
-    annotations.push(buildAnnotation(prompt, [el]));
-  }
-
-  hidePopover();
-  renderAnnotations();
-  updateToolbarCount();
-}
-
-function deleteAnnotationFromPopover() {
-  if (editingAnnotationIndex >= 0) {
-    annotations.splice(editingAnnotationIndex, 1);
-  }
-  hidePopover();
-  renderAnnotations();
-  updateToolbarCount();
-}
-
-// ---------------------------------------------------------------------------
-// Toolbar
-// ---------------------------------------------------------------------------
-function createToolbar(): HTMLDivElement {
-  const tb = createElement('div', 'toolbar');
-  tb.innerHTML = `
-    <div class="toolbar-drag-handle" title="Drag to move">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="8" cy="4" r="1.5"></circle>
-        <circle cx="16" cy="4" r="1.5"></circle>
-        <circle cx="8" cy="12" r="1.5"></circle>
-        <circle cx="16" cy="12" r="1.5"></circle>
-        <circle cx="8" cy="20" r="1.5"></circle>
-        <circle cx="16" cy="20" r="1.5"></circle>
-      </svg>
-    </div>
-    <button class="toolbar-btn" data-action="pause" title="Pause animations">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="10"></circle>
-        <rect x="9" y="8" width="2" height="8" fill="currentColor" stroke="none"></rect>
-        <rect x="13" y="8" width="2" height="8" fill="currentColor" stroke="none"></rect>
-      </svg>
-    </button>
-    <button class="toolbar-btn" data-action="browse" title="Browse mode — navigate the page">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M5 12h14"></path>
-        <path d="M12 5l7 7-7 7"></path>
-      </svg>
-    </button>
-    <button class="toolbar-btn" data-action="draw" title="Draw on screen">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M12 19l7-7 3 3-7 7-3-3z"></path>
-        <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"></path>
-        <path d="M2 2l7.586 7.586"></path>
-        <circle cx="11" cy="11" r="2"></circle>
-      </svg>
-    </button>
-    <button class="toolbar-btn" data-action="toggle-visibility" title="Toggle annotations">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-        <circle cx="12" cy="12" r="3"></circle>
-      </svg>
-    </button>
-    <button class="toolbar-btn" data-action="show-testids" title="Show data-testid labels">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M4 7V4h16v3"></path>
-        <path d="M9 20h6"></path>
-        <path d="M12 4v16"></path>
-      </svg>
-    </button>
-    <button class="toolbar-btn" data-action="copy" title="Copy as markdown">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-      </svg>
-    </button>
-    <button class="toolbar-btn" data-action="copy-screenshot" title="Copy screenshot to clipboard">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
-        <circle cx="12" cy="13" r="4"></circle>
-      </svg>
-    </button>
-    <button class="toolbar-btn" data-action="clear" title="Clear all annotations">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <polyline points="3 6 5 6 21 6"></polyline>
-        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-      </svg>
-    </button>
-    <button class="toolbar-btn" data-action="settings" title="Settings">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="3"></circle>
-        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-      </svg>
-    </button>
-    <button class="toolbar-btn" data-action="history" title="Sent history">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="10"></circle>
-        <polyline points="12 6 12 12 16 14"></polyline>
-      </svg>
-    </button>
-    <div class="toolbar-separator"></div>
-    <button class="toolbar-btn toolbar-btn-send" data-action="send" title="Send to Funny">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <line x1="22" y1="2" x2="11" y2="13"></line>
-        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-      </svg>
-      <span class="toolbar-send-label">Send</span>
-      <span class="toolbar-count" style="display:none">0</span>
-    </button>
-    <button class="toolbar-btn" data-action="close" title="Close annotator">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <line x1="18" y1="6" x2="6" y2="18"></line>
-        <line x1="6" y1="6" x2="18" y2="18"></line>
-      </svg>
-    </button>
-  `;
-
-  tb.addEventListener('click', (e) => {
-    if (!(e.target instanceof Element)) return;
-    const btn = e.target.closest<HTMLElement>('[data-action]');
-    if (!btn) return;
-    e.stopPropagation();
-    handleToolbarAction(btn.dataset.action!);
-  });
-
-  // Drag to reposition (only from the drag handle)
-  const dragHandle = tb.querySelector<HTMLDivElement>('.toolbar-drag-handle')!;
-  dragHandle.addEventListener('mousedown', (e) => {
-    e.preventDefault();
-    isDragging = true;
-    const rect = tb.getBoundingClientRect();
-    dragOffset.x = e.clientX - rect.left;
-    dragOffset.y = e.clientY - rect.top;
-    tb.classList.add('toolbar-dragging');
-    // Close panels so they don't detach visually
-    hideSettingsPanel();
-    hidePopover();
-  });
-
-  // Named handlers so they can be removed on deactivate
-  dragMoveHandler = (e: MouseEvent) => {
-    if (!isDragging) return;
-    const x = e.clientX - dragOffset.x;
-    const y = e.clientY - dragOffset.y;
-    tb.style.left = `${x}px`;
-    tb.style.top = `${y}px`;
-    tb.style.bottom = 'auto';
-    tb.style.transform = 'none';
-  };
-  dragUpHandler = () => {
-    if (!isDragging) return;
-    isDragging = false;
-    tb.classList.remove('toolbar-dragging');
-  };
-
-  return tb;
-}
-
-function updateToolbarCount() {
-  const count = toolbarEl.querySelector<HTMLSpanElement>('.toolbar-count')!;
-  const label = toolbarEl.querySelector<HTMLSpanElement>('.toolbar-send-label')!;
-  if (annotations.length > 0) {
-    count.textContent = String(annotations.length);
-    count.style.display = 'inline-flex';
-    label.textContent = `Send (${annotations.length})`;
-  } else {
-    count.style.display = 'none';
-    label.textContent = 'Send';
-  }
-}
-
-function loadToolbarProjectName() {
-  safeSendMessage({ type: 'GET_FULL_CONFIG' }, (data: any) => {
-    if (!data?.success) return;
-    const config = data.config || {};
-    const projects: Array<{ id: string; name: string }> = data.projects || [];
-    const project = config.projectId ? projects.find((p) => p.id === config.projectId) : null;
-    updateToolbarProjectName(project?.name || '');
-  });
-}
-
-function updateToolbarProjectName(name: string) {
-  const el = toolbarEl.querySelector<HTMLSpanElement>('.toolbar-project');
-  if (!el) return;
-  if (name) {
-    el.textContent = name;
-    el.style.display = 'inline';
-    el.title = `Project: ${name}`;
-  } else {
-    el.textContent = '';
-    el.style.display = 'none';
-  }
-}
-
-function handleToolbarAction(action: string) {
-  switch (action) {
-    case 'pause':
-      togglePauseAnimations();
-      break;
-    case 'browse':
-      toggleBrowseMode();
-      break;
-    case 'draw':
-      toggleDrawMode();
-      break;
-    case 'toggle-visibility':
-      annotationsVisible = !annotationsVisible;
-      renderAnnotations();
-      updateVisibilityButton();
-      break;
-    case 'show-testids':
-      toggleTestIdLabels();
-      break;
-    case 'copy':
-      copyAsMarkdown();
-      break;
-    case 'copy-screenshot':
-      copyScreenshotToClipboard();
-      break;
-    case 'clear':
-      annotations = [];
-      clearMultiSelect();
-      clearDrawing();
-      renderAnnotations();
-      updateToolbarCount();
-      break;
-    case 'settings':
-      toggleSettingsPanel();
-      break;
-    case 'history':
-      toggleHistoryPanel();
-      break;
-    case 'send':
-      sendToFunny();
-      break;
-    case 'close':
-      deactivate();
-      break;
-  }
-}
-
-function updateVisibilityButton() {
-  const btn = toolbarEl.querySelector<HTMLButtonElement>('[data-action="toggle-visibility"]')!;
-  if (annotationsVisible) {
-    btn.classList.remove('toolbar-btn-active');
-    btn.innerHTML = `
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
-        <circle cx="12" cy="12" r="3"></circle>
-      </svg>`;
-  } else {
-    btn.classList.add('toolbar-btn-active');
-    btn.innerHTML = `
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
-        <line x1="1" y1="1" x2="23" y2="23"></line>
-      </svg>`;
-  }
-}
-
-function togglePauseAnimations() {
-  isPaused = !isPaused;
-  const btn = toolbarEl.querySelector<HTMLButtonElement>('[data-action="pause"]')!;
-  if (isPaused) {
-    document.getAnimations().forEach((a) => a.pause());
-    btn.classList.add('toolbar-btn-active');
-    btn.title = 'Resume animations';
-    showToast('Animations paused — annotate the current frame');
-  } else {
-    document.getAnimations().forEach((a) => a.play());
-    btn.classList.remove('toolbar-btn-active');
-    btn.title = 'Pause animations';
-  }
-}
-
-function toggleBrowseMode() {
-  isBrowsing = !isBrowsing;
-  const btn = toolbarEl.querySelector<HTMLButtonElement>('[data-action="browse"]')!;
-  if (isBrowsing) {
-    btn.classList.add('toolbar-btn-active');
-    btn.title = 'Annotate mode — select elements';
-    hideHoverHighlight();
-    hidePopover();
-    clearMultiSelect();
-  } else {
-    btn.classList.remove('toolbar-btn-active');
-    btn.title = 'Browse mode — navigate the page';
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Test ID label overlay
-// ---------------------------------------------------------------------------
-
-function toggleTestIdLabels() {
-  testIdLabelsVisible = !testIdLabelsVisible;
-  const btn = toolbarEl.querySelector<HTMLButtonElement>('[data-action="show-testids"]')!;
-
-  if (testIdLabelsVisible) {
-    btn.classList.add('toolbar-btn-active');
-    btn.title = 'Hide data-testid labels';
-    renderTestIdLabels();
-    // Watch for DOM changes to re-render labels
-    testIdObserver = new MutationObserver(() => {
-      if (testIdLabelsVisible) renderTestIdLabels();
-    });
-    testIdObserver.observe(document.body, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ['data-testid'],
-    });
-    // Re-position labels on scroll/resize
-    testIdScrollHandler = () => {
-      if (testIdLabelsVisible) renderTestIdLabels();
-    };
-    window.addEventListener('scroll', testIdScrollHandler, true);
-    window.addEventListener('resize', testIdScrollHandler);
-  } else {
-    btn.classList.remove('toolbar-btn-active');
-    btn.title = 'Show data-testid labels';
-    clearTestIdLabels();
-  }
-}
-
-function renderTestIdLabels() {
-  testIdContainer.innerHTML = '';
-  const elements = document.querySelectorAll('[data-testid]');
-
-  elements.forEach((el) => {
-    const testId = el.getAttribute('data-testid');
-    if (!testId) return;
-
-    const rect = el.getBoundingClientRect();
-    // Skip elements that are not visible or have zero size
-    if (rect.width === 0 && rect.height === 0) return;
-
-    // Create the label overlay
-    const label = document.createElement('div');
-    label.className = 'testid-label';
-    label.textContent = testId;
-    label.title = testId;
-
-    // Position at the top-left corner of the element
-    // Clamp max-width to the element's width so labels don't overflow small elements
-    label.style.position = 'fixed';
-    label.style.left = `${rect.left}px`;
-    label.style.top = `${rect.top}px`;
-    label.style.maxWidth = `${Math.min(120, rect.width)}px`;
-    label.style.pointerEvents = 'none';
-
-    // Create a subtle border highlight around the element
-    const highlight = document.createElement('div');
-    highlight.className = 'testid-highlight';
-    highlight.style.position = 'fixed';
-    highlight.style.left = `${rect.left}px`;
-    highlight.style.top = `${rect.top}px`;
-    highlight.style.width = `${rect.width}px`;
-    highlight.style.height = `${rect.height}px`;
-    highlight.style.pointerEvents = 'none';
-
-    testIdContainer.appendChild(highlight);
-    testIdContainer.appendChild(label);
-  });
-}
-
-function clearTestIdLabels() {
-  testIdContainer.innerHTML = '';
-  if (testIdObserver) {
-    testIdObserver.disconnect();
-    testIdObserver = null;
-  }
-  if (testIdScrollHandler) {
-    window.removeEventListener('scroll', testIdScrollHandler, true);
-    window.removeEventListener('resize', testIdScrollHandler);
-    testIdScrollHandler = null;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Drawing mode
-// ---------------------------------------------------------------------------
-function createDrawToolbar(): HTMLDivElement {
-  const bar = createElement('div', 'draw-toolbar');
-  bar.style.display = 'none';
-
-  // Drag handle (grip dots)
-  const dragHandle = createElement('div', 'draw-toolbar-drag');
-  dragHandle.innerHTML = `<svg width="8" height="14" viewBox="0 0 8 14" fill="currentColor">
-    <circle cx="2" cy="2" r="1.2"/><circle cx="6" cy="2" r="1.2"/>
-    <circle cx="2" cy="7" r="1.2"/><circle cx="6" cy="7" r="1.2"/>
-    <circle cx="2" cy="12" r="1.2"/><circle cx="6" cy="12" r="1.2"/>
-  </svg>`;
-  dragHandle.title = 'Drag to move';
-  bar.appendChild(dragHandle);
-
-  // Separator before colors
-  bar.appendChild(createElement('div', 'draw-toolbar-sep'));
-
-  // Color swatches
-  const colors = createElement('div', 'draw-colors');
-  DRAW_COLORS.forEach((color) => {
-    const swatch = createElement('button', 'draw-color-swatch');
-    swatch.style.background = color;
-    swatch.dataset.color = color;
-    if (color === drawColor) swatch.classList.add('draw-color-active');
-    if (color === '#ffffff') swatch.style.border = '1px solid #666';
-    swatch.addEventListener('click', (e) => {
-      e.stopPropagation();
-      drawColor = color;
-      drawingCtx.strokeStyle = color;
-      bar
-        .querySelectorAll('.draw-color-swatch')
-        .forEach((s) => s.classList.remove('draw-color-active'));
-      swatch.classList.add('draw-color-active');
-    });
-    colors.appendChild(swatch);
-  });
-  bar.appendChild(colors);
-
-  // Separator
-  const sep = createElement('div', 'draw-toolbar-sep');
-  bar.appendChild(sep);
-
-  // Clear drawing button
-  const clearBtn = createElement('button', 'draw-clear-btn');
-  clearBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-    <polyline points="3 6 5 6 21 6"></polyline>
-    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-  </svg>`;
-  clearBtn.title = 'Clear drawing';
-  clearBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    if (!hasDrawingContent) return;
-    clearDrawing();
-    showToast('Drawing cleared');
-  });
-  bar.appendChild(clearBtn);
-
-  // Copy screenshot button
-  const copyBtn = createElement('button', 'draw-copy-btn');
-  copyBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
-  </svg>`;
-  copyBtn.title = 'Copy screenshot to clipboard';
-  copyBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    copyScreenshotToClipboard();
-  });
-  bar.appendChild(copyBtn);
-
-  // Separator
-  const sep2 = createElement('div', 'draw-toolbar-sep');
-  bar.appendChild(sep2);
-
-  // Prompt input
-  drawPromptInput = createElement('textarea', 'draw-prompt-input');
-  drawPromptInput.placeholder = 'Describe what you want to change...';
-  drawPromptInput.rows = 1;
-  drawPromptInput.addEventListener('keydown', (e) => {
-    e.stopPropagation(); // Don't trigger Escape/other hotkeys while typing
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendToFunny();
-    }
-  });
-  bar.appendChild(drawPromptInput);
-
-  // Send button
-  const sendBtn = createElement('button', 'draw-send-btn');
-  sendBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-    <line x1="22" y1="2" x2="11" y2="13"></line>
-    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-  </svg>`;
-  sendBtn.title = 'Send drawing + prompt to Funny';
-  sendBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    sendToFunny();
-  });
-  bar.appendChild(sendBtn);
-
-  // Separator before close
-  bar.appendChild(createElement('div', 'draw-toolbar-sep'));
-
-  // Close button (same style as main toolbar close)
-  const closeBtn = createElement('button', 'toolbar-btn draw-toolbar-close');
-  closeBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-    <line x1="18" y1="6" x2="6" y2="18"></line>
-    <line x1="6" y1="6" x2="18" y2="18"></line>
-  </svg>`;
-  closeBtn.title = 'Close draw mode';
-  closeBtn.addEventListener('click', (e) => {
-    e.stopPropagation();
-    toggleDrawMode();
-  });
-  bar.appendChild(closeBtn);
-
-  // --- Drag logic ---
-  let isDragging = false;
-  let dragOffsetX = 0;
-  let dragOffsetY = 0;
-
-  const onDragMove = (e: MouseEvent) => {
-    if (!isDragging) return;
-    const x = e.clientX - dragOffsetX;
-    const y = e.clientY - dragOffsetY;
-    bar.style.left = `${x}px`;
-    bar.style.top = `${y}px`;
-    bar.style.transform = 'none';
-  };
-
-  const onDragEnd = () => {
-    isDragging = false;
-    window.removeEventListener('mousemove', onDragMove);
-    window.removeEventListener('mouseup', onDragEnd);
-  };
-
-  dragHandle.addEventListener('mousedown', (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    isDragging = true;
-    const rect = bar.getBoundingClientRect();
-    dragOffsetX = e.clientX - rect.left;
-    dragOffsetY = e.clientY - rect.top;
-    window.addEventListener('mousemove', onDragMove);
-    window.addEventListener('mouseup', onDragEnd);
-  });
-
-  return bar;
-}
-
-function toggleDrawMode() {
-  isDrawing = !isDrawing;
-  const btn = toolbarEl.querySelector<HTMLButtonElement>('[data-action="draw"]')!;
-
-  if (isDrawing) {
-    // Exit browse mode if active
-    if (isBrowsing) toggleBrowseMode();
-    hideHoverHighlight();
-    hidePopover();
-    clearMultiSelect();
-
-    btn.classList.add('toolbar-btn-draw-active');
-    btn.title = 'Exit draw mode';
-
-    // Size canvas to full viewport
-    drawingCanvas.width = window.innerWidth;
-    drawingCanvas.height = window.innerHeight;
-    drawingCanvas.style.display = 'block';
-
-    // Restore existing strokes if any
-    if (!hasDrawingContent) {
-      drawingCtx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
-    }
-
-    // Set up drawing style
-    drawingCtx.strokeStyle = drawColor;
-    drawingCtx.lineWidth = 3;
-    drawingCtx.lineCap = 'round';
-    drawingCtx.lineJoin = 'round';
-
-    // Show draw toolbar (reset position to center)
-    drawToolbar.style.left = '50%';
-    drawToolbar.style.top = '16px';
-    drawToolbar.style.transform = 'translateX(-50%)';
-    drawToolbar.style.display = 'flex';
-
-    // Attach drawing listeners on canvas
-    drawingCanvas.addEventListener('mousedown', onDrawStart);
-    drawingCanvas.addEventListener('mousemove', onDrawMove);
-    drawingCanvas.addEventListener('mouseup', onDrawEnd);
-    drawingCanvas.addEventListener('mouseleave', onDrawEnd);
-    // Touch support
-    drawingCanvas.addEventListener('touchstart', onDrawTouchStart, { passive: false });
-    drawingCanvas.addEventListener('touchmove', onDrawTouchMove, { passive: false });
-    drawingCanvas.addEventListener('touchend', onDrawEnd);
-  } else {
-    btn.classList.remove('toolbar-btn-draw-active');
-    btn.title = 'Draw on screen';
-    drawingCanvas.style.display = 'none';
-    drawToolbar.style.display = 'none';
-
-    drawingCanvas.removeEventListener('mousedown', onDrawStart);
-    drawingCanvas.removeEventListener('mousemove', onDrawMove);
-    drawingCanvas.removeEventListener('mouseup', onDrawEnd);
-    drawingCanvas.removeEventListener('mouseleave', onDrawEnd);
-    drawingCanvas.removeEventListener('touchstart', onDrawTouchStart);
-    drawingCanvas.removeEventListener('touchmove', onDrawTouchMove);
-    drawingCanvas.removeEventListener('touchend', onDrawEnd);
-  }
-}
-
-function onDrawStart(e: MouseEvent) {
-  e.preventDefault();
-  e.stopPropagation();
-  isDrawingStroke = true;
-  hasDrawingContent = true;
-  drawingCtx.beginPath();
-  drawingCtx.moveTo(e.offsetX, e.offsetY);
-}
-
-function onDrawMove(e: MouseEvent) {
-  if (!isDrawingStroke) return;
-  e.preventDefault();
-  e.stopPropagation();
-  drawingCtx.lineTo(e.offsetX, e.offsetY);
-  drawingCtx.stroke();
-}
-
-function onDrawEnd(e: MouseEvent | TouchEvent) {
-  if (isDrawingStroke) {
-    e.preventDefault();
-    isDrawingStroke = false;
-  }
-}
-
-function onDrawTouchStart(e: TouchEvent) {
-  e.preventDefault();
-  const touch = e.touches[0];
-  const rect = drawingCanvas.getBoundingClientRect();
-  isDrawingStroke = true;
-  hasDrawingContent = true;
-  drawingCtx.beginPath();
-  drawingCtx.moveTo(touch.clientX - rect.left, touch.clientY - rect.top);
-}
-
-function onDrawTouchMove(e: TouchEvent) {
-  if (!isDrawingStroke) return;
-  e.preventDefault();
-  const touch = e.touches[0];
-  const rect = drawingCanvas.getBoundingClientRect();
-  drawingCtx.lineTo(touch.clientX - rect.left, touch.clientY - rect.top);
-  drawingCtx.stroke();
-}
-
-function clearDrawing() {
-  drawingCtx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
-  hasDrawingContent = false;
-}
-
-function getDrawingDataUrl(): string | null {
-  if (!hasDrawingContent) return null;
-  return drawingCanvas.toDataURL('image/png');
-}
-
-// ---------------------------------------------------------------------------
-// Settings panel (inline, replaces popup)
-// ---------------------------------------------------------------------------
-function createSettingsPanel(): HTMLDivElement {
-  const panel = createElement('div', 'settings-panel');
-  panel.style.display = 'none';
-  panel.innerHTML = `
-    <div class="settings-header">
-      <div class="settings-title">
-        <span class="settings-logo">F</span>
-        <span>Settings</span>
-        <span class="settings-dot" title="Not connected"></span>
-      </div>
-      <button class="settings-close-btn" title="Close">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="18" y1="6" x2="6" y2="18"></line>
-          <line x1="6" y1="6" x2="18" y2="18"></line>
-        </svg>
-      </button>
-    </div>
-    <div class="settings-body">
-      <div class="settings-field">
-        <label>Server URL</label>
-        <div class="settings-url-row">
-          <input type="text" class="settings-input" data-key="serverUrl" placeholder="http://localhost:3001" />
-          <button class="settings-connect-btn" title="Connect">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M5 12h14"></path>
-              <path d="M12 5l7 7-7 7"></path>
-            </svg>
-          </button>
-        </div>
-        <div class="settings-status"></div>
-        <button type="button" class="settings-link-btn settings-grant-btn" style="display: none">
-          Open extension options to allow this server
-        </button>
-      </div>
-      <div class="settings-field">
-        <label>API token</label>
-        <div class="settings-url-row">
-          <span class="settings-token-state">Not set</span>
-          <button type="button" class="settings-link-btn settings-token-btn">Set token</button>
-        </div>
-        <div class="settings-hint">
-          Create one in funny: Settings &gt; API tokens. It is entered in the extension's
-          options page, never on this page.
-        </div>
-      </div>
-      <div class="settings-field">
-        <label>Project</label>
-        <select class="settings-select" data-key="projectId">
-          <option value="">Loading...</option>
-        </select>
-      </div>
-      <div class="settings-field">
-        <label>Provider</label>
-        <select class="settings-select" data-key="provider">
-          <option value="">Loading...</option>
-        </select>
-      </div>
-      <div class="settings-row">
-        <div class="settings-field">
-          <label>Model</label>
-          <select class="settings-select" data-key="model">
-            <option value="">-</option>
-          </select>
-        </div>
-        <div class="settings-field">
-          <label>Mode</label>
-          <select class="settings-select" data-key="mode">
-            <option value="local">Local</option>
-            <option value="worktree">Worktree</option>
-          </select>
-        </div>
-      </div>
-      <div class="settings-react-status"></div>
-    </div>
-  `;
-
-  // Close button
-  panel.querySelector('.settings-close-btn')!.addEventListener('click', (e) => {
-    e.stopPropagation();
-    hideSettingsPanel();
-  });
-
-  // Connect button
-  panel.querySelector('.settings-connect-btn')!.addEventListener('click', (e) => {
-    e.stopPropagation();
-    testSettingsConnection();
-  });
-
-  // The token and a remote server's host permission are set in the options
-  // page: an extension page, out of reach of this page's scripts, and the only
-  // place `chrome.permissions.request` can run.
-  panel.querySelectorAll('.settings-token-btn, .settings-grant-btn').forEach((btn) => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      saveSettings();
-      safeSendMessage({ type: 'OPEN_OPTIONS' });
-    });
-  });
-
-  // Auto-save on change
-  panel
-    .querySelectorAll<HTMLSelectElement | HTMLInputElement>('.settings-select, .settings-input')
-    .forEach((target) => {
-      target.addEventListener('change', (e) => {
-        e.stopPropagation();
-        // If provider changed, repopulate models
-        if (target.dataset.key === 'provider') {
-          populateSettingsModels(target.value);
-        }
-        // If project changed, apply project defaults to provider/model/mode
-        if (target.dataset.key === 'projectId') {
-          applyProjectDefaults(target.value);
-        }
-        saveSettings();
-      });
-    });
-
-  // Prevent clicks inside panel from triggering annotation
-  panel.addEventListener('click', (e) => e.stopPropagation());
-  panel.addEventListener('mousedown', (e) => e.stopPropagation());
-
-  return panel;
-}
-
-// Cached provider data for the settings panel
-// (`models`: a plain model id list, read as a fallback for `modelsWithLabels`).
-let settingsProviderData: Record<string, ProviderInfo & { models?: string[] }> | null = null;
-// Cached projects data (includes per-project defaults)
-let settingsProjectsData: Array<{
-  id: string;
-  name: string;
-  defaultProvider?: string;
-  defaultModel?: string;
-  defaultMode?: string;
-}> = [];
-
-function toggleSettingsPanel() {
-  if (settingsPanel.style.display === 'block') {
-    hideSettingsPanel();
-  } else {
-    showSettingsPanel();
-  }
-}
-
-function showSettingsPanel() {
-  hideHistoryPanel();
-  settingsPanel.style.display = 'block';
-  positionSettingsPanel();
-  loadSettingsData();
-  updateFrameworkStatus();
-}
-
-function detectFramework(): string {
-  // Ask page-bridge.js (MAIN world) to detect JS frameworks.
-  // Returns a comma-separated string like "React, Next.js" or "" if none found.
-  try {
-    document.documentElement.removeAttribute('data-funny-framework');
-    document.dispatchEvent(new Event('__funny_detect_framework'));
-    const result = document.documentElement.getAttribute('data-funny-framework') || '';
-    console.info('[Funny Annotator] Framework detect result:', result || 'none');
-    document.documentElement.removeAttribute('data-funny-framework');
-    return result;
-  } catch {
-    return '';
-  }
-}
-
-function updateFrameworkStatus() {
-  const el = settingsPanel.querySelector<HTMLDivElement>('.settings-react-status')!;
-  const frameworks = detectFramework();
-  if (frameworks) {
-    el.style.display = 'none';
-    el.innerHTML = '';
-  } else {
-    el.style.display = 'flex';
-    el.className = 'settings-react-status settings-react-no';
-    el.innerHTML =
-      '<span class="settings-react-dot settings-react-dot-no"></span> No JS framework detected — component tree data will not be included in annotations';
-  }
-}
-
-function hideSettingsPanel() {
-  settingsPanel.style.display = 'none';
-}
-
-function positionSettingsPanel() {
-  const settingsBtn = toolbarEl.querySelector<HTMLButtonElement>('[data-action="settings"]')!;
-  const btnRect = settingsBtn.getBoundingClientRect();
-  const panelWidth = 340;
-  const gap = 12;
-
-  // Center panel horizontally on the settings button
-  let left = btnRect.left + btnRect.width / 2 - panelWidth / 2;
-  const top = btnRect.top - gap;
-
-  // Keep within viewport
-  if (left + panelWidth > window.innerWidth - 8) left = window.innerWidth - panelWidth - 8;
-  if (left < 8) left = 8;
-
-  // Show above by default; measure height after display
-  settingsPanel.style.left = `${left}px`;
-  settingsPanel.style.top = 'auto';
-  settingsPanel.style.bottom = `${window.innerHeight - top}px`;
-}
-
-async function loadSettingsData() {
-  const statusEl = settingsPanel.querySelector<HTMLDivElement>('.settings-status')!;
-  statusEl.textContent = 'Loading...';
-  statusEl.className = 'settings-status';
-
-  try {
-    const data = await new Promise<any>((resolve) => {
-      safeSendMessage({ type: 'GET_FULL_CONFIG' }, resolve);
-    });
-
-    if (!data?.success) {
-      statusEl.textContent = data?.error || 'Failed to load config';
-      statusEl.className = 'settings-status settings-status-error';
-      return;
-    }
-
-    const config = data.config || {};
-
-    // Populate server URL
-    const serverInput = settingsPanel.querySelector<HTMLInputElement>('[data-key="serverUrl"]')!;
-    serverInput.value = config.serverUrl || 'http://localhost:3001';
-    updateTokenState(Boolean(config.hasApiToken));
-
-    // Populate projects
-    settingsProjectsData = data.projects || [];
-    const projectSelect = settingsPanel.querySelector<HTMLSelectElement>('[data-key="projectId"]')!;
-    projectSelect.innerHTML = '<option value="">Select a project...</option>';
-    settingsProjectsData.forEach((p) => {
-      const opt = document.createElement('option');
-      opt.value = p.id;
-      opt.textContent = p.name;
-      if (p.id === config.projectId) opt.selected = true;
-      projectSelect.appendChild(opt);
-    });
-
-    // Look up project defaults for the selected project
-    const selectedProject = config.projectId
-      ? settingsProjectsData.find((p) => p.id === config.projectId)
-      : null;
-
-    // Populate mode — project default > fallback
-    const modeSelect = settingsPanel.querySelector<HTMLSelectElement>('[data-key="mode"]')!;
-    const effectiveMode = selectedProject?.defaultMode || config.mode || DEFAULT_THREAD_MODE;
-    modeSelect.value = effectiveMode;
-
-    // Populate providers
-    settingsProviderData = data.providers || {};
-    const providerSelect = settingsPanel.querySelector<HTMLSelectElement>('[data-key="provider"]')!;
-    providerSelect.innerHTML = '';
-    const available = Object.entries(settingsProviderData!).filter(([, info]) => info.available);
-
-    if (available.length === 0) {
-      providerSelect.innerHTML = '<option value="">No providers</option>';
-    } else {
-      // Resolve provider: project default > saved config > first available
-      const projectDefaultProvider = selectedProject?.defaultProvider;
-      const effectiveProvider =
-        projectDefaultProvider && settingsProviderData![projectDefaultProvider]?.available
-          ? projectDefaultProvider
-          : config.provider && settingsProviderData![config.provider]?.available
-            ? config.provider
-            : available[0][0];
-      available.forEach(([key, info]) => {
-        const opt = document.createElement('option');
-        opt.value = key;
-        opt.textContent = info.label || key;
-        if (key === effectiveProvider) opt.selected = true;
-        providerSelect.appendChild(opt);
-      });
-      providerSelect.value = effectiveProvider;
-      // Resolve model: project default > saved config > provider default
-      const effectiveModel = selectedProject?.defaultModel || config.model || undefined;
-      populateSettingsModels(effectiveProvider, effectiveModel);
-    }
-
-    // Connection state (dot + connect button + status text)
-    const dot = settingsPanel.querySelector<HTMLSpanElement>('.settings-dot')!;
-    const connectBtn = settingsPanel.querySelector<HTMLButtonElement>('.settings-connect-btn')!;
-    if (data.connected) {
-      dot.className = 'settings-dot settings-dot-ok';
-      dot.title = 'Connected';
-      connectBtn.className = 'settings-connect-btn settings-connect-btn-ok';
-      statusEl.textContent = 'Connected';
-      statusEl.className = 'settings-status settings-status-ok';
-    } else {
-      dot.className = 'settings-dot settings-dot-err';
-      dot.title = 'Not connected';
-      connectBtn.className = 'settings-connect-btn settings-connect-btn-err';
-      statusEl.textContent = data.connectionError;
-      statusEl.className = 'settings-status settings-status-error';
-    }
-    showGrantButton(data.connectionReason === 'permission');
-  } catch {
-    statusEl.textContent = 'Error loading settings';
-    statusEl.className = 'settings-status settings-status-error';
-  }
-}
-
-function updateTokenState(hasToken: boolean) {
-  const state = settingsPanel.querySelector<HTMLSpanElement>('.settings-token-state')!;
-  const btn = settingsPanel.querySelector<HTMLButtonElement>('.settings-token-btn')!;
-  state.textContent = hasToken ? 'Saved' : 'Not set';
-  state.classList.toggle('settings-token-missing', !hasToken);
-  btn.textContent = hasToken ? 'Change token' : 'Set token';
-}
-
-function showGrantButton(show: boolean) {
-  const btn = settingsPanel.querySelector<HTMLButtonElement>('.settings-grant-btn')!;
-  btn.style.display = show ? 'block' : 'none';
-}
-
-function applyProjectDefaults(projectId: string) {
-  const project = settingsProjectsData.find((p) => p.id === projectId);
-  // The public API's projects carry no defaults: keep the saved choices.
-  if (!hasProjectDefaults(project) || !settingsProviderData) return;
-
-  const available = Object.entries(settingsProviderData).filter(([, info]) => info.available);
-  if (available.length === 0) return;
-
-  // Resolve provider: project default > 'claude'
-  const effectiveProvider = project.defaultProvider || 'claude';
-  const providerSelect = settingsPanel.querySelector<HTMLSelectElement>('[data-key="provider"]')!;
-  if (settingsProviderData[effectiveProvider]?.available) {
-    providerSelect.value = effectiveProvider;
-  }
-
-  // Resolve model: project default > provider's default
-  const effectiveModel = project.defaultModel || '';
-  populateSettingsModels(providerSelect.value, effectiveModel);
-
-  // Resolve mode: project default > 'local'
-  const modeSelect = settingsPanel.querySelector<HTMLSelectElement>('[data-key="mode"]')!;
-  modeSelect.value = project.defaultMode || DEFAULT_THREAD_MODE;
-}
-
-function populateSettingsModels(provider: string, selectedModel?: string) {
-  const modelSelect = settingsPanel.querySelector<HTMLSelectElement>('[data-key="model"]')!;
-  modelSelect.innerHTML = '';
-
-  if (!settingsProviderData || !settingsProviderData[provider]) {
-    modelSelect.innerHTML = '<option value="">-</option>';
-    return;
-  }
-
-  const info = settingsProviderData[provider];
-  const models: Array<{ value: string; label: string }> =
-    info.modelsWithLabels || info.models?.map((m: string) => ({ value: m, label: m })) || [];
-  const effectiveModel =
-    selectedModel && models.some((m) => m.value === selectedModel)
-      ? selectedModel
-      : info.defaultModel || models[0]?.value || '';
-
-  models.forEach((m) => {
-    const opt = document.createElement('option');
-    opt.value = m.value;
-    opt.textContent = m.label;
-    if (m.value === effectiveModel) opt.selected = true;
-    modelSelect.appendChild(opt);
-  });
-
-  modelSelect.value = effectiveModel;
-}
-
-function saveSettings() {
-  const config: Record<string, string> = {};
-  // Every [data-key] element in the settings panel is a <select> or an <input>.
-  settingsPanel
-    .querySelectorAll<HTMLSelectElement | HTMLInputElement>('[data-key]')
-    .forEach((input) => {
-      config[input.dataset.key!] = input.value;
-    });
-  safeSendMessage({ type: 'SAVE_CONFIG', config });
-
-  // Update the project name in the toolbar
-  const projectId = config.projectId;
-  const project = projectId ? settingsProjectsData.find((p) => p.id === projectId) : null;
-  updateToolbarProjectName(project?.name || '');
-}
-
-async function testSettingsConnection() {
-  const statusEl = settingsPanel.querySelector<HTMLDivElement>('.settings-status')!;
-  const connectBtn = settingsPanel.querySelector<HTMLButtonElement>('.settings-connect-btn')!;
-  const serverUrl = settingsPanel
-    .querySelector<HTMLInputElement>('[data-key="serverUrl"]')!
-    .value.trim();
-  statusEl.textContent = 'Connecting...';
-  statusEl.className = 'settings-status';
-  connectBtn.className = 'settings-connect-btn';
-
-  try {
-    const result = await new Promise<any>((resolve) => {
-      safeSendMessage({ type: 'TEST_CONNECTION', serverUrl }, resolve);
-    });
-
-    const dot = settingsPanel.querySelector<HTMLSpanElement>('.settings-dot')!;
-    if (result?.success) {
-      dot.className = 'settings-dot settings-dot-ok';
-      connectBtn.className = 'settings-connect-btn settings-connect-btn-ok';
-      statusEl.textContent = 'Connected';
-      statusEl.className = 'settings-status settings-status-ok';
-      showGrantButton(false);
-      // Reload all data with new URL
-      saveSettings();
-      loadSettingsData();
-    } else {
-      dot.className = 'settings-dot settings-dot-err';
-      connectBtn.className = 'settings-connect-btn settings-connect-btn-err';
-      statusEl.textContent = result?.error || 'Connection failed';
-      statusEl.className = 'settings-status settings-status-error';
-      // Keep the entered URL so the options page opens with it.
-      saveSettings();
-      showGrantButton(isPermissionError(result));
-    }
-  } catch {
-    connectBtn.className = 'settings-connect-btn settings-connect-btn-err';
-    statusEl.textContent = 'Connection failed';
-    statusEl.className = 'settings-status settings-status-error';
-  }
-}
-
-// ---------------------------------------------------------------------------
-// History panel
-// ---------------------------------------------------------------------------
-function createHistoryPanel(): HTMLDivElement {
-  const panel = createElement('div', 'history-panel');
-  panel.style.display = 'none';
-  panel.innerHTML = `
-    <div class="history-header">
-      <span class="history-title">Sent History</span>
-      <button class="history-close-btn" title="Close">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="18" y1="6" x2="6" y2="18"></line>
-          <line x1="6" y1="6" x2="18" y2="18"></line>
-        </svg>
-      </button>
-    </div>
-    <div class="history-body"></div>
-  `;
-
-  panel.querySelector('.history-close-btn')!.addEventListener('click', (e) => {
-    e.stopPropagation();
-    hideHistoryPanel();
-  });
-
-  panel.addEventListener('click', (e) => e.stopPropagation());
-  panel.addEventListener('mousedown', (e) => e.stopPropagation());
-
-  return panel;
-}
-
-function toggleHistoryPanel() {
-  if (historyPanel.style.display === 'block') {
-    hideHistoryPanel();
-  } else {
-    showHistoryPanel();
-  }
-}
-
-function showHistoryPanel() {
-  hideSettingsPanel();
-  historyPanel.style.display = 'block';
-  positionHistoryPanel();
-  loadHistoryData();
-}
-
-function hideHistoryPanel() {
-  historyPanel.style.display = 'none';
-}
-
-function positionHistoryPanel() {
-  const historyBtn = toolbarEl.querySelector<HTMLButtonElement>('[data-action="history"]')!;
-  const btnRect = historyBtn.getBoundingClientRect();
-  const panelWidth = 360;
-  const gap = 12;
-
-  let left = btnRect.left + btnRect.width / 2 - panelWidth / 2;
-  const top = btnRect.top - gap;
-
-  if (left + panelWidth > window.innerWidth - 8) left = window.innerWidth - panelWidth - 8;
-  if (left < 8) left = 8;
-
-  historyPanel.style.left = `${left}px`;
-  historyPanel.style.top = 'auto';
-  historyPanel.style.bottom = `${window.innerHeight - top}px`;
-}
-
-function loadHistoryData() {
-  const body = historyPanel.querySelector<HTMLDivElement>('.history-body')!;
-
-  chrome.storage.local.get<FunnyHistoryStorage>('funnyHistory', (result) => {
-    const history = result.funnyHistory ?? [];
-
-    if (history.length === 0) {
-      body.innerHTML = '<div class="history-empty">No annotations sent yet</div>';
-      return;
-    }
-
-    body.innerHTML = '';
-    history.forEach((entry) => {
-      const item = createElement('div', 'history-item');
-
-      const timeAgo = formatTimeAgo(entry.timestamp);
-      const prompts: string[] = (entry.annotations || []).map((a: any) => a.prompt).filter(Boolean);
-
-      let promptsHtml = '';
-      if (prompts.length > 0) {
-        promptsHtml = `<div class="history-item-prompts">${prompts
-          .slice(0, 3)
-          .map((p) => `<div class="history-item-prompt">${escapeHtml(p.slice(0, 80))}</div>`)
-          .join(
-            '',
-          )}${prompts.length > 3 ? `<div class="history-item-prompt">+${prompts.length - 3} more</div>` : ''}</div>`;
-      }
-
-      item.innerHTML = `
-        <div class="history-item-header">
-          <span class="history-item-title">${escapeHtml(entry.title || 'Untitled')}</span>
-          <span class="history-item-count">${entry.annotationCount} ann.</span>
-        </div>
-        <div class="history-item-url">${escapeHtml(entry.url || '')}</div>
-        ${promptsHtml}
-        <div class="history-item-time">${timeAgo}</div>
-      `;
-
-      // Click to open thread in Funny if threadId exists
-      const { threadId, serverUrl, projectId } = entry;
-      if (threadId && serverUrl) {
-        item.title = 'Open thread in Funny';
-        item.addEventListener('click', () => {
-          window.open(threadUrl(serverUrl, { id: threadId, projectId }), '_blank');
-        });
-      }
-
-      body.appendChild(item);
-    });
-  });
-}
-
-function formatTimeAgo(ts: number): string {
-  const diff = Date.now() - ts;
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'Just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d ago`;
-  return new Date(ts).toLocaleDateString();
-}
-
-function escapeHtml(str: string): string {
-  const div = document.createElement('div');
-  div.textContent = str;
-  return div.innerHTML;
-}
-
-// ---------------------------------------------------------------------------
-// Generate markdown output
-// ---------------------------------------------------------------------------
-function generateMarkdown(): string {
-  if (annotations.length === 0) return '';
-
-  // -- User instructions first (clear, top-level) --
-  const instructions = annotations
-    .map((ann, i) =>
-      ann.prompt ? `${annotations.length > 1 ? `${i + 1}. ` : ''}${ann.prompt}` : null,
-    )
-    .filter(Boolean);
-
-  let md = '';
-  if (instructions.length > 0) {
-    md += instructions.join('\n') + '\n\n';
-  }
-
-  // -- UI context as supporting reference --
-  md += `<details>\n<summary>UI Context: ${window.location.href}</summary>\n\n`;
-  md += `**Page title:** ${document.title}\n`;
-  md += `**Viewport:** ${window.innerWidth}x${window.innerHeight}\n`;
-  md += `**Date:** ${new Date().toISOString()}\n\n`;
-
-  annotations.forEach((ann, i) => {
-    md += `### Annotated element ${i + 1}`;
-    if (ann.elements.length > 1) md += ` (${ann.elements.length} elements)`;
-    md += `\n\n`;
-
-    ann.elements.forEach((elem, j) => {
-      if (ann.elements.length > 1) md += `#### Element ${j + 1}: \`${elem.elementName}\`\n\n`;
-      md += `**Element:** \`${elem.element}\` at \`${elem.elementPath}\`\n`;
-      md += `**Position:** ${elem.x}% from left, ${elem.y}px from top\n`;
-      if (elem.cssClasses) md += `**Classes:** \`${elem.cssClasses}\`\n`;
-      if (elem.componentTree) md += `**Component Tree:** \`${elem.componentTree}\`\n`;
-      md += `**Styles:** ${elem.computedStyles}\n`;
-      md += `**Accessibility:** ${elem.accessibility}\n`;
-      md += `**Nearby text:** ${elem.nearbyText}\n`;
-      md += `**Bounding box:** ${elem.boundingBox.width}x${elem.boundingBox.height} at (${elem.boundingBox.x}, ${elem.boundingBox.y})\n`;
-      if (elem.isFixed) md += `**Fixed position:** yes\n`;
-      md += `\n**HTML (truncated):**\n\`\`\`html\n${elem.outerHTML.slice(0, 500)}\n\`\`\`\n\n`;
-    });
-
-    if (i < annotations.length - 1) md += `---\n\n`;
-  });
-
-  md += `</details>`;
-
-  return md;
-}
-
-function copyAsMarkdown() {
-  const md = generateMarkdown();
-  if (!md) return;
-  navigator.clipboard.writeText(md).then(() => {
-    showToast('Copied to clipboard');
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Merge drawing overlay with screenshot
-// ---------------------------------------------------------------------------
-function mergeDrawingWithScreenshot(
-  screenshotDataUrl: string,
-  drawingDataUrl: string,
-): Promise<string> {
-  return new Promise((resolve) => {
-    const screenshotImg = new Image();
-    screenshotImg.onload = () => {
-      const drawingImg = new Image();
-      drawingImg.onload = () => {
-        const canvas = document.createElement('canvas');
-        canvas.width = screenshotImg.width;
-        canvas.height = screenshotImg.height;
-        const ctx = canvas.getContext('2d')!;
-        // Draw screenshot as base
-        ctx.drawImage(screenshotImg, 0, 0);
-        // Draw the red pen overlay on top (scale drawing to match screenshot dimensions)
-        ctx.drawImage(drawingImg, 0, 0, canvas.width, canvas.height);
-        resolve(canvas.toDataURL('image/png'));
-      };
-      drawingImg.src = drawingDataUrl;
-    };
-    screenshotImg.src = screenshotDataUrl;
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Send to Funny
-// ---------------------------------------------------------------------------
-async function sendToFunny() {
-  if (annotations.length === 0 && !hasDrawingContent) {
-    showToast('No annotations or drawings to send');
-    return;
-  }
-
-  const sendBtn = toolbarEl.querySelector<HTMLButtonElement>('[data-action="send"]')!;
-  sendBtn.classList.add('toolbar-btn-loading');
-  sendBtn.setAttribute('disabled', 'true');
-
-  try {
-    // Exit draw mode if active so canvas is hidden before screenshot
-    const wasDrawing = isDrawing;
-    const drawingData = getDrawingDataUrl();
-    if (wasDrawing) toggleDrawMode();
-
-    // Take screenshot
-    let screenshot = await captureScreenshot();
-
-    // Merge drawing overlay onto screenshot
-    if (screenshot && drawingData) {
-      screenshot = await mergeDrawingWithScreenshot(screenshot, drawingData);
-    } else if (!screenshot && drawingData) {
-      // No screenshot available — use drawing as the image
-      screenshot = drawingData;
-    }
-
-    // Serialize annotations (strip domElement refs from each element)
-    const serialized = annotations.map((ann) => ({
-      ...ann,
-      elements: ann.elements.map(({ domElement: _domElement, ...rest }) => rest),
-    }));
-
-    let markdown = generateMarkdown();
-
-    // Include draw prompt if provided
-    const drawPrompt = drawPromptInput?.value?.trim() || '';
-    if (drawPrompt) {
-      markdown = markdown ? `${drawPrompt}\n\n${markdown}` : drawPrompt;
-    }
-    if (hasDrawingContent && !drawPrompt && !markdown) {
-      markdown = 'See the annotated screenshot — the red drawings highlight the areas of interest.';
-    }
-
-    // Send to background worker
-    safeSendMessage(
-      {
-        type: 'SEND_TO_FUNNY',
-        data: {
-          url: window.location.href,
-          title: document.title,
-          viewport: { width: window.innerWidth, height: window.innerHeight },
-          annotations: serialized,
-          markdown,
-          screenshot,
-        },
-      },
-      (response: any) => {
-        sendBtn.classList.remove('toolbar-btn-loading');
-        sendBtn.removeAttribute('disabled');
-
-        if (response?.success) {
-          // Save to history before clearing
-          saveToHistory(serialized, response.threadId, response.projectId);
-
-          // Clear all annotations and drawings
-          annotations = [];
-          clearMultiSelect();
-          clearDrawing();
-          if (drawPromptInput) drawPromptInput.value = '';
-          renderAnnotations();
-          updateToolbarCount();
-
-          showToast('Sent to Funny! Thread created.');
-        } else {
-          showToast(response?.error || 'Failed to send. Is Funny running?', true);
-        }
-      },
-    );
-  } catch (err: any) {
-    sendBtn.classList.remove('toolbar-btn-loading');
-    sendBtn.removeAttribute('disabled');
-    showToast(`Error: ${err.message}`, true);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Annotation history
-// ---------------------------------------------------------------------------
-/** An entry of `funnyHistory` in chrome.storage.local, written only by saveToHistory. */
-interface HistoryEntry {
-  id: string;
-  timestamp: number;
-  url: string;
-  title: string;
-  threadId: string | null;
-  projectId: string | null;
-  annotationCount: number;
-  annotations: any[];
-  serverUrl?: string;
-}
-
-interface FunnyHistoryStorage {
-  funnyHistory?: HistoryEntry[];
-}
-
-function saveToHistory(serializedAnnotations: any[], threadId?: string, projectId?: string) {
-  const entry: HistoryEntry = {
-    id: `hist_${Date.now()}`,
-    timestamp: Date.now(),
-    url: window.location.href,
-    title: document.title,
-    threadId: threadId || null,
-    projectId: projectId || null,
-    annotationCount: serializedAnnotations.length,
-    annotations: serializedAnnotations,
-  };
-
-  safeSendMessage({ type: 'GET_CONFIG' }, (config: any) => {
-    const serverUrl = config?.serverUrl || 'http://localhost:3001';
-    entry.serverUrl = serverUrl;
-
-    // Store in chrome.storage.local (keep last 50 entries)
-    chrome.storage.local.get<FunnyHistoryStorage>('funnyHistory', (result) => {
-      const history = result.funnyHistory ?? [];
-      history.unshift(entry);
-      if (history.length > 50) history.length = 50;
-      chrome.storage.local.set({ funnyHistory: history });
-    });
-  });
-}
-
-function captureScreenshot(): Promise<string | null> {
-  return new Promise((resolve) => {
-    safeSendMessage({ type: 'CAPTURE_SCREENSHOT' }, (response: any) => {
-      resolve(response?.screenshot || null);
-    });
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Copy screenshot to clipboard
-// ---------------------------------------------------------------------------
-async function copyScreenshotToClipboard() {
-  try {
-    // Get drawing overlay if any
-    const drawingData = getDrawingDataUrl();
-
-    // Hide toolbars temporarily for a clean screenshot
-    const drawToolbarDisplay = drawToolbar.style.display;
-    const toolbarDisplay = toolbarEl.style.display;
-    drawToolbar.style.display = 'none';
-    toolbarEl.style.display = 'none';
-
-    let screenshot = await captureScreenshot();
-
-    // Restore toolbars
-    drawToolbar.style.display = drawToolbarDisplay;
-    toolbarEl.style.display = toolbarDisplay;
-
-    // Merge drawing overlay onto screenshot if there are drawings
-    if (screenshot && drawingData) {
-      screenshot = await mergeDrawingWithScreenshot(screenshot, drawingData);
-    } else if (!screenshot && drawingData) {
-      screenshot = drawingData;
-    }
-
-    if (!screenshot) {
-      showToast('Failed to capture screenshot', true);
-      return;
-    }
-
-    // Convert data URL to blob and copy to clipboard
-    const response = await fetch(screenshot);
-    const blob = await response.blob();
-    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-
-    showToast('Screenshot copied to clipboard!');
-  } catch (err: any) {
-    showToast(`Failed to copy: ${err.message}`, true);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Toast
-// ---------------------------------------------------------------------------
-function showToast(message: string, isError = false) {
-  const existing = shadowRoot.querySelector('.toast');
-  if (existing) existing.remove();
-
-  const toast = createElement('div', `toast ${isError ? 'toast-error' : ''}`);
-  toast.textContent = message;
-  shadowRoot.appendChild(toast);
-
-  setTimeout(() => toast.classList.add('toast-visible'), 10);
-  setTimeout(() => {
-    toast.classList.remove('toast-visible');
-    setTimeout(() => toast.remove(), 300);
-  }, 3000);
+  st.toolbarEl = createToolbar();
+  st.shadowRoot.appendChild(st.toolbarEl);
 }
 
 // ---------------------------------------------------------------------------
 // Event handlers
 // ---------------------------------------------------------------------------
 function onMouseMove(e: MouseEvent) {
-  if (!isActive || isBrowsing || isDrawing || popover.style.display === 'block') return;
+  if (!st.isActive || st.isBrowsing || st.isDrawing || st.popover.style.display === 'block') return;
 
   const el = document.elementFromPoint(e.clientX, e.clientY);
-  if (!el || el === shadowHost || shadowHost.contains(el)) {
+  if (!el || el === st.shadowHost || st.shadowHost.contains(el)) {
     hideHoverHighlight();
     return;
   }
@@ -2479,22 +135,22 @@ function onMouseMove(e: MouseEvent) {
 }
 
 function onClick(e: MouseEvent) {
-  if (!isActive) return;
+  if (!st.isActive) return;
 
   // Ignore clicks on our own UI (use composedPath to reliably cross shadow DOM boundaries)
-  if (e.composedPath().includes(shadowHost)) return;
+  if (e.composedPath().includes(st.shadowHost)) return;
 
   // In browse mode or draw mode, let clicks pass through / be handled by canvas
-  if (isBrowsing || isDrawing) return;
+  if (st.isBrowsing || st.isDrawing) return;
 
   // Close settings panel if open
-  if (settingsPanel.style.display === 'block') {
+  if (st.settingsPanel.style.display === 'block') {
     hideSettingsPanel();
     return;
   }
 
   // Ignore if popover is open
-  if (popover.style.display === 'block') {
+  if (st.popover.style.display === 'block') {
     hidePopover();
     return;
   }
@@ -2507,11 +163,11 @@ function onClick(e: MouseEvent) {
 
   // Ctrl+click (or Cmd+click on Mac): toggle element in/out of multi-selection
   if (e.ctrlKey || e.metaKey) {
-    const idx = multiSelectElements.indexOf(el);
+    const idx = st.multiSelectElements.indexOf(el);
     if (idx >= 0) {
-      multiSelectElements.splice(idx, 1);
+      st.multiSelectElements.splice(idx, 1);
     } else {
-      multiSelectElements.push(el);
+      st.multiSelectElements.push(el);
     }
     renderMultiSelectHighlights();
     hideHoverHighlight();
@@ -2519,10 +175,10 @@ function onClick(e: MouseEvent) {
   }
 
   // Normal click with pending multi-selection → open popover for all
-  if (multiSelectElements.length > 0) {
+  if (st.multiSelectElements.length > 0) {
     // Add the clicked element too if not already selected
-    if (!multiSelectElements.includes(el)) {
-      multiSelectElements.push(el);
+    if (!st.multiSelectElements.includes(el)) {
+      st.multiSelectElements.push(el);
       renderMultiSelectHighlights();
     }
     showPopoverForMultiSelect(e.clientX, e.clientY);
@@ -2534,17 +190,17 @@ function onClick(e: MouseEvent) {
 }
 
 function onKeyDown(e: KeyboardEvent) {
-  if (!isActive) return;
+  if (!st.isActive) return;
   if (e.key === 'Escape') {
-    if (isDrawing) {
+    if (st.isDrawing) {
       toggleDrawMode();
-    } else if (historyPanel.style.display === 'block') {
+    } else if (st.historyPanel.style.display === 'block') {
       hideHistoryPanel();
-    } else if (settingsPanel.style.display === 'block') {
+    } else if (st.settingsPanel.style.display === 'block') {
       hideSettingsPanel();
-    } else if (popover.style.display === 'block') {
+    } else if (st.popover.style.display === 'block') {
       hidePopover();
-    } else if (multiSelectElements.length > 0) {
+    } else if (st.multiSelectElements.length > 0) {
       clearMultiSelect();
     } else {
       deactivate();
@@ -2557,10 +213,10 @@ function onKeyDown(e: KeyboardEvent) {
 // Activate / Deactivate
 // ---------------------------------------------------------------------------
 async function activate() {
-  if (isActive) return;
-  isActive = true;
-  if (!shadowHost) await createShadowHost();
-  toolbarEl.style.display = 'flex';
+  if (st.isActive) return;
+  st.isActive = true;
+  if (!st.shadowHost) await createShadowHost();
+  st.toolbarEl.style.display = 'flex';
 
   // Inject page-bridge.js into MAIN world (for framework detection).
   // Done via background script to bypass CSP restrictions.
@@ -2576,8 +232,8 @@ async function activate() {
   window.addEventListener('scroll', onScrollOrResize, true);
   window.addEventListener('resize', onScrollOrResize, true);
   // Drag listeners (registered on activate, removed on deactivate)
-  document.addEventListener('mousemove', dragMoveHandler!);
-  document.addEventListener('mouseup', dragUpHandler!);
+  document.addEventListener('mousemove', st.dragMoveHandler!);
+  document.addEventListener('mouseup', st.dragUpHandler!);
 
   renderAnnotations();
   updateToolbarCount();
@@ -2585,47 +241,47 @@ async function activate() {
 }
 
 function deactivate() {
-  isActive = false;
+  st.isActive = false;
   hideHoverHighlight();
   hidePopover();
   hideSettingsPanel();
   hideHistoryPanel();
   clearMultiSelect();
-  toolbarEl.style.display = 'none';
-  highlightContainer.innerHTML = '';
-  badgeContainer.innerHTML = '';
-  annotationOverlays = [];
+  st.toolbarEl.style.display = 'none';
+  st.highlightContainer.innerHTML = '';
+  st.badgeContainer.innerHTML = '';
+  st.annotationOverlays = [];
 
   document.removeEventListener('mousemove', onMouseMove, true);
   document.removeEventListener('click', onClick, true);
   document.removeEventListener('keydown', onKeyDown, true);
   window.removeEventListener('scroll', onScrollOrResize, true);
   window.removeEventListener('resize', onScrollOrResize, true);
-  document.removeEventListener('mousemove', dragMoveHandler!);
-  document.removeEventListener('mouseup', dragUpHandler!);
+  document.removeEventListener('mousemove', st.dragMoveHandler!);
+  document.removeEventListener('mouseup', st.dragUpHandler!);
 
   // Cancel any pending rAF
-  if (scrollRafId) {
-    cancelAnimationFrame(scrollRafId);
-    scrollRafId = null;
+  if (st.scrollRafId) {
+    cancelAnimationFrame(st.scrollRafId);
+    st.scrollRafId = null;
   }
 
   // Exit draw mode if active
-  if (isDrawing) toggleDrawMode();
+  if (st.isDrawing) toggleDrawMode();
   clearDrawing();
 
   // Clear test-id labels if visible
-  if (testIdLabelsVisible) {
-    testIdLabelsVisible = false;
+  if (st.testIdLabelsVisible) {
+    st.testIdLabelsVisible = false;
     clearTestIdLabels();
   }
 
   // Resume animations if paused
-  if (isPaused) {
+  if (st.isPaused) {
     document.getAnimations().forEach((a) => a.play());
-    isPaused = false;
+    st.isPaused = false;
   }
-  isBrowsing = false;
+  st.isBrowsing = false;
 }
 
 // ---------------------------------------------------------------------------
@@ -2633,17 +289,17 @@ function deactivate() {
 // ---------------------------------------------------------------------------
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg.type === 'TOGGLE_ANNOTATOR') {
-    if (isActive) {
+    if (st.isActive) {
       deactivate();
     } else {
       activate();
     }
-    sendResponse({ active: isActive });
+    sendResponse({ active: st.isActive });
   } else if (msg.type === 'GET_STATE') {
     sendResponse({
-      active: isActive,
-      annotationCount: annotations.length,
-      annotations: annotations.map((ann) => ({
+      active: st.isActive,
+      annotationCount: st.annotations.length,
+      annotations: st.annotations.map((ann) => ({
         ...ann,
         elements: ann.elements.map(({ domElement: _domElement, ...rest }) => rest),
       })),
@@ -2651,7 +307,7 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   } else if (msg.type === 'GET_MARKDOWN') {
     sendResponse({ markdown: generateMarkdown() });
   } else if (msg.type === 'CLEAR_ANNOTATIONS') {
-    annotations = [];
+    st.annotations = [];
     clearMultiSelect();
     renderAnnotations();
     updateToolbarCount();
@@ -2663,36 +319,16 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   // No async responses needed — don't return true
 });
 
-// ---------------------------------------------------------------------------
-// Runtime disconnect handler
-// ---------------------------------------------------------------------------
-// When the extension is updated/reloaded, chrome.runtime becomes invalid.
-// Wrap sendMessage calls to avoid "Extension context invalidated" errors.
-function safeSendMessage(msg: any, callback?: (response: any) => void) {
-  try {
-    if (runtimeDisconnected) return;
-    chrome.runtime.sendMessage(msg, (response) => {
-      if (chrome.runtime.lastError) {
-        runtimeDisconnected = true;
-        console.warn('[Funny Annotator] Extension disconnected:', chrome.runtime.lastError.message);
-        return;
-      }
-      if (callback) callback(response);
-    });
-  } catch {
-    runtimeDisconnected = true;
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Styles (loaded from external content.css)
-// ---------------------------------------------------------------------------
-async function loadStyles(): Promise<string> {
-  try {
-    const url = chrome.runtime.getURL('content.css');
-    const res = await fetch(url);
-    return await res.text();
-  } catch {
-    return ''; // Styles will be missing but extension won't crash
-  }
-}
+registerContentActions({
+  copyScreenshotToClipboard,
+  deactivate,
+  hideHistoryPanel,
+  hidePopover,
+  hideSettingsPanel,
+  positionPopoverAtPoint,
+  sendToFunny,
+  showPopoverForEdit,
+  toggleBrowseMode,
+  updateToolbarCount,
+  updateToolbarProjectName,
+});

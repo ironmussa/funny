@@ -231,6 +231,7 @@ export function FactoryBoard({ runs, now, ...rest }: Props) {
     review: t('factoryBoard.column.review', 'Review'),
     merge: t('factoryBoard.column.merge', 'Merge'),
     needs_person: t('factoryBoard.column.needsPerson', 'Needs a person'),
+    waiting_parts: t('factoryBoard.column.waitingParts', 'Waiting on parts'),
     done: t('factoryBoard.column.done', 'Done'),
   };
   return (

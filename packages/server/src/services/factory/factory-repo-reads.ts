@@ -228,6 +228,16 @@ export function createFactoryRepoReads(
         .map(() => undefined);
     },
 
+    /** Close an issue as completed, as the App. */
+    closeIssue(issueNumber: number): ResultAsync<void, GithubCallError> {
+      return github
+        .json(repo, 'PATCH', `/repos/${repo}/issues/${issueNumber}`, {
+          state: 'closed',
+          state_reason: 'completed',
+        })
+        .map(() => undefined);
+    },
+
     /** Open an issue, as the App. */
     createIssue(issue: {
       title: string;

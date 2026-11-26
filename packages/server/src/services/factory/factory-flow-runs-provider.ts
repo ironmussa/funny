@@ -294,11 +294,14 @@ export function splitDepsFor(
       const created = await open(reader, issue);
       return created.isOk() ? ok(created.value.number) : err(created.error.message);
     },
-    queue: async (issueNumbers) => {
-      if (issueNumbers.length === 0) return;
+    queue: async (parts) => {
+      if (parts.length === 0) return;
+      const issueNumbers = parts.map((part) => part.number);
       const queued = await deps.runs.enqueue({
         factoryId: job.factory.id,
         issueNumbers,
+        // The part's title, so its card names it before triage reads the issue.
+        issueTitles: new Map(parts.map((part) => [part.number, part.title])),
         flowName: flowOf(job),
       });
       if (queued.isErr()) {
@@ -500,6 +503,7 @@ export function createRunProvider(ctx: FlowRunsContext, attempt: RunAttempt) {
       }),
     ...issueDepsOf(deps, job, scope),
     split: splitDepsOf(deps, job, scope),
+    dropLabel: async () => splitDepsFor(deps, job, scope)?.release(true),
     sensitivePaths: job.factory.sensitivePaths,
     maxLowRiskLines: job.factory.sizeGateEnabled ? job.factory.maxLowRiskLines : null,
     lintCleanup: async () => {

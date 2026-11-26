@@ -47,8 +47,8 @@ export class NativeRendererErrorBoundary extends Component<
 > {
   state: NativeRendererErrorBoundaryState = { error: null };
 
-  static getDerivedStateFromError(error: unknown): NativeRendererErrorBoundaryState {
-    return { error: error instanceof Error ? error.message : String(error) };
+  static getDerivedStateFromError(cause: unknown): NativeRendererErrorBoundaryState {
+    return { error: cause instanceof Error ? cause.message : String(cause) };
   }
 
   componentDidCatch(error: Error, info: ErrorInfo): void {

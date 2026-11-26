@@ -54,7 +54,11 @@ import { FactoryBoardChip } from './FactoryBoardChip';
 import { FactoryRunDependencyNote } from './FactoryRunDependencyNote';
 import { FactoryRunGateChips } from './FactoryRunGateChips';
 import { FactoryRunStatus, type FactoryRunSelectionProps } from './FactoryRunStatus';
-import { factoryRunCardThreadLinks, FactoryRunThreadMenuItems } from './FactoryRunThreadLinks';
+import {
+  factoryRunCardThreadLinks,
+  FactoryRunLastThreadLink,
+  FactoryRunThreadMenuItems,
+} from './FactoryRunThreadLinks';
 import { type FactoryRunDependencyLookup, NO_FACTORY_RUN_DEPENDENCIES } from './run-dependencies';
 import { useFactoryRunPrState } from './run-pr-state';
 import { factoryBoardStateChip } from './run-state-chip';
@@ -343,6 +347,7 @@ function QueuedFactoryRunCard({
       footer={
         <>
           <FactoryRunProject name={projectName} />
+          <FactoryRunLastThreadLink run={run} />
           {/* A run with no thread has no git status to carry its pull request. */}
           {prNumber !== null && (
             <PRBadge
@@ -374,6 +379,17 @@ function QueuedFactoryRunCard({
 /** The run's threads, at the bottom of the card's menu under its actions; null with none. */
 function runThreadMenuItems(run: Props['run']) {
   return factoryRunCardThreadLinks(run).length > 0 ? <FactoryRunThreadMenuItems run={run} /> : null;
+}
+
+/** A card's actions, then the run's threads; null when there is neither. */
+function withThreadItems(menuItems: ReactNode, threadItems: ReactNode): ReactNode {
+  if (!menuItems && !threadItems) return null;
+  return (
+    <>
+      {menuItems}
+      {threadItems}
+    </>
+  );
 }
 
 /** The time in the step, which takes the footer's time slot in place of the card's age. */
@@ -447,7 +463,7 @@ export const FactoryRunCard = memo(function FactoryRunCard({
         now={now}
         testId={testId}
         stepTime={stepTime}
-        menuItems={menuItems}
+        menuItems={withThreadItems(menuItems, threadItems)}
         status={status}
         below={below}
         onOpen={open}
@@ -473,7 +489,12 @@ export const FactoryRunCard = memo(function FactoryRunCard({
       status={status}
       // No powerline: each of the run's threads has its own worktree and diff,
       // so the card links the threads (under its chips) instead of one branch.
-      footerLead={<FactoryRunProject name={projectName} />}
+      footerLead={
+        <>
+          <FactoryRunProject name={projectName} />
+          <FactoryRunLastThreadLink run={run} />
+        </>
+      }
       below={below}
     >
       {body}

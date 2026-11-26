@@ -6,6 +6,7 @@ import { HarnessError, toHarnessError } from '../errors.js';
 import type { HarnessEvent } from '../events.js';
 import { nowIso } from '../events.js';
 import type {
+  CoreAgentMessage,
   CoreAgentProcessLike,
   CoreAgentProcessOptions,
   CoreProcessFactoryLike,
@@ -86,7 +87,7 @@ export interface SandboxManagerLike {
     requestId: string;
     worktreePath: string;
     env?: Record<string, string>;
-  }): Promise<unknown>;
+  }): Promise<void>;
   createSpawnFn(requestId: string): SandboxExecutionHandle['spawnClaudeCodeProcess'];
   stopSandbox(requestId: string): Promise<void>;
 }
@@ -183,7 +184,7 @@ function waitForProcess(
       );
     };
 
-    const onMessage = (msg: unknown) => {
+    const onMessage = (msg: CoreAgentMessage) => {
       for (const event of normalizeCoreMessage(msg)) emit(event);
       if (isResultMessage(msg)) {
         const errors = Array.isArray(msg.errors) ? msg.errors.join('\n') : undefined;
@@ -231,7 +232,9 @@ function waitForProcess(
   });
 }
 
-function normalizeCoreMessage(msg: unknown): HarnessEvent[] {
+function normalizeCoreMessage(message: CoreAgentMessage): HarnessEvent[] {
+  // Read as the fields the harness knows; a provider may emit any of them.
+  const msg: AgentStreamRecord = message;
   if (!isRecord(msg)) {
     return [{ type: 'session.raw', timestamp: nowIso(), raw: msg }];
   }
@@ -290,7 +293,7 @@ function normalizeCoreMessage(msg: unknown): HarnessEvent[] {
   return [{ type: 'session.raw', timestamp: nowIso(), raw: msg }];
 }
 
-function isResultMessage(msg: unknown): msg is {
+function isResultMessage<T>(msg: T): msg is T & {
   type: 'result';
   subtype: string;
   is_error: boolean;
@@ -319,7 +322,7 @@ interface AgentStreamRecord {
   session_id?: unknown;
 }
 
-function isRecord(value: unknown): value is AgentStreamRecord {
+function isRecord<T>(value: T): value is T & AgentStreamRecord {
   return typeof value === 'object' && value !== null;
 }
 
@@ -343,8 +346,8 @@ async function runLocalCommand(request: HarnessCommandRequest): Promise<HarnessC
         : undefined;
     // If the kill itself fails the child may keep running: report it instead of hanging.
     if (timeout)
-      void timeout.done.catch((err: unknown) => {
-        const reason = err instanceof Error ? err.message : String(err);
+      void timeout.done.catch((cause: unknown) => {
+        const reason = cause instanceof Error ? cause.message : String(cause);
         resolve({ ok: false, stdout, stderr, error: `Command timed out; kill failed: ${reason}` });
       });
 

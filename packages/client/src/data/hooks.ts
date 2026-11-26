@@ -31,8 +31,25 @@ export interface DataQueryOptions<T> {
   refetchInterval?: number | ((query: QueryStatusView) => number | false | undefined);
 }
 
-/** One observer per query client and key, shared by every component reading that key. */
+/**
+ * One observer per query client, key and behavior options, shared by every
+ * component reading that key the same way. Readers of one key with different
+ * options (a cache-only `enabled: false` reader next to a fetching one) get
+ * separate observers on the same cached query: a shared observer would have
+ * each reader's `setOptions` undo the other's on every render, a loop React
+ * stops with "Maximum update depth exceeded".
+ */
 const observers = new WeakMap<QueryClient, Map<string, QueryObserver<unknown>>>();
+
+function observerHash<T>(options: DataQueryOptions<T>): string {
+  const interval = options.refetchInterval;
+  return hashKey([
+    options.queryKey,
+    options.enabled ?? true,
+    options.staleTime ?? null,
+    interval instanceof Function ? 'fn' : (interval ?? null),
+  ]);
+}
 
 function observerFor<T>(client: QueryClient, options: DataQueryOptions<T>): QueryObserver<T> {
   let byKey = observers.get(client);
@@ -40,7 +57,7 @@ function observerFor<T>(client: QueryClient, options: DataQueryOptions<T>): Quer
     byKey = new Map();
     observers.set(client, byKey);
   }
-  const keyHash = hashKey(options.queryKey);
+  const keyHash = observerHash(options);
   // SAFETY: a query key is read with one data type T everywhere (the key names
   // one request), and the observer under this hash was built from that key's options.
   let observer = byKey.get(keyHash) as QueryObserver<T> | undefined;

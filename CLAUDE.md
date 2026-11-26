@@ -124,7 +124,8 @@ bun run db:studio
 
 - `Sidebar` — Project list with collapsible accordion, thread list with status badges, folder picker for adding projects
 - `NewThreadDialog` — Thread creation with mode (local/worktree), model (haiku/sonnet/opus), branch selection, and prompt
-- `ThreadView` — Chat-style message display with tool call cards, input, stop button, and review pane toggle
+- `ThreadView` — Chat-style message display with tool call cards, input and stop button, under the thread's own header (`ProjectHeader`: breadcrumb, title, startup commands, preview, share, ⋮)
+- `ToolRail` — The column of icons at the right edge of the window that opens the tool panels (review, files, comments, activity) and the tests, terminal and browser (openspec `tool-panels`). The panels are declared once in `lib/tool-panels/registry.ts`, which the rail, the Alt+key shortcuts and `?panel=` read; which one is open lives in `ui-store`'s `openPanels` (`openPanel` / `togglePanel` / `closeRightPanel`). Add a panel there, never as a new boolean or header button.
 - `ToolCallCard` — Collapsible card showing tool name, summary, and expandable JSON input
 - `ReviewPane` — Git diff viewer with stage/unstage/revert/commit/push/PR actions
 - `PromptInput` — Textarea with model/mode selectors (shadcn Select) and send/stop buttons

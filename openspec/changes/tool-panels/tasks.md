@@ -10,11 +10,11 @@
 
 ## 2. Thread header and tool rail
 
-- [ ] 2.1 Add `ToolRail` (shadcn `Button` + `Tooltip`, `tool-rail-<id>` test ids, active state, i18n titles in en/es/pt) as a sibling of the dockview, rendered for the open thread, project, or grid selection; verify with a component test for open, switch, close and hidden-when-unavailable
-- [ ] 2.2 Move `ProjectHeader` into the thread panel and remove the panel toggles from `ThreadHeaderActionsBase`; route the ⋮ menu's activity/comments items through `togglePanel`; verify the header tests and that the right pane reaches the top of the window in the Storybook layout story
-- [ ] 2.3 (Alt+key toggles already read the registry since 1.3) Move the remaining keyboard shortcut hints (Alt+G and the others) to the registry's `shortcut`; verify with a shortcut test that rail and URL update
-- [ ] 2.4 Update e2e tests from `header-toggle-*` to `tool-rail-*`; verify the affected Playwright specs pass
-- [ ] 2.5 Update `openwiki` (client layout section) and the client `CLAUDE.md` "Key components" list to describe the registry and rail
+- [x] 2.1 Add `ToolRail` (shadcn `Button` + `Tooltip`, `tool-rail-<id>` test ids, active state, i18n titles in en/es/pt) as a sibling of the dockview, rendered for the open thread, project, or grid selection; verify with a component test for open, switch, close and hidden-when-unavailable
+- [x] 2.2 Move `ProjectHeader` into the thread panel and remove the panel toggles from `ThreadHeaderActionsBase`; route the ⋮ menu's activity/comments items through `togglePanel`; verify the header tests and the ToolRail component test
+- [x] 2.3 Alt+key toggles and the rail's shortcut hints read the registry's `altKey`; verified by the shortcut tests and the ToolRail test
+- [ ] 2.4 Update e2e tests from `header-toggle-*` to `tool-rail-*` (ids renamed; the Playwright run against a live app is still pending); verify the affected Playwright specs pass
+- [x] 2.5 Update the root `CLAUDE.md` "Key components" list (openwiki has no client layout section) to describe the registry and rail
 
 ## 3. One dockview
 

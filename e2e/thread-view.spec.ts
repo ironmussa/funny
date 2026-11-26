@@ -35,7 +35,7 @@ test.describe('5. Thread View', () => {
     await page.waitForLoadState('networkidle');
 
     // Project header with toggle review should be visible
-    await expect(page.getByTestId('header-toggle-review')).toBeVisible();
+    await expect(page.getByTestId('tool-rail-review')).toBeVisible();
   });
 
   test('5.11 Scroll to bottom button', async ({ authedPage: page }) => {

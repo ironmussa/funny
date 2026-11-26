@@ -37,7 +37,7 @@ test.describe('C. Responsive / Viewport', () => {
     await page.waitForLoadState('networkidle');
 
     // Open review pane
-    await page.getByTestId('header-toggle-review').click();
+    await page.getByTestId('tool-rail-review').click();
     await page.waitForTimeout(500);
 
     // Both thread view and review pane should be visible simultaneously
@@ -80,7 +80,7 @@ test.describe('C. Responsive / Viewport', () => {
     await page.goto(`/projects/${projectId}/threads/${threadId}`);
     await page.waitForLoadState('networkidle');
 
-    await page.getByTestId('header-toggle-review').click();
+    await page.getByTestId('tool-rail-review').click();
     await page.waitForTimeout(500);
 
     // The resize handle should exist (aria-label="Resize review pane")

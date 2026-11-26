@@ -26,7 +26,7 @@ test.describe('7. Review Pane', () => {
 
   test('7.1 Toggle review pane open', async ({ authedPage: page }) => {
     // Click the review toggle in the header
-    await page.getByTestId('header-toggle-review').click();
+    await page.getByTestId('tool-rail-review').click();
     await page.waitForTimeout(500);
 
     // Review pane controls should appear
@@ -36,7 +36,7 @@ test.describe('7. Review Pane', () => {
 
   test('7.2 Close review pane', async ({ authedPage: page }) => {
     // Open review pane
-    await page.getByTestId('header-toggle-review').click();
+    await page.getByTestId('tool-rail-review').click();
     await page.waitForTimeout(500);
 
     await expect(page.getByTestId('review-close')).toBeVisible();
@@ -54,7 +54,7 @@ test.describe('7. Review Pane', () => {
     fs.writeFileSync(path.join(repoPath, 'test-file.txt'), 'hello world\n');
 
     // Open review pane
-    await page.getByTestId('header-toggle-review').click();
+    await page.getByTestId('tool-rail-review').click();
     await page.waitForTimeout(500);
 
     // Refresh to load the diff
@@ -81,7 +81,7 @@ test.describe('7. Review Pane', () => {
     fs.writeFileSync(path.join(repoPath, 'file-a.txt'), 'a\n');
     fs.writeFileSync(path.join(repoPath, 'file-b.txt'), 'b\n');
 
-    await page.getByTestId('header-toggle-review').click();
+    await page.getByTestId('tool-rail-review').click();
     await page.waitForTimeout(500);
     await page.getByTestId('review-refresh').click();
     await page.waitForTimeout(1000);
@@ -99,7 +99,7 @@ test.describe('7. Review Pane', () => {
     // Create a dirty file
     fs.writeFileSync(path.join(repoPath, 'commit-test.txt'), 'commit me\n');
 
-    await page.getByTestId('header-toggle-review').click();
+    await page.getByTestId('tool-rail-review').click();
     await page.waitForTimeout(500);
     await page.getByTestId('review-refresh').click();
     await page.waitForTimeout(1000);
@@ -117,7 +117,7 @@ test.describe('7. Review Pane', () => {
   });
 
   test('7.20 Refresh button reloads diff', async ({ authedPage: page }) => {
-    await page.getByTestId('header-toggle-review').click();
+    await page.getByTestId('tool-rail-review').click();
     await page.waitForTimeout(500);
 
     // Intercept diff/summary API call
@@ -130,7 +130,7 @@ test.describe('7. Review Pane', () => {
   });
 
   test('7.22 Commit log popover', async ({ authedPage: page }) => {
-    await page.getByTestId('header-toggle-review').click();
+    await page.getByTestId('tool-rail-review').click();
     await page.waitForTimeout(500);
 
     const commitLog = page.getByTestId('review-commit-log');
@@ -153,7 +153,7 @@ test.describe('7. Review Pane', () => {
     });
 
     test('7.3 Diff summary loads', async ({ authedPage: page }) => {
-      await page.getByTestId('header-toggle-review').click();
+      await page.getByTestId('tool-rail-review').click();
       await page.waitForTimeout(500);
       await page.getByTestId('review-refresh').click();
       await page.waitForTimeout(1500);
@@ -164,7 +164,7 @@ test.describe('7. Review Pane', () => {
     });
 
     test('7.13 Commit action stages and commits', async ({ authedPage: page }) => {
-      await page.getByTestId('header-toggle-review').click();
+      await page.getByTestId('tool-rail-review').click();
       await page.waitForTimeout(500);
       await page.getByTestId('review-refresh').click();
       await page.waitForTimeout(1500);
@@ -193,7 +193,7 @@ test.describe('7. Review Pane', () => {
     });
 
     test('7.24 Discard all confirmation', async ({ authedPage: page }) => {
-      await page.getByTestId('header-toggle-review').click();
+      await page.getByTestId('tool-rail-review').click();
       await page.waitForTimeout(500);
       await page.getByTestId('review-refresh').click();
       await page.waitForTimeout(1500);
@@ -219,7 +219,7 @@ test.describe('7. Review Pane', () => {
 
   test.describe('PR dialog', () => {
     test('7.16 Create PR dialog fields', async ({ authedPage: page }) => {
-      await page.getByTestId('header-toggle-review').click();
+      await page.getByTestId('tool-rail-review').click();
       await page.waitForTimeout(500);
 
       // The PR button may only be visible in worktree mode with unpushed commits

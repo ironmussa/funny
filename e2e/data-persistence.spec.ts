@@ -85,7 +85,7 @@ test.describe('H. Data Persistence & State', () => {
     await page.waitForLoadState('networkidle');
 
     // Open review pane
-    await page.getByTestId('header-toggle-review').click();
+    await page.getByTestId('tool-rail-review').click();
     await page.waitForTimeout(500);
 
     // Check if review_pane_width is stored in localStorage
@@ -95,7 +95,7 @@ test.describe('H. Data Persistence & State', () => {
     // Close and reopen — it should restore the same width
     await page.getByTestId('review-close').click();
     await page.waitForTimeout(300);
-    await page.getByTestId('header-toggle-review').click();
+    await page.getByTestId('tool-rail-review').click();
     await page.waitForTimeout(500);
 
     // Review pane should be visible (restored)

@@ -105,15 +105,12 @@ test.describe('A. Accessibility', () => {
     await page.waitForLoadState('networkidle');
 
     // Review pane toggle should have accessible label
-    const toggleReview = page.getByTestId('header-toggle-review');
+    const toggleReview = page.getByTestId('tool-rail-review');
     if (await toggleReview.isVisible().catch(() => false)) {
       const ariaLabel = await toggleReview.getAttribute('aria-label');
       const title = await toggleReview.getAttribute('title');
       const text = (await toggleReview.textContent())?.trim();
-      expect(
-        ariaLabel || title || text,
-        'header-toggle-review needs accessible label',
-      ).toBeTruthy();
+      expect(ariaLabel || title || text, 'tool-rail-review needs accessible label').toBeTruthy();
     }
   });
 

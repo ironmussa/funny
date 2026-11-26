@@ -16,7 +16,7 @@ test.describe('Scratch threads', () => {
     await expect(page.getByTestId('new-thread-scratch-prompt')).toBeVisible();
 
     // No review pane should be available for scratch threads.
-    await expect(page.getByTestId('header-toggle-review')).toHaveCount(0);
+    await expect(page.getByTestId('tool-rail-review')).toHaveCount(0);
 
     // Branch picker / project context should NOT be rendered.
     await expect(page.getByTestId('new-thread-branch-picker')).toHaveCount(0);

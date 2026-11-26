@@ -137,7 +137,7 @@ test.describe('D. API Error Handling', () => {
     await page.waitForLoadState('networkidle');
 
     // Open review pane
-    await page.getByTestId('header-toggle-review').click();
+    await page.getByTestId('tool-rail-review').click();
     await page.waitForTimeout(1000);
 
     // Review pane should still render (even with error)

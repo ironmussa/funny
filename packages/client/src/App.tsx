@@ -19,6 +19,7 @@ import { ReviewPaneStateProvider } from '@/components/review-pane/ReviewPaneStat
 import { RunnerOnboardingBanner } from '@/components/RunnerOnboardingBanner';
 import { useTerminalDockview } from '@/components/terminal/TerminalDockview';
 import { ProjectHeader } from '@/components/thread/ProjectHeader';
+import { ToolRail } from '@/components/tool-rail/ToolRail';
 import { LoadingState } from '@/components/ui/loading-state';
 import { SidebarProvider, SidebarInset, useSidebar } from '@/components/ui/sidebar';
 import { loadTemplates } from '@/data/templates/loaders';
@@ -216,6 +217,20 @@ function useRightPaneCanShowGit(liveColumnsOpen: boolean, gridSelectedThreadId: 
   return gridSelectedThreadId ? gridSelectedCanDoGit : false;
 }
 
+/** The thread panel: its own header (hidden under full-screen views) above the thread. */
+function ThreadPanel({ showHeader, children }: { showHeader: boolean; children: ReactNode }) {
+  return (
+    <div className="flex h-full w-full flex-col">
+      {showHeader && (
+        <ErrorBoundary area="project-header">
+          <ProjectHeader />
+        </ErrorBoundary>
+      )}
+      <div className="min-h-0 flex-1">{children}</div>
+    </div>
+  );
+}
+
 export function App() {
   useAppScrollLock();
 
@@ -327,13 +342,15 @@ export function App() {
   // The grid view is full-screen, but unlike the other full-screen views it
   // hosts the right pane in a sibling dockview slot (acting on the selected
   // thread). Allow it through when a thread is selected. See `grid-thread-actions`.
-  const rightPaneVisible = isRightPaneVisible(
-    reviewPaneOpen,
+  // The rail shows wherever a right panel could (openspec `tool-panels`).
+  const toolRailVisible = isRightPaneVisible(
+    true,
     isFullScreenView,
     liveColumnsOpen,
     gridSelectedThreadId,
     !!effectiveId || hasSelectedProject,
   );
+  const rightPaneVisible = reviewPaneOpen && toolRailVisible;
   const reviewSubTab = useUIStore((s) => s.reviewSubTab);
   const setReviewSubTabStore = useUIStore((s) => s.setReviewSubTab);
 
@@ -454,11 +471,6 @@ export function App() {
 
   const centerPanel = (
     <SidebarInset className="relative flex h-full flex-col overflow-hidden">
-      {!isFullScreenView && (
-        <ErrorBoundary area="project-header">
-          <ProjectHeader />
-        </ErrorBoundary>
-      )}
       <ErrorBoundary area="runner-onboarding">
         {/* The runner status arrives after the primary layout. Keep its banner
         out of normal flow so it cannot resize the Dockview and cause CLS. */}
@@ -475,7 +487,7 @@ export function App() {
       </ErrorBoundary>
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
         <CenterDockview
-          thread={threadContent}
+          thread={<ThreadPanel showHeader={!isFullScreenView}>{threadContent}</ThreadPanel>}
           right={singleRightPanel}
           rightTabs={rightTabs}
           activeRightTab={reviewSubTab}
@@ -507,6 +519,11 @@ export function App() {
               browserPanelWidth={browserPanelWidth}
             />
           </ReviewPaneStateProvider>
+          {toolRailVisible && (
+            <ErrorBoundary area="tool-rail">
+              <ToolRail />
+            </ErrorBoundary>
+          )}
         </div>
 
         {/* Global overlays — kept inside ThreadProvider so dialogs that read

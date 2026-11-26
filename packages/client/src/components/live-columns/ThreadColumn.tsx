@@ -169,10 +169,7 @@ export const ThreadColumn = memo(function ThreadColumn({
         <div ref={dragHandleRef} className="shrink-0 cursor-grab active:cursor-grabbing">
           <ProjectHeader
             hideActions
-            hideFiles
-            hideTests
             hideStartup
-            hideTerminal
             hideTimeline
             leading={
               <>

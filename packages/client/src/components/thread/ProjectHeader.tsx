@@ -32,14 +32,11 @@ export const ThreadHeaderActions = memo(function ThreadHeaderActions({
 });
 
 interface ProjectHeaderProps {
-  hideFiles?: boolean;
-  hideTests?: boolean;
   hideStartup?: boolean;
-  hideTerminal?: boolean;
   hideTimeline?: boolean;
   /**
-   * Suppress the entire thread action cluster (review/files/tests/comments/
-   * share/more). Used by the grid column header (`ThreadColumn`), where those
+   * Suppress the entire thread action cluster (startup, preview, share,
+   * more). Used by the grid column header (`ThreadColumn`), where those
    * actions are consolidated into the grid's view header bound to the selected
    * thread. `trailing` (e.g. the per-cell remove button) is still rendered.
    */
@@ -49,10 +46,7 @@ interface ProjectHeaderProps {
 }
 
 export const ProjectHeader = memo(function ProjectHeader({
-  hideFiles = false,
-  hideTests = false,
   hideStartup = false,
-  hideTerminal = false,
   hideTimeline = false,
   hideActions = false,
   leading,
@@ -85,10 +79,7 @@ export const ProjectHeader = memo(function ProjectHeader({
           ) : null
         ) : (
           <ThreadHeaderActions
-            hideFiles={hideFiles}
-            hideTests={hideTests}
             hideStartup={hideStartup}
-            hideTerminal={hideTerminal}
             hideTimeline={hideTimeline}
             trailing={trailing}
           />

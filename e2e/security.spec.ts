@@ -69,7 +69,7 @@ test.describe('L. Security (Client-Side)', () => {
     await page.goto(`/projects/${projectId}/threads/${thread.id}`);
     await page.waitForLoadState('networkidle');
 
-    await page.getByTestId('header-toggle-review').click();
+    await page.getByTestId('tool-rail-review').click();
     await page.waitForTimeout(500);
 
     // Try XSS in commit title

@@ -26,7 +26,7 @@ test.describe('G. Git Edge Cases', () => {
     await page.waitForLoadState('networkidle');
 
     // Open review pane with no dirty files
-    await page.getByTestId('header-toggle-review').click();
+    await page.getByTestId('tool-rail-review').click();
     await page.waitForTimeout(500);
     await page.getByTestId('review-refresh').click();
     await page.waitForTimeout(1000);
@@ -50,7 +50,7 @@ test.describe('G. Git Edge Cases', () => {
     await page.goto(`/projects/${projectId}/threads/${threadId}`);
     await page.waitForLoadState('networkidle');
 
-    await page.getByTestId('header-toggle-review').click();
+    await page.getByTestId('tool-rail-review').click();
     await page.waitForTimeout(500);
     await page.getByTestId('review-refresh').click();
     await page.waitForTimeout(1500);
@@ -76,7 +76,7 @@ test.describe('G. Git Edge Cases', () => {
     await page.goto(`/projects/${projectId}/threads/${threadId}`);
     await page.waitForLoadState('networkidle');
 
-    await page.getByTestId('header-toggle-review').click();
+    await page.getByTestId('tool-rail-review').click();
     await page.waitForTimeout(500);
     await page.getByTestId('review-refresh').click();
     await page.waitForTimeout(1500);
@@ -92,7 +92,7 @@ test.describe('G. Git Edge Cases', () => {
     await page.goto(`/projects/${projectId}/threads/${threadId}`);
     await page.waitForLoadState('networkidle');
 
-    await page.getByTestId('header-toggle-review').click();
+    await page.getByTestId('tool-rail-review').click();
     await page.waitForTimeout(500);
     await page.getByTestId('review-refresh').click();
     await page.waitForTimeout(1500);
@@ -127,7 +127,7 @@ test.describe('G. Git Edge Cases', () => {
     await page.goto(`/projects/${projectId}/threads/${threadId}`);
     await page.waitForLoadState('networkidle');
 
-    await page.getByTestId('header-toggle-review').click();
+    await page.getByTestId('tool-rail-review').click();
     await page.waitForTimeout(500);
     await page.getByTestId('review-refresh').click();
     await page.waitForTimeout(1500);
@@ -146,7 +146,7 @@ test.describe('G. Git Edge Cases', () => {
     await page.goto(`/projects/${projectId}/threads/${threadId}`);
     await page.waitForLoadState('networkidle');
 
-    await page.getByTestId('header-toggle-review').click();
+    await page.getByTestId('tool-rail-review').click();
     await page.waitForTimeout(500);
     await page.getByTestId('review-refresh').click();
     await page.waitForTimeout(1500);
@@ -162,7 +162,7 @@ test.describe('G. Git Edge Cases', () => {
     await page.goto(`/projects/${projectId}/threads/${threadId}`);
     await page.waitForLoadState('networkidle');
 
-    await page.getByTestId('header-toggle-review').click();
+    await page.getByTestId('tool-rail-review').click();
     await page.waitForTimeout(500);
     await page.getByTestId('review-refresh').click();
     await page.waitForTimeout(1500);
@@ -180,7 +180,7 @@ test.describe('G. Git Edge Cases', () => {
     await page.goto(`/projects/${projectId}/threads/${threadId}`);
     await page.waitForLoadState('networkidle');
 
-    await page.getByTestId('header-toggle-review').click();
+    await page.getByTestId('tool-rail-review').click();
     await page.waitForTimeout(500);
     await page.getByTestId('review-refresh').click();
     await page.waitForTimeout(1500);
@@ -201,7 +201,7 @@ test.describe('G. Git Edge Cases', () => {
     await page.goto(`/projects/${projectId}/threads/${threadId}`);
     await page.waitForLoadState('networkidle');
 
-    await page.getByTestId('header-toggle-review').click();
+    await page.getByTestId('tool-rail-review').click();
     await page.waitForTimeout(500);
     await page.getByTestId('review-refresh').click();
     await page.waitForTimeout(2000);

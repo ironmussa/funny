@@ -103,8 +103,8 @@ test.describe('13. Project Header Actions', () => {
     }
   });
 
-  test('13.13 Toggle review pane from header', async ({ authedPage: page }) => {
-    const toggleReview = page.getByTestId('header-toggle-review');
+  test('13.13 Toggle review pane from the tool rail', async ({ authedPage: page }) => {
+    const toggleReview = page.getByTestId('tool-rail-review');
     await expect(toggleReview).toBeVisible();
 
     // Open

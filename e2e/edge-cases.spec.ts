@@ -93,7 +93,7 @@ test.describe('18. Edge Cases & UX', () => {
     await page.waitForLoadState('networkidle');
 
     // Should load the thread view
-    await expect(page.getByTestId('header-toggle-review')).toBeVisible();
+    await expect(page.getByTestId('tool-rail-review')).toBeVisible();
 
     // Cleanup
     await api.deleteThread(thread.id);

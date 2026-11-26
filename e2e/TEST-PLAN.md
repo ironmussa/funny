@@ -16,7 +16,7 @@
 
 ### Project Header
 
-`header-more-actions`, `header-menu-copy-text`, `header-menu-copy-all`, `header-menu-pin`, `header-menu-delete`, `header-delete-cancel`, `header-delete-confirm`, `header-startup-commands`, `header-stage-select`, `header-back-kanban`, `header-back-parent`, `header-view-board`, `header-preview`, `header-open-editor`, `header-toggle-terminal`, `header-toggle-review`
+`header-more-actions`, `header-menu-copy-text`, `header-menu-copy-all`, `header-menu-pin`, `header-menu-delete`, `header-delete-cancel`, `header-delete-confirm`, `header-startup-commands`, `header-stage-select`, `header-back-kanban`, `header-back-parent`, `header-view-board`, `header-preview`, `header-open-editor`, `tool-rail-terminal`, `tool-rail-review`
 
 ### New Thread Dialog
 
@@ -188,7 +188,7 @@
 
 ## 7. Review Pane (Git Operations) — `review-pane.spec.ts`
 
-- [x] 7.1 Toggle review pane — Click `header-toggle-review` abre/cierra panel
+- [x] 7.1 Toggle review pane — Click `tool-rail-review` abre/cierra panel
 - [x] 7.2 Close review pane — `review-close` cierra el panel
 - [x] 7.3 Diff summary loads — Lista archivos con cambios se carga
 - [ ] 7.4 File click shows diff — Click en archivo muestra diff inline
@@ -306,8 +306,8 @@
 - [x] 13.9 View board — `header-view-board` abre vista board del proyecto
 - [x] 13.10 Preview — `header-preview` abre preview
 - [x] 13.11 Open in editor — `header-open-editor` abre editor externo
-- [ ] 13.12 Toggle terminal — `header-toggle-terminal` abre/cierra terminal
-- [x] 13.13 Toggle review — `header-toggle-review` abre/cierra review pane
+- [ ] 13.12 Toggle terminal — `tool-rail-terminal` abre/cierra terminal
+- [x] 13.13 Toggle review — `tool-rail-review` abre/cierra review pane
 - [x] 13.14 Startup commands — `header-startup-commands` muestra comandos
 
 ## 14. Automation Inbox — `automation-inbox.spec.ts`

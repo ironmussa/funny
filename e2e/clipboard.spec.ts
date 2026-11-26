@@ -60,7 +60,7 @@ test.describe('K. Clipboard & Copy', () => {
     await page.goto(`/projects/${projectId}/threads/${threadId}`);
     await page.waitForLoadState('networkidle');
 
-    await page.getByTestId('header-toggle-review').click();
+    await page.getByTestId('tool-rail-review').click();
     await page.waitForTimeout(500);
     await page.getByTestId('review-refresh').click();
     await page.waitForTimeout(1500);

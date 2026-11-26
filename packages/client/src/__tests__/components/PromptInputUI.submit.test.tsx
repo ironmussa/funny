@@ -8,9 +8,9 @@ import { mocked } from '@funny/test-kit';
  */
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { errAsync, okAsync } from 'neverthrow';
-import { toast } from 'sonner';
 
 import type { PromptInputUIProps } from '@/components/PromptInputUI';
+import { toast } from '@/components/ui/toast';
 
 import { buildAgentTemplate, expectInstance } from '../helpers/builders-components';
 import { renderWithProviders } from '../helpers/render';
@@ -30,7 +30,7 @@ mock.module('@/lib/api/system', () => {
   };
 });
 
-mock.module('sonner', () => ({
+mock.module('@/components/ui/toast', () => ({
   toast: { warning: vi.fn(), error: vi.fn(), success: vi.fn(), info: vi.fn() },
 }));
 

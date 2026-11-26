@@ -40,7 +40,7 @@ mock.module('@/stores/ui-store', () => ({
     select({ generalSettingsOpen: false, setAddProjectOpen: mocks.setAddProjectOpen }),
 }));
 mock.module('@/lib/toast-error', () => ({ toastError: mocks.toastError }));
-mock.module('sonner', () => ({
+mock.module('@/components/ui/toast', () => ({
   toast: { error: mocks.toastFailure, success: mocks.toastSuccess },
 }));
 mock.module('react-i18next', () => ({

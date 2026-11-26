@@ -73,7 +73,9 @@ mock.module('@/components/ui/dropdown-menu', () => {
 });
 
 const toastError = vi.fn();
-mock.module('sonner', () => ({ toast: { error: (...a: unknown[]) => toastError(...a) } }));
+mock.module('@/components/ui/toast', () => ({
+  toast: { error: (...a: unknown[]) => toastError(...a) },
+}));
 
 const openExternal = vi.fn();
 const openInternal = vi.fn();

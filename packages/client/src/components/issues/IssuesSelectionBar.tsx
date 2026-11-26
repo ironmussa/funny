@@ -8,11 +8,11 @@ import type { TFunction } from 'i18next';
 import { Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { IssuesFactoryBar, type IssueFactory } from '@/components/issues/IssueFactoryControls';
 import { Button } from '@/components/ui/button';
+import { toast } from '@/components/ui/toast';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import { toastError } from '@/lib/toast-error';

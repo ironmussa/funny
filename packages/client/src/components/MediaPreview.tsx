@@ -307,11 +307,14 @@ function UnknownPreview({ src, name }: { src: string; name?: string }) {
       <div className="text-muted-foreground text-sm">
         No preview available{name ? ` for ${name}` : ''}.
       </div>
-      <Button asChild variant="outline" size="sm" data-testid="media-preview-download">
-        <a href={src} download={name} target="_blank" rel="noreferrer">
-          <Download className="icon-sm" />
-          Download
-        </a>
+      <Button
+        variant="outline"
+        size="sm"
+        data-testid="media-preview-download"
+        render={<a href={src} download={name} target="_blank" rel="noreferrer" />}
+      >
+        <Download className="icon-sm" />
+        Download
       </Button>
     </div>
   );

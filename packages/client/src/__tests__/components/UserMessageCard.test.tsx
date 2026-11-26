@@ -12,9 +12,9 @@ import {
 import { mocked } from '@funny/test-kit';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { toast } from 'sonner';
 
 import { UserMessageCard } from '@/components/thread/UserMessageCard';
+import { toast } from '@/components/ui/toast';
 
 import { mockT } from '../helpers/mock-i18n';
 import { renderWithProviders } from '../helpers/render';
@@ -31,7 +31,7 @@ mock.module('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 
-mock.module('sonner', () => ({
+mock.module('@/components/ui/toast', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }));
 

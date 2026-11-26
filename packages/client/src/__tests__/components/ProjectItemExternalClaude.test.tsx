@@ -275,7 +275,7 @@ describe('ProjectItem external Claude sessions', () => {
       />,
     );
 
-    fireEvent.pointerDown(await screen.findByTestId('thread-item-more-thread-external'));
+    fireEvent.click(await screen.findByTestId('thread-item-more-thread-external'));
     fireEvent.click(await screen.findByTestId('thread-delete-thread-external'));
 
     await waitFor(() => {
@@ -311,7 +311,7 @@ describe('ProjectItem external Claude sessions', () => {
       { route: '/projects/project-1' },
     );
 
-    fireEvent.pointerDown(screen.getByTestId('project-more-actions-project-1'));
+    fireEvent.click(screen.getByTestId('project-more-actions-project-1'));
     fireEvent.click(await screen.findByTestId('project-menu-workflows'));
 
     await waitFor(() => {
@@ -350,7 +350,7 @@ describe('ProjectItem external Claude sessions', () => {
       />,
     );
 
-    fireEvent.pointerDown(screen.getByTestId('project-more-actions-project-1'));
+    fireEvent.click(screen.getByTestId('project-more-actions-project-1'));
     fireEvent.click(await screen.findByTestId('project-menu-open-directory'));
 
     await waitFor(() => {

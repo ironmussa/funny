@@ -14,7 +14,7 @@ mock.module('react-i18next', () => ({
   useTranslation: () => ({ t: mockT, i18n: { language: 'en' } }),
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
-mock.module('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+mock.module('@/components/ui/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 import { UtilityModelSettings } from '@/components/settings/UtilityModelSettings';
 import { profileQuery, writeProfile } from '@/data/profile/queries';
@@ -62,11 +62,11 @@ describe('UtilityModelSettings', () => {
     render(<UtilityModelSettings />);
 
     const toggle = screen.getByTestId('settings-thread-recap-toggle');
-    expect(toggle).toHaveAttribute('data-state', 'checked');
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
     fireEvent.click(toggle);
 
     await waitFor(() => expect(updateProfile).toHaveBeenCalledWith({ threadRecapEnabled: false }));
-    await waitFor(() => expect(toggle).toHaveAttribute('data-state', 'unchecked'));
+    await waitFor(() => expect(toggle).toHaveAttribute('aria-checked', 'false'));
     expect(cached()?.threadRecapEnabled).toBe(false);
   });
 

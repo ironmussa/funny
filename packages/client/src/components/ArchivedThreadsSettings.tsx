@@ -2,11 +2,11 @@ import type { GitStatusInfo, Thread } from '@funny/shared';
 import { ArchiveRestore, Trash2 } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import { ThreadPowerline } from '@/components/ThreadPowerline';
 import { LoadingState } from '@/components/ui/loading-state';
 import { SearchBar } from '@/components/ui/search-bar';
+import { toast } from '@/components/ui/toast';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { VirtualThreadList } from '@/components/VirtualThreadList';
 import { useGitStatusMaps } from '@/data/git-status/hooks';

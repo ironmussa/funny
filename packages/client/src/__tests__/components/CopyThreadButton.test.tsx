@@ -27,7 +27,7 @@ mock.module('react-i18next', () => ({
   ),
 }));
 const { showError } = (() => ({ showError: vi.fn() }))();
-mock.module('sonner', () => ({ toast: { error: showError, success: vi.fn() } }));
+mock.module('@/components/ui/toast', () => ({ toast: { error: showError, success: vi.fn() } }));
 const writeText = vi.fn();
 
 beforeEach(() => {

@@ -1,6 +1,5 @@
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import type {
   ArchiveConfirmState,
@@ -8,6 +7,7 @@ import type {
   DeleteThreadConfirmState,
   RenameProjectState,
 } from '@/components/sidebar/SidebarDialogs';
+import { toast } from '@/components/ui/toast';
 import { readThreadRow } from '@/data/threads/read';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { isScratch } from '@/lib/thread-variant';

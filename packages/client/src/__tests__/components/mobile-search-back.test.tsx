@@ -21,7 +21,7 @@ mock.module('@/stores/thread-context', () => ({
   ThreadProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
-mock.module('@/components/ui/sonner', () => ({ Toaster: () => null }));
+mock.module('@/components/ui/toast', () => ({ Toaster: () => null }));
 
 mock.module('@/components/mobile/ProjectListView', () => ({
   ProjectListView: ({ onSelect }: { onSelect: (id: string) => void }) => (

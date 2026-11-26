@@ -6,12 +6,12 @@ import { useTranslation } from 'react-i18next';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import rehypeSanitize from 'rehype-sanitize';
 import remarkGfm from 'remark-gfm';
-import { toast } from 'sonner';
 
 import { HtmlPreview } from '@/components/HtmlPreview';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchBar } from '@/components/ui/search-bar';
+import { toast } from '@/components/ui/toast';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { useResettableState } from '@/hooks/use-resettable-state';
 import { api } from '@/lib/api';

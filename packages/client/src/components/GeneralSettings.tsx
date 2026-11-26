@@ -1,7 +1,6 @@
 import { DEFAULT_FOLLOW_UP_MODE } from '@funny/shared/models';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import {
   DefaultTemplateSetting,
@@ -21,6 +20,7 @@ import {
   ProjectSettingRow,
 } from '@/components/general-settings-project/setting-primitives';
 import { ToolPermissionsSection } from '@/components/general-settings/ToolPermissionsSection';
+import { toast } from '@/components/ui/toast';
 import { useProjects } from '@/data/projects/hooks';
 import { projectsApi } from '@/lib/api/projects';
 import { useProjectStore } from '@/stores/project-store';

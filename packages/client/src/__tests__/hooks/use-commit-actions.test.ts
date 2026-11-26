@@ -34,7 +34,7 @@ mock.module('react-i18next', () => ({
   useTranslation: () => ({ t: (_key: string, fallback?: string) => fallback ?? _key }),
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
-mock.module('sonner', () => ({ toast: { success: toastSuccess } }));
+mock.module('@/components/ui/toast', () => ({ toast: { success: toastSuccess } }));
 mock.module('@/lib/toast-error', () => ({ toastError: toastErrorFn }));
 mock.module('@/data/git-status/actions', () => ({ fetchForThread, fetchProjectStatus }));
 mock.module('@/lib/api', () => ({ api }));

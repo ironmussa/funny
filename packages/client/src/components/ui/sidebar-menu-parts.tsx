@@ -3,7 +3,8 @@
  * `sidebar.tsx` to keep it within the file-size limit. Import them from
  * `@/components/ui/sidebar`, which re-exports them.
  */
-import { Slot } from '@radix-ui/react-slot';
+import { mergeProps } from '@base-ui/react/merge-props';
+import { useRender } from '@base-ui/react/use-render';
 import * as React from 'react';
 
 import { Skeleton } from '@/components/ui/skeleton';
@@ -89,36 +90,39 @@ function SidebarMenuSubItem({
   return <li ref={ref} {...props} />;
 }
 function SidebarMenuSubButton({
-  asChild = false,
+  render,
   size = 'md',
   isActive,
   className,
   ref,
   ...props
-}: React.ComponentProps<'a'> & {
-  asChild?: boolean;
+}: useRender.ComponentProps<'a'> & {
   size?: 'sm' | 'md';
   isActive?: boolean;
-} & { ref?: React.Ref<HTMLAnchorElement> }) {
-  const Comp = asChild ? Slot : 'a';
-
-  return (
-    <Comp
-      ref={ref}
-      data-sidebar="menu-sub-button"
-      data-size={size}
-      data-active={isActive}
-      className={cn(
-        'flex h-7 min-w-0 -translate-x-px items-center gap-2 overflow-hidden rounded-md px-2 text-sidebar-foreground outline-hidden hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-1 focus-visible:ring-sidebar-ring/50 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-sidebar-accent-foreground',
-        'data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground',
-        size === 'sm' && 'text-xs',
-        size === 'md' && 'text-sm',
-        'group-data-[collapsible=icon]:hidden',
-        className,
-      )}
-      {...props}
-    />
-  );
+}) {
+  return useRender({
+    defaultTagName: 'a',
+    render,
+    ref,
+    props: {
+      ...mergeProps<'a'>(
+        {
+          className: cn(
+            'flex h-7 min-w-0 -translate-x-px items-center gap-2 overflow-hidden rounded-md px-2 text-sidebar-foreground outline-hidden hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:ring-1 focus-visible:ring-sidebar-ring/50 active:bg-sidebar-accent active:text-sidebar-accent-foreground disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 [&>span:last-child]:truncate [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-sidebar-accent-foreground',
+            'data-[active=true]:bg-sidebar-accent data-[active=true]:text-sidebar-accent-foreground',
+            size === 'sm' && 'text-xs',
+            size === 'md' && 'text-sm',
+            'group-data-[collapsible=icon]:hidden',
+            className,
+          ),
+        },
+        props,
+      ),
+      'data-sidebar': 'menu-sub-button',
+      'data-size': size,
+      'data-active': isActive,
+    },
+  });
 }
 
 export {

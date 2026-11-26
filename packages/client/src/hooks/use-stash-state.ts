@@ -1,7 +1,7 @@
 import type { FileDiffSummary } from '@funny/shared';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { toast } from 'sonner';
 
+import { toast } from '@/components/ui/toast';
 import { useAdjustOnChange } from '@/hooks/use-resettable-state';
 import { useStableCallback } from '@/hooks/use-stable-callback';
 import { gitApi } from '@/lib/api/git';

@@ -14,10 +14,10 @@ import {
   Trash2,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
+import { toast } from '@/components/ui/toast';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { annotationsToMarkdown } from '@/lib/browser-panel-markdown';
 import { browserSessionClient } from '@/lib/browser-session-client';

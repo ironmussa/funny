@@ -1,8 +1,8 @@
 import type { FileDiffSummary } from '@funny/shared';
 import { useCallback, useState, type Dispatch, type SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
+import { toast } from '@/components/ui/toast';
 import { useGitRemoteActions } from '@/hooks/use-git-remote-actions';
 import { type PullStrategy } from '@/lib/api/_core';
 import { browseApi } from '@/lib/api/browse';

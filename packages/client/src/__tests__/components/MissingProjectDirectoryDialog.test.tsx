@@ -60,7 +60,7 @@ describe('MissingProjectDirectoryDialog', () => {
     await screen.findByRole('alertdialog');
     fireEvent.click(screen.getByText('projects.configureDirectory'));
     expect(screen.getByTestId('location').textContent).toBe('/projects/p1/settings/general');
-    expect(screen.queryByRole('alertdialog')).toBeNull();
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
   });
 
   test('cancel dismisses the notice without navigating', async () => {
@@ -68,7 +68,7 @@ describe('MissingProjectDirectoryDialog', () => {
     render(<View />);
     await screen.findByRole('alertdialog');
     fireEvent.click(screen.getByText('common.cancel'));
-    expect(screen.queryByRole('alertdialog')).toBeNull();
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
     expect(screen.getByTestId('location').textContent).toBe('/projects/p1');
   });
 

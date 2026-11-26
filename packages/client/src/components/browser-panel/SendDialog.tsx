@@ -1,6 +1,5 @@
 import { Send } from 'lucide-react';
 import { useMemo, useState } from 'react';
-import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -18,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { toast } from '@/components/ui/toast';
 import { useProjects } from '@/data/projects/hooks';
 import { useResettableState } from '@/hooks/use-resettable-state';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';

@@ -1,7 +1,6 @@
 import { FolderOpen } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import { FolderPicker } from '@/components/FolderPicker';
 import { SettingAnchor } from '@/components/settings/SettingRow';
@@ -15,6 +14,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { toast } from '@/components/ui/toast';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { api } from '@/lib/api';
 import { whilePending } from '@/lib/while-pending';

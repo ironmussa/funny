@@ -10,12 +10,12 @@ import { Factory, RotateCw, Send, X } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
-import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { LabelBadge, type LabelBadgeTone } from '@/components/ui/label-badge';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
+import { toast } from '@/components/ui/toast';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   controlFactoryRun,

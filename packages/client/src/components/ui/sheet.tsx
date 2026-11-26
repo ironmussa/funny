@@ -1,6 +1,6 @@
 'use client';
 
-import * as SheetPrimitive from '@radix-ui/react-dialog';
+import { Dialog as SheetPrimitive } from '@base-ui/react/dialog';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { X } from 'lucide-react';
 import * as React from 'react';
@@ -15,13 +15,13 @@ function SheetOverlay({
   className,
   ref,
   ...props
-}: React.ComponentPropsWithoutRef<typeof SheetPrimitive.Overlay> & {
-  ref?: React.Ref<React.ElementRef<typeof SheetPrimitive.Overlay>>;
+}: React.ComponentPropsWithoutRef<typeof SheetPrimitive.Backdrop> & {
+  ref?: React.Ref<HTMLDivElement>;
 }) {
   return (
-    <SheetPrimitive.Overlay
+    <SheetPrimitive.Backdrop
       className={cn(
-        'fixed inset-0 z-50 bg-black/80 backdrop-blur-xs data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
+        'fixed inset-0 z-50 bg-black/80 backdrop-blur-xs data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0',
         className,
       )}
       {...props}
@@ -29,17 +29,18 @@ function SheetOverlay({
     />
   );
 }
+
 const sheetVariants = cva(
-  'fixed z-50 gap-4 bg-background p-6 shadow-lg transition ease-in-out data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:duration-300 data-[state=open]:duration-500',
+  'fixed z-50 gap-4 bg-background p-6 shadow-lg transition ease-in-out data-open:animate-in data-closed:animate-out data-closed:duration-300 data-open:duration-500',
   {
     variants: {
       side: {
-        top: 'inset-x-0 top-0 border-b data-[state=closed]:slide-out-to-top data-[state=open]:slide-in-from-top',
+        top: 'inset-x-0 top-0 border-b data-closed:slide-out-to-top data-open:slide-in-from-top',
         bottom:
-          'inset-x-0 bottom-0 border-t data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom',
-        left: 'inset-y-0 left-0 h-full w-3/4 border-r data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left sm:max-w-sm',
+          'inset-x-0 bottom-0 border-t data-closed:slide-out-to-bottom data-open:slide-in-from-bottom',
+        left: 'inset-y-0 left-0 h-full w-3/4 border-r data-closed:slide-out-to-left data-open:slide-in-from-left sm:max-w-sm',
         right:
-          'inset-y-0 right-0 h-full w-3/4  border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-sm',
+          'inset-y-0 right-0 h-full w-3/4 border-l data-closed:slide-out-to-right data-open:slide-in-from-right sm:max-w-sm',
       },
     },
     defaultVariants: {
@@ -48,35 +49,54 @@ const sheetVariants = cva(
   },
 );
 
+function bridgeAutoFocusHandler(handler?: (event: Event) => void) {
+  if (!handler) return undefined;
+  return () => {
+    const event = new CustomEvent('sheet.autoFocus', { cancelable: true });
+    handler(event);
+    return !event.defaultPrevented;
+  };
+}
+
 interface SheetContentProps
   extends
-    React.ComponentPropsWithoutRef<typeof SheetPrimitive.Content>,
-    VariantProps<typeof sheetVariants> {}
+    React.ComponentPropsWithoutRef<typeof SheetPrimitive.Popup>,
+    VariantProps<typeof sheetVariants> {
+  onOpenAutoFocus?: (event: Event) => void;
+  onCloseAutoFocus?: (event: Event) => void;
+}
 
 function SheetContent({
   side = 'right',
   className,
   children,
+  initialFocus,
+  finalFocus,
+  onOpenAutoFocus,
+  onCloseAutoFocus,
   ref,
   ...props
-}: SheetContentProps & { ref?: React.Ref<React.ElementRef<typeof SheetPrimitive.Content>> }) {
+}: SheetContentProps & { ref?: React.Ref<HTMLDivElement> }) {
   return (
     <SheetPortal>
       <SheetOverlay />
-      <SheetPrimitive.Content
+      <SheetPrimitive.Popup
         ref={ref}
+        initialFocus={initialFocus ?? bridgeAutoFocusHandler(onOpenAutoFocus)}
+        finalFocus={finalFocus ?? bridgeAutoFocusHandler(onCloseAutoFocus)}
         className={cn(sheetVariants({ side }), className)}
         {...props}
       >
         {children}
-        <SheetPrimitive.Close className="focus-visible:ring-ring/50 data-[state=open]:bg-secondary absolute top-4 right-4 rounded-sm opacity-70 transition-opacity hover:opacity-100 focus-visible:ring-1 focus-visible:outline-hidden disabled:pointer-events-none">
+        <SheetPrimitive.Close className="focus-visible:ring-ring/50 data-open:bg-secondary absolute top-4 right-4 rounded-sm opacity-70 transition-opacity hover:opacity-100 focus-visible:ring-1 focus-visible:outline-hidden disabled:pointer-events-none">
           <X className="icon-base" />
           <span className="sr-only">Close</span>
         </SheetPrimitive.Close>
-      </SheetPrimitive.Content>
+      </SheetPrimitive.Popup>
     </SheetPortal>
   );
 }
+
 const SheetHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div className={cn('flex flex-col space-y-2 text-center sm:text-left', className)} {...props} />
 );
@@ -87,7 +107,7 @@ function SheetTitle({
   ref,
   ...props
 }: React.ComponentPropsWithoutRef<typeof SheetPrimitive.Title> & {
-  ref?: React.Ref<React.ElementRef<typeof SheetPrimitive.Title>>;
+  ref?: React.Ref<HTMLHeadingElement>;
 }) {
   return (
     <SheetPrimitive.Title
@@ -97,19 +117,29 @@ function SheetTitle({
     />
   );
 }
+
 function SheetDescription({
   className,
+  asChild,
+  render,
+  children,
   ref,
   ...props
 }: React.ComponentPropsWithoutRef<typeof SheetPrimitive.Description> & {
-  ref?: React.Ref<React.ElementRef<typeof SheetPrimitive.Description>>;
+  asChild?: boolean;
+  ref?: React.Ref<HTMLParagraphElement>;
 }) {
+  const childElement = asChild && !render && React.isValidElement(children) ? children : undefined;
   return (
     <SheetPrimitive.Description
       ref={ref}
+      render={render ?? childElement}
       className={cn('text-sm text-muted-foreground', className)}
       {...props}
-    />
+    >
+      {childElement ? undefined : children}
+    </SheetPrimitive.Description>
   );
 }
+
 export { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription };

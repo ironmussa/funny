@@ -5,8 +5,8 @@
  */
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
+import { toast } from '@/components/ui/toast';
 import { updateProfile } from '@/data/profile/actions';
 import { useProfile } from '@/data/profile/hooks';
 import { refreshProfile } from '@/data/profile/queries';

@@ -2,7 +2,7 @@ import { lazy, Suspense } from 'react';
 
 import { MissingProjectDirectoryDialog } from '@/components/MissingProjectDirectoryDialog';
 import { PipelineApprovalDialog } from '@/components/PipelineApprovalDialog';
-import { Toaster } from '@/components/ui/sonner';
+import { Toaster } from '@/components/ui/toast';
 import { WorkflowErrorModal } from '@/components/WorkflowErrorModal';
 import { TOAST_DURATION } from '@/lib/utils';
 import {

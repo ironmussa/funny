@@ -3,13 +3,13 @@ import { HOOK_TYPES } from '@funny/shared';
 import { Plus } from 'lucide-react';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import { HookForm } from '@/components/project-hooks-settings/HookForm';
 import { HookItem, hookKey } from '@/components/project-hooks-settings/HookItem';
 import { useHookReorderMonitor } from '@/components/project-hooks-settings/use-hook-reorder-monitor';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
+import { toast } from '@/components/ui/toast';
 import { api } from '@/lib/api';
 import { useProjectStore } from '@/stores/project-store';
 

@@ -1,4 +1,4 @@
-import * as DialogPrimitive from '@radix-ui/react-dialog';
+import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
 import { type KeyboardEvent, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -107,13 +107,13 @@ function TextSearchDialogContent({ open, onOpenChange }: TextSearchDialogProps) 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogPortal>
         <DialogOverlay />
-        <DialogPrimitive.Content
+        <DialogPrimitive.Popup
           aria-describedby={undefined}
-          className="bg-card data-[state=closed]:animate-fade-out data-[state=open]:animate-fade-in fixed top-[15%] left-[50%] z-50 flex w-full max-w-2xl translate-x-[-50%] flex-col overflow-hidden rounded-lg border shadow-xl"
-          onOpenAutoFocus={(e) => {
-            e.preventDefault();
+          className="bg-card data-closed:animate-fade-out data-open:animate-fade-in fixed top-[15%] left-[50%] z-50 flex w-full max-w-2xl translate-x-[-50%] flex-col overflow-hidden rounded-lg border shadow-xl"
+          initialFocus={() => {
             inputRef.current?.focus();
             inputRef.current?.select();
+            return false;
           }}
         >
           <DialogTitle className="sr-only">{t('textSearch.title', 'Search in files')}</DialogTitle>
@@ -168,7 +168,7 @@ function TextSearchDialogContent({ open, onOpenChange }: TextSearchDialogProps) 
             virtualizer={virtualizer}
             truncatedCount={response?.truncated ? response.totalMatches : null}
           />
-        </DialogPrimitive.Content>
+        </DialogPrimitive.Popup>
       </DialogPortal>
     </Dialog>
   );

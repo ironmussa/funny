@@ -5,7 +5,6 @@ import {
 } from '@funny/shared/contracts/profile';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import { SettingRow, SettingsSection } from '@/components/settings/SettingRow';
 import { Button } from '@/components/ui/button';
@@ -18,6 +17,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { toast } from '@/components/ui/toast';
 import { updateProfile } from '@/data/profile/actions';
 import { useProfile } from '@/data/profile/hooks';
 

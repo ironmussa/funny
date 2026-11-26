@@ -2,7 +2,6 @@ import type { TeamRole } from '@funny/shared';
 import { Copy, Check, Link, MailWarning, Send, Trash2, UserMinus, X } from 'lucide-react';
 import { useState, useEffect, useCallback, type Dispatch, type SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { SettingsSection } from '@/components/settings/SettingRow';
@@ -17,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { toast } from '@/components/ui/toast';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { api } from '@/lib/api';

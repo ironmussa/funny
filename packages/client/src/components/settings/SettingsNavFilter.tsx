@@ -114,14 +114,18 @@ function FilterResults({
               <SidebarMenuSub>
                 {elements.map((entry) => (
                   <SidebarMenuSubItem key={entry.id}>
-                    <SidebarMenuSubButton asChild size="sm" isActive={isCursor(page.id, entry.id)}>
-                      <button
-                        type="button"
-                        onClick={() => openResult({ pageId: page.id, elementId: entry.id })}
-                        data-testid={`settings-filter-result-${entry.id}`}
-                      >
-                        <span>{tr.t(entry.title, entry.titleDefault ?? entry.title)}</span>
-                      </button>
+                    <SidebarMenuSubButton
+                      size="sm"
+                      isActive={isCursor(page.id, entry.id)}
+                      render={
+                        <button
+                          type="button"
+                          onClick={() => openResult({ pageId: page.id, elementId: entry.id })}
+                          data-testid={`settings-filter-result-${entry.id}`}
+                        />
+                      }
+                    >
+                      <span>{tr.t(entry.title, entry.titleDefault ?? entry.title)}</span>
                     </SidebarMenuSubButton>
                   </SidebarMenuSubItem>
                 ))}

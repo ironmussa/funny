@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
+
+import { toast } from '@/components/ui/toast';
 
 /** Copy feedback is shown only after the clipboard accepts the text. */
 export function useCopyToClipboard(duration = 2000): [boolean, (text: string) => Promise<boolean>] {

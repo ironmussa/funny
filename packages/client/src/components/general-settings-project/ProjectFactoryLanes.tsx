@@ -8,12 +8,12 @@ import type { FactoryLane, FactoryLaneSyncState } from '@funny/shared/contracts/
 import { ExternalLink, GitMerge, RefreshCw, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import { BranchBadge } from '@/components/BranchBadge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { LabelBadge, type LabelBadgeTone } from '@/components/ui/label-badge';
+import { toast } from '@/components/ui/toast';
 import { finishFactoryLane, removeFactoryLane, syncFactoryLane } from '@/data/factory/actions';
 import { useFactoryLanes } from '@/data/factory/hooks';
 import type { SaveFactorySettingsInput } from '@/lib/api/factory';

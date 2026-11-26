@@ -2,12 +2,12 @@ import type { Message, ToolCall } from '@funny/shared';
 import { Clock, FolderOpen, GitBranch } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import { PromptInput } from '@/components/PromptInput';
 import { MessageStream, type MessageStreamHandle } from '@/components/thread/MessageStream';
 import { Badge } from '@/components/ui/badge';
 import { LoadingState } from '@/components/ui/loading-state';
+import { toast } from '@/components/ui/toast';
 import { useProjects } from '@/data/projects/hooks';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useAdjustOnChange } from '@/hooks/use-resettable-state';

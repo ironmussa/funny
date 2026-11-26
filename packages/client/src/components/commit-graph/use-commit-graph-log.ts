@@ -10,11 +10,11 @@ import {
   type SetStateAction,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import { FILTER_MAX_SCAN, type GraphEntry, PAGE_SIZE } from '@/components/commit-graph/graph-entry';
 import { DEFAULT_GRAPH_BRANCH_SCOPE } from '@/components/commit-graph/HistoryFilters';
 import type { GraphFilters } from '@/components/commit-graph/use-graph-filters';
+import { toast } from '@/components/ui/toast';
 import { useGitHistoryAutoRefresh } from '@/hooks/use-git-history-auto-refresh';
 import { useStableCallback } from '@/hooks/use-stable-callback';
 import { api } from '@/lib/api';

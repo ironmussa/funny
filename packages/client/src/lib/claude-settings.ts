@@ -1,5 +1,4 @@
-import { toast } from 'sonner';
-
+import { toast } from '@/components/ui/toast';
 import { api } from '@/lib/api';
 import { useInternalEditorStore } from '@/stores/internal-editor-store';
 

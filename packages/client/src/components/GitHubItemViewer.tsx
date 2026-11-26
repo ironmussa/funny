@@ -170,16 +170,21 @@ function IssuePendingDialog({
               {state.message}
             </DialogDescription>
             {target.url && (
-              <Button asChild variant="outline" size="sm" className="self-start">
-                <a
-                  href={target.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  data-testid="github-item-viewer-open-github"
-                >
-                  <ExternalLink className="icon-sm" aria-hidden="true" />
-                  {t('githubItemViewer.openOnGithub', 'Open on GitHub')}
-                </a>
+              <Button
+                variant="outline"
+                size="sm"
+                className="self-start"
+                render={
+                  <a
+                    href={target.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    data-testid="github-item-viewer-open-github"
+                  />
+                }
+              >
+                <ExternalLink className="icon-sm" aria-hidden="true" />
+                {t('githubItemViewer.openOnGithub', 'Open on GitHub')}
               </Button>
             )}
           </>

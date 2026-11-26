@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test, vi, mock } from 'bun:test';
 
 const warning = (() => vi.fn())();
-mock.module('sonner', () => ({ toast: { warning } }));
+mock.module('@/components/ui/toast', () => ({ toast: { warning } }));
 
 import { notifyIncompatibleProtocol, resetProtocolMismatchNotice } from './protocol-mismatch';
 

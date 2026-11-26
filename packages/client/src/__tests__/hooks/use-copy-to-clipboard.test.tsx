@@ -1,14 +1,14 @@
 import { afterEach, expect, test, vi, mock } from 'bun:test';
 
 import { act, renderHook } from '@testing-library/react';
-import { toast } from 'sonner';
 
+import { toast } from '@/components/ui/toast';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 
 mock.module('react-i18next', () => ({
   useTranslation: () => ({ t: (_key: string, fallback: string) => fallback }),
 }));
-mock.module('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+mock.module('@/components/ui/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 afterEach(() => {
   vi.useRealTimers();
   vi.clearAllMocks();

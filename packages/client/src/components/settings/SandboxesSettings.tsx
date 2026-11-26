@@ -8,7 +8,6 @@
  */
 import { Boxes, CheckCircle2, Pencil, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { toast } from 'sonner';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Badge } from '@/components/ui/badge';
@@ -23,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { toast } from '@/components/ui/toast';
 import { useSandboxConnections } from '@/data/runner/hooks';
 import { refreshSandboxConnections } from '@/data/runner/queries';
 import { api } from '@/lib/api';

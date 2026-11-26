@@ -20,7 +20,6 @@ import {
  */
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { ConnectRunnerCard } from '@/components/ConnectRunnerCard';
@@ -37,6 +36,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { toast } from '@/components/ui/toast';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { useProjects } from '@/data/projects/hooks';
@@ -238,19 +238,21 @@ function RunnerCard({ runner, onDeleted }: RunnerCardProps) {
           <div className="flex items-center gap-1">
             <Tooltip>
               <TooltipTrigger asChild>
-                <CollapsibleTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-6"
-                    data-testid={`runner-item-${runner.runnerId}-expand`}
-                  >
-                    {open ? (
-                      <ChevronDown className="icon-sm" />
-                    ) : (
-                      <ChevronRight className="icon-sm" />
-                    )}
-                  </Button>
+                <CollapsibleTrigger
+                  render={
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="size-6"
+                      data-testid={`runner-item-${runner.runnerId}-expand`}
+                    />
+                  }
+                >
+                  {open ? (
+                    <ChevronDown className="icon-sm" />
+                  ) : (
+                    <ChevronRight className="icon-sm" />
+                  )}
                 </CollapsibleTrigger>
               </TooltipTrigger>
               <TooltipContent>{open ? t('common.collapse') : t('common.expand')}</TooltipContent>

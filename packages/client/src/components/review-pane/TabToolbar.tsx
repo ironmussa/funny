@@ -81,10 +81,14 @@ export function TabToolbarExternalLink({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Button variant="muted" size="icon-sm" asChild className="shrink-0" data-testid={testId}>
-          <a href={href} target="_blank" rel="noopener noreferrer" aria-label={label}>
-            <ExternalLink className="icon-base" />
-          </a>
+        <Button
+          variant="muted"
+          size="icon-sm"
+          className="shrink-0"
+          data-testid={testId}
+          render={<a href={href} target="_blank" rel="noopener noreferrer" aria-label={label} />}
+        >
+          <ExternalLink className="icon-base" />
         </Button>
       </TooltipTrigger>
       <TooltipContent side="bottom">{label}</TooltipContent>

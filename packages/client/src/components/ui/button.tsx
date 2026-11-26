@@ -1,4 +1,5 @@
-import { Slot } from '@radix-ui/react-slot';
+import { mergeProps } from '@base-ui/react/merge-props';
+import { useRender } from '@base-ui/react/use-render';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { Loader2 } from 'lucide-react';
 import * as React from 'react';
@@ -58,7 +59,7 @@ const buttonVariants = cva(
           'bg-primary/10 text-primary hover:bg-accent hover:text-accent-foreground',
         // A muted menu trigger that keeps the foreground color while its menu is open.
         'muted-menu':
-          'text-muted-foreground hover:bg-accent hover:text-accent-foreground data-[state=open]:text-foreground',
+          'text-muted-foreground hover:bg-accent hover:text-accent-foreground data-popup-open:text-foreground data-open:text-foreground',
         // A ghost row on the sidebar background (the user menu in the sidebar footer).
         'ghost-sidebar': 'hover:bg-sidebar-accent hover:text-accent-foreground',
       },
@@ -140,8 +141,7 @@ const buttonVariants = cva(
 );
 
 export interface ButtonProps
-  extends React.ButtonHTMLAttributes<HTMLButtonElement>, VariantProps<typeof buttonVariants> {
-  asChild?: boolean;
+  extends useRender.ComponentProps<'button'>, VariantProps<typeof buttonVariants> {
   loading?: boolean;
 }
 
@@ -153,30 +153,32 @@ function Button({
   reveal,
   segment,
   weight,
-  asChild = false,
+  render,
   loading = false,
   children,
   disabled,
   ref,
   ...props
-}: ButtonProps & { ref?: React.Ref<HTMLButtonElement> }) {
-  const Comp = asChild ? Slot : 'button';
-  return (
-    <Comp
-      className={cn(buttonVariants({ variant, size, gap, reveal, segment, weight, className }))}
-      ref={ref}
-      disabled={disabled || loading}
-      {...props}
-    >
-      {asChild ? (
-        children
-      ) : (
-        <>
-          {loading && <Loader2 className="icon-base animate-spin" />}
-          {children}
-        </>
-      )}
-    </Comp>
-  );
+}: ButtonProps) {
+  return useRender({
+    defaultTagName: 'button',
+    render,
+    ref,
+    props: mergeProps<'button'>(
+      {
+        className: cn(buttonVariants({ variant, size, gap, reveal, segment, weight, className })),
+        disabled: disabled || loading,
+        children: render ? (
+          children
+        ) : (
+          <>
+            {loading && <Loader2 className="icon-base animate-spin" />}
+            {children}
+          </>
+        ),
+      },
+      props,
+    ),
+  });
 }
 export { Button, buttonVariants };

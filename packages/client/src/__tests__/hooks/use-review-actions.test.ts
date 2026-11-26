@@ -47,7 +47,7 @@ mock.module('react-i18next', () => ({
   }),
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
-mock.module('sonner', () => ({ toast }));
+mock.module('@/components/ui/toast', () => ({ toast }));
 mock.module('@/lib/toast-error', () => ({ toastError: toastErrorFn }));
 mock.module('@/lib/api/git', () => ({ gitApi }));
 mock.module('@/lib/api/threads', () => ({ threadsApi }));

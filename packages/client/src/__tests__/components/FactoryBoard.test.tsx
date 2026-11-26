@@ -180,10 +180,7 @@ describe('FactoryBoard', () => {
     expect(screen.getByTestId('factory-board-column-review')).toBeTruthy();
 
     render(<FactoryBoardColumnsMenu />, { wrapper: TooltipProvider });
-    fireEvent.pointerDown(screen.getByTestId('factory-board-columns-menu'), {
-      button: 0,
-      ctrlKey: false,
-    });
+    fireEvent.click(screen.getByTestId('factory-board-columns-menu'));
     fireEvent.click(await screen.findByTestId('factory-board-columns-toggle-merge'));
     expect(useFactoryViewStore.getState().hiddenColumns).toEqual(['waiting_parts']);
     expect(await screen.findByTestId('factory-board-column-merge')).toBeTruthy();
@@ -431,7 +428,7 @@ describe('FactoryBoard', () => {
     expect(screen.queryByTestId('factory-board-retry-r1')).toBeNull();
     fireEvent.click(card);
     expect(mocks.navigate).toHaveBeenCalledWith(run);
-    fireEvent.pointerDown(within(card).getByTestId('kanban-card-more-t-impl'));
+    fireEvent.click(within(card).getByTestId('kanban-card-more-t-impl'));
     const threadLink = await screen.findByTestId('factory-board-thread-link-t-impl');
     // The run's threads sit at the bottom of the menu, after its actions.
     const retry = await screen.findByTestId('factory-board-retry-r1');
@@ -450,7 +447,7 @@ describe('FactoryBoard', () => {
       stepOptions: [implementStep('t-impl')],
     });
     renderBoard([run]);
-    fireEvent.pointerDown(screen.getByTestId('kanban-card-more-t-impl'));
+    fireEvent.click(screen.getByTestId('kanban-card-more-t-impl'));
     fireEvent.click(await screen.findByTestId('factory-board-thread-link-t-impl'));
     expect(mocks.navigate).toHaveBeenCalledTimes(1);
     expect(String(mocks.navigate.mock.calls[0]?.[0])).toContain('/threads/t-impl');
@@ -504,7 +501,7 @@ describe('FactoryBoard', () => {
     expect(mocks.navigate).toHaveBeenCalledTimes(1);
     fireEvent.keyDown(screen.getByTestId('factory-board-card-r1'), { key: 'Enter' });
     expect(mocks.navigate).toHaveBeenCalledTimes(2);
-    fireEvent.pointerDown(screen.getByTestId('factory-board-more-r1'));
+    fireEvent.click(screen.getByTestId('factory-board-more-r1'));
     fireEvent.click(await screen.findByTestId('factory-board-retry-r1'));
     expect(mocks.control).toHaveBeenCalledWith('retry', 'p1', 'r1');
     fireEvent.click(screen.getByTestId('factory-board-pr-r1'));
@@ -534,7 +531,7 @@ describe('FactoryBoard', () => {
   test('a run that ended with no change offers "Mark as done" next to Retry', async () => {
     renderBoard([queueRun('r1', 'no_change', { completedAt: recent() })]);
     const card = screen.getByTestId('factory-board-card-r1');
-    fireEvent.pointerDown(within(card).getByTestId('factory-board-more-r1'));
+    fireEvent.click(within(card).getByTestId('factory-board-more-r1'));
     expect(await screen.findByTestId('factory-board-retry-r1')).toBeTruthy();
     fireEvent.click(screen.getByTestId('factory-board-mark-done-r1'));
     expect(mocks.markDone).toHaveBeenCalledWith('p1', 'r1');
@@ -545,7 +542,7 @@ describe('FactoryBoard', () => {
   test('a stopped run offers "Mark as done"', async () => {
     renderBoard([queueRun('r1', 'stopped', { completedAt: recent(), threadIds: ['t1'] })]);
     const card = screen.getByTestId('factory-board-card-r1');
-    fireEvent.pointerDown(within(card).getByTestId('factory-board-more-r1'));
+    fireEvent.click(within(card).getByTestId('factory-board-more-r1'));
     fireEvent.click(await screen.findByTestId('factory-board-mark-done-r1'));
     expect(mocks.markDone).toHaveBeenCalledWith('p1', 'r1');
   });
@@ -553,7 +550,7 @@ describe('FactoryBoard', () => {
   test('a run that failed offers no "Mark as done"', async () => {
     renderBoard([queueRun('r1', 'failed', { completedAt: recent() })]);
     const card = screen.getByTestId('factory-board-card-r1');
-    fireEvent.pointerDown(within(card).getByTestId('factory-board-more-r1'));
+    fireEvent.click(within(card).getByTestId('factory-board-more-r1'));
     expect(await screen.findByTestId('factory-board-retry-r1')).toBeTruthy();
     expect(screen.queryByTestId('factory-board-mark-done-r1')).toBeNull();
   });
@@ -562,7 +559,7 @@ describe('FactoryBoard', () => {
   test('a failed run is put on hold with the reason the member gives', async () => {
     renderBoard([queueRun('r1', 'failed', { completedAt: recent() })]);
     const card = screen.getByTestId('factory-board-card-r1');
-    fireEvent.pointerDown(within(card).getByTestId('factory-board-more-r1'));
+    fireEvent.click(within(card).getByTestId('factory-board-more-r1'));
     fireEvent.click(await screen.findByTestId('factory-board-hold-r1'));
     const confirm = await screen.findByTestId('factory-hold-confirm');
     // No reason, no hold.
@@ -591,7 +588,7 @@ describe('FactoryBoard', () => {
         'factory-board-card-r1',
       ),
     ).toBeNull();
-    fireEvent.pointerDown(within(card).getByTestId('factory-board-more-r1'));
+    fireEvent.click(within(card).getByTestId('factory-board-more-r1'));
     fireEvent.click(await screen.findByTestId('factory-board-release-r1'));
     expect(mocks.release).toHaveBeenCalledWith('p1', 'r1');
     expect(screen.queryByTestId('factory-board-stop-r1')).toBeNull();

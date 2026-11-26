@@ -31,8 +31,8 @@ describe('Collapsible', () => {
 
       return (
         <Collapsible open={open} onOpenChange={setOpen}>
-          <CollapsibleTrigger asChild>
-            <button data-testid="custom-trigger">Custom Toggle</button>
+          <CollapsibleTrigger render={<button data-testid="custom-trigger" />}>
+            Custom Toggle
           </CollapsibleTrigger>
           <CollapsibleContent data-testid="content">Controlled Panel</CollapsibleContent>
         </Collapsible>

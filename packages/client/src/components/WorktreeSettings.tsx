@@ -13,7 +13,6 @@ import {
 } from 'lucide-react';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { ToolbarCount } from '@/components/review-pane/ToolbarCount';
@@ -24,6 +23,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { toast } from '@/components/ui/toast';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useGitStatusForThread } from '@/data/git-status/hooks';
 import { useProjects } from '@/data/projects/hooks';

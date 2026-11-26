@@ -8,13 +8,13 @@ import type { ImageAttachment, TemplateVariable, Thread } from '@funny/shared';
 import { parseCodexCommand } from '@funny/shared/codex-commands';
 import type { TFunction } from 'i18next';
 import { useCallback, useLayoutEffect, useRef } from 'react';
-import { toast } from 'sonner';
 
 import type {
   PromptEditorHandle,
   PromptSlashResource,
 } from '@/components/prompt-editor/PromptEditor';
 import { serializeEditorContent } from '@/components/prompt-editor/serialize';
+import { toast } from '@/components/ui/toast';
 import { systemApi } from '@/lib/api/system';
 import {
   getLeadingSlashCommand,

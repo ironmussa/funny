@@ -1,8 +1,8 @@
 import { useCallback, useRef, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import type { PromptEditorHandle } from '@/components/prompt-editor/PromptEditor';
+import { toast } from '@/components/ui/toast';
 import { useProfile } from '@/data/profile/hooks';
 import { useDictation } from '@/hooks/use-dictation';
 import { usePushToTalk } from '@/hooks/use-push-to-talk';

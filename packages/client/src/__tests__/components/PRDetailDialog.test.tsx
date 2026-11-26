@@ -157,7 +157,7 @@ describe('PRDetailDialog', () => {
     expect(screen.getByTestId('pr-detail-status')).toHaveTextContent('-37');
     expect(screen.getByTestId('pr-detail-status')).toHaveTextContent('2');
     expect(screen.getByTestId('pr-detail-status')).toHaveTextContent('Ready to merge');
-    expect(screen.getByTestId('pr-detail-tab-info')).toHaveAttribute('data-state', 'active');
+    expect(screen.getByTestId('pr-detail-tab-info')).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByTestId('pr-detail-commit-select')).toBeInTheDocument();
     expect(screen.getByTestId('pr-detail-tab-conversation')).toBeInTheDocument();
 

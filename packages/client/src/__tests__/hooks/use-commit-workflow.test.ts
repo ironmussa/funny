@@ -14,7 +14,7 @@ mock.module('react-i18next', () => ({
   }),
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
-mock.module('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+mock.module('@/components/ui/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 mock.module('@/lib/toast-error', () => ({ toastError: vi.fn() }));
 mock.module('@/lib/api/git', () => ({ gitApi }));
 mock.module('@/lib/api/projects', () => ({ projectsApi: { listBranches: vi.fn() } }));

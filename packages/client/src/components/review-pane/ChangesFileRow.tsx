@@ -14,10 +14,10 @@ import {
 } from 'lucide-react';
 import type { ComponentProps, Dispatch, SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { FileName } from '@/components/ui/file-name';
+import { toast } from '@/components/ui/toast';
 import { TriCheckbox } from '@/components/ui/tri-checkbox';
 import {
   getEditorLabel,

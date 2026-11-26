@@ -1,6 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 import { useShallow } from 'zustand/react/shallow';
 
 import {
@@ -11,6 +10,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { toast } from '@/components/ui/toast';
 import { useUnifiedPromptModelGroups } from '@/hooks/use-unified-prompt-model-groups';
 import { getConfigurablePromptModelGroups } from '@/lib/prompt-model-visibility';
 import { useSettingsStore } from '@/stores/settings-store';

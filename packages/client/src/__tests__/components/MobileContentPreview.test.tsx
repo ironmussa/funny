@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 import {
   MobileContentPreview,
@@ -16,7 +16,7 @@ beforeEach(() => {
 });
 
 describe('mobile thread content', () => {
-  test('keeps the preview mounted and inert while opening live content in a separate viewer', () => {
+  test('keeps the preview mounted and inert while opening live content in a separate viewer', async () => {
     const { container, rerender } = render(
       <ToolContentArea>
         <pre>First output</pre>
@@ -24,7 +24,7 @@ describe('mobile thread content', () => {
     );
     const preview = screen.getByTestId('mobile-content-preview');
     expect(preview.querySelector('[inert]')).toBeTruthy();
-    expect(container.querySelector('[data-radix-scroll-area-viewport]')).toBeNull();
+    expect(container.querySelector('[data-slot="scroll-area-viewport"]')).toBeNull();
     const trigger = screen.getByRole('button', { name: 'tools.viewFullContent' });
     fireEvent.click(trigger);
     const dialog = screen.getByRole('dialog');
@@ -37,7 +37,7 @@ describe('mobile thread content', () => {
     );
     expect(within(dialog).getByText('Updated output')).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole('button', { name: 'tools.closeViewer' }));
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(screen.getByTestId('mobile-content-preview')).toBe(preview);
   });
 
@@ -60,7 +60,7 @@ describe('mobile thread content', () => {
         <pre>Output</pre>
       </ToolContentArea>,
     );
-    expect(container.querySelector('[data-radix-scroll-area-viewport]')).toHaveClass(
+    expect(container.querySelector('[data-slot="scroll-area-viewport"]')).toHaveClass(
       'max-h-[50vh]',
     );
     expect(screen.queryByRole('button')).not.toBeInTheDocument();

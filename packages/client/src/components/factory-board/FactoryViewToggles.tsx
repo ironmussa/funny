@@ -221,11 +221,10 @@ export function FactoryLayoutToggle({
   const analytics = t('factoryView.layoutAnalytics', 'Analytics');
   return (
     <ToggleGroup
-      type="single"
       size="sm"
       variant="outline"
-      value={layout}
-      onValueChange={(value) => {
+      value={[layout]}
+      onValueChange={([value]) => {
         if (value === 'list' || value === 'board' || value === 'analytics') onChange(value);
       }}
     >

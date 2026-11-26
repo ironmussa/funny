@@ -1,9 +1,9 @@
 import { Globe } from 'lucide-react';
 import { memo, startTransition, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
+import { toast } from '@/components/ui/toast';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useProjects } from '@/data/projects/hooks';
 import { usePanelParam } from '@/hooks/use-panel-param';

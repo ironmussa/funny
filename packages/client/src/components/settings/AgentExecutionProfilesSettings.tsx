@@ -3,7 +3,6 @@ import { Bot, Check, Copy, Plus, Save, Trash2 } from 'lucide-react';
 import type { Dispatch, FormEvent, SetStateAction } from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -16,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { toast } from '@/components/ui/toast';
 import { refreshProjectAgentProfiles } from '@/data/agent-profiles/queries';
 import { useProjectById } from '@/data/projects/hooks';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';

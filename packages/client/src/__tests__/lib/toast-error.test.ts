@@ -11,7 +11,7 @@ const { toastErrorMock, logWarnMock, tMock } = (() => ({
   }),
 }))();
 
-mock.module('sonner', () => ({
+mock.module('@/components/ui/toast', () => ({
   toast: { error: (...args: unknown[]) => toastErrorMock(...args) },
 }));
 

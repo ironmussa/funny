@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useNavigate, type NavigateFunction } from 'react-router-dom';
-import { toast } from 'sonner';
 
+import { toast } from '@/components/ui/toast';
 import { authClient } from '@/lib/auth-client';
 import { useAuthStore } from '@/stores/auth-store';
 import { useProjectStore } from '@/stores/project-store';

@@ -1,6 +1,5 @@
 import { Check, Link2, X } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
-import { toast } from 'sonner';
 
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -20,6 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { toast } from '@/components/ui/toast';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { api } from '@/lib/api';
 import { threadsApi, type ShareLevel, type ThreadShareGrant } from '@/lib/api/threads';

@@ -21,7 +21,8 @@ describe('FileName', () => {
     const name = 'a'.repeat(80) + '.json';
     const label = renderName({ name });
     expect(label).not.toHaveAttribute('title');
-    fireEvent.pointerMove(label, { pointerType: 'mouse' });
+    fireEvent.pointerEnter(label, { pointerType: 'mouse' });
+    fireEvent.mouseEnter(label);
     expect(await screen.findByRole('tooltip')).toHaveTextContent(name);
     expect(document.querySelector('[data-slot="tooltip-content"]')).toHaveTextContent(name);
   });

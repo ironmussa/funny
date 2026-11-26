@@ -1,6 +1,6 @@
 import type { TFunction } from 'i18next';
-import { toast } from 'sonner';
 
+import { toast } from '@/components/ui/toast';
 import { api } from '@/lib/api';
 import type { FileRef, SymbolRef } from '@/lib/thread-payload';
 import { buildWorkflowRunBody, type WorkflowInvocation } from '@/lib/workflow-invocation';

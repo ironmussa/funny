@@ -1,4 +1,4 @@
-import * as ProgressPrimitive from '@radix-ui/react-progress';
+import { Progress as ProgressPrimitive } from '@base-ui/react/progress';
 import * as React from 'react';
 
 import { cn } from '@/lib/utils';
@@ -14,16 +14,23 @@ const SIZE_CLASS = {
   thin: 'h-1.5',
 } as const;
 
-interface ProgressProps extends React.ComponentPropsWithoutRef<typeof ProgressPrimitive.Root> {
+interface ProgressProps extends Omit<React.ComponentProps<typeof ProgressPrimitive.Root>, 'value'> {
+  value?: number | null;
   /** Indicator color: `warning` / `error` for a value nearing or at a limit. */
   tone?: keyof typeof TONE_CLASS;
   size?: keyof typeof SIZE_CLASS;
 }
 
-const Progress = React.forwardRef<React.ElementRef<typeof ProgressPrimitive.Root>, ProgressProps>(
-  ({ className, value, tone = 'default', size = 'default', ...props }, ref) => (
+function Progress({
+  className,
+  value = null,
+  tone = 'default',
+  size = 'default',
+  ...props
+}: ProgressProps) {
+  return (
     <ProgressPrimitive.Root
-      ref={ref}
+      value={value}
       className={cn(
         'relative w-full overflow-hidden rounded-full bg-secondary',
         SIZE_CLASS[size],
@@ -31,13 +38,11 @@ const Progress = React.forwardRef<React.ElementRef<typeof ProgressPrimitive.Root
       )}
       {...props}
     >
-      <ProgressPrimitive.Indicator
-        className={cn('h-full w-full flex-1 transition-all', TONE_CLASS[tone])}
-        style={{ transform: `translateX(-${100 - (value || 0)}%)` }}
-      />
+      <ProgressPrimitive.Track className="h-full w-full">
+        <ProgressPrimitive.Indicator className={cn('h-full transition-all', TONE_CLASS[tone])} />
+      </ProgressPrimitive.Track>
     </ProgressPrimitive.Root>
-  ),
-);
-Progress.displayName = ProgressPrimitive.Root.displayName;
+  );
+}
 
 export { Progress };

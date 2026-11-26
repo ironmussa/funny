@@ -1,6 +1,6 @@
 import type { Activity } from '@funny/shared';
-import { toast } from 'sonner';
 
+import { toast } from '@/components/ui/toast';
 import i18n from '@/i18n/config';
 
 import { useActivityPanelStore } from './activity-panel-store';

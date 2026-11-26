@@ -112,11 +112,7 @@ describe('BrowserControlBar', () => {
   test('the viewport menu offers DevTools device presets and marks the current size', () => {
     useBrowserPanelStore.setState({ sessionId: 'thread:t1', sessionThreadId: 't1' });
     const { rerender } = render(<BrowserControlBar />);
-    const openMenu = () =>
-      fireEvent.pointerDown(screen.getByTestId('browser-panel-viewport-menu'), {
-        button: 0,
-        ctrlKey: false,
-      });
+    const openMenu = () => fireEvent.click(screen.getByTestId('browser-panel-viewport-menu'));
 
     openMenu();
     expect(screen.getByTestId('browser-panel-viewport-desktop')).toHaveAttribute(

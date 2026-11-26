@@ -81,8 +81,11 @@ describe('ProjectSandboxSetting', () => {
     // jsdom has no scrollIntoView; the open Radix Select calls it.
     Element.prototype.scrollIntoView = vi.fn();
     render(<ProjectSandboxSetting projectId="p1" />);
-    fireEvent.keyDown(screen.getByTestId('settings-project-sandbox-connection'), { key: 'Enter' });
-    fireEvent.click(await screen.findByRole('option', { name: /funny-laptop/ }));
+    fireEvent.click(screen.getByTestId('settings-project-sandbox-connection'));
+    const option = await screen.findByRole('option', { name: /funny-laptop/ });
+    fireEvent.pointerDown(option);
+    fireEvent.pointerUp(option);
+    fireEvent.click(option);
     expect(mocks.save).toHaveBeenCalledWith('p1', { mode: 'local', connectionId: 'c1' });
   });
 

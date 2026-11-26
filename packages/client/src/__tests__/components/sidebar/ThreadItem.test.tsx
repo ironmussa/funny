@@ -115,10 +115,7 @@ describe('ThreadItem', () => {
       />,
     );
 
-    fireEvent.pointerDown(screen.getByTestId('thread-item-more-scratch-1'), {
-      button: 0,
-      ctrlKey: false,
-    });
+    fireEvent.click(screen.getByTestId('thread-item-more-scratch-1'));
     fireEvent.click(await screen.findByTestId('thread-rename-scratch-1'));
     const input = screen.getByTestId('thread-rename-input-scratch-1');
     fireEvent.change(input, { target: { value: 'Renamed thread' } });
@@ -362,11 +359,7 @@ describe('ThreadItem', () => {
           timeValue="2m"
         />,
       );
-    const openMenu = () =>
-      fireEvent.pointerDown(screen.getByTestId('thread-item-more-t-factory'), {
-        button: 0,
-        ctrlKey: false,
-      });
+    const openMenu = () => fireEvent.click(screen.getByTestId('thread-item-more-t-factory'));
 
     test('shows it busy with the step instead of the time, and offers to stop the run', async () => {
       seedActiveRuns([run()]);

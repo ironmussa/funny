@@ -13,9 +13,8 @@
  */
 
 import type { DomainError } from '@funny/shared/errors';
-import type { ExternalToast } from 'sonner';
-import { toast } from 'sonner';
 
+import { toast, type ToastOptions } from '@/components/ui/toast';
 import i18n from '@/i18n/config';
 import { createClientLogger } from '@/lib/client-logger';
 
@@ -30,7 +29,7 @@ const log = createClientLogger('toast-error');
  *   3. `errors.generic.{type}` (per-type fallback)
  *   4. Hardcoded fallback
  */
-export function toastError(error: DomainError, context?: string, opts?: ExternalToast): void {
+export function toastError(error: DomainError, context?: string, opts?: ToastOptions): void {
   // Always log the raw error for debugging
   log.warn('API error', {
     type: error.type,

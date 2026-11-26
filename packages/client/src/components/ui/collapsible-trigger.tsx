@@ -1,39 +1,47 @@
-import { Slot } from '@radix-ui/react-slot';
-import { type ComponentProps, type Ref } from 'react';
+import { mergeProps } from '@base-ui/react/merge-props';
+import { useRender } from '@base-ui/react/use-render';
+import * as React from 'react';
 
 import { useCollapsibleContext } from '@/components/ui/collapsible-context';
 
 function CollapsibleTrigger({
-  asChild = false,
+  asChild,
+  render,
+  children,
   disabled: disabledProp,
   onClick,
   ref,
   ...props
-}: ComponentProps<'button'> & {
-  asChild?: boolean;
-  ref?: Ref<HTMLButtonElement>;
-}) {
+}: useRender.ComponentProps<'button'> & { asChild?: boolean }) {
   const context = useCollapsibleContext('CollapsibleTrigger');
   const disabled = disabledProp || context.disabled;
-  const Comp = asChild ? Slot : 'button';
+  const childElement = asChild && !render && React.isValidElement(children) ? children : undefined;
+  const resolvedRender = render ?? childElement;
 
-  return (
-    <Comp
-      ref={ref}
-      aria-controls={context.contentId}
-      aria-expanded={context.open}
-      data-state={context.open ? 'open' : 'closed'}
-      data-disabled={disabled ? '' : undefined}
-      disabled={disabled}
-      type={asChild ? undefined : 'button'}
-      {...props}
-      onClick={(event) => {
-        onClick?.(event);
-        if (event.defaultPrevented || disabled) return;
-        context.setOpen(!context.open);
-      }}
-    />
-  );
+  return useRender({
+    defaultTagName: 'button',
+    render: resolvedRender,
+    ref,
+    props: {
+      ...mergeProps<'button'>(
+        {
+          'aria-controls': context.contentId,
+          'aria-expanded': context.open,
+          disabled,
+          type: resolvedRender ? undefined : 'button',
+          children: childElement ? undefined : children,
+          onClick: (event: React.MouseEvent<HTMLButtonElement>) => {
+            onClick?.(event);
+            if (event.defaultPrevented || disabled) return;
+            context.setOpen(!context.open);
+          },
+        },
+        props,
+      ),
+      'data-state': context.open ? 'open' : 'closed',
+      'data-disabled': disabled ? '' : undefined,
+    },
+  });
 }
 
 export { CollapsibleTrigger };

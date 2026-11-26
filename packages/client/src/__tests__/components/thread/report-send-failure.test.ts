@@ -4,7 +4,9 @@ import { ok } from 'neverthrow';
 
 const revertOptimisticRun = vi.fn();
 const rollbackOptimisticMessage = vi.fn();
-mock.module('sonner', () => ({ toast: { error: vi.fn(), info: vi.fn(), success: vi.fn() } }));
+mock.module('@/components/ui/toast', () => ({
+  toast: { error: vi.fn(), info: vi.fn(), success: vi.fn() },
+}));
 mock.module('@/stores/thread-store', () => ({
   useThreadStore: { getState: () => ({ revertOptimisticRun, rollbackOptimisticMessage }) },
 }));

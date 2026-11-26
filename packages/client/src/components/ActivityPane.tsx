@@ -14,7 +14,6 @@ import {
 } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import { FileTree } from '@/components/FileTree';
 import { formatInput } from '@/components/tool-cards/utils';
@@ -23,6 +22,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { EmptyState as SharedEmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { toast } from '@/components/ui/toast';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useProjects } from '@/data/projects/hooks';
 import { useLoadDiffWhenMissing } from '@/hooks/use-load-diff-when-missing';

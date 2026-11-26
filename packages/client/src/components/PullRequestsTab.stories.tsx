@@ -2,8 +2,8 @@ import type { GitHubPR, PRConversation, PRReviewThread } from '@funny/shared';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useEffect } from 'react';
 import { MemoryRouter } from 'react-router-dom';
-import { Toaster } from 'sonner';
 
+import { Toaster } from '@/components/ui/toast';
 import '@/i18n/config';
 import { seedProjectCurrentBranches, withProjects } from '@/data/projects/testing';
 import { buildThreadWithMessages } from '@/data/threads/testing';

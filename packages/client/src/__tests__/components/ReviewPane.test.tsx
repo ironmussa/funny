@@ -66,7 +66,7 @@ mock.module('@/components/tool-cards/utils', () => ({
   getFileName: (filePath: string) => filePath.split('/').pop() ?? filePath,
 }));
 
-mock.module('sonner', () => ({
+mock.module('@/components/ui/toast', () => ({
   toast: {
     success: vi.fn(),
     error: vi.fn(),

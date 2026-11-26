@@ -15,7 +15,7 @@ mock.module('react-i18next', () => ({
   useTranslation: () => ({ t: mockT, i18n: { language: 'en' } }),
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
-mock.module('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+mock.module('@/components/ui/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 mock.module('@/lib/api', () => ({ api: mocks }));
 
 import { ApiTokensSettings } from '@/components/settings/ApiTokensSettings';

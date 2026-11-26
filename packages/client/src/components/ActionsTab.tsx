@@ -2,7 +2,6 @@ import type { ActionJob, ActionRun, CICheck, PRDetail } from '@funny/shared';
 import { ChevronRight, CircleDashed, ExternalLink, GitPullRequest, RotateCcw } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import { BranchBadge } from '@/components/BranchBadge';
 import { CommitHash } from '@/components/CommitHash';
@@ -19,6 +18,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { toast } from '@/components/ui/toast';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { rerunFailedJobs } from '@/data/github-actions/actions';
@@ -559,10 +559,9 @@ function ScopeToggle({
   const { t } = useTranslation();
   return (
     <ToggleGroup
-      type="single"
       size="sm"
-      value={scope}
-      onValueChange={(value) => {
+      value={[scope]}
+      onValueChange={([value]) => {
         if (value === 'branch' || value === 'all') onScopeChange(value);
       }}
       className="h-6"

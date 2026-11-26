@@ -2,9 +2,9 @@ import type { AgentModel, EffortLevel, PermissionDecision, PermissionMode } from
 import { DEFAULT_FOLLOW_UP_MODE } from '@funny/shared/models';
 import { useCallback, useRef, useState, type RefObject, type SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import type { MessageStreamHandle } from '@/components/thread/MessageStream';
+import { toast } from '@/components/ui/toast';
 import { readProject } from '@/data/projects/read';
 import { applyQueueCount, readQueuedCount } from '@/data/queue/store';
 import { api } from '@/lib/api';

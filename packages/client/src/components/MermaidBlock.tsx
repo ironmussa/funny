@@ -10,7 +10,6 @@ import {
   ZoomOut,
 } from 'lucide-react';
 import { useCallback, useMemo, useLayoutEffect, useRef, useState } from 'react';
-import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -20,6 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { toast } from '@/components/ui/toast';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { createClientLogger } from '@/lib/client-logger';

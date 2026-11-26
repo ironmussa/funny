@@ -586,7 +586,7 @@ describe('the run panel tabs', () => {
     expect(within(tabs).queryByTestId('factory-run-detail-tab-proof')).toBeNull();
     // Only the picked tab's section is shown.
     expect(screen.queryByTestId('factory-run-detail-reviews')).toBeNull();
-    fireEvent.mouseDown(screen.getByTestId('factory-run-detail-tab-reviews'), { button: 0 });
+    fireEvent.click(screen.getByTestId('factory-run-detail-tab-reviews'));
     expect(screen.getByTestId('factory-run-detail-reviews')).toBeTruthy();
   });
 });

@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
+import { toast } from '@/components/ui/toast';
 import { useProjectById, useProjectCurrentBranch } from '@/data/projects/hooks';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';

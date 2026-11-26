@@ -41,19 +41,19 @@ const VIEW_MODE_OPTIONS: {
     value: 'unified',
     label: 'Unified',
     icon: RectangleVertical,
-    className: 'data-[state=on]:bg-accent rounded-none rounded-l-md border-0 px-1.5',
+    className: 'data-pressed:bg-accent rounded-none rounded-l-md border-0 px-1.5',
   },
   {
     value: 'split',
     label: 'Split',
     icon: Columns2,
-    className: 'border-border data-[state=on]:bg-accent rounded-none border-x px-1.5',
+    className: 'border-border data-pressed:bg-accent rounded-none border-x px-1.5',
   },
   {
     value: 'three-pane',
     label: 'Three-pane',
     icon: Columns3,
-    className: 'data-[state=on]:bg-accent rounded-none rounded-r-md border-0 px-1.5',
+    className: 'data-pressed:bg-accent rounded-none rounded-r-md border-0 px-1.5',
   },
 ];
 
@@ -70,10 +70,11 @@ function DiffViewModeToggle({
 }) {
   return (
     <ToggleGroup
-      type="single"
       size="sm"
-      value={value}
-      onValueChange={onValueChange}
+      value={[value]}
+      onValueChange={([next]) => {
+        if (next) onValueChange(next);
+      }}
       disabled={disabled}
       segmented
       className="shrink-0"

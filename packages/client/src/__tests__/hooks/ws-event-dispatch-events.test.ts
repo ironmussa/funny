@@ -109,7 +109,7 @@ mock.module('@/hooks/dispatch-browser-session-events', () => ({
   dispatchBrowserSessionEvent: mockDispatchBrowserSessionEvent,
 }));
 
-mock.module('sonner', () => ({
+mock.module('@/components/ui/toast', () => ({
   toast: {
     error: mockToastError,
     success: mockToastSuccess,

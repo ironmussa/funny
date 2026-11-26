@@ -8,12 +8,12 @@
 import { APPROVAL_ADJUST_LINES_RANGE, LOW_RISK_LINES_RANGE } from '@funny/shared/contracts/factory';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
+import { toast } from '@/components/ui/toast';
 import { proposeQueueCi } from '@/data/factory/actions';
 import { useFactoryFlowDefinition, useFactoryReadiness } from '@/data/factory/hooks';
 import type { FactorySettings, SaveFactorySettingsInput } from '@/lib/api/factory';

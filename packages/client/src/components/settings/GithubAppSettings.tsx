@@ -1,6 +1,5 @@
 import { Check, ChevronsUpDown } from 'lucide-react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { toast } from 'sonner';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -15,6 +14,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/ui/loading-state';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { toast } from '@/components/ui/toast';
 import { api } from '@/lib/api';
 import type { GithubAppAccount, GithubAppStatus } from '@/lib/api/github-app';
 import { cn } from '@/lib/utils';
@@ -169,10 +169,12 @@ function ConnectedApp({
       <PermissionNotices status={status} />
       <div className="flex gap-2">
         {status.installUrl && (
-          <Button asChild size="sm" data-testid="github-app-install">
-            <a href={status.installUrl} target="_blank" rel="noreferrer">
-              Install on repositories
-            </a>
+          <Button
+            size="sm"
+            data-testid="github-app-install"
+            render={<a href={status.installUrl} target="_blank" rel="noreferrer" />}
+          >
+            Install on repositories
           </Button>
         )}
         {!fromEnvironment && (

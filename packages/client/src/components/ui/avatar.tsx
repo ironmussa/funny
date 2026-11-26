@@ -1,4 +1,4 @@
-import * as AvatarPrimitive from '@radix-ui/react-avatar';
+import { Avatar as AvatarPrimitive } from '@base-ui/react/avatar';
 import { cva, type VariantProps } from 'class-variance-authority';
 import * as React from 'react';
 
@@ -82,33 +82,13 @@ const avatarVariants = cva('relative flex shrink-0 overflow-hidden rounded-full'
 function Avatar({
   className,
   size,
-  ref,
   ...props
-}: React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Root> &
-  VariantProps<typeof avatarVariants> & {
-    ref?: React.Ref<React.ElementRef<typeof AvatarPrimitive.Root>>;
-  }) {
-  return (
-    <AvatarPrimitive.Root
-      ref={ref}
-      className={cn(avatarVariants({ size }), className)}
-      {...props}
-    />
-  );
+}: React.ComponentProps<typeof AvatarPrimitive.Root> & VariantProps<typeof avatarVariants>) {
+  return <AvatarPrimitive.Root className={cn(avatarVariants({ size }), className)} {...props} />;
 }
-function AvatarImage({
-  className,
-  ref,
-  ...props
-}: React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Image> & {
-  ref?: React.Ref<React.ElementRef<typeof AvatarPrimitive.Image>>;
-}) {
+function AvatarImage({ className, ...props }: React.ComponentProps<typeof AvatarPrimitive.Image>) {
   return (
-    <AvatarPrimitive.Image
-      ref={ref}
-      className={cn('aspect-square h-full w-full', className)}
-      {...props}
-    />
+    <AvatarPrimitive.Image className={cn('aspect-square h-full w-full', className)} {...props} />
   );
 }
 function AvatarFallback({
@@ -116,18 +96,14 @@ function AvatarFallback({
   name,
   textSize = 'default',
   style,
-  ref,
   ...props
-}: React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Fallback> & {
+}: React.ComponentProps<typeof AvatarPrimitive.Fallback> & {
   name?: string;
   /** Initials size: `xs` for the small avatars in lists and menus. Defaults to the inherited size. */
   textSize?: 'default' | 'xs' | 'micro';
-} & {
-  ref?: React.Ref<React.ElementRef<typeof AvatarPrimitive.Fallback>>;
 }) {
   return (
     <AvatarPrimitive.Fallback
-      ref={ref}
       className={cn(
         'flex h-full w-full items-center justify-center rounded-full',
         !name && 'bg-muted',

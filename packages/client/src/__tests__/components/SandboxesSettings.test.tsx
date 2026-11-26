@@ -26,7 +26,7 @@ mock.module('@/lib/api', () => ({
   },
 }));
 
-mock.module('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+mock.module('@/components/ui/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 mock.module('@/data/runner/hooks', () => ({ useSandboxConnections: () => mocks.storeState }));
 mock.module('@/data/runner/queries', () => ({ refreshSandboxConnections: mocks.fetch }));

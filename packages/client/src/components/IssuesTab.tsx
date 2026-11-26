@@ -493,19 +493,19 @@ function IssueRow({
             <Button
               variant="ghost"
               size="icon-xs"
-              asChild
               // oxlint-disable-next-line shadcn/require-static-classes -- listRowActionClassName is a static constant from list-row-styles
               className={listRowActionClassName}
               data-testid={`issue-open-github-${issue.number}`}
+              render={
+                <a
+                  href={issue.html_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={t('issues.viewOnGithub', 'View on GitHub')}
+                />
+              }
             >
-              <a
-                href={issue.html_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={t('issues.viewOnGithub', 'View on GitHub')}
-              >
-                <ExternalLink className="icon-sm" />
-              </a>
+              <ExternalLink className="icon-sm" />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top">{t('issues.viewOnGithub', 'View on GitHub')}</TooltipContent>

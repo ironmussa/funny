@@ -1,32 +1,105 @@
-import * as HoverCardPrimitive from '@radix-ui/react-hover-card';
+import { PreviewCard as PreviewCardPrimitive } from '@base-ui/react/preview-card';
 import * as React from 'react';
 
 import { cn } from '@/lib/utils';
 
-const HoverCard = HoverCardPrimitive.Root;
+interface HoverCardDelayContextValue {
+  openDelay?: number;
+  closeDelay?: number;
+}
 
-const HoverCardTrigger = HoverCardPrimitive.Trigger;
+const HoverCardDelayContext = React.createContext<HoverCardDelayContextValue>({});
+
+type HoverCardProps = React.ComponentPropsWithoutRef<typeof PreviewCardPrimitive.Root> & {
+  openDelay?: number;
+  closeDelay?: number;
+};
+
+function HoverCard({ openDelay, closeDelay, ...props }: HoverCardProps) {
+  const delayValue = React.useMemo(() => ({ openDelay, closeDelay }), [openDelay, closeDelay]);
+  return (
+    <HoverCardDelayContext value={delayValue}>
+      <PreviewCardPrimitive.Root {...props} />
+    </HoverCardDelayContext>
+  );
+}
+
+type HoverCardTriggerProps = React.ComponentPropsWithoutRef<typeof PreviewCardPrimitive.Trigger> & {
+  asChild?: boolean;
+  ref?: React.Ref<HTMLAnchorElement>;
+};
+
+function HoverCardTrigger({
+  asChild,
+  render,
+  children,
+  delay,
+  closeDelay,
+  ref,
+  ...props
+}: HoverCardTriggerProps) {
+  const delayCtx = React.useContext(HoverCardDelayContext);
+  const resolvedRender =
+    render ?? (asChild && React.isValidElement(children) ? children : undefined);
+  const resolvedChildren =
+    asChild && !render && React.isValidElement(children) ? undefined : children;
+
+  return (
+    <PreviewCardPrimitive.Trigger
+      ref={ref}
+      render={resolvedRender}
+      delay={delay ?? delayCtx.openDelay}
+      closeDelay={closeDelay ?? delayCtx.closeDelay}
+      {...props}
+    >
+      {resolvedChildren}
+    </PreviewCardPrimitive.Trigger>
+  );
+}
+
+type PreviewCardPositionerProps = React.ComponentPropsWithoutRef<
+  typeof PreviewCardPrimitive.Positioner
+>;
+
+type HoverCardContentProps = React.ComponentPropsWithoutRef<typeof PreviewCardPrimitive.Popup> &
+  Pick<
+    PreviewCardPositionerProps,
+    'side' | 'align' | 'sideOffset' | 'alignOffset' | 'collisionPadding'
+  > & {
+    ref?: React.Ref<HTMLDivElement>;
+  };
 
 function HoverCardContent({
   className,
+  side,
   align = 'center',
   sideOffset = 4,
+  alignOffset,
+  collisionPadding,
   ref,
   ...props
-}: React.ComponentPropsWithoutRef<typeof HoverCardPrimitive.Content> & {
-  ref?: React.Ref<React.ElementRef<typeof HoverCardPrimitive.Content>>;
-}) {
+}: HoverCardContentProps) {
   return (
-    <HoverCardPrimitive.Content
-      ref={ref}
-      align={align}
-      sideOffset={sideOffset}
-      className={cn(
-        'z-50 w-64 rounded-md border bg-popover p-4 text-popover-foreground shadow-md outline-hidden data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 origin-(--radix-hover-card-content-transform-origin)',
-        className,
-      )}
-      {...props}
-    />
+    <PreviewCardPrimitive.Portal>
+      <PreviewCardPrimitive.Positioner
+        side={side}
+        align={align}
+        sideOffset={sideOffset}
+        alignOffset={alignOffset}
+        collisionPadding={collisionPadding}
+        className="z-50"
+      >
+        <PreviewCardPrimitive.Popup
+          ref={ref}
+          className={cn(
+            'z-50 w-64 rounded-md border bg-popover p-4 text-popover-foreground shadow-md outline-hidden data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 origin-(--transform-origin)',
+            className,
+          )}
+          {...props}
+        />
+      </PreviewCardPrimitive.Positioner>
+    </PreviewCardPrimitive.Portal>
   );
 }
+
 export { HoverCard, HoverCardTrigger, HoverCardContent };

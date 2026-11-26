@@ -8,13 +8,13 @@
 import { ACP_MANIFESTS, GATEABLE_ACP_PROVIDER_IDS } from '@funny/shared/provider-manifests';
 import { AlertTriangle, Cpu, Package, RefreshCw, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
-import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/ui/loading-state';
 import { Switch } from '@/components/ui/switch';
+import { toast } from '@/components/ui/toast';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { useRunnerProviders } from '@/data/runner/hooks';
 import { refreshRunnerProviders, setActiveBuiltins } from '@/data/runner/queries';

@@ -13,8 +13,8 @@
  */
 
 import { useCallback, useState } from 'react';
-import { toast } from 'sonner';
 
+import { toast } from '@/components/ui/toast';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import { metric, startSpan } from '@/lib/telemetry';

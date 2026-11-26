@@ -1,4 +1,4 @@
-import * as DialogPrimitive from '@radix-ui/react-dialog';
+import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Search } from 'lucide-react';
 import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -154,13 +154,10 @@ function FileSearchDialogContent({ open, onOpenChange }: FileSearchDialogProps) 
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogPortal>
         <DialogOverlay />
-        <DialogPrimitive.Content
+        <DialogPrimitive.Popup
           aria-describedby={undefined}
-          className="bg-card data-[state=closed]:animate-fade-out data-[state=open]:animate-fade-in fixed top-[20%] left-[50%] z-50 w-full max-w-3xl translate-x-[-50%] overflow-hidden rounded-lg border p-0 shadow-xl"
-          onOpenAutoFocus={(e) => {
-            e.preventDefault();
-            inputRef.current?.focus();
-          }}
+          className="bg-card data-closed:animate-fade-out data-open:animate-fade-in fixed top-[20%] left-[50%] z-50 w-full max-w-3xl translate-x-[-50%] overflow-hidden rounded-lg border p-0 shadow-xl"
+          initialFocus={inputRef}
         >
           <DialogTitle className="sr-only">{t('fileSearch.title', 'Search files')}</DialogTitle>
 
@@ -251,7 +248,7 @@ function FileSearchDialogContent({ open, onOpenChange }: FileSearchDialogProps) 
               </div>
             )}
           </div>
-        </DialogPrimitive.Content>
+        </DialogPrimitive.Popup>
       </DialogPortal>
     </Dialog>
   );

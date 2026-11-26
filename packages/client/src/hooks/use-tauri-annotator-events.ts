@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
 
+import { toast } from '@/components/ui/toast';
 import { useUIStore } from '@/stores/ui-store';
 
 // Module-level loader: React Compiler cannot compile `import()` inside a hook.

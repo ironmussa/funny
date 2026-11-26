@@ -42,7 +42,7 @@ mock.module('@/lib/api', async () => {
   };
 });
 
-mock.module('sonner', () => ({
+mock.module('@/components/ui/toast', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }));
 

@@ -164,7 +164,7 @@ describe('#556 Button variants and sizes', () => {
   const variants: [string, string, string][] = [
     // [new variant, old variant, old className]
     ['pressed-primary', 'muted', 'text-primary bg-primary/10'],
-    ['muted-menu', 'muted', 'data-[state=open]:text-foreground'],
+    ['muted-menu', 'muted', 'data-popup-open:text-foreground data-open:text-foreground'],
     ['ghost-sidebar', 'ghost', 'hover:bg-sidebar-accent'],
     ['ghost-primary', 'muted', 'text-primary hover:text-primary'],
   ];

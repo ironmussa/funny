@@ -51,7 +51,9 @@ mock.module('@/stores/thread-store-internals', () => ({
   setUrlThreadId: vi.fn(),
 }));
 
-mock.module('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
+mock.module('@/components/ui/toast', () => ({
+  toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() },
+}));
 
 const {
   handleWSMessage,

@@ -2,7 +2,6 @@ import type { TFunction } from 'i18next';
 import { AlertTriangle, KeyRound } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -18,6 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { toast } from '@/components/ui/toast';
 import { api } from '@/lib/api';
 import type { PersonalAccessTokenInfo } from '@/lib/api/personal-tokens';
 import { cn } from '@/lib/utils';

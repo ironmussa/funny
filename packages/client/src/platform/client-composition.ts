@@ -1,5 +1,6 @@
 import { validateClientPlatform, type ClientPlatform } from '@funny/client-core';
-import { toast } from 'sonner';
+
+import { toast } from '@/components/ui/toast';
 
 import { createWebPlatform } from './web/create-web-platform';
 import { createRequestLifetime } from './web/request-lifetime';

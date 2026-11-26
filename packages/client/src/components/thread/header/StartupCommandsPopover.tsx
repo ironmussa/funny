@@ -2,11 +2,11 @@ import type { StartupCommand } from '@funny/shared';
 import { GitBranch, Loader2, Play, Rocket, Square } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { toast } from '@/components/ui/toast';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useTooltipMenu } from '@/hooks/use-tooltip-menu';
 import { api } from '@/lib/api';

@@ -70,7 +70,7 @@ function RuntimeSwitch({
   toggle: SandboxToggle;
 }) {
   const value = toggle.enabled ? SANDBOX_VALUE : runtime;
-  const onValueChange = (next: string) => {
+  const onValueChange = ([next]: string[]) => {
     // Clicking the selected item would clear a single ToggleGroup: keep it.
     if (!next || next === value) return;
     if (next === SANDBOX_VALUE) {
@@ -83,10 +83,9 @@ function RuntimeSwitch({
   const itemClass = '[&_svg]:size-3.5';
   return (
     <ToggleGroup
-      type="single"
       size="xs"
       segmented
-      value={value}
+      value={[value]}
       onValueChange={onValueChange}
       className="shrink-0"
       data-testid="prompt-runtime-switch"

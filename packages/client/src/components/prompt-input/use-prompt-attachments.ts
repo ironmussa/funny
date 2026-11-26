@@ -28,8 +28,8 @@ import type { AttachmentLimits } from '@funny/shared/models';
 import { getAttachmentLimits } from '@funny/shared/models';
 import type { TFunction } from 'i18next';
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, type RefObject } from 'react';
-import { toast } from 'sonner';
 
+import { toast } from '@/components/ui/toast';
 import { threadsApi } from '@/lib/api/threads';
 
 import type { AttachedTextFile } from './prompt-submit';

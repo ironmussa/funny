@@ -160,7 +160,9 @@ describe('ThreadPowerline', () => {
     );
 
     const project = screen.getByTestId('powerline-segment-project');
-    fireEvent.pointerMove(project, { pointerType: 'mouse' });
+    fireEvent.pointerEnter(project, { pointerType: 'mouse' });
+    fireEvent.mouseEnter(project);
+    fireEvent.mouseMove(project);
 
     expect(await screen.findAllByText('funny — running in a cloud sandbox')).not.toHaveLength(0);
     expect(screen.queryByText(localPath)).not.toBeInTheDocument();
@@ -176,9 +178,10 @@ describe('ThreadPowerline', () => {
       />,
     );
 
-    fireEvent.pointerMove(screen.getByTestId('powerline-segment-project'), {
-      pointerType: 'mouse',
-    });
+    const project = screen.getByTestId('powerline-segment-project');
+    fireEvent.pointerEnter(project, { pointerType: 'mouse' });
+    fireEvent.mouseEnter(project);
+    fireEvent.mouseMove(project);
 
     expect(await screen.findAllByText(localPath)).not.toHaveLength(0);
   });
@@ -192,9 +195,10 @@ describe('ThreadPowerline', () => {
       />,
     );
 
-    fireEvent.pointerMove(screen.getByTestId('powerline-segment-branch'), {
-      pointerType: 'mouse',
-    });
+    const branchEl = screen.getByTestId('powerline-segment-branch');
+    fireEvent.pointerEnter(branchEl, { pointerType: 'mouse' });
+    fireEvent.mouseEnter(branchEl);
+    fireEvent.mouseMove(branchEl);
 
     expect(await screen.findAllByText(`Local branch: ${branch}`)).not.toHaveLength(0);
   });
@@ -213,9 +217,10 @@ describe('ThreadPowerline', () => {
       />,
     );
 
-    fireEvent.pointerMove(screen.getByTestId('powerline-segment-worktree-branch'), {
-      pointerType: 'mouse',
-    });
+    const wtBranch = screen.getByTestId('powerline-segment-worktree-branch');
+    fireEvent.pointerEnter(wtBranch, { pointerType: 'mouse' });
+    fireEvent.mouseEnter(wtBranch);
+    fireEvent.mouseMove(wtBranch);
 
     expect(
       await screen.findAllByText(`Worktree branch: ${branch} — goliiive-v2-worktree`),
@@ -232,9 +237,10 @@ describe('ThreadPowerline', () => {
       />,
     );
 
-    fireEvent.pointerMove(screen.getByTestId('powerline-segment-worktree-branch'), {
-      pointerType: 'mouse',
-    });
+    const wtBranch = screen.getByTestId('powerline-segment-worktree-branch');
+    fireEvent.pointerEnter(wtBranch, { pointerType: 'mouse' });
+    fireEvent.mouseEnter(wtBranch);
+    fireEvent.mouseMove(wtBranch);
 
     await new Promise((resolve) => setTimeout(resolve, 400));
     expect(screen.queryByText(`Worktree branch: ${branch}`)).toBeNull();

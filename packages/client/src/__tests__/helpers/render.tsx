@@ -26,7 +26,7 @@ export function renderWithProviders(
   function Wrapper({ children }: { children: React.ReactNode }) {
     return (
       <MemoryRouter initialEntries={[route ?? '/']}>
-        <TooltipProvider>
+        <TooltipProvider delayDuration={0}>
           <ThreadProvider threadId={resolvedThreadId}>{children}</ThreadProvider>
         </TooltipProvider>
       </MemoryRouter>

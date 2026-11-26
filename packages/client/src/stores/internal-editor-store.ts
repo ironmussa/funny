@@ -1,6 +1,6 @@
-import { toast } from 'sonner';
 import { create } from 'zustand';
 
+import { toast } from '@/components/ui/toast';
 import { systemApi } from '@/lib/api/system';
 
 interface OpenFileOptions {

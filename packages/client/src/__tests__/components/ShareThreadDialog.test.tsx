@@ -10,7 +10,7 @@ interface ThreadRef {
 
 const thread = ((): ThreadRef => ({ current: {} }))();
 
-mock.module('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+mock.module('@/components/ui/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 mock.module('@/lib/api', () => ({
   api: { listProjectMembers: () => okAsync({ members: [] }) },
 }));

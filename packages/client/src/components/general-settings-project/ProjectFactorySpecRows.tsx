@@ -5,10 +5,10 @@
  */
 import { isRepositoryRelativePath } from '@funny/shared/contracts/factory';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
+import { toast } from '@/components/ui/toast';
 import type { SaveFactorySettingsInput } from '@/lib/api/factory';
 
 import { ProjectSettingRow } from './setting-primitives';

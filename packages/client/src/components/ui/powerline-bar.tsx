@@ -1,7 +1,7 @@
 import { ChevronDown, Copy } from 'lucide-react';
 import * as React from 'react';
-import { toast } from 'sonner';
 
+import { toast } from '@/components/ui/toast';
 import { cn, ICON_SIZE } from '@/lib/utils';
 
 import { HighlightText } from './highlight-text';

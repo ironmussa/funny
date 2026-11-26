@@ -1,9 +1,9 @@
 import type { TFunction } from 'i18next';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import { isDivergedBranchesError } from '@/components/pull-strategy-dialog';
+import { toast } from '@/components/ui/toast';
 import { refreshGitStatus } from '@/data/git-status/actions';
 import type { PullStrategy } from '@/lib/api/_core';
 import { gitApi } from '@/lib/api/git';

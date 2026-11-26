@@ -11,7 +11,7 @@ const checkout = vi.fn(() => okAsync({ worktreePath: null }));
 mock.module('@/lib/api', () => ({ api: { checkoutPreflight, checkout } }));
 mock.module('@/data/projects/branches', () => ({ readProjectCurrentBranch: () => 'main' }));
 mock.module('@/data/git-status/actions', () => ({ fetchProjectStatus: vi.fn() }));
-mock.module('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
+mock.module('@/components/ui/toast', () => ({ toast: { error: vi.fn(), success: vi.fn() } }));
 
 import { useBranchSwitch } from '@/hooks/use-branch-switch';
 

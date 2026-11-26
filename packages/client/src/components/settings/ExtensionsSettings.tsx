@@ -9,12 +9,12 @@
  */
 import { AlertTriangle, Package, Puzzle, RefreshCw, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
-import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/ui/loading-state';
+import { toast } from '@/components/ui/toast';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { api } from '@/lib/api';
 import type { InstalledExtension } from '@/lib/api/extensions';

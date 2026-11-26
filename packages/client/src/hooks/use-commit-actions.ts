@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
+import { toast } from '@/components/ui/toast';
 import { fetchForThread, fetchProjectStatus } from '@/data/git-status/actions';
 import { api } from '@/lib/api';
 import { toastError } from '@/lib/toast-error';

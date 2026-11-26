@@ -1,6 +1,5 @@
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 import { useShallow } from 'zustand/react/shallow';
 
 import { SettingRow } from '@/components/settings/SettingRow';
@@ -13,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { toast } from '@/components/ui/toast';
 import {
   playNotificationSound,
   showAgentNotification,

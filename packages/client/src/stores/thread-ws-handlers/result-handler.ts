@@ -1,8 +1,8 @@
 /** `agent:result`, and the toast that reports how the run ended. */
 
 import type { MessageRole, Thread, ThreadStatus } from '@funny/shared';
-import { toast } from 'sonner';
 
+import { toast } from '@/components/ui/toast';
 import { readThreadIndex, readThreadRow } from '@/data/threads/read';
 import { isFactoryThread, isScratch } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';

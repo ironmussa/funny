@@ -453,16 +453,22 @@ function BranchRefDetail({
         <div className="border-border/70 flex border-t pt-3">
           <div className="flex flex-wrap gap-2">
             {githubUrl ? (
-              <Button asChild type="button" variant="outline" size="xs" gap="snug">
-                <a
-                  href={githubUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  data-testid={`graph-branch-github-${summary?.branch}`}
-                >
-                  <ExternalLink className="icon-sm" aria-hidden="true" />
-                  {t('graph.viewBranchOnGithub', 'View branch on GitHub')}
-                </a>
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                gap="snug"
+                render={
+                  <a
+                    href={githubUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    data-testid={`graph-branch-github-${summary?.branch}`}
+                  />
+                }
+              >
+                <ExternalLink className="icon-sm" aria-hidden="true" />
+                {t('graph.viewBranchOnGithub', 'View branch on GitHub')}
               </Button>
             ) : null}
             {summary && action && ActionIcon ? (

@@ -2,13 +2,13 @@ import type { StartupCommand } from '@funny/shared';
 import { Plus, X, Check } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import { StartupCommandEditForm } from '@/components/startup-commands-settings/StartupCommandEditForm';
 import { StartupCommandRow } from '@/components/startup-commands-settings/StartupCommandRow';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
+import { toast } from '@/components/ui/toast';
 import { useProjects } from '@/data/projects/hooks';
 import { api } from '@/lib/api';
 import { useProjectStore } from '@/stores/project-store';

@@ -8,7 +8,6 @@ import { Search, Trash2, UserPlus } from 'lucide-react';
  * optional, separate bulk-access path managed under global preferences.)
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { toast } from 'sonner';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -22,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { toast } from '@/components/ui/toast';
 import { useProjectById } from '@/data/projects/hooks';
 import { api } from '@/lib/api';
 import type { ProjectMemberEntry, ProjectMemberRole, UserSearchResult } from '@/lib/api/projects';

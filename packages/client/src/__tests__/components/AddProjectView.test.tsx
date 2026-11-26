@@ -29,7 +29,7 @@ mock.module('@/stores/auth-store', () => ({
   useAuthStore: { getState: () => ({ activeOrgId: mocks.orgId }) },
 }));
 mock.module('@/lib/toast-error', () => ({ toastError: mocks.toastError }));
-mock.module('sonner', () => ({ toast: { error: mocks.toast, success: vi.fn() } }));
+mock.module('@/components/ui/toast', () => ({ toast: { error: mocks.toast, success: vi.fn() } }));
 mock.module('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 mock.module('@/lib/url', () => ({ buildPath: (path: string) => path }));
 mock.module('@/components/CloneRepoView', () => ({ CloneRepoView: () => null }));

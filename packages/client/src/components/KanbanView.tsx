@@ -4,11 +4,11 @@ import type { Thread, ThreadStage, GitStatusInfo } from '@funny/shared';
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { KanbanColumn } from '@/components/kanban/KanbanColumn';
 import { SlideUpPrompt } from '@/components/SlideUpPrompt';
+import { toast } from '@/components/ui/toast';
 import { useGitStatusMaps } from '@/data/git-status/hooks';
 import { branchKey as computeBranchKey } from '@/data/git-status/keys';
 import { useProjects } from '@/data/projects/hooks';

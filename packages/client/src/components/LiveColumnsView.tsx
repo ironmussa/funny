@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import { ImageLightbox } from '@/components/ImageLightbox';
 import { EmptyGridCell } from '@/components/live-columns/EmptyGridCell';
@@ -10,7 +9,14 @@ import {
   MAX_GRID_COLS,
   MAX_GRID_ROWS,
 } from '@/components/live-columns/grid-constants';
-import { withoutColumn } from '@/components/live-columns/grid-layout';
+import {
+  createColumnIds,
+  insertColumnId,
+  removeColumnId,
+  resizeColumnIds,
+  withInsertedColumn,
+  withoutColumn,
+} from '@/components/live-columns/grid-layout';
 import { GridCellDropTarget } from '@/components/live-columns/GridCellDropTarget';
 import { GridColumnInsertDropTarget } from '@/components/live-columns/GridColumnInsertDropTarget';
 import { GridToolbar } from '@/components/live-columns/GridToolbar';
@@ -18,6 +24,7 @@ import { ProjectPickerDialog } from '@/components/live-columns/ProjectPickerDial
 import { ThreadColumn } from '@/components/live-columns/ThreadColumn';
 import { useGridDragMonitor } from '@/components/live-columns/use-grid-drag-monitor';
 import { useGridNewColumnShortcut } from '@/components/live-columns/use-grid-new-column-shortcut';
+import { toast } from '@/components/ui/toast';
 import { fetchForThread } from '@/data/git-status/actions';
 import { useProjects } from '@/data/projects/hooks';
 import { isProjectListed } from '@/data/threads/read';
@@ -31,6 +38,11 @@ import { useUIStore } from '@/stores/ui-store';
 
 const log = createClientLogger('LiveColumnsView');
 
+let nextColumnIdSeq = 0;
+function allocColumnId(): string {
+  return `col-${nextColumnIdSeq++}`;
+}
+
 type OpenLightboxFn = (images: { src: string; alt: string }[], index: number) => void;
 
 export function LiveColumnsView() {
@@ -38,10 +50,21 @@ export function LiveColumnsView() {
   useMinuteTick();
   const projects = useProjects();
   const loadThreadsForProject = useThreadStore((s) => s.loadThreadsForProject);
-  const [gridCols, setGridCols] = useState(() => {
+  // Stable per-column IDs so removing or inserting a column doesn't shift React
+  // keys of surviving columns (which would unmount/remount their ThreadColumns
+  // and evict/refetch thread payloads).
+  const [columnIds, setColumnIds] = useState<string[]>(() => {
     const saved = localStorage.getItem(GRID_COLS_KEY);
-    return saved ? Math.min(Math.max(Number(saved), 1), MAX_GRID_COLS) : 2;
+    const initialCols = saved ? Math.min(Math.max(Number(saved), 1), MAX_GRID_COLS) : 2;
+    return createColumnIds(initialCols, allocColumnId);
   });
+  const gridCols = columnIds.length;
+  const setGridCols = useCallback((nextCols: number) => {
+    setColumnIds((prev) => resizeColumnIds(prev, nextCols, allocColumnId));
+  }, []);
+  const insertColumnAt = useCallback((insertIndex: number) => {
+    setColumnIds((prev) => insertColumnId(prev, insertIndex, allocColumnId()));
+  }, []);
   const [gridRows, setGridRows] = useState(() => {
     const saved = localStorage.getItem(GRID_ROWS_KEY);
     return saved ? Math.min(Math.max(Number(saved), 1), MAX_GRID_ROWS) : 2;
@@ -175,7 +198,7 @@ export function LiveColumnsView() {
 
       const newCols = gridCols - 1;
       setGridCells(withoutColumn(updated, col, gridCols));
-      setGridCols(newCols);
+      setColumnIds((prev) => removeColumnId(prev, col));
       setPendingProjectByCell((prevPending) => withoutColumn(prevPending, col, gridCols));
       localStorage.setItem(GRID_COLS_KEY, String(newCols));
     },
@@ -196,32 +219,16 @@ export function LiveColumnsView() {
       const newCols = oldCols + 1;
       const insertIndex = oldCols;
 
-      setGridCells((prev) => {
-        const updated: GridCellAssignments = {};
-        for (const [key, val] of Object.entries(prev)) {
-          const oldIdx = Number(key);
-          const oldCol = oldIdx % oldCols;
-          const oldRow = Math.floor(oldIdx / oldCols);
-          updated[String(oldRow * newCols + oldCol)] = val;
-        }
-        return updated;
-      });
-      setPendingProjectByCell((prev) => {
-        const updated: Record<number, string> = {};
-        for (const [key, val] of Object.entries(prev)) {
-          const oldIdx = Number(key);
-          const oldCol = oldIdx % oldCols;
-          const oldRow = Math.floor(oldIdx / oldCols);
-          updated[oldRow * newCols + oldCol] = val;
-        }
-        updated[insertIndex] = pid;
-        return updated;
-      });
-      setGridCols(newCols);
+      setGridCells((prev) => withInsertedColumn(prev, insertIndex, oldCols));
+      setPendingProjectByCell((prev) => ({
+        ...withInsertedColumn(prev, insertIndex, oldCols),
+        [insertIndex]: pid,
+      }));
+      insertColumnAt(insertIndex);
       localStorage.setItem(GRID_COLS_KEY, String(newCols));
       log.info({ projectId: pid, cellIndex: insertIndex }, 'header preset project for new column');
     },
-    [gridCols, t],
+    [gridCols, insertColumnAt, t],
   );
 
   const handlePickerSelect = useCallback(
@@ -245,7 +252,7 @@ export function LiveColumnsView() {
     t,
     setGridCells,
     setPendingProjectByCell,
-    setGridCols,
+    onInsertColumn: insertColumnAt,
   });
 
   return (
@@ -269,9 +276,9 @@ export function LiveColumnsView() {
             isDragging={isDragging}
             disabled={gridCols >= MAX_GRID_COLS}
           />
-          {Array.from({ length: gridCols }).flatMap((_, c) => [
+          {columnIds.flatMap((colId, c) => [
             <div
-              key={`col-${c}`}
+              key={colId}
               className="flex h-full min-w-[280px] flex-1 flex-col gap-2"
               data-testid={`grid-col-${c}`}
             >
@@ -280,7 +287,7 @@ export function LiveColumnsView() {
                 const threadId = gridCells[String(cellIndex)];
                 return (
                   <GridCellDropTarget
-                    key={threadId ? `col-${threadId}` : `empty-${cellIndex}`}
+                    key={threadId ? `col-${threadId}` : `empty-${r}`}
                     cellIndex={cellIndex}
                   >
                     {threadId ? (
@@ -312,7 +319,7 @@ export function LiveColumnsView() {
               })}
             </div>,
             <GridColumnInsertDropTarget
-              key={`insert-${c + 1}`}
+              key={`insert-${colId}`}
               insertIndex={c + 1}
               isDragging={isDragging}
               disabled={gridCols >= MAX_GRID_COLS}

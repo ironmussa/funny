@@ -80,11 +80,7 @@ export function ReviewChangesTabContent({
  */
 export function ReviewChangesTab(props: ReviewChangesTabProps) {
   return (
-    <TabsContent
-      value="changes"
-      className="flex min-h-0 flex-1 data-[state=inactive]:hidden"
-      forceMount
-    >
+    <TabsContent value="changes" className="flex min-h-0 flex-1 data-hidden:hidden" keepMounted>
       <ReviewChangesTabContent {...props} />
     </TabsContent>
   );

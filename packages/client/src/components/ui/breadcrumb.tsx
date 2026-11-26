@@ -1,4 +1,5 @@
-import { Slot } from '@radix-ui/react-slot';
+import { mergeProps } from '@base-ui/react/merge-props';
+import { useRender } from '@base-ui/react/use-render';
 import { ChevronRight } from 'lucide-react';
 import * as React from 'react';
 
@@ -43,23 +44,30 @@ function BreadcrumbItem({
 }
 function BreadcrumbLink({
   asChild,
+  render,
+  children,
   className,
   truncate = false,
   ref,
   ...props
-}: React.ComponentPropsWithoutRef<'a'> & { asChild?: boolean } & {
-  ref?: React.Ref<HTMLAnchorElement>;
+}: useRender.ComponentProps<'a'> & {
+  asChild?: boolean;
   /** Clip a long name with an ellipsis. */
   truncate?: boolean;
 }) {
-  const Comp = asChild ? Slot : 'a';
-  return (
-    <Comp
-      ref={ref}
-      className={cn('transition-colors hover:text-foreground', truncate && 'truncate', className)}
-      {...props}
-    />
-  );
+  const childElement = asChild && !render && React.isValidElement(children) ? children : undefined;
+  return useRender({
+    defaultTagName: 'a',
+    render: render ?? childElement,
+    ref,
+    props: mergeProps<'a'>(
+      {
+        className: cn('transition-colors hover:text-foreground', truncate && 'truncate', className),
+        children: childElement ? undefined : children,
+      },
+      props,
+    ),
+  });
 }
 function BreadcrumbPage({
   className,

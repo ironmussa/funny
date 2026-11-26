@@ -44,10 +44,7 @@ describe('CommitActionsMenu', () => {
       />,
     );
 
-    fireEvent.pointerDown(screen.getByTestId('graph-commit-more-1111111'), {
-      button: 0,
-      ctrlKey: false,
-    });
+    fireEvent.click(screen.getByTestId('graph-commit-more-1111111'));
 
     expect(screen.getByTestId('graph-commit-menu-github-1111111')).toBeInTheDocument();
   });
@@ -63,10 +60,7 @@ describe('CommitActionsMenu', () => {
         onAfterAction={vi.fn()}
       />,
     );
-    fireEvent.pointerDown(screen.getByTestId('graph-commit-more-1111111'), {
-      button: 0,
-      ctrlKey: false,
-    });
+    fireEvent.click(screen.getByTestId('graph-commit-more-1111111'));
     expect(screen.getByTestId('graph-commit-menu-drop-stash-1111111')).toBeInTheDocument();
     unmount();
 
@@ -79,10 +73,7 @@ describe('CommitActionsMenu', () => {
         onAfterAction={vi.fn()}
       />,
     );
-    fireEvent.pointerDown(screen.getByTestId('graph-commit-more-1111111'), {
-      button: 0,
-      ctrlKey: false,
-    });
+    fireEvent.click(screen.getByTestId('graph-commit-more-1111111'));
     expect(screen.queryByTestId('graph-commit-menu-drop-stash-1111111')).not.toBeInTheDocument();
   });
 
@@ -97,10 +88,7 @@ describe('CommitActionsMenu', () => {
       />,
     );
 
-    fireEvent.pointerDown(screen.getByTestId('graph-commit-more-1111111'), {
-      button: 0,
-      ctrlKey: false,
-    });
+    fireEvent.click(screen.getByTestId('graph-commit-more-1111111'));
 
     expect(screen.queryByTestId('graph-commit-menu-github-1111111')).not.toBeInTheDocument();
   });
@@ -119,10 +107,7 @@ describe('CommitActionsMenu', () => {
       />,
     );
 
-    fireEvent.pointerDown(screen.getByTestId('graph-commit-more-1111111'), {
-      button: 0,
-      ctrlKey: false,
-    });
+    fireEvent.click(screen.getByTestId('graph-commit-more-1111111'));
 
     const item = screen.getByTestId('graph-commit-menu-rebase-details-1111111');
     expect(item).toHaveTextContent('View rebase details: feature/auth -> main');
@@ -144,10 +129,7 @@ describe('CommitActionsMenu', () => {
       />,
     );
 
-    fireEvent.pointerDown(screen.getByTestId('graph-commit-more-1111111'), {
-      button: 0,
-      ctrlKey: false,
-    });
+    fireEvent.click(screen.getByTestId('graph-commit-more-1111111'));
 
     expect(screen.getByTestId('graph-commit-menu-merge-current-into-master')).toHaveTextContent(
       'Merge current branch into master',
@@ -171,10 +153,7 @@ describe('CommitActionsMenu', () => {
       />,
     );
 
-    fireEvent.pointerDown(screen.getByTestId('graph-commit-more-1111111'), {
-      button: 0,
-      ctrlKey: false,
-    });
+    fireEvent.click(screen.getByTestId('graph-commit-more-1111111'));
 
     const item = screen.getByTestId('graph-commit-menu-new-thread-feat/x');
     expect(item).toHaveTextContent('New thread from feat/x');
@@ -194,10 +173,7 @@ describe('CommitActionsMenu', () => {
       />,
     );
 
-    fireEvent.pointerDown(screen.getByTestId('graph-commit-more-1111111'), {
-      button: 0,
-      ctrlKey: false,
-    });
+    fireEvent.click(screen.getByTestId('graph-commit-more-1111111'));
 
     expect(screen.queryByTestId('graph-commit-menu-new-thread-feat/x')).not.toBeInTheDocument();
   });

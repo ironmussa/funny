@@ -2,7 +2,6 @@ import type { FileDiffSummary, FileStatus } from '@funny/shared';
 import { FileCode, GitBranch, GitCommit, History, Loader2, RotateCcw, X } from 'lucide-react';
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import { AuthorBadge } from '@/components/AuthorBadge';
 import { CommitActionConfirm } from '@/components/CommitActionConfirm';
@@ -15,6 +14,7 @@ import { LoadingState } from '@/components/ui/loading-state';
 import { ResizeHandle, useResizeHandle } from '@/components/ui/resize-handle';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchBar } from '@/components/ui/search-bar';
+import { toast } from '@/components/ui/toast';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCommitActions } from '@/hooks/use-commit-actions';
 import { useMinuteTick } from '@/hooks/use-minute-tick';

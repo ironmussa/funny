@@ -14,7 +14,7 @@ import { PullRequestsTab } from '../PullRequestsTab';
 import { WorktreeSettings } from '../WorktreeSettings';
 import { StashTab } from './StashTab';
 
-const TAB_CONTENT_CLASS = 'flex min-h-0 flex-1 data-[state=inactive]:hidden';
+const TAB_CONTENT_CLASS = 'flex min-h-0 flex-1 data-hidden:hidden';
 
 const TABS: Array<{ value: ReviewSubTab; labelKey: string; fallback: string }> = [
   { value: 'changes', labelKey: 'review.changes', fallback: 'Changes' },
@@ -82,12 +82,12 @@ export function ReviewSecondaryTabs({
   return (
     <>
       {/* History tab (commit graph) */}
-      <TabsContent value="graph" className={TAB_CONTENT_CLASS} forceMount>
+      <TabsContent value="graph" className={TAB_CONTENT_CLASS} keepMounted>
         <CommitGraphTab visible={reviewSubTab === 'graph'} />
       </TabsContent>
 
       {/* Stash tab */}
-      <TabsContent value="stash" className={TAB_CONTENT_CLASS} forceMount>
+      <TabsContent value="stash" className={TAB_CONTENT_CLASS} keepMounted>
         <StashTab {...stashTab} />
       </TabsContent>
 
@@ -101,12 +101,12 @@ export function ReviewSecondaryTabs({
       </TabsContent>
 
       {/* Pull Requests tab */}
-      <TabsContent value="prs" className={TAB_CONTENT_CLASS} forceMount>
+      <TabsContent value="prs" className={TAB_CONTENT_CLASS} keepMounted>
         <PullRequestsTab visible={reviewSubTab === 'prs'} />
       </TabsContent>
 
       {/* Actions tab (workflow runs + the PR's checks) */}
-      <TabsContent value="ci" className={TAB_CONTENT_CLASS} forceMount>
+      <TabsContent value="ci" className={TAB_CONTENT_CLASS} keepMounted>
         <ActionsTab
           projectId={projectId}
           prNumber={prNumber}
@@ -118,7 +118,7 @@ export function ReviewSecondaryTabs({
       </TabsContent>
 
       {/* Issues tab */}
-      <TabsContent value="issues" className={TAB_CONTENT_CLASS} forceMount>
+      <TabsContent value="issues" className={TAB_CONTENT_CLASS} keepMounted>
         <IssuesTab visible={reviewSubTab === 'issues'} />
       </TabsContent>
     </>

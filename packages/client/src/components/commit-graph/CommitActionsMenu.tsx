@@ -15,7 +15,6 @@ import {
 } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import { CreateBranchDialog } from '@/components/commit-graph/CreateBranchDialog';
 import { CommitActionConfirm } from '@/components/CommitActionConfirm';
@@ -27,6 +26,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { toast } from '@/components/ui/toast';
 import { useCommitActions } from '@/hooks/use-commit-actions';
 import type { GitRebaseReflogEventDTO } from '@/lib/api/git';
 import { listRowActionClassName } from '@/lib/list-row-styles';

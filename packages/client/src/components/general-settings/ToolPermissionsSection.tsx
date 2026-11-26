@@ -2,11 +2,11 @@ import type { ToolPermission } from '@funny/shared';
 import { RotateCcw } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 import { useShallow } from 'zustand/react/shallow';
 
 import { SegmentedControl } from '@/components/general-settings-project/setting-primitives';
 import { SettingAnchor, SettingsSection } from '@/components/settings/SettingRow';
+import { toast } from '@/components/ui/toast';
 import { ALL_STANDARD_TOOLS, TOOL_LABELS, useSettingsStore } from '@/stores/settings-store';
 
 /** Per-tool allow / ask / deny permissions, with a reset to the defaults. */

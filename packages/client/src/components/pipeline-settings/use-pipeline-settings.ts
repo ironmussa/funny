@@ -1,8 +1,8 @@
 import type { Pipeline } from '@funny/shared';
 import type { UpdatePipelineRequest } from '@funny/shared/contracts/pipelines';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { toast } from 'sonner';
 
+import { toast } from '@/components/ui/toast';
 import { api } from '@/lib/api';
 import { whilePending } from '@/lib/while-pending';
 

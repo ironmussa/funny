@@ -1,9 +1,9 @@
 import { CODEX_COMMANDS, parseCodexCommand } from '@funny/shared/codex-commands';
 import { useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
 
 import type { ModelSelectGroup } from '@/components/PromptInputUI';
+import { toast } from '@/components/ui/toast';
 import { readThreadRow } from '@/data/threads/read';
 import { threadsApi } from '@/lib/api/threads';
 import { getEffortLevels } from '@/lib/providers';

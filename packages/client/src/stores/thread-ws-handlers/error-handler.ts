@@ -1,7 +1,6 @@
 /** `agent:error`, with network failures reworded for the toast. */
 
-import { toast } from 'sonner';
-
+import { toast } from '@/components/ui/toast';
 import i18n from '@/i18n/config';
 
 import * as mutations from '../thread-mutations';

@@ -1,7 +1,6 @@
 import type { FileDiffSummary, GitHubPR, PRCommit, PRDetail, PRFile } from '@funny/shared';
 import { FileCode, GitCommitHorizontal, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
@@ -17,6 +16,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { toast } from '@/components/ui/toast';
 import { usePRDetail } from '@/data/pull-requests/hooks';
 import { fetchPRDetail } from '@/data/pull-requests/queries';
 import { api } from '@/lib/api';

@@ -150,17 +150,17 @@ export function IssueDetailDialog({
                 <Button
                   variant="muted"
                   size="icon-xs"
-                  asChild
                   data-testid="issue-detail-open-github"
+                  render={
+                    <a
+                      href={issue.html_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={t('issues.viewOnGithub', 'View on GitHub')}
+                    />
+                  }
                 >
-                  <a
-                    href={issue.html_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={t('issues.viewOnGithub', 'View on GitHub')}
-                  >
-                    <ExternalLink className="icon-xs" />
-                  </a>
+                  <ExternalLink className="icon-xs" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom">

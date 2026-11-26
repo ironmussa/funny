@@ -1,8 +1,8 @@
 import type { FunnyProjectConfig, FunnyPortGroup } from '@funny/shared';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
+import { toast } from '@/components/ui/toast';
 import { api } from '@/lib/api';
 import { useProjectStore } from '@/stores/project-store';
 

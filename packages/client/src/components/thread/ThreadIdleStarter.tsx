@@ -2,11 +2,11 @@ import type { AgentModel, EffortLevel, PermissionMode } from '@funny/shared';
 import { addReferencedEntries, parseReferencedFiles } from '@funny/shared/attachments';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import { AvailableMcpServers } from '@/components/AvailableMcpServers';
 import { PromptInput } from '@/components/PromptInput';
 import { FileChip } from '@/components/ui/chip';
+import { toast } from '@/components/ui/toast';
 import { useProjectById } from '@/data/projects/hooks';
 import { api } from '@/lib/api';
 import { startWorkflowInvocation } from '@/lib/start-workflow-invocation';

@@ -13,9 +13,9 @@
 
 import { Check, Copy, ExternalLink, Server } from 'lucide-react';
 import { useState } from 'react';
-import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
+import { toast } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
 
 /**
@@ -104,11 +104,14 @@ export function ConnectRunnerCard({ showSteps = true, className }: Props) {
       {railwayDeployUrl && (
         <div className="flex items-center gap-2">
           <span className="text-muted-foreground text-xs">Or deploy a cloud runner:</span>
-          <Button size="sm" variant="outline" asChild data-testid="connect-runner-railway">
-            <a href={railwayDeployUrl} target="_blank" rel="noopener noreferrer">
-              <ExternalLink className="icon-sm mr-1" />
-              Deploy on Railway
-            </a>
+          <Button
+            size="sm"
+            variant="outline"
+            data-testid="connect-runner-railway"
+            render={<a href={railwayDeployUrl} target="_blank" rel="noopener noreferrer" />}
+          >
+            <ExternalLink className="icon-sm mr-1" />
+            Deploy on Railway
           </Button>
         </div>
       )}

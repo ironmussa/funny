@@ -15,8 +15,8 @@
 import { useCallback, useState, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
 
+import { toast } from '@/components/ui/toast';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import { buildPath } from '@/lib/url';

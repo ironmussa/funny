@@ -2,8 +2,8 @@ import type { FileDiffSummary, DiffSummaryResponse, GitStatusInfo } from '@funny
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useEffect } from 'react';
 import { MemoryRouter } from 'react-router-dom';
-import { Toaster } from 'sonner';
 
+import { Toaster } from '@/components/ui/toast';
 import { seedGitStatus } from '@/data/git-status/testing';
 import '@/i18n/config';
 import { seedProjectCurrentBranches, withProjects } from '@/data/projects/testing';

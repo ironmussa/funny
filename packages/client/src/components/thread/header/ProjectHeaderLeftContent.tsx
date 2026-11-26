@@ -1,7 +1,6 @@
 import { ArrowLeft, FolderIcon } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import { ThreadTitle } from '@/components/thread/ThreadAttachmentsBadge';
 import {
@@ -11,6 +10,7 @@ import {
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
+import { toast } from '@/components/ui/toast';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useProjectById } from '@/data/projects/hooks';
 import { useAgentTemplate } from '@/data/templates/hooks';

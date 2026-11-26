@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { toast } from 'sonner';
 
+import { toast } from '@/components/ui/toast';
 import { fetchProjectStatus } from '@/data/git-status/actions';
 import { useAdjustOnChange } from '@/hooks/use-resettable-state';
 import { gitApi } from '@/lib/api/git';

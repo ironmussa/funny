@@ -37,7 +37,7 @@ mock.module('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 
-mock.module('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+mock.module('@/components/ui/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 function check(id: number, status: CICheck['status'], conclusion: CICheck['conclusion']): CICheck {
   return {

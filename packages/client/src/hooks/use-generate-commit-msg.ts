@@ -1,7 +1,7 @@
 import { useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
+import { toast } from '@/components/ui/toast';
 import { gitApi } from '@/lib/api/git';
 import { useDraftStore } from '@/stores/draft-store';
 import { useProjectStore } from '@/stores/project-store';

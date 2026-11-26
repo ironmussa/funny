@@ -42,6 +42,38 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
 // export) already handle a null context, so return it without the error.
 HTMLCanvasElement.prototype.getContext = () => null;
 
+// Polyfill Element.prototype.getAnimations (not in jsdom; used by Base UI popups/transitions)
+if (typeof Element !== 'undefined' && typeof Element.prototype.getAnimations !== 'function') {
+  Element.prototype.getAnimations = () => [];
+}
+
+// jsdom's EventTarget.addEventListener rejects Bun's global AbortSignal (Base UI passes
+// `new AbortController().signal` in ContextMenuTrigger etc.). Bridge `options.signal` manually
+// when native addEventListener rejects it.
+if (typeof EventTarget !== 'undefined') {
+  const origAddEventListener = EventTarget.prototype.addEventListener;
+  EventTarget.prototype.addEventListener = function patchedAddEventListener(
+    type: string,
+    listener: EventListenerOrEventListenerObject | null,
+    options?: boolean | AddEventListenerOptions,
+  ) {
+    if (options && typeof options === 'object' && options.signal) {
+      const { signal, ...rest } = options;
+      if (signal.aborted) return;
+      origAddEventListener.call(this, type, listener, rest);
+      signal.addEventListener(
+        'abort',
+        () => {
+          this.removeEventListener(type, listener, rest);
+        },
+        { once: true },
+      );
+      return;
+    }
+    return origAddEventListener.call(this, type, listener, options);
+  };
+}
+
 // Mock window.matchMedia (used by settings-store, main.tsx)
 Object.defineProperty(window, 'matchMedia', {
   writable: true,

@@ -6,7 +6,6 @@
  */
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -25,6 +24,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { toast } from '@/components/ui/toast';
 import { runFactoryFlow } from '@/data/factory/actions';
 import { toastError } from '@/lib/toast-error';
 

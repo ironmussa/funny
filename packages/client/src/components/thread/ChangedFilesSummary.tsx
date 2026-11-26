@@ -2,11 +2,11 @@ import type { FileDiffSummary } from '@funny/shared';
 import { RotateCcw } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import { DiffStats } from '@/components/DiffStats';
 import { ExpandedDiffDialog } from '@/components/tool-cards/ExpandedDiffDialog';
 import { Button } from '@/components/ui/button';
+import { toast } from '@/components/ui/toast';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
 import { countDiffStats, parseDiffNew, parseDiffOld } from '@/lib/diff-parse';

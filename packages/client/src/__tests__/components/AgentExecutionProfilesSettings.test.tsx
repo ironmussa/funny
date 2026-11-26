@@ -18,7 +18,7 @@ mock.module('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 
-mock.module('sonner', () => ({
+mock.module('@/components/ui/toast', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }));
 

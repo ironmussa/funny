@@ -2,7 +2,6 @@ import type { ProjectRunnerSettingsResponse, RunnerInfo } from '@funny/shared/ru
 import { AlertTriangle, KeyRound, Save, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -17,6 +16,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { toast } from '@/components/ui/toast';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { whilePending } from '@/lib/while-pending';

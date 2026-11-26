@@ -50,7 +50,7 @@ mock.module('@/components/settings/SettingRow', () => ({ useSettingDimmed: () =>
 mock.module('@/lib/toast-error', () => ({
   toastError: (...args: unknown[]) => mocks.toastError(...args),
 }));
-mock.module('sonner', () => ({ toast: { success: vi.fn() } }));
+mock.module('@/components/ui/toast', () => ({ toast: { success: vi.fn() } }));
 // Radix Select needs layout APIs happy-dom lacks: a native select with the same test ids.
 mock.module('@/components/ui/select', () => ({
   Select: ({

@@ -6,7 +6,6 @@ import type { AgentTemplate, CreateAgentTemplateRequest, DeepAgentTool } from '@
 import { DEEPAGENT_TOOLS } from '@funny/shared';
 import { Bot, Copy, Download, Plus, Trash2, ChevronDown, Upload, Lock, Share2 } from 'lucide-react';
 import { useState, useCallback, useEffect } from 'react';
-import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -20,6 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { toast } from '@/components/ui/toast';
 import {
   createTemplate,
   deleteTemplate,

@@ -1,33 +1,122 @@
-import * as DialogPrimitive from '@radix-ui/react-dialog';
+import { Dialog as DialogPrimitive } from '@base-ui/react/dialog';
 import { X } from 'lucide-react';
 import * as React from 'react';
 
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-const Dialog = DialogPrimitive.Root;
-const DialogTrigger = DialogPrimitive.Trigger;
+interface DialogDismissHandlers {
+  onEscapeKeyDown?: (event: KeyboardEvent) => void;
+  onPointerDownOutside?: (event: Event) => void;
+}
+
+const DialogDismissContext = React.createContext<React.RefObject<DialogDismissHandlers> | null>(
+  null,
+);
+
+function Dialog({
+  onOpenChange,
+  children,
+  ...props
+}: Omit<React.ComponentPropsWithoutRef<typeof DialogPrimitive.Root>, 'children'> & {
+  children?: React.ReactNode;
+}) {
+  const dismissHandlersRef = React.useRef<DialogDismissHandlers>({});
+
+  const handleOpenChange: React.ComponentPropsWithoutRef<
+    typeof DialogPrimitive.Root
+  >['onOpenChange'] = (open, eventDetails) => {
+    if (!open) {
+      if (eventDetails.reason === 'escape-key' && dismissHandlersRef.current.onEscapeKeyDown) {
+        const synthetic = new KeyboardEvent('keydown', { key: 'Escape', cancelable: true });
+        dismissHandlersRef.current.onEscapeKeyDown(synthetic);
+        if (synthetic.defaultPrevented) {
+          eventDetails.cancel();
+          return;
+        }
+      }
+      if (
+        eventDetails.reason === 'outside-press' &&
+        dismissHandlersRef.current.onPointerDownOutside
+      ) {
+        const synthetic = new CustomEvent('dialog.pointerDownOutside', { cancelable: true });
+        dismissHandlersRef.current.onPointerDownOutside(synthetic);
+        if (synthetic.defaultPrevented) {
+          eventDetails.cancel();
+          return;
+        }
+      }
+    }
+    onOpenChange?.(open, eventDetails);
+  };
+
+  return (
+    <DialogDismissContext value={dismissHandlersRef}>
+      <DialogPrimitive.Root onOpenChange={handleOpenChange} {...props}>
+        {children}
+      </DialogPrimitive.Root>
+    </DialogDismissContext>
+  );
+}
+
+type DialogTriggerProps = React.ComponentPropsWithoutRef<typeof DialogPrimitive.Trigger> & {
+  asChild?: boolean;
+  ref?: React.Ref<HTMLButtonElement>;
+};
+
+function DialogTrigger({ asChild, render, children, ref, ...props }: DialogTriggerProps) {
+  const childElement = asChild && !render && React.isValidElement(children) ? children : undefined;
+  return (
+    <DialogPrimitive.Trigger ref={ref} render={render ?? childElement} {...props}>
+      {childElement ? undefined : children}
+    </DialogPrimitive.Trigger>
+  );
+}
+
 const DialogPortal = DialogPrimitive.Portal;
-const DialogClose = DialogPrimitive.Close;
+
+type DialogCloseProps = React.ComponentPropsWithoutRef<typeof DialogPrimitive.Close> & {
+  asChild?: boolean;
+  ref?: React.Ref<HTMLButtonElement>;
+};
+
+function DialogClose({ asChild, render, children, ref, ...props }: DialogCloseProps) {
+  const childElement = asChild && !render && React.isValidElement(children) ? children : undefined;
+  return (
+    <DialogPrimitive.Close ref={ref} render={render ?? childElement} {...props}>
+      {childElement ? undefined : children}
+    </DialogPrimitive.Close>
+  );
+}
 
 function DialogOverlay({
   className,
   ref,
   ...props
-}: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Overlay> & {
-  ref?: React.Ref<React.ComponentRef<typeof DialogPrimitive.Overlay>>;
+}: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Backdrop> & {
+  ref?: React.Ref<HTMLDivElement>;
 }) {
   return (
-    <DialogPrimitive.Overlay
+    <DialogPrimitive.Backdrop
       ref={ref}
       className={cn(
-        'fixed inset-0 z-50 bg-black/60 backdrop-blur-xs data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
+        'fixed inset-0 z-50 bg-black/60 backdrop-blur-xs data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0',
         className,
       )}
       {...props}
     />
   );
 }
+
+function bridgeAutoFocusHandler(handler?: (event: Event) => void) {
+  if (!handler) return undefined;
+  return () => {
+    const event = new CustomEvent('dialog.autoFocus', { cancelable: true });
+    handler(event);
+    return !event.defaultPrevented;
+  };
+}
+
 function DialogContent({
   className,
   overlayClassName,
@@ -35,11 +124,17 @@ function DialogContent({
   square = false,
   compact = false,
   instant = false,
+  initialFocus,
+  finalFocus,
+  onOpenAutoFocus,
+  onCloseAutoFocus,
+  onEscapeKeyDown,
+  onPointerDownOutside,
   children,
   ref,
   ...props
-}: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
-  ref?: React.Ref<React.ComponentRef<typeof DialogPrimitive.Content>>;
+}: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Popup> & {
+  ref?: React.Ref<HTMLDivElement>;
   /** Extra classes for the backdrop overlay (e.g. to disable its fade animation). */
   overlayClassName?: string;
   /** No padding or gap: the header, body and footer lay out their own sections. */
@@ -50,34 +145,50 @@ function DialogContent({
   compact?: boolean;
   /** Open and close at once, with no fade or zoom on the content or the overlay. */
   instant?: boolean;
+  onOpenAutoFocus?: (event: Event) => void;
+  onCloseAutoFocus?: (event: Event) => void;
+  onEscapeKeyDown?: (event: KeyboardEvent) => void;
+  onPointerDownOutside?: (event: Event) => void;
 }) {
+  const dismissHandlersRef = React.useContext(DialogDismissContext);
+  React.useEffect(() => {
+    if (!dismissHandlersRef) return;
+    dismissHandlersRef.current = { onEscapeKeyDown, onPointerDownOutside };
+    return () => {
+      dismissHandlersRef.current = {};
+    };
+  }, [dismissHandlersRef, onEscapeKeyDown, onPointerDownOutside]);
+
   return (
     <DialogPortal>
       <DialogOverlay
         className={cn(
-          instant && 'data-[state=closed]:animate-none data-[state=open]:animate-none',
+          instant && 'data-closed:animate-none data-open:animate-none',
           overlayClassName,
         )}
       />
-      <DialogPrimitive.Content
+      <DialogPrimitive.Popup
         ref={ref}
         aria-describedby={undefined}
+        initialFocus={initialFocus ?? bridgeAutoFocusHandler(onOpenAutoFocus)}
+        finalFocus={finalFocus ?? bridgeAutoFocusHandler(onCloseAutoFocus)}
         className={cn(
-          'fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-card p-6 shadow-xl duration-100 outline-hidden data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 rounded-lg',
+          'fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-card p-6 shadow-xl duration-100 outline-hidden data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 rounded-lg',
           flush && 'gap-0 p-0',
           square === true && 'rounded-none',
           square === 'below-md' && 'rounded-none md:rounded-lg',
           compact && 'gap-3 p-4',
-          instant && 'duration-0 data-[state=closed]:animate-none data-[state=open]:animate-none',
+          instant && 'duration-0 data-closed:animate-none data-open:animate-none',
           className,
         )}
         {...props}
       >
         {children}
-      </DialogPrimitive.Content>
+      </DialogPrimitive.Popup>
     </DialogPortal>
   );
 }
+
 /** The displayName of a child element's component, or undefined for text and intrinsic tags. */
 function childDisplayName(child: React.ReactNode): string | undefined {
   if (!React.isValidElement(child)) return undefined;
@@ -117,7 +228,7 @@ const DialogHeader = ({
         {children}
         <DialogPrimitive.Close
           tabIndex={-1}
-          className="bg-muted/80 hover:bg-muted focus-visible:ring-ring/50 data-[state=open]:bg-accent data-[state=open]:text-muted-foreground absolute top-0 right-0 shrink-0 rounded-md p-1.5 opacity-70 transition-[color,background-color,opacity,box-shadow] hover:opacity-100 focus-visible:ring-1 focus-visible:outline-hidden disabled:pointer-events-none"
+          className="bg-muted/80 hover:bg-muted focus-visible:ring-ring/50 data-open:bg-accent data-open:text-muted-foreground absolute top-0 right-0 shrink-0 rounded-md p-1.5 opacity-70 transition-[color,background-color,opacity,box-shadow] hover:opacity-100 focus-visible:ring-1 focus-visible:outline-hidden disabled:pointer-events-none"
         >
           <X className="icon-base" />
           <span className="sr-only">Close</span>
@@ -135,7 +246,7 @@ const DialogHeader = ({
           {actions.length > 0 && actions}
           <DialogPrimitive.Close
             tabIndex={-1}
-            className="bg-muted/80 hover:bg-muted focus-visible:ring-ring/50 data-[state=open]:bg-accent data-[state=open]:text-muted-foreground shrink-0 rounded-md p-1.5 opacity-70 transition-[color,background-color,opacity,box-shadow] hover:opacity-100 focus-visible:ring-1 focus-visible:outline-hidden disabled:pointer-events-none"
+            className="bg-muted/80 hover:bg-muted focus-visible:ring-ring/50 data-open:bg-accent data-open:text-muted-foreground shrink-0 rounded-md p-1.5 opacity-70 transition-[color,background-color,opacity,box-shadow] hover:opacity-100 focus-visible:ring-1 focus-visible:outline-hidden disabled:pointer-events-none"
           >
             <X className="icon-base" />
             <span className="sr-only">Close</span>
@@ -192,7 +303,7 @@ function DialogTitle({
   ref,
   ...props
 }: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Title> & {
-  ref?: React.Ref<React.ComponentRef<typeof DialogPrimitive.Title>>;
+  ref?: React.Ref<HTMLHeadingElement>;
   /** `sm` for compact dialogs and panels (text-sm). */
   size?: 'default' | 'sm';
   /** A leading icon beside the title: one row, gap between them, the text clipped. */
@@ -229,22 +340,31 @@ DialogTitle.displayName = 'DialogTitle';
 function DialogDescription({
   className,
   size = 'default',
+  asChild,
+  render,
+  children,
   ref,
   ...props
 }: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Description> & {
-  ref?: React.Ref<React.ComponentRef<typeof DialogPrimitive.Description>>;
+  ref?: React.Ref<HTMLParagraphElement>;
+  asChild?: boolean;
   /** `xs` under a `size="sm"` title. */
   size?: 'default' | 'xs';
 }) {
+  const childElement = asChild && !render && React.isValidElement(children) ? children : undefined;
   return (
     <DialogPrimitive.Description
       ref={ref}
+      render={render ?? childElement}
       className={cn('text-muted-foreground', size === 'xs' ? 'text-xs' : 'text-sm', className)}
       {...props}
-    />
+    >
+      {childElement ? undefined : children}
+    </DialogPrimitive.Description>
   );
 }
 DialogDescription.displayName = 'DialogDescription';
+
 function DialogCancelButton({
   children = 'Cancel',
   className,
@@ -254,18 +374,17 @@ function DialogCancelButton({
   ref?: React.Ref<HTMLButtonElement>;
 }) {
   return (
-    <DialogPrimitive.Close asChild>
-      <button
-        ref={ref}
-        type="button"
-        className={cn(buttonVariants({ variant: 'outline' }), className)}
-        {...props}
-      >
-        {children}
-      </button>
+    <DialogPrimitive.Close
+      ref={ref}
+      type="button"
+      className={cn(buttonVariants({ variant: 'outline' }), className)}
+      {...props}
+    >
+      {children}
     </DialogPrimitive.Close>
   );
 }
+
 export {
   Dialog,
   DialogPortal,

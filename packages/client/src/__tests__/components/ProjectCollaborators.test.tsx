@@ -6,7 +6,7 @@ import { okAsync } from 'neverthrow';
 const mockListMembers = (() => vi.fn())();
 const mockSearchUsers = (() => vi.fn())();
 
-mock.module('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+mock.module('@/components/ui/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 mock.module('@/lib/api', () => ({
   api: {

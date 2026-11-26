@@ -2,9 +2,9 @@ import type { GitHubRepo } from '@funny/shared';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
 
 import { LoadingState } from '@/components/ui/loading-state';
+import { toast } from '@/components/ui/toast';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { api } from '@/lib/api';

@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
-import { toast } from 'sonner';
 
+import { toast } from '@/components/ui/toast';
 import type { SubmitFn } from '@/hooks/prompt-input-types';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';

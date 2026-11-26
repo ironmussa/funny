@@ -7,7 +7,7 @@ import { ProjectSettingsView } from '@/components/mobile/ProjectSettingsView';
 import { SearchView } from '@/components/mobile/SearchView';
 import { ThreadListView } from '@/components/mobile/ThreadListView';
 import { LoadingState } from '@/components/ui/loading-state';
-import { Toaster } from '@/components/ui/sonner';
+import { Toaster } from '@/components/ui/toast';
 import { useProjects } from '@/data/projects/hooks';
 import { useMobileNavigation } from '@/hooks/use-mobile-navigation';
 import { useMobileViewport } from '@/hooks/use-mobile-viewport';

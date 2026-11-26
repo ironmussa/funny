@@ -158,18 +158,18 @@ export function PRCardSummary({
           <Button
             variant="muted"
             size="icon-xs"
-            asChild
             className="shrink-0"
             data-testid={`pinned-pr-open-github-${pr.number}`}
+            render={
+              <a
+                href={pr.html_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={`Open pull request ${pr.number} on GitHub`}
+              />
+            }
           >
-            <a
-              href={pr.html_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={`Open pull request ${pr.number} on GitHub`}
-            >
-              <ExternalLink className="icon-xs" />
-            </a>
+            <ExternalLink className="icon-xs" />
           </Button>
         </TooltipTrigger>
         <TooltipContent side="top">Open on GitHub</TooltipContent>

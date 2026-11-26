@@ -1,8 +1,8 @@
 import type { PermissionMode } from '@funny/shared';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
+import { toast } from '@/components/ui/toast';
 import { useProjectSandbox } from '@/data/runner/hooks';
 import { useAdjustOnChange } from '@/hooks/use-resettable-state';
 import { applySandboxModelGroups } from '@/hooks/use-runner-provider-groups';

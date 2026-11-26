@@ -8,8 +8,8 @@ import {
   type SetStateAction,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
+import { toast } from '@/components/ui/toast';
 import { useStableCallback } from '@/hooks/use-stable-callback';
 import { gitApi } from '@/lib/api/git';
 import { projectsApi } from '@/lib/api/projects';

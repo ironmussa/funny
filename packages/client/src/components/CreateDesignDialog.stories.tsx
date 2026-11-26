@@ -4,9 +4,9 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { okAsync } from 'neverthrow';
 import { useState } from 'react';
 import { MemoryRouter } from 'react-router-dom';
-import { Toaster } from 'sonner';
 
 import { Button } from '@/components/ui/button';
+import { Toaster } from '@/components/ui/toast';
 import { api } from '@/lib/api';
 
 import { CreateDesignDialog } from './CreateDesignDialog';

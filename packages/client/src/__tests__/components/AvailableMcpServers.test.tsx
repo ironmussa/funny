@@ -115,7 +115,8 @@ describe('AvailableMcpServers', () => {
     const badge = await screen.findByTestId('available-mcp-linear-server');
     expect(badge).toHaveClass('bg-status-warning/15', 'text-status-warning');
 
-    fireEvent.pointerMove(badge);
+    fireEvent.pointerEnter(badge, { pointerType: 'mouse' });
+    fireEvent.mouseEnter(badge);
     fireEvent.focus(badge);
 
     await waitFor(() => {

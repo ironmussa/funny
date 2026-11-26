@@ -146,7 +146,7 @@ function closeIcon(tabId: string): Element {
 }
 
 function openMenu(el: HTMLElement) {
-  fireEvent.pointerDown(el, { button: 0, ctrlKey: false });
+  fireEvent.click(el);
 }
 
 beforeEach(() => {

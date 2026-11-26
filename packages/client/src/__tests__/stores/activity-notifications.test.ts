@@ -9,7 +9,7 @@ import { useActivityPanelStore } from '@/stores/activity-panel-store';
 import { installTestDataLayer, resetTestDataLayer } from '../helpers/data-layer-harness';
 
 const sonner = (() => ({ error: vi.fn() }))();
-mock.module('sonner', () => ({ toast: { error: sonner.error } }));
+mock.module('@/components/ui/toast', () => ({ toast: { error: sonner.error } }));
 
 const api = (() => ({ listActivities: vi.fn() }))();
 mock.module('@/lib/api/activities', () => ({ activitiesApi: api }));

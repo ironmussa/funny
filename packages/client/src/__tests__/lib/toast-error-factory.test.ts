@@ -1,7 +1,7 @@
 import { describe, expect, test, vi, mock } from 'bun:test';
 
 const toastErrorMock = (() => vi.fn())();
-mock.module('sonner', () => ({
+mock.module('@/components/ui/toast', () => ({
   toast: { error: (...args: unknown[]) => toastErrorMock(...args) },
 }));
 

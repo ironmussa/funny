@@ -47,7 +47,7 @@ mock.module('@/stores/thread-store-internals', () => ({
   setUrlThreadId: vi.fn(),
 }));
 
-mock.module('sonner', () => ({
+mock.module('@/components/ui/toast', () => ({
   toast: {
     success: vi.fn(),
     error: mockToastError,
@@ -62,8 +62,7 @@ const {
   handleWSResult,
   handleWSStageChanged,
 } = await import('@/stores/thread-ws-handlers');
-import { toast } from 'sonner';
-
+import { toast } from '@/components/ui/toast';
 import { useSidebarFilterStore } from '@/stores/sidebar-filter-store';
 
 const THREAD_ID = 'thread-edge';

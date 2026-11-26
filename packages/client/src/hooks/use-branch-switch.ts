@@ -1,8 +1,8 @@
 import { createElement, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import { SwitchBranchDialog } from '@/components/SwitchBranchDialog';
+import { toast } from '@/components/ui/toast';
 import { fetchProjectStatus } from '@/data/git-status/actions';
 import { readProjectCurrentBranch } from '@/data/projects/branches';
 import { api } from '@/lib/api';

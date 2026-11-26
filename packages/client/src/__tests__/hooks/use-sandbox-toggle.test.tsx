@@ -91,7 +91,7 @@ describe('PromptFooterBar sandbox toggle', () => {
     expect(screen.queryByTestId('prompt-mode-select')).toBeNull();
     const sandbox = screen.getByTestId('prompt-sandbox-toggle');
     expect(sandbox).toHaveTextContent('Sandbox · InstaBox');
-    expect(sandbox).toHaveAttribute('data-state', 'on');
+    expect(sandbox).toHaveAttribute('aria-pressed', 'true');
     // Only Local and the project's sandbox are offered.
     expect(screen.getByTestId('prompt-runtime-switch').children).toHaveLength(2);
 
@@ -107,7 +107,10 @@ describe('PromptFooterBar sandbox toggle', () => {
         sandboxToggle={{ label: 'InstaBox', enabled: false, setEnabled }}
       />,
     );
-    expect(screen.getByTestId('prompt-runtime-switch-local')).toHaveAttribute('data-state', 'on');
+    expect(screen.getByTestId('prompt-runtime-switch-local')).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
     // Clicking the selected side keeps it selected.
     setEnabled.mockClear();
     fireEvent.click(screen.getByTestId('prompt-runtime-switch-local'));

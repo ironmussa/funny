@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
+import { toast } from '@/components/ui/toast';
 import { useNotifications } from '@/hooks/use-notifications';
 import { disableWebPush, enableWebPush, supportsWebPush, testWebPush } from '@/lib/web-push';
 import { whilePending } from '@/lib/while-pending';

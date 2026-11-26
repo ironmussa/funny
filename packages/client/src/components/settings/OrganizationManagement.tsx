@@ -1,6 +1,5 @@
 import { Building2, Check, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { toast } from 'sonner';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { SettingsSection } from '@/components/settings/SettingRow';
@@ -9,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/ui/loading-state';
+import { toast } from '@/components/ui/toast';
 import { activeOrganizationIdFromSession } from '@/lib/active-organization';
 import { authClient } from '@/lib/auth-client';
 import { whilePending, withCleanup } from '@/lib/while-pending';

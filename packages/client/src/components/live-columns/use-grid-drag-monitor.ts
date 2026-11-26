@@ -1,9 +1,10 @@
 import { monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import type { TFunction } from 'i18next';
 import { useEffect, useState, type Dispatch, type SetStateAction } from 'react';
-import { toast } from 'sonner';
 
 import { GRID_COLS_KEY, MAX_GRID_COLS } from '@/components/live-columns/grid-constants';
+import { withInsertedColumn } from '@/components/live-columns/grid-layout';
+import { toast } from '@/components/ui/toast';
 import type { GridCellAssignments } from '@/lib/grid-storage';
 
 interface GridDragMonitorInput {
@@ -11,7 +12,7 @@ interface GridDragMonitorInput {
   t: TFunction;
   setGridCells: Dispatch<SetStateAction<GridCellAssignments>>;
   setPendingProjectByCell: Dispatch<SetStateAction<Record<number, string>>>;
-  setGridCols: Dispatch<SetStateAction<number>>;
+  onInsertColumn: (insertIndex: number) => void;
 }
 
 /**
@@ -24,7 +25,7 @@ export function useGridDragMonitor({
   t,
   setGridCells,
   setPendingProjectByCell,
-  setGridCols,
+  onInsertColumn,
 }: GridDragMonitorInput) {
   const [isDragging, setIsDragging] = useState(false);
 
@@ -83,36 +84,23 @@ export function useGridDragMonitor({
           const oldCols = gridCols;
           const newCols = oldCols + 1;
           setGridCells((prev) => {
-            const updated: GridCellAssignments = {};
-            for (const [key, val] of Object.entries(prev)) {
-              if (val === threadId) continue;
-              const oldIdx = Number(key);
-              const oldCol = oldIdx % oldCols;
-              const oldRow = Math.floor(oldIdx / oldCols);
-              const newCol = oldCol < insertIndex ? oldCol : oldCol + 1;
-              const newIdx = oldRow * newCols + newCol;
-              updated[String(newIdx)] = val;
-            }
-            updated[String(insertIndex)] = threadId;
-            return updated;
+            const withoutSource = Object.fromEntries(
+              Object.entries(prev).filter(([, val]) => val !== threadId),
+            );
+            return {
+              ...withInsertedColumn(withoutSource, insertIndex, oldCols),
+              [String(insertIndex)]: threadId,
+            };
           });
-          setPendingProjectByCell((prevPending) => {
-            const remapped: Record<number, string> = {};
-            for (const [key, val] of Object.entries(prevPending)) {
-              const oldIdx = Number(key);
-              const oldCol = oldIdx % oldCols;
-              const oldRow = Math.floor(oldIdx / oldCols);
-              const newCol = oldCol < insertIndex ? oldCol : oldCol + 1;
-              remapped[oldRow * newCols + newCol] = val;
-            }
-            return remapped;
-          });
-          setGridCols(newCols);
+          setPendingProjectByCell((prevPending) =>
+            withInsertedColumn(prevPending, insertIndex, oldCols),
+          );
+          onInsertColumn(insertIndex);
           localStorage.setItem(GRID_COLS_KEY, String(newCols));
         }
       },
     });
-  }, [gridCols, t, setGridCells, setPendingProjectByCell, setGridCols]);
+  }, [gridCols, t, setGridCells, setPendingProjectByCell, onInsertColumn]);
 
   return isDragging;
 }

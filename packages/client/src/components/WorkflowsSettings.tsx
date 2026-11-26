@@ -29,11 +29,11 @@ import {
 import '@xyflow/react/dist/style.css';
 import { AlertCircle, AlertTriangle, CircleDashed } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
-import { toast } from 'sonner';
 
 import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/ui/loading-state';
 import { Textarea } from '@/components/ui/textarea';
+import { toast } from '@/components/ui/toast';
 import { useResettableState } from '@/hooks/use-resettable-state';
 import { api } from '@/lib/api';
 import { whilePending } from '@/lib/while-pending';

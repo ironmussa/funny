@@ -45,7 +45,7 @@ mock.module('@/components/ui/tooltip', () => ({
 mock.module('@/lib/toast-error', () => ({
   toastError: (...args: unknown[]) => mocks.toastError(...args),
 }));
-mock.module('sonner', () => ({
+mock.module('@/components/ui/toast', () => ({
   toast: {
     success: (...args: unknown[]) => mocks.toastSuccess(...args),
     info: (...args: unknown[]) => mocks.toastInfo(...args),

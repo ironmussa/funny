@@ -1,10 +1,10 @@
 import type { ImageAttachment } from '@funny/shared';
 import { useCallback, useLayoutEffect, useRef, type MutableRefObject, type RefObject } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import type { PromptEditorHandle } from '@/components/prompt-editor/PromptEditor';
 import type { PromptAttachmentsHandle } from '@/components/prompt-input/use-prompt-attachments';
+import { toast } from '@/components/ui/toast';
 import { api } from '@/lib/api';
 import { toastError } from '@/lib/toast-error';
 

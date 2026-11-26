@@ -1,12 +1,12 @@
 import { RefreshCw, Hammer, CircleCheck, CircleX, CircleIcon, Copy } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { toast } from 'sonner';
 
 import { SettingAnchor } from '@/components/settings/SettingRow';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { toast } from '@/components/ui/toast';
 import { createAnsiConverter } from '@/lib/ansi-to-html';
 import { api } from '@/lib/api';
 import { BUILD_INFO } from '@/lib/build-info';

@@ -1,7 +1,8 @@
 import type { QueuedMessage } from '@funny/shared';
 import type { TFunction } from 'i18next';
 import { useCallback, useState } from 'react';
-import { toast } from 'sonner';
+
+import { toast } from '@/components/ui/toast';
 
 interface UseQueueEditingParams {
   t: TFunction;

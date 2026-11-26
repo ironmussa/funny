@@ -398,6 +398,15 @@ describe('FactoryBoard', () => {
     expect(mocks.control).not.toHaveBeenCalled();
   });
 
+  // #532: its issue was closed as a duplicate; nothing else takes the run out of "Needs a person".
+  test('a stopped run offers "Mark as done"', async () => {
+    renderBoard([queueRun('r1', 'stopped', { completedAt: recent(), threadIds: ['t1'] })]);
+    const card = screen.getByTestId('factory-board-card-r1');
+    fireEvent.pointerDown(within(card).getByTestId('factory-board-more-r1'));
+    fireEvent.click(await screen.findByTestId('factory-board-mark-done-r1'));
+    expect(mocks.markDone).toHaveBeenCalledWith('p1', 'r1');
+  });
+
   test('a run that failed offers no "Mark as done"', async () => {
     renderBoard([queueRun('r1', 'failed', { completedAt: recent() })]);
     const card = screen.getByTestId('factory-board-card-r1');

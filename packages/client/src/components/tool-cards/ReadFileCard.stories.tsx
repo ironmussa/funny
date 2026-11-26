@@ -85,3 +85,25 @@ export const CollapsedLongPath: Story = {
     expect(path.scrollWidth).toBeGreaterThan(path.clientWidth);
   },
 };
+
+/**
+ * Cursor ACP reads can arrive with no file path (upstream metadata bug, issue #9):
+ * the card says the path is unavailable and still shows the output as plain text.
+ */
+export const MissingPath: Story = {
+  args: {
+    parsed: {},
+    output: '   1→const answer = 42;\n   2→export default answer;',
+    displayTime: '12:34',
+  },
+  play: async ({ canvasElement }) => {
+    const { expect, userEvent, within } = await import('storybook/test');
+    const canvas = within(canvasElement);
+
+    expect(canvas.getByTestId('read-file-path-unavailable')).toHaveTextContent('path unavailable');
+    expect(canvas.queryByTestId('read-file-open-link')).toBeNull();
+
+    await userEvent.click(canvas.getByRole('button', { name: /Read File/ }));
+    expect(canvas.getByText('const answer = 42;')).toBeTruthy();
+  },
+};

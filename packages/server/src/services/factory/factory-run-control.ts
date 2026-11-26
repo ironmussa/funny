@@ -358,9 +358,10 @@ export function createFactoryRunControl(runs = createFactoryRunsRepository()) {
     },
 
     /**
-     * A member agrees with the agent that the issue needs no change: the run,
-     * which ended as `no_change` and stayed on the board for a person, becomes
-     * `done`. Nothing else is touched: the issue stays as it is on GitHub.
+     * A member says the run needs nothing more: one that ended as `no_change`
+     * (they agree with the agent) or `stopped` (e.g. its issue was closed as a
+     * duplicate) and stayed on the board for a person becomes `done`. Nothing
+     * else is touched: the issue stays as it is on GitHub.
      */
     markDone(
       factoryId: string,
@@ -375,7 +376,8 @@ export function createFactoryRunControl(runs = createFactoryRunsRepository()) {
               ? reread(runId)
               : errAsync<FactoryRunView, FactoryRunControlError>({
                   kind: 'conflict',
-                  message: 'Only a run that ended with no change can be marked as done.',
+                  message:
+                    'Only a run that ended with no change or was stopped can be marked as done.',
                 }),
           ),
       );

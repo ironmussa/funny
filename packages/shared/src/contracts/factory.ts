@@ -387,6 +387,21 @@ export type FactoryRunState =
   | 'failed'
   | 'stopped';
 
+/**
+ * The ended states a member may mark as done: `no_change` (they agree there is
+ * nothing to change) and `stopped` (nothing more is needed, e.g. its issue was
+ * closed as a duplicate). Anything else still has work or a failure to look at.
+ */
+export const FACTORY_RUN_MARK_DONE_STATES = [
+  'no_change',
+  'stopped',
+] as const satisfies readonly FactoryRunState[];
+
+/** Whether a member may mark a run in this state as done. */
+export function canMarkFactoryRunDone(state: FactoryRunState): boolean {
+  return FACTORY_RUN_MARK_DONE_STATES.some((one) => one === state);
+}
+
 export interface FactoryRun {
   id: string;
   factoryId: string;

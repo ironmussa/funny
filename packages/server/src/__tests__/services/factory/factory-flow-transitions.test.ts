@@ -116,3 +116,24 @@ describe('updateInFlight', () => {
     }
   });
 });
+
+describe('markDone', () => {
+  // #532: a stopped run whose issue was closed as a duplicate had no way off the board.
+  test('a run that ended with no change or was stopped becomes done', async () => {
+    for (const state of ['no_change', 'stopped'] as const) {
+      const { runs, run, stateOf } = await runIn(state);
+      expect((await runs.markDone(run.id))._unsafeUnwrap()).toBe(true);
+      expect(await stateOf()).toBe('done');
+      await testDb.db.delete(testDb.schema.factoryRuns).run();
+    }
+  });
+
+  test('a failed, parked or live run is not marked done', async () => {
+    for (const state of ['failed', 'waiting_human', 'working', 'merged'] as const) {
+      const { runs, run, stateOf } = await runIn(state);
+      expect((await runs.markDone(run.id))._unsafeUnwrap()).toBe(false);
+      expect(await stateOf()).toBe(state);
+      await testDb.db.delete(testDb.schema.factoryRuns).run();
+    }
+  });
+});

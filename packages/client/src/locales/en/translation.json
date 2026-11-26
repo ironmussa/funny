@@ -901,6 +901,7 @@
     "viewFullContent": "View full content",
     "viewFullDiff": "View full diff",
     "readFile": "Read File",
+    "readFilePathUnavailable": "path unavailable",
     "writeFile": "Write File",
     "editFile": "Edit File",
     "runCommand": "Run Command",

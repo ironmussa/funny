@@ -56,6 +56,9 @@ const MAX_DEADLINE_SECONDS = 86_400;
 /** `exec` waits at most this long server-side. */
 const MAX_EXEC_SECONDS = 600;
 
+/** The JSON body of a lifecycle mutation: flat fields such as a snapshot name or a port's settings. */
+type InstaboxMutationBody = Readonly<Record<string, string | number | boolean>>;
+
 /**
  * A stopped or paused machine is kept until deleted (no retention purge). There
  * is no lifetime cap that can be extended or set again on start, so
@@ -242,7 +245,7 @@ export function createInstaboxProvider(
   const poll = createPoller(options.pollMs ?? 3_000, options.sleep);
 
   /** A lifecycle mutation: InstaBox requires an `Idempotency-Key` on each. */
-  const mutate = (path: string, body: unknown = {}) =>
+  const mutate = (path: string, body: InstaboxMutationBody = {}) =>
     call('POST', path, { body, headers: { 'Idempotency-Key': newKey() } });
 
   /** A guarded delete: InstaBox wants the resource id echoed back. */

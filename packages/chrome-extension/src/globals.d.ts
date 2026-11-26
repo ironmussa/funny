@@ -49,7 +49,8 @@ interface Element {
 // ---------------------------------------------------------------------------
 interface ReactFiber {
   type:
-    | (((...args: unknown[]) => unknown) & { displayName?: string; name?: string })
+    // A function component: never called here, only its name is read.
+    | (((...args: unknown[]) => void) & { displayName?: string; name?: string })
     | { displayName?: string }
     | string
     | null;

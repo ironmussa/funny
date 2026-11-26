@@ -18,6 +18,8 @@
  * releases its slot, members it did not settle go back to waiting.
  */
 
+import type { NodeData } from './types.js';
+
 /** A request for one slot of a group. */
 export interface SlotRequest {
   /** The group, already computed from the run's inputs. */
@@ -49,7 +51,7 @@ export type SlotRelease = () => void;
 
 /** The outcome a batch leader settles for a member. */
 export type MemberOutcome =
-  | { status: 'succeeded'; output?: unknown }
+  | { status: 'succeeded'; output?: NodeData }
   | { status: 'failed'; error: string }
   /** The leader could not finish this member: it waits again in the place it had. */
   | { status: 'requeued' };

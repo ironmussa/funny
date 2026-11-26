@@ -101,7 +101,8 @@ export type MetricSample = z.infer<typeof metricSampleSchema>;
 export type MetricSummary = z.infer<typeof metricSummarySchema>;
 export type WorkloadResult = z.infer<typeof workloadResultSchema>;
 
-export function parseBenchmarkResult(value: unknown): BenchmarkResult {
+/** Any decoded value (a JSON file's contents, a built result) checked against the schema. */
+export function parseBenchmarkResult<Input>(value: Input): BenchmarkResult {
   const parsed = benchmarkResultSchema.safeParse(value);
   if (parsed.success) return parsed.data;
   throw new Error(`Invalid benchmark result: ${z.prettifyError(parsed.error)}`);

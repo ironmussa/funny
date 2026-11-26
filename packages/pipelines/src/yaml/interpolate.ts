@@ -135,7 +135,7 @@ function assertScopeCoversTokens(
     const [type, key] = tok;
     // Variable tags (`{{x}}`, `{{{x}}}`, `{{&x}}`) — must resolve.
     if (type === 'name' || type === '&') {
-      if (resolvePath(scope, key) === undefined) {
+      if (!resolvesInScope(scope, key)) {
         throw new TemplateInterpolationError(`Missing variable "${key}" in template`, template);
       }
     }
@@ -146,18 +146,19 @@ function assertScopeCoversTokens(
   }
 }
 
-function resolvePath(scope: TemplateScope, path: string): unknown {
-  if (path === '.') return scope;
+/** Whether `path` (dot-separated) reads a defined value from `scope`. */
+function resolvesInScope(scope: TemplateScope, path: string): boolean {
+  if (path === '.') return true;
   const segments = path.split('.');
   let current: unknown = scope;
   for (const seg of segments) {
-    if (current === null || current === undefined) return undefined;
-    if (!isObject(current)) return undefined;
+    if (current === null || current === undefined) return false;
+    if (!isObject(current)) return false;
     // SAFETY: `current` is a non-null object here (both checked above), read like the scope it
     // sits in; a missing key reads as undefined, which ends the path.
     current = (current as TemplateScope)[seg];
   }
-  return current;
+  return current !== undefined;
 }
 
 /**

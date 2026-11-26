@@ -402,7 +402,15 @@ export function UserMessageCard({
         <div className="min-w-0">
           {/* Image attachments */}
           {allImages && allImages.length > 0 && (
-            <div className="mb-2 flex flex-wrap gap-2">
+            <div
+              className={cn(
+                'flex flex-wrap gap-2',
+                (unmentionedFiles.length > 0 ||
+                  visibleContent.length > 0 ||
+                  presentation.kind === 'context') &&
+                  'mb-2',
+              )}
+            >
               {allImages.map((img, idx) => (
                 <button
                   key={img.src}
@@ -426,7 +434,13 @@ export function UserMessageCard({
 
           {/* Attached files not already @-mentioned inline */}
           {unmentionedFiles.length > 0 && (
-            <div data-testid="user-message-attached-files" className="mb-2 flex flex-wrap gap-1.5">
+            <div
+              data-testid="user-message-attached-files"
+              className={cn(
+                'flex flex-wrap gap-1.5',
+                (visibleContent.length > 0 || presentation.kind === 'context') && 'mb-2',
+              )}
+            >
               {unmentionedFiles.map((item) => (
                 <ReferencedFileChip key={`attached-${item.path}`} item={item} />
               ))}
@@ -434,11 +448,13 @@ export function UserMessageCard({
           )}
 
           {/* Message content with inline file chips */}
-          <PresentedUserContent
-            automaticContext={presentation.kind === 'context'}
-            content={visibleContent}
-            fileMap={fileMap}
-          />
+          {(visibleContent.length > 0 || presentation.kind === 'context') && (
+            <PresentedUserContent
+              automaticContext={presentation.kind === 'context'}
+              content={visibleContent}
+              fileMap={fileMap}
+            />
+          )}
         </div>
       </div>
 

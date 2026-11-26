@@ -320,12 +320,14 @@ function annotateToolCall(
 }
 
 /**
- * Only add a message bubble if there's actual text content. Skip if the
- * message has an ExitPlanMode tool call — the plan text will be shown inside
- * the ExitPlanModeCard instead.
+ * Only add a message bubble if there's actual text content or image attachments.
+ * Skip if the message has an ExitPlanMode tool call — the plan text will be shown
+ * inside the ExitPlanModeCard instead.
  */
 function shouldRenderMessageBubble(msg: any, hasExitPlanMode: boolean): boolean {
-  return Boolean(msg.content && msg.content.trim() && !hasExitPlanMode);
+  const hasText = Boolean(msg.content && msg.content.trim());
+  const hasImages = Array.isArray(msg.images) && msg.images.length > 0;
+  return (hasText || hasImages) && !hasExitPlanMode;
 }
 
 /** Flatten all messages into a single stream of message / toolcall items. */

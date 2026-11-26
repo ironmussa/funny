@@ -193,16 +193,19 @@ async function sendPrompt(
   p.setAttachedTextFiles(submittedTextFiles);
 }
 
-/** Reads the composer; warns and returns `null` when it is empty. */
+/** Reads the composer; warns and returns `null` when both text and attachments are empty. */
 function readEditorDraft(
   p: PromptSubmitParams,
 ): { editorJSON: EditorJSON; serialized: SerializedPrompt } | null {
   const editorJSON = p.editorRef.current?.getJSON();
-  if (p.editorRef.current?.isEmpty() ?? true) {
+  const isEditorEmpty = p.editorRef.current?.isEmpty() ?? true;
+  const hasAttachments = p.images.length > 0 || p.attachedTextFiles.length > 0;
+  if (isEditorEmpty && !hasAttachments) {
     toast.warning(p.t('prompt.emptyPrompt', 'Please enter a prompt before sending'));
     return null;
   }
-  const serialized = editorJSON ? serializeEditorContent(editorJSON) : EMPTY_SERIALIZED_PROMPT;
+  const serialized =
+    !isEditorEmpty && editorJSON ? serializeEditorContent(editorJSON) : EMPTY_SERIALIZED_PROMPT;
   return { editorJSON, serialized };
 }
 

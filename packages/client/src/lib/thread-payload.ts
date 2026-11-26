@@ -126,6 +126,7 @@ const TITLE_MAX = 500;
 export function buildThreadTitle(
   prompt: string,
   attachedFileNames: readonly string[] = [],
+  imageCount = 0,
 ): string {
   const { entries, body } = parseReferencedFiles(prompt);
   const text = body.slice(0, TITLE_TEXT_MAX);
@@ -136,7 +137,10 @@ export function buildThreadTitle(
     ],
     text,
   );
-  return titled.length <= TITLE_MAX ? titled : text;
+  const resolved = titled.length <= TITLE_MAX ? titled : text;
+  if (resolved) return resolved;
+  if (imageCount > 0) return imageCount === 1 ? 'Image' : `${imageCount} images`;
+  return '';
 }
 
 /**
@@ -166,7 +170,7 @@ export type BuildResult =
  */
 export function buildThreadPayload(input: BuildInput): BuildResult {
   const { prompt, opts, images, designId, defaultThreadMode, toolPermissions } = input;
-  const title = buildThreadTitle(prompt, opts.attachedFileNames);
+  const title = buildThreadTitle(prompt, opts.attachedFileNames, images?.length ?? 0);
 
   if (input.isScratch) {
     return {

@@ -484,7 +484,7 @@ export const PromptInputUI = memo(function PromptInputUI(rawProps: PromptInputUI
           onToggleRecording={props.onToggleRecording}
           loading={loading}
           running={running}
-          editorEmpty={editorEmpty}
+          editorEmpty={editorEmpty && images.length === 0 && attachedTextFiles.length === 0}
           isQueueMode={props.isQueueMode}
           onStop={props.onStop}
           onSend={handleSubmit}

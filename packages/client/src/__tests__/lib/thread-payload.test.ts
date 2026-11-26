@@ -182,6 +182,11 @@ describe('buildThreadTitle', () => {
     expect(buildThreadTitle('Fix the bug')).toBe('Fix the bug');
   });
 
+  test('names an image-only prompt after its images', () => {
+    expect(buildThreadTitle('', [], 1)).toBe('Image');
+    expect(buildThreadTitle('', [], 3)).toBe('3 images');
+  });
+
   test('falls back to the plain text when the attachment list is too long', () => {
     const names = Array.from({ length: 40 }, (_, i) => `file-${i}.pdf`);
     expect(buildThreadTitle('Read these', names)).toBe('Read these');

@@ -32,6 +32,8 @@ export type RunControlAction =
   | 'split'
   | 'approve-merge'
   | 'mark-done'
+  | 'hold'
+  | 'release'
   | 'close-replaced-pr';
 
 /** A controlled run, and the commit the control was for (only an approval names one). */
@@ -55,6 +57,8 @@ const RUN_CONTROL: Record<
       | 'factory.run_split'
       | 'factory.merge_approved'
       | 'factory.run_marked_done'
+      | 'factory.run_put_on_hold'
+      | 'factory.run_released'
       | 'factory.superseded_pr_closed';
     /**
      * The member's activity row, or null when the control records its own
@@ -66,9 +70,11 @@ const RUN_CONTROL: Record<
       | 'factory.split'
       | 'factory.approve-merge'
       | 'factory.mark-done'
+      | 'factory.hold'
+      | 'factory.release'
       | null;
     /** `label` names the run: `for issue #12`, or its id when it has no issue. */
-    auditDetail: (label: string, sha: string | null) => string;
+    auditDetail: (label: string, sha: string | null, reason?: string) => string;
     /** Past tense when it worked; what was asked when it did not (the row shows why). */
     title: (issue: number | null | undefined, sha: string | null, done: boolean) => string;
   }
@@ -108,6 +114,19 @@ const RUN_CONTROL: Record<
     auditDetail: (label) => `Factory run ${label} marked as done: nothing more was needed`,
     title: (issue, _sha, done) =>
       `${done ? 'Marked' : 'Mark'} the factory run${issue ? ` for #${issue}` : ''} as done`,
+  },
+  hold: {
+    audit: 'factory.run_put_on_hold',
+    kind: 'factory.hold',
+    auditDetail: (label, _sha, reason) => `Factory run ${label} put on hold: ${reason ?? ''}`,
+    title: (issue) => `Put the factory run${issue ? ` for #${issue}` : ''} on hold`,
+  },
+  release: {
+    audit: 'factory.run_released',
+    kind: 'factory.release',
+    auditDetail: (label) => `Factory run ${label} released from hold`,
+    title: (issue, _sha, done) =>
+      `${done ? 'Released' : 'Release'} the factory run${issue ? ` for #${issue}` : ''} from hold`,
   },
   'close-replaced-pr': {
     audit: 'factory.superseded_pr_closed',
@@ -154,6 +173,8 @@ interface RunControlOptions {
   expectedSha?: string;
   /** The thread whose agent asked for a retry or a stop. */
   askedByThread?: string;
+  /** Why the run is put on hold (`hold` only). */
+  reason?: string;
 }
 
 /**
@@ -171,7 +192,7 @@ export function createRunControl(
     userId: string,
     projectId: string,
     runId: string,
-    { expectedSha = '', askedByThread }: RunControlOptions = {},
+    { expectedSha = '', askedByThread, reason = '' }: RunControlOptions = {},
   ): ResultAsync<FactoryRunView, ApiFailure> =>
     ownFactory(userId, projectId)
       .andThen((factoryId) => {
@@ -181,6 +202,8 @@ export function createRunControl(
           split: () => control.split(factoryId, runId).map(withoutSha),
           'approve-merge': () => control.approveMerge(userId, factoryId, runId, expectedSha),
           'mark-done': () => control.markDone(factoryId, runId).map(withoutSha),
+          hold: () => control.hold(userId, factoryId, runId, reason).map(withoutSha),
+          release: () => control.release(factoryId, runId).map(withoutSha),
           'close-replaced-pr': () =>
             control.closeReplacedPr(factoryId, runId).map(({ run }) => withoutSha(run)),
         }[action];
@@ -190,12 +213,13 @@ export function createRunControl(
         audit({
           action: RUN_CONTROL[action].audit,
           actorId: userId,
-          detail: RUN_CONTROL[action].auditDetail(factoryRunLabel(run), sha),
+          detail: RUN_CONTROL[action].auditDetail(factoryRunLabel(run), sha, reason),
           meta: {
             projectId,
             runId,
             issueNumber: run.issueNumber,
             ...(sha && { sha }),
+            ...(reason && { reason }),
             ...(askedByThread && { askedByThread }),
           },
         });
@@ -255,6 +279,8 @@ export function runPortMethods(
   | 'splitRun'
   | 'approveMerge'
   | 'markRunDone'
+  | 'holdRun'
+  | 'releaseRun'
   | 'closeReplacedPr'
   | 'setLintCleanup'
   | 'approvalRequests'
@@ -351,6 +377,14 @@ export function runPortMethods(
 
     async markRunDone(userId, projectId, runId) {
       return controlled('mark-done', userId, projectId, runId);
+    },
+
+    async holdRun(userId, projectId, runId, reason) {
+      return controlled('hold', userId, projectId, runId, { reason });
+    },
+
+    async releaseRun(userId, projectId, runId) {
+      return controlled('release', userId, projectId, runId);
     },
 
     async closeReplacedPr(userId, projectId, runId) {

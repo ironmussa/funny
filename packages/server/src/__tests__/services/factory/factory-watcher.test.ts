@@ -572,6 +572,28 @@ describe('factory watcher', () => {
     expect(launcher.calls).toHaveLength(0);
   });
 
+  // A person (or the factory, putting a run on hold) marked the issue blocked.
+  test('does not take an issue carrying the on-hold label', async () => {
+    const factoryId = await enableFactory({ label: 'ready-for-agent' });
+    const poll = fakePoll();
+    const launcher = fakeLauncher();
+    await startWatcherWithProof({
+      ports,
+      github: fakeGithub('acme/repo', [
+        { number: 7, title: 'Blocked', url: 'u/7', labels: ['ready-for-agent', 'on-hold'] },
+      ]),
+      createPoll: poll.createPoll,
+      launch: launcher.launch,
+      resolveRuntime,
+      waitThread: pendingThreads,
+    });
+
+    await poll.ticks[0]!();
+
+    expect(launcher.calls).toHaveLength(0);
+    expect((await createFactoryRunsRepository().list(factoryId))._unsafeUnwrap()).toEqual([]);
+  });
+
   // A run merged its pull request, and the next tick still lists the issue
   // labelled and open (GitHub closes it a moment later): the label queued a
   // second run that was then stopped, and the board showed the issue as done
@@ -2525,6 +2547,40 @@ describe('factory operator controls', () => {
     // Stopping twice is refused: the run already ended.
     const again = await createFactoryRunControl().stop('alice', factoryId, running.id);
     expect(again.isErr() && again.error.kind).toBe('conflict');
+  });
+
+  test('putting a run on hold swaps its label for on-hold, and releasing it swaps them back', async () => {
+    const factoryId = await enableFactory();
+    const run = await seedRun(factoryId, 'failed', []);
+    const { poll, launcher, github } = await watch();
+    const control = createFactoryRunControl();
+
+    const held = await control.hold('alice', factoryId, run.id, 'blocked by an upstream bug');
+    expect(held._unsafeUnwrap()).toMatchObject({
+      state: 'on_hold',
+      hold: { reason: 'blocked by an upstream bug', userId: 'alice', from: 'failed' },
+    });
+    expect(github.relabels).toContainEqual({ issue: 7, remove: 'ready-for-agent', add: 'on-hold' });
+    // Nothing takes the issue while the run is on hold.
+    await poll.ticks[0]!();
+    expect(launcher.calls).toHaveLength(0);
+    expect((await runById(run.id)).state).toBe('on_hold');
+
+    const released = await control.release(factoryId, run.id);
+    expect(released.isOk()).toBe(true);
+    expect(github.relabels).toContainEqual({ issue: 7, remove: 'on-hold', add: 'ready-for-agent' });
+    expect((await runById(run.id)).state).not.toBe('on_hold');
+  });
+
+  test('a run in flight is not put on hold, and only a run on hold is released', async () => {
+    const factoryId = await enableFactory();
+    const run = await seedRun(factoryId, 'working', []);
+    const control = createFactoryRunControl();
+    const held = await control.hold('alice', factoryId, run.id, 'why');
+    expect(held.isErr() && held.error.kind).toBe('conflict');
+    const released = await control.release(factoryId, run.id);
+    expect(released.isErr() && released.error.kind).toBe('conflict');
+    expect((await runById(run.id)).state).toBe('working');
   });
 
   test('a run of another factory cannot be controlled', async () => {

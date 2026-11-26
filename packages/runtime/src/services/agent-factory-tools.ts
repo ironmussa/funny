@@ -32,7 +32,10 @@ export const FACTORY_TOOL_INSTRUCTIONS =
   "from which thread; use it instead of reading funny's database. " +
   'funny_factory_control acts on one run as the thread owner, as the ' +
   'board does: retry, stop, mark-done (a run that ended with no change or was ' +
-  'stopped, when nothing more is needed) or close-replaced-pr (the pull ' +
+  'stopped, when nothing more is needed), hold (put a run waiting for a ' +
+  'person or ended without merging on hold, with a reason, e.g. blocked by ' +
+  'an upstream bug), release (send a run on hold back to the queue) or ' +
+  'close-replaced-pr (the pull ' +
   'request of a run a newer run of its issue replaced); use it when the user ' +
   'asks for it. funny_factory_request_approval ASKS the ' +
   'user to approve merging a run the factory holds as high risk: the user ' +
@@ -63,6 +66,8 @@ interface RunSummary {
   currentStep: string | null;
   waitReason: { kind: string; blockers: number[] } | null;
   failureReason: string | null;
+  /** Why a member put it on hold, while it is on hold. */
+  holdReason?: string | null;
   risk: { level: string; headSha: string; reasons: string[]; changedLines: number | null } | null;
   approvedSha: string | null;
   /** Absent from a server that does not send it. */
@@ -130,6 +135,7 @@ export function describeRun(run: RunSummary): string {
     lines.push(`    waits: ${run.waitReason.kind}${blockers ? ` (${blockers})` : ''}`);
   }
   if (run.failureReason) lines.push(`    reason: ${run.failureReason}`);
+  if (run.holdReason) lines.push(`    on hold: ${run.holdReason}`);
   lines.push(...describeRisk(run), ...describeApproval(run));
   return lines.join('\n');
 }
@@ -219,7 +225,14 @@ export function describeRunDetail(run: RunDetail): string {
 
 /** The run fields a factory tool sends; the thread id comes from the tool's context. */
 /** The run controls an agent has (the server's `AGENT_RUN_CONTROLS`; it refuses any other). */
-const RUN_CONTROLS = ['retry', 'stop', 'mark-done', 'close-replaced-pr'] as const;
+const RUN_CONTROLS = [
+  'retry',
+  'stop',
+  'mark-done',
+  'hold',
+  'release',
+  'close-replaced-pr',
+] as const;
 type RunControl = (typeof RUN_CONTROLS)[number];
 
 /** What each control's answer says it did. */
@@ -227,12 +240,16 @@ const CONTROL_DONE: Record<RunControl, string> = {
   retry: 'Retried',
   stop: 'Stopped',
   'mark-done': 'Marked as done',
+  hold: 'Put on hold',
+  release: 'Released from hold',
   'close-replaced-pr': 'Closed the pull request of the replaced run',
 };
 
 interface FactoryToolPayload {
   runId?: string;
   action?: RunControl;
+  /** Why the run is put on hold (`hold` only). */
+  reason?: string;
 }
 
 /** The fields of a server answer that say whether it refused. */
@@ -345,7 +362,11 @@ export function factoryToolDefinitions(
         "factory board's button does. retry: a failed run or one waiting for a " +
         'person. stop: one that has not ended. mark-done: one that ended with no ' +
         'change or was stopped, when nothing more is needed (its issue was ' +
-        'closed elsewhere, a duplicate); done is final. close-replaced-pr: close ' +
+        'closed elsewhere, a duplicate); done is final. hold: put a run that ' +
+        'waits for a person or ended without merging on hold, with `reason` ' +
+        '(required): it leaves the queue and its issue gets the on-hold label ' +
+        'until a release. release: send a run on hold back to the queue, to ' +
+        'be triaged again. close-replaced-pr: close ' +
         'the pull request (and branch) of a run a newer run of its issue ' +
         'replaced. The server refuses an action the run is not in a state for. ' +
         'A run held as ' +
@@ -357,11 +378,20 @@ export function factoryToolDefinitions(
         action: z
           .enum(RUN_CONTROLS)
           .describe('The control to apply. There is no approve action and no way to set a state.'),
+        reason: z
+          .string()
+          .max(300)
+          .optional()
+          .describe('Why the run is put on hold (required for hold, ignored otherwise).'),
       },
       run: async (args) => {
         const { response, error } = await ask(
           'data:factory_control_run',
-          { runId: args.runId, action: args.action },
+          {
+            runId: args.runId,
+            action: args.action,
+            ...(args.action === 'hold' && { reason: args.reason ?? '' }),
+          },
           `Could not ${args.action} the run.`,
         );
         log.info('funny_factory_control', {

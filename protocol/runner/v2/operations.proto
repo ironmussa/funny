@@ -181,9 +181,10 @@ message JobDeleteByThread { string thread_id = 1; }
 // factory-agent-tools: what an agent in a thread may do on its owner's issue
 // factory. The server takes the actor and the project from the thread's row.
 message FactoryListRuns { string thread_id = 1; }
-// `action` is one of the agent run controls (retry, stop, mark-done,
-// close-replaced-pr); anything else is refused.
-message FactoryControlRun { string thread_id = 1; string run_id = 2; string action = 3; }
+// `action` is one of the agent run controls (retry, stop, mark-done, hold,
+// release, close-replaced-pr); anything else is refused. `reason` is why a
+// run is put on hold (`hold` only; empty otherwise).
+message FactoryControlRun { string thread_id = 1; string run_id = 2; string action = 3; string reason = 4; }
 // Asks the member to approve a held merge. It never approves one.
 message FactoryRequestApproval { string thread_id = 1; string run_id = 2; }
 // One run in detail: its steps, triage, reviews, threads by role and the

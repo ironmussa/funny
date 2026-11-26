@@ -55,6 +55,7 @@ describe('factoryBoardColumn', () => {
     merged: 'done',
     done: 'done',
     stopped: 'done',
+    on_hold: 'on_hold',
   };
   test('places every run state in one column', () => {
     for (const [state, column] of Object.entries(expected)) {

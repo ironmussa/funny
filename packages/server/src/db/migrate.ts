@@ -2577,6 +2577,15 @@ const migrations: Migration[] = [
       await ctx().addColumn('factory_runs', 'role_threads', 'TEXT');
     },
   },
+  {
+    // A member may put a run on hold (`on_hold`): why, who, when and from
+    // which state. The state needs no index change: `on_hold` is not
+    // terminal, so the one-run-per-issue index keeps the issue held.
+    name: '136_factory_runs_hold',
+    async up() {
+      await ctx().addColumn('factory_runs', 'hold', 'TEXT');
+    },
+  },
 ];
 
 /**

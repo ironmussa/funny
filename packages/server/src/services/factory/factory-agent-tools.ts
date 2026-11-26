@@ -19,6 +19,7 @@
  */
 import {
   approvalGapFor,
+  factoryHoldReason,
   type FactoryApprovalRequestState,
   type FactoryRunState,
   type FactoryWaitReason,
@@ -48,7 +49,14 @@ import { createFactorySettingsService } from './factory-settings.js';
  * the run control, never a state the agent names. A merge approval and a
  * split (it opens issues) are not among them.
  */
-export const AGENT_RUN_CONTROLS = ['retry', 'stop', 'mark-done', 'close-replaced-pr'] as const;
+export const AGENT_RUN_CONTROLS = [
+  'retry',
+  'stop',
+  'mark-done',
+  'hold',
+  'release',
+  'close-replaced-pr',
+] as const;
 export type AgentRunControl = (typeof AGENT_RUN_CONTROLS)[number];
 
 export type FactoryToolAction = 'list' | 'get' | AgentRunControl | 'request-approval';
@@ -115,6 +123,8 @@ export interface AgentRunSummary {
   waitReason: FactoryWaitReason | null;
   /** One line, at most 200 characters. */
   failureReason: string | null;
+  /** Why a member put it on hold, while it is `on_hold`; one line. */
+  holdReason: string | null;
   risk: { level: string; headSha: string; reasons: string[]; changedLines: number | null } | null;
   /** The commit a member approved merging, or null. */
   approvedSha: string | null;
@@ -256,6 +266,7 @@ function summarize(
     currentStep: run.currentStep,
     waitReason: run.waitReason,
     failureReason: oneLine(run.failureReason),
+    holdReason: run.state === 'on_hold' ? oneLine(run.hold?.reason ?? null) : null,
     risk: run.risk
       ? {
           level: run.risk.level,
@@ -292,6 +303,7 @@ type ControlRun = (
   projectId: string,
   runId: string,
   threadId: string,
+  reason?: string,
 ) => ResultAsync<FactoryRunView, { status: number; message: string }>;
 
 export interface FactoryAgentToolsDeps {
@@ -516,18 +528,29 @@ export function createFactoryAgentTools(deps: FactoryAgentToolsDeps) {
       );
     },
 
-    /** Retry, stop, mark done or close a replaced PR, as the thread's owner, exactly as the board does. */
+    /**
+     * Retry, stop, mark done, put on hold (with `reason`), release or close a
+     * replaced PR, as the thread's owner, exactly as the board does.
+     */
     controlRun(
       request: FactoryToolRequest,
       action: AgentRunControl,
       runId: string,
+      reason?: string,
     ): ResultAsync<AgentRunSummary, FactoryToolError> {
+      const holdReason = action === 'hold' ? factoryHoldReason.safeParse(reason ?? '') : null;
+      if (holdReason && !holdReason.success) {
+        return errAsync({
+          kind: 'refused',
+          message: 'Putting a run on hold needs a reason of at most 300 characters.',
+        });
+      }
       return admitted(request, action).andThen(({ userId, projectId }) =>
         steering(userId, projectId)
           .andThen(() => ownRun(userId, projectId, runId))
           .andThen(() =>
             deps
-              .control(action, userId, projectId, runId, request.threadId)
+              .control(action, userId, projectId, runId, request.threadId, holdReason?.data)
               .mapErr<FactoryToolError>((failure) => ({
                 kind: failure.status === 404 ? 'not-found' : 'conflict',
                 message: failure.message,

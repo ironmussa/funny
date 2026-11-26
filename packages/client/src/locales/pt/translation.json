@@ -1805,7 +1805,8 @@
       "notStartedQueued": "Retirada da fila antes de começar: nenhum agente executou, sem branch nem pull request",
       "notStartedStopped": "Parada antes do primeiro passo: nenhum agente executou, sem branch nem pull request",
       "tooBig": "Grande demais",
-      "alreadyDone": "Já feito"
+      "alreadyDone": "Já feito",
+      "onHold": "Em pausa"
     },
     "wait": {
       "pathsAwaitingApproval": "Aguardando {{blockers}}: reserva os mesmos arquivos enquanto aguarda uma aprovação",
@@ -1959,7 +1960,14 @@
     "closeReplacedPrBodyNoPr": "Uma run mais nova da issue #{{issue}} substituiu esta run. A factory comenta em #{{pr}}, fecha-o e apaga sua branch.",
     "clearQueueTooltip": "Remover as issues que esperam na fila",
     "stopAllTooltip": "Esvaziar a fila e parar todas as runs em andamento",
-    "runFlowTooltip": "Iniciar uma run de um flow em um projeto"
+    "runFlowTooltip": "Iniciar uma run de um flow em um projeto",
+    "hold": "Pausar",
+    "release": "Retomar",
+    "holdTitle": "Pausar #{{issue}}?",
+    "holdTitleNoIssue": "Pausar esta execução?",
+    "holdBody": "A execução sai de \"Precisa de uma pessoa\" e espera em \"Em pausa\" até você retomá-la. A issue recebe o rótulo on-hold no lugar do rótulo da fábrica, para que a fábrica não a pegue de novo. Ao retomá-la, ela volta à fila e passa pela triagem de novo.",
+    "holdReason": "Motivo",
+    "holdReasonPlaceholder": "Por quê? ex.: bloqueado por um bug upstream"
   },
   "projectSecrets": {
     "title": "Segredos",
@@ -2098,7 +2106,8 @@
       "merge": "Merge",
       "needsPerson": "Precisa de uma pessoa",
       "waitingParts": "Aguardando as partes",
-      "done": "Concluído"
+      "done": "Concluído",
+      "onHold": "Em pausa"
     },
     "emptyColumn": "Nenhuma execução aqui",
     "limit": {

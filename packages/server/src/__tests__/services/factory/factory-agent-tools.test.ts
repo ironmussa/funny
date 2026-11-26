@@ -71,6 +71,8 @@ describe('factoryToolAccess', () => {
       'retry',
       'stop',
       'mark-done',
+      'hold',
+      'release',
       'close-replaced-pr',
       'request-approval',
     ] as const) {
@@ -94,6 +96,7 @@ describe('factory agent tools', () => {
       projectId: string;
       runId: string;
       threadId: string;
+      reason?: string;
     }>;
     controlFails?: { status: number; message: string };
     historyAsked: Array<{ userId: string; projectId: string; issueNumber: number }>;
@@ -157,8 +160,15 @@ describe('factory agent tools', () => {
           },
         ];
       },
-      control: (action, userId, projectId, runId, threadId) => {
-        world.controls.push({ action, userId, projectId, runId, threadId });
+      control: (action, userId, projectId, runId, threadId, reason) => {
+        world.controls.push({
+          action,
+          userId,
+          projectId,
+          runId,
+          threadId,
+          ...(reason !== undefined && { reason }),
+        });
         if (world.controlFails) return errAsync(world.controlFails);
         return runs
           .get(runId)
@@ -271,9 +281,29 @@ describe('factory agent tools', () => {
     ]);
   });
 
+  test('puts a run on hold with the reason it was given, and refuses one without', async () => {
+    const run = await seedRun(F.alice, 7, 'failed');
+    const missing = await tools().controlRun(from(), 'hold', run.id, '  ');
+    expect(missing.isErr() && missing.error.kind).toBe('refused');
+    expect(world.controls).toEqual([]);
+
+    const held = await tools().controlRun(from(), 'hold', run.id, 'blocked upstream');
+    expect(held.isOk()).toBe(true);
+    expect(world.controls).toEqual([
+      {
+        action: 'hold',
+        userId: 'alice',
+        projectId: 'p1',
+        runId: run.id,
+        threadId: 't1',
+        reason: 'blocked upstream',
+      },
+    ]);
+  });
+
   // The data channel names a control, never a state; anything else is refused.
   test('only named controls are agent controls', () => {
-    for (const control of ['retry', 'stop', 'mark-done', 'close-replaced-pr']) {
+    for (const control of ['retry', 'stop', 'mark-done', 'hold', 'release', 'close-replaced-pr']) {
       expect(isAgentRunControl(control)).toBe(true);
     }
     for (const other of ['done', 'merged', 'approve-merge', 'split', undefined]) {

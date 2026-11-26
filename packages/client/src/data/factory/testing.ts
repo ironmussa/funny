@@ -38,6 +38,7 @@ export function buildFactoryRun(overrides: Partial<FactoryRun> = {}): FactoryRun
     roleThreads: [],
     mergeApproval: null,
     riskWaiver: null,
+    hold: null,
     ...overrides,
   };
 }

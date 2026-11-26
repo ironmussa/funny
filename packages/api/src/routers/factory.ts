@@ -3,6 +3,7 @@ import {
   factoryFlowInput,
   factoryApprovalRequestInput,
   factoryApproveMergeInput,
+  factoryHoldRunInput,
   factoryLintCleanupInput,
   factoryProjectInput,
   factoryRunInput,
@@ -89,6 +90,20 @@ export const factoryRouter = router({
     .input(factoryRunInput)
     .mutation(async ({ ctx, input }) =>
       unwrap(await ctx.ports.factory.markRunDone(ctx.userId, input.projectId, input.runId)),
+    ),
+  // A member puts a run on hold until something outside it changes, and
+  // releases it later: the same `steer` as retrying it.
+  holdRun: projectProcedure('steer', CONTROL_FORBIDDEN)
+    .input(factoryHoldRunInput)
+    .mutation(async ({ ctx, input }) =>
+      unwrap(
+        await ctx.ports.factory.holdRun(ctx.userId, input.projectId, input.runId, input.reason),
+      ),
+    ),
+  releaseRun: projectProcedure('steer', CONTROL_FORBIDDEN)
+    .input(factoryRunInput)
+    .mutation(async ({ ctx, input }) =>
+      unwrap(await ctx.ports.factory.releaseRun(ctx.userId, input.projectId, input.runId)),
     ),
   // A member closes the pull request a replaced run left open. The server
   // decides again that the run was replaced; the board only offers it.

@@ -691,8 +691,9 @@ pub struct FactoryListRuns {
     #[prost(string, tag="1")]
     pub thread_id: ::prost::alloc::string::String,
 }
-/// `action` is one of the agent run controls (retry, stop, mark-done,
-/// close-replaced-pr); anything else is refused.
+/// `action` is one of the agent run controls (retry, stop, mark-done, hold,
+/// release, close-replaced-pr); anything else is refused. `reason` is why a
+/// run is put on hold (`hold` only; empty otherwise).
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct FactoryControlRun {
     #[prost(string, tag="1")]
@@ -701,6 +702,8 @@ pub struct FactoryControlRun {
     pub run_id: ::prost::alloc::string::String,
     #[prost(string, tag="3")]
     pub action: ::prost::alloc::string::String,
+    #[prost(string, tag="4")]
+    pub reason: ::prost::alloc::string::String,
 }
 /// Asks the member to approve a held merge. It never approves one.
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]

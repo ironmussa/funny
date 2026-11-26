@@ -474,6 +474,17 @@ export interface FactoryPort {
    */
   markRunDone(userId: string, projectId: string, runId: string): PortResult<FactoryRun>;
   /**
+   * Put a run of the caller's factory on hold with `reason`: one waiting for a
+   * person or that ended without merging. Refused (409) for any other run.
+   * Its issue gets the on-hold label. Audited.
+   */
+  holdRun(userId: string, projectId: string, runId: string, reason: string): PortResult<FactoryRun>;
+  /**
+   * Release a run on hold: back to the queue, triaged again. Refused (409)
+   * for a run not on hold. Audited.
+   */
+  releaseRun(userId: string, projectId: string, runId: string): PortResult<FactoryRun>;
+  /**
    * Close the pull request of a run of the caller's factory that a newer run
    * of its issue replaced, and delete its branch. Refused (409) for a run that
    * was not replaced, has not ended or has no pull request of its own; 502

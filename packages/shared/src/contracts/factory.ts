@@ -74,6 +74,23 @@ export const factoryRiskWaiverSchema = z.object({
 });
 export type FactoryRiskWaiver = z.infer<typeof factoryRiskWaiverSchema>;
 
+/** The longest reason a member (or an agent) may give for putting a run on hold. */
+export const FACTORY_HOLD_REASON_MAX = 300;
+
+/** Why a run is on hold, in a member's words (e.g. "blocked by an upstream bug"). */
+export const factoryHoldReason = z.string().trim().min(1).max(FACTORY_HOLD_REASON_MAX);
+
+/** A member putting one run of their factory on hold, with the reason. */
+export const factoryHoldRunInput = z
+  .object({ projectId, runId: z.string().min(1), reason: factoryHoldReason })
+  .strict();
+
+/**
+ * The label the factory puts on the issue of a run on hold (and takes off when
+ * the run is released). The watcher never takes an issue carrying it.
+ */
+export const FACTORY_ON_HOLD_LABEL = 'on-hold';
+
 export const factoryApproveMergeInput = z
   .object({ projectId, runId: z.string().min(1), expectedSha: z.string().min(7) })
   .strict();
@@ -385,7 +402,41 @@ export type FactoryRunState =
    */
   | 'done'
   | 'failed'
-  | 'stopped';
+  | 'stopped'
+  /**
+   * A member put the run on hold: it cannot go on until something outside it
+   * changes (an upstream bug, a decision). No flow, no slot, not waiting for a
+   * person, and its issue is not taken again. Releasing it sends it back to
+   * the queue to be triaged again.
+   */
+  | 'on_hold';
+
+/**
+ * The states a member may put on hold: the ones where the run waits for a
+ * person or ended without merging. A run in flight is stopped first.
+ */
+export const FACTORY_RUN_HOLDABLE_STATES = [
+  'needs_info',
+  'waiting_human',
+  'failed',
+  'no_change',
+  'stopped',
+] as const satisfies readonly FactoryRunState[];
+
+/** Whether a member may put a run in this state on hold. */
+export function canHoldFactoryRun(state: FactoryRunState): boolean {
+  return FACTORY_RUN_HOLDABLE_STATES.some((one) => one === state);
+}
+
+/** Who put a run on hold, why, when, and from which state. */
+export const factoryRunHoldSchema = z.object({
+  reason: z.string(),
+  userId: z.string(),
+  at: z.string(),
+  /** The state the run was in; shown, never restored (a release re-triages it). */
+  from: z.string(),
+});
+export type FactoryRunHold = z.infer<typeof factoryRunHoldSchema>;
 
 /**
  * The ended states a member may mark as done: `no_change` (they agree there is
@@ -460,6 +511,8 @@ export interface FactoryRun {
   mergeApproval: FactoryMergeApproval | null;
   /** A member's statement that the run is a lint cleanup, or null. */
   riskWaiver: FactoryRiskWaiver | null;
+  /** Why the run is on hold (`on_hold`), or null. Kept from its last hold otherwise. */
+  hold: FactoryRunHold | null;
   /**
    * Each execution of a node of the run's flow, in the order they started
    * (openspec factory-step-timings), from the workflow engine's journal.

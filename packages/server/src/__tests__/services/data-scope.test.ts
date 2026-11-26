@@ -256,7 +256,8 @@ describe('dedicated runner data scope', () => {
       expect(res).toEqual({
         type: 'data:factory_control_run_response',
         error: 'refused',
-        message: 'The action must be one of: retry, stop, mark-done, close-replaced-pr.',
+        message:
+          'The action must be one of: retry, stop, mark-done, hold, release, close-replaced-pr.',
       });
     }
 

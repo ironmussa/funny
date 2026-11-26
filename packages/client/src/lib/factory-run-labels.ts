@@ -14,6 +14,8 @@ export const ENDED_FACTORY_STATES: ReadonlySet<FactoryRun['state']> = new Set([
   'done',
   'failed',
   'stopped',
+  // Not ended, but nothing runs: it waits for a person to release it.
+  'on_hold',
 ]);
 
 /**
@@ -87,6 +89,7 @@ export function factoryRunStateLabel(t: TFunction, state: FactoryRun['state']): 
     done: t('factory.state.done', 'Done'),
     failed: t('factory.state.failed', 'Failed'),
     stopped: t('factory.state.stopped', 'Stopped'),
+    on_hold: t('factory.state.onHold', 'On hold'),
   };
   return labels[state];
 }
@@ -272,6 +275,8 @@ const SECTION_OF: Record<FactoryRun['state'], FactoryQueueSection> = {
   no_change: 'ended',
   done: 'ended',
   stopped: 'ended',
+  // Put on hold by a person: it asks nothing of anyone until it is released.
+  on_hold: 'ended',
 };
 
 const FACTORY_QUEUE_SECTIONS: readonly FactoryQueueSection[] = [

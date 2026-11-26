@@ -137,3 +137,73 @@ describe('markDone', () => {
     }
   });
 });
+
+describe('putOnHold / release', () => {
+  const hold = { reason: 'blocked by an upstream bug', userId: 'alice', at: 'now' };
+
+  test('a run waiting for a person or ended without merging goes on hold', async () => {
+    for (const state of [
+      'needs_info',
+      'waiting_human',
+      'failed',
+      'no_change',
+      'stopped',
+    ] as const) {
+      const { runs, run, stateOf } = await runIn(state);
+      const held = await runs.putOnHold(run.id, { ...hold, from: state });
+      expect(held._unsafeUnwrap()).toBe(true);
+      expect(await stateOf()).toBe('on_hold');
+      expect((await runs.get(run.id))._unsafeUnwrap()!.hold).toEqual({ ...hold, from: state });
+      await testDb.db.delete(testDb.schema.factoryRuns).run();
+    }
+  });
+
+  test('a run in flight, in the queue or merged is not put on hold', async () => {
+    for (const state of ['requested', 'working', 'merging', 'merged', 'done'] as const) {
+      const { runs, run, stateOf } = await runIn(state);
+      expect((await runs.putOnHold(run.id, { ...hold, from: state }))._unsafeUnwrap()).toBe(false);
+      expect(await stateOf()).toBe(state);
+      await testDb.db.delete(testDb.schema.factoryRuns).run();
+    }
+  });
+
+  test('a run on hold holds its issue but no slot', async () => {
+    const { runs, run } = await runIn('failed');
+    await runs.putOnHold(run.id, { ...hold, from: 'failed' });
+    expect((await runs.activeByIssue('f1', 1))._unsafeUnwrap()?.id).toBe(run.id);
+    expect((await runs.inFlight('f1'))._unsafeUnwrap()).toEqual([]);
+  });
+
+  test('release sends a run on hold to the back of the queue, to be triaged again', async () => {
+    const { runs, run, stateOf } = await runIn('failed');
+    await runs.putOnHold(run.id, { ...hold, from: 'failed' });
+    const held = (await runs.get(run.id))._unsafeUnwrap()!;
+    expect((await runs.release(held, ['t-impl']))._unsafeUnwrap()).toBe(true);
+    const released = (await runs.get(run.id))._unsafeUnwrap()!;
+    expect(released.state).toBe('requested');
+    expect(released.threadIds).toEqual(['t-impl']);
+    expect(released.completedAt).toBeNull();
+    expect(await stateOf()).toBe('requested');
+  });
+
+  test('only a run on hold is released', async () => {
+    const { runs, run, stateOf } = await runIn('failed');
+    expect((await runs.release(run, []))._unsafeUnwrap()).toBe(false);
+    expect(await stateOf()).toBe('failed');
+  });
+
+  test('a member stops a run on hold', async () => {
+    const { runs, run, stateOf } = await runIn('waiting_human');
+    await runs.putOnHold(run.id, { ...hold, from: 'waiting_human' });
+    expect((await runs.updateInFlight(run.id, { state: 'stopped' }))._unsafeUnwrap()).toBe(true);
+    expect(await stateOf()).toBe('stopped');
+  });
+
+  test('no flow writes over a run on hold', async () => {
+    const { runs, run, stateOf } = await runIn('waiting_human');
+    await runs.putOnHold(run.id, { ...hold, from: 'waiting_human' });
+    const written = await runs.updateInFlight(run.id, { state: 'waiting_human' });
+    expect(written._unsafeUnwrapErr().kind).toBe('illegal-transition');
+    expect(await stateOf()).toBe('on_hold');
+  });
+});

@@ -1846,7 +1846,8 @@
       "notStartedQueued": "Taken out of the queue before it started: no agent ran, no branch or pull request",
       "notStartedStopped": "Stopped before its first step: no agent ran, no branch or pull request",
       "tooBig": "Too big",
-      "alreadyDone": "Already done"
+      "alreadyDone": "Already done",
+      "onHold": "On hold"
     },
     "wait": {
       "pathsAwaitingApproval": "Waiting for {{blockers}}: it holds the same files while it waits for an approval",
@@ -2000,7 +2001,14 @@
     "closeReplacedPrBodyNoPr": "A newer run of issue #{{issue}} replaced this run. The factory comments on #{{pr}}, closes it and deletes its branch.",
     "clearQueueTooltip": "Remove the issues waiting in the queue",
     "stopAllTooltip": "Clear the queue and stop every run in progress",
-    "runFlowTooltip": "Start one run of a flow in a project"
+    "runFlowTooltip": "Start one run of a flow in a project",
+    "hold": "Put on hold",
+    "release": "Release",
+    "holdTitle": "Put #{{issue}} on hold?",
+    "holdTitleNoIssue": "Put this run on hold?",
+    "holdBody": "The run leaves \"Needs a person\" and waits in \"On hold\" until you release it. Its issue gets the on-hold label instead of the factory label, so the factory does not take it again. Releasing it sends it back to the queue, to be triaged again.",
+    "holdReason": "Reason",
+    "holdReasonPlaceholder": "Why? e.g. blocked by an upstream bug"
   },
   "projectSecrets": {
     "title": "Secrets",
@@ -2139,7 +2147,8 @@
       "merge": "Merge",
       "needsPerson": "Needs a person",
       "waitingParts": "Waiting on parts",
-      "done": "Done"
+      "done": "Done",
+      "onHold": "On hold"
     },
     "emptyColumn": "No runs here",
     "limit": {

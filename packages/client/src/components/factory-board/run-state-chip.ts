@@ -30,6 +30,7 @@ const TONE_OF = {
   done: 'success',
   failed: 'danger',
   stopped: 'neutral',
+  on_hold: 'neutral',
 } satisfies Record<FactoryRun['state'], LabelBadgeTone>;
 
 const TONES: ReadonlyMap<string, LabelBadgeTone> = new Map(Object.entries(TONE_OF));
@@ -159,10 +160,16 @@ export function factoryBoardStateChip(
     | 'stepOptions'
     | 'reviews'
     | 'roleThreads'
-  >,
+  > &
+    Partial<Pick<FactoryRun, 'hold'>>,
   hasThread: boolean,
 ): FactoryRunStateChip | null {
   if (SHOWN_BY_COLUMN.has(run.state)) return null;
+  if (run.state === 'on_hold') {
+    // Why a person put it on hold is what the chip explains.
+    const reason = run.hold?.reason;
+    return { ...factoryRunStateChip(t, run), ...(reason && { detail: reason }) };
+  }
   if (hasThread && SHOWN_BY_THREAD_ICON.has(run.state)) return null;
   const notStarted = stoppedBeforeStartChip(t, run);
   if (notStarted) return notStarted;

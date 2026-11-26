@@ -37,6 +37,7 @@
 
 import {
   contractOf,
+  FACTORY_ON_HOLD_LABEL,
   implementingThreadOf,
   isBehaviorNeutralLintCleanup,
   type FactoryRiskWaiver,
@@ -112,23 +113,66 @@ function wake(factoryId: string): void {
  * effort: the stop has happened either way, and a failure is logged.
  */
 export async function releaseStoppedIssue(run: FactoryRunView): Promise<void> {
-  if (run.source !== 'label' || run.issueNumber === null) return;
+  if (run.source !== 'label') return;
+  await relabelRunIssue(run, (label) => (label ? { remove: label } : null), 'stopped');
+}
+
+/**
+ * Swap labels on a run's issue as its factory's enabler: `labels` gets the
+ * factory's trigger label (empty when it has none) and answers what to
+ * remove and add, or null for nothing. Best effort: the run's change has
+ * happened either way, and a failure is logged.
+ */
+async function relabelRunIssue(
+  run: FactoryRunView,
+  labels: (factoryLabel: string) => { remove?: string; add?: string } | null,
+  why: 'stopped' | 'put on hold' | 'released',
+): Promise<void> {
+  if (run.issueNumber === null) return;
   const factory = await getWatchedFactory(run.factoryId);
   const port = factoryGithubPort();
-  if (!factory?.label || !port) return;
+  const swap = factory ? labels(factory.label ?? '') : null;
+  if (!factory || !port || !swap) return;
   const target = await checkFactoryTarget(factory);
   if (!target || 'reason' in target) return;
   const reader = { repo: target.repo, ownerId: factory.userId, projectId: factory.projectId };
-  const removed = await port.relabelIssue(reader, run.issueNumber, { remove: factory.label });
-  if (removed.isErr()) {
-    log.warn("Issue factory could not take the label off a stopped run's issue", {
+  const relabelled = await port.relabelIssue(reader, run.issueNumber, swap);
+  if (relabelled.isErr()) {
+    log.warn(`Issue factory could not relabel the issue of a run ${why}`, {
       namespace: 'factory',
       runId: run.id,
       issue: run.issueNumber,
-      error: removed.error.message,
+      error: relabelled.error.message,
     });
   }
 }
+
+/**
+ * A run put on hold: its issue gets the on-hold label and loses the
+ * factory's trigger label, so neither this factory (which also skips issues
+ * carrying the on-hold label) nor a person reading GitHub takes it as ready.
+ */
+const markIssueOnHold = (run: FactoryRunView) =>
+  relabelRunIssue(
+    run,
+    (label) => ({ ...(label && { remove: label }), add: FACTORY_ON_HOLD_LABEL }),
+    'put on hold',
+  );
+
+/**
+ * A run released from hold: the on-hold label comes off its issue, and a run
+ * the factory took by its label gets the label back (the watcher drops a
+ * labelled run from its queue when its issue no longer carries the label).
+ */
+const unmarkIssueOnHold = (run: FactoryRunView) =>
+  relabelRunIssue(
+    run,
+    (label) => ({
+      remove: FACTORY_ON_HOLD_LABEL,
+      ...(run.source === 'label' && label && { add: label }),
+    }),
+    'released',
+  );
 
 /**
  * A run's pull request as its factory's enabler reaches it, or null when the
@@ -181,7 +225,9 @@ function lintCleanupWord(
  * Nor for a "not pushed" one: the step ended before the push, the same way.
  */
 async function keptOnRetry(run: FactoryRunView): Promise<string[]> {
-  if (run.state === 'no_change') return [];
+  // A run on hold keeps what the state it was held from would.
+  const state = run.state === 'on_hold' ? run.hold?.from : run.state;
+  if (state === 'no_change' || state === 'needs_info') return [];
   if (run.failureReason === NO_CHANGE_REASON || run.failureReason === NOT_PUSHED_REASON) return [];
   const first = run.threadIds[0];
   if (!first) return [];
@@ -249,7 +295,7 @@ const freedForRetry = (
 ): ResultAsync<undefined, FactoryRunControlError> => {
   const ports = factoryRunnerPorts();
   // A run in flight goes on with its worktree: only a stopped attempt's are removed.
-  const retryable: ReadonlySet<string> = new Set(RETRYABLE_STATES);
+  const retryable: ReadonlySet<string> = new Set([...RETRYABLE_STATES, 'on_hold']);
   if (!ports || !retryable.has(run.state)) return okAsync(undefined);
   return ResultAsync.fromSafePromise(
     freeRunBranchForRetry(
@@ -262,6 +308,61 @@ const freedForRetry = (
     left.length === 0 ? okAsync(undefined) : errAsync(keptWorktreesConflict(left)),
   );
 };
+
+type FactoryRuns = ReturnType<typeof createFactoryRunsRepository>;
+
+/** Put `run` on hold (a compare-and-set), then swap its issue's labels. */
+function putRunOnHold(
+  runs: FactoryRuns,
+  run: FactoryRunView,
+  userId: string,
+  reason: string,
+): ResultAsync<undefined, FactoryRunControlError> {
+  return runs
+    .putOnHold(run.id, { reason, userId, at: new Date().toISOString(), from: run.state })
+    .mapErr(reopenRefused)
+    .andThen((held) =>
+      held
+        ? ResultAsync.fromSafePromise(markIssueOnHold(run)).map(() => undefined)
+        : errAsync<undefined, FactoryRunControlError>({
+            kind: 'conflict',
+            message:
+              'Only a run waiting for a person, or one that ended without merging, can be put on hold. Stop a running one first.',
+          }),
+    );
+}
+
+/**
+ * Send a run on hold back to the queue (a compare-and-set), keeping what a
+ * retry of the state it was held from keeps; then its issue's labels are
+ * swapped back and the threads it does not keep are archived.
+ */
+function releaseHeldRun(
+  runs: FactoryRuns,
+  run: FactoryRunView,
+): ResultAsync<undefined, FactoryRunControlError> {
+  const notHeld = errAsync<never, FactoryRunControlError>({
+    kind: 'conflict',
+    message: 'Only a run on hold can be released.',
+  });
+  if (run.state !== 'on_hold') return notHeld;
+  return ResultAsync.fromSafePromise(keptOnRetry(run)).andThen((kept) =>
+    freedForRetry(run, kept)
+      .andThen(() => runs.release(run, kept).mapErr(storage))
+      .andThen((moved) => (moved ? okAsync(undefined) : notHeld))
+      .andThen(() =>
+        ResultAsync.fromSafePromise(
+          Promise.all([
+            unmarkIssueOnHold(run),
+            archiveReplacedFactoryThreads(
+              run.threadIds.filter((id) => !kept.includes(id)),
+              factoryBrowserEvents(),
+            ),
+          ]),
+        ).map(() => undefined),
+      ),
+  );
+}
 
 export function createFactoryRunControl(runs = createFactoryRunsRepository()) {
   /** The run, when it belongs to `factoryId`. */
@@ -381,6 +482,38 @@ export function createFactoryRunControl(runs = createFactoryRunsRepository()) {
                 }),
           ),
       );
+    },
+
+    /**
+     * Put a run on hold, as `userId`, with the member's `reason`: one that
+     * waits for a person or ended without merging (`HOLDABLE_STATES`) and
+     * cannot go on until something outside it changes. It holds its issue but
+     * no slot, and the issue gets the on-hold label instead of the trigger
+     * label. A run in flight is stopped first.
+     */
+    hold(
+      userId: string,
+      factoryId: string,
+      runId: string,
+      reason: string,
+    ): ResultAsync<FactoryRunView, FactoryRunControlError> {
+      return runOf(factoryId, runId)
+        .andThen((run) => putRunOnHold(runs, run, userId, reason))
+        .andThen(() => reread(runId));
+    },
+
+    /**
+     * Release a run on hold: it goes back to the end of the queue and is
+     * triaged again, keeping what a retry of the state it was held from keeps.
+     * The on-hold label comes off its issue.
+     */
+    release(factoryId: string, runId: string): ResultAsync<FactoryRunView, FactoryRunControlError> {
+      return runOf(factoryId, runId)
+        .andThen((run) => releaseHeldRun(runs, run))
+        .andThen(() => {
+          wake(factoryId);
+          return reread(runId);
+        });
     },
 
     /**

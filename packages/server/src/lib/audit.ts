@@ -35,6 +35,8 @@ type AuditAction =
   | 'factory.merge_approved'
   | 'factory.lint_cleanup_marked'
   | 'factory.run_marked_done'
+  | 'factory.run_put_on_hold'
+  | 'factory.run_released'
   | 'factory.superseded_pr_closed'
   | 'factory.approval_requested'
   | 'factory.approval_declined'

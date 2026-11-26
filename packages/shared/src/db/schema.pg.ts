@@ -409,6 +409,8 @@ export const factoryRuns = pgTable('factory_runs', {
   mergeApproval: text('merge_approval'),
   /** JSON `FactoryRiskWaiver`: a member marked the run as a lint cleanup; null otherwise. */
   riskWaiver: text('risk_waiver'),
+  // Who put the run on hold, why, when and from which state (JSON, `FactoryRunHold`).
+  hold: text('hold'),
   /** JSON array of the role threads (triage, review) the run started (`FactoryRoleThread[]`). */
   roleThreads: text('role_threads'),
   /** The schedule trigger that started the run (change flow-triggers); null otherwise. */

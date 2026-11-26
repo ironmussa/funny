@@ -44,6 +44,7 @@ const run = (over: Partial<FactoryRun>): FactoryRun => ({
   roleThreads: [],
   mergeApproval: null,
   riskWaiver: null,
+  hold: null,
   ...over,
 });
 

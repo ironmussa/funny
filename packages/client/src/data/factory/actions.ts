@@ -112,6 +112,34 @@ export function markFactoryRunDone(
 }
 
 /**
+ * Put a run on hold with the member's reason, or release one: not optimistic,
+ * the server says whether the run was in a state for it. The caller shows the
+ * error.
+ */
+export function holdFactoryRun(
+  projectId: string,
+  runId: string,
+  reason: string,
+  layer: DataLayer = getDataLayer(),
+): ResultAsync<FactoryRun, DomainError> {
+  return factoryApi.holdRun(projectId, runId, reason).map((run) => {
+    writeFactoryRun(projectId, run, layer);
+    return run;
+  });
+}
+
+export function releaseFactoryRun(
+  projectId: string,
+  runId: string,
+  layer: DataLayer = getDataLayer(),
+): ResultAsync<FactoryRun, DomainError> {
+  return factoryApi.releaseRun(projectId, runId).map((run) => {
+    writeFactoryRun(projectId, run, layer);
+    return run;
+  });
+}
+
+/**
  * Close the pull request a replaced run left open, and delete its branch. The
  * server decides again that a newer run of the issue replaced it. The run does
  * not change; the PR's state is read again from GitHub so the card shows it

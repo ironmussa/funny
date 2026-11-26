@@ -396,6 +396,7 @@ const LEGACY_MAPPERS: Record<OperationKind, LegacyMapper> = {
     threadId: value.threadId,
     runId: value.runId,
     action: value.action,
+    ...(value.reason && { reason: value.reason }),
   }),
   factoryRequestApproval: (value) => ({
     type: 'data:factory_request_approval',

@@ -435,6 +435,7 @@ export function createTestDb() {
       merge_approval TEXT,
       risk_waiver TEXT,
       role_threads TEXT,
+      hold TEXT,
       issue_title TEXT,
       trigger_id TEXT,
       trigger_name TEXT,

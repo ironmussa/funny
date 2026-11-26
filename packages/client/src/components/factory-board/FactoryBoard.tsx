@@ -246,6 +246,7 @@ export function useFactoryBoardColumnTitles(): Record<FactoryBoardColumnId, stri
     merge: t('factoryBoard.column.merge', 'Merge'),
     needs_person: t('factoryBoard.column.needsPerson', 'Needs a person'),
     waiting_parts: t('factoryBoard.column.waitingParts', 'Waiting on parts'),
+    on_hold: t('factoryBoard.column.onHold', 'On hold'),
     done: t('factoryBoard.column.done', 'Done'),
   };
 }

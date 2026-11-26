@@ -11,7 +11,7 @@
 import type { IssueBlocker } from '@funny/core/github-app';
 import { sleep as interruptibleSleep } from '@funny/shared/async';
 import type { FactoryStackedOn, FactoryWaitReason } from '@funny/shared/contracts/factory';
-import { contractOf } from '@funny/shared/contracts/factory';
+import { contractOf, FACTORY_ON_HOLD_LABEL } from '@funny/shared/contracts/factory';
 
 import { log } from '../../lib/logger.js';
 import {
@@ -450,6 +450,8 @@ async function queueLabelled(
   const inQueue = new Set(waiting.map((run) => run.issueNumber));
   const fresh: number[] = [];
   for (const issue of issues) {
+    // A person (or the factory, putting a run on hold) marked it as blocked.
+    if (issue.labels?.includes(FACTORY_ON_HOLD_LABEL)) continue;
     if (!inQueue.has(issue.number) && (await isAdmissible(factory.id, issue.number))) {
       fresh.push(issue.number);
     }

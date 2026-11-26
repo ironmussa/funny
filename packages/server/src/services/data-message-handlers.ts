@@ -666,6 +666,7 @@ const DATA_MESSAGE_HANDLERS: DataMessageHandlers = {
       { threadId: String(data.threadId), runnerId, runnerOwnerId: ownerId },
       action,
       String(data.runId),
+      data.reason ? String(data.reason) : undefined,
     );
     return controlled.isOk()
       ? { type, run: controlled.value }

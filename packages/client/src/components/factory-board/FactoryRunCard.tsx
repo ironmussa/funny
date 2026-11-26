@@ -12,6 +12,8 @@ import {
   Folder,
   GitPullRequestClosed,
   MoreVertical,
+  Pause,
+  Play,
   RotateCcw,
   Sparkles,
   Split,
@@ -249,6 +251,8 @@ const ACTION_ICON: Record<FactoryRunActionId, typeof Check> = {
   'lint-cleanup': Sparkles,
   'lint-cleanup-off': Sparkles,
   'mark-done': Check,
+  hold: Pause,
+  release: Play,
   split: Split,
   retry: RotateCcw,
   stop: Square,
@@ -439,12 +443,7 @@ export const FactoryRunCard = memo(function FactoryRunCard({
       onToggleSelected={onToggleSelected}
     />
   );
-  const body = (
-    <>
-      <FactoryRunCardBody run={run} hasThread={Boolean(thread)} replacedBy={replacedBy} />
-      {dialog}
-    </>
-  );
+  const body = <FactoryRunCardBody run={run} hasThread={Boolean(thread)} replacedBy={replacedBy} />;
   // Under the project line, so the card reads title, chips, project, then what it holds up.
   const below = (
     <FactoryRunDependencyNote
@@ -455,49 +454,58 @@ export const FactoryRunCard = memo(function FactoryRunCard({
     />
   );
 
+  // The action dialogs sit beside the card, never inside it: a portal's React
+  // events bubble through the component tree, so a click in a dialog would
+  // reach the card's onClick and open the run's side panel.
   if (!thread) {
     return (
-      <QueuedFactoryRunCard
-        run={run}
-        projectName={projectName}
-        now={now}
-        testId={testId}
-        stepTime={stepTime}
-        menuItems={withThreadItems(menuItems, threadItems)}
-        status={status}
-        below={below}
-        onOpen={open}
-      >
-        {body}
-      </QueuedFactoryRunCard>
+      <>
+        <QueuedFactoryRunCard
+          run={run}
+          projectName={projectName}
+          now={now}
+          testId={testId}
+          stepTime={stepTime}
+          menuItems={withThreadItems(menuItems, threadItems)}
+          status={status}
+          below={below}
+          onOpen={open}
+        >
+          {body}
+        </QueuedFactoryRunCard>
+        {dialog}
+      </>
     );
   }
 
   return (
-    <KanbanCard
-      thread={thread}
-      projectInfo={projectName ? { name: projectName } : undefined}
-      stage={thread.stage ?? 'in_progress'}
-      gitStatus={withRunPullRequest(gitStatus, run, thread.id, prState)}
-      onOpen={open}
-      draggable={false}
-      testId={testId}
-      menuItems={menuItems}
-      menuEndItems={threadItems}
-      time={stepTime}
-      title={factoryRunTitle(t, run, thread.title)}
-      status={status}
-      // No powerline: each of the run's threads has its own worktree and diff,
-      // so the card links the threads (under its chips) instead of one branch.
-      footerLead={
-        <>
-          <FactoryRunProject name={projectName} />
-          <FactoryRunLastThreadLink run={run} />
-        </>
-      }
-      below={below}
-    >
-      {body}
-    </KanbanCard>
+    <>
+      <KanbanCard
+        thread={thread}
+        projectInfo={projectName ? { name: projectName } : undefined}
+        stage={thread.stage ?? 'in_progress'}
+        gitStatus={withRunPullRequest(gitStatus, run, thread.id, prState)}
+        onOpen={open}
+        draggable={false}
+        testId={testId}
+        menuItems={menuItems}
+        menuEndItems={threadItems}
+        time={stepTime}
+        title={factoryRunTitle(t, run, thread.title)}
+        status={status}
+        // No powerline: each of the run's threads has its own worktree and diff,
+        // so the card links the threads (under its chips) instead of one branch.
+        footerLead={
+          <>
+            <FactoryRunProject name={projectName} />
+            <FactoryRunLastThreadLink run={run} />
+          </>
+        }
+        below={below}
+      >
+        {body}
+      </KanbanCard>
+      {dialog}
+    </>
   );
 });

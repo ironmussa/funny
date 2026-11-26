@@ -16,6 +16,7 @@ import {
   toView,
   TERMINAL_STATES,
   PARKED_STATES,
+  HELD_STATES,
   WAITING_STATES,
   UNMERGED_END_STATES,
   RETRYABLE_STATES,
@@ -27,7 +28,7 @@ import {
 } from './factory-runs-model.js';
 import { withStepTimings } from './factory-step-timings.js';
 
-/** Runs holding a concurrency slot: non-terminal and not parked for a person. */
+/** Runs holding a concurrency slot: non-terminal, not parked for a person nor on hold. */
 export const inFlight = (factoryId: string): ResultAsync<FactoryRunView[], FactoryRunsError> =>
   ResultAsync.fromPromise(
     db
@@ -36,7 +37,12 @@ export const inFlight = (factoryId: string): ResultAsync<FactoryRunView[], Facto
       .where(
         and(
           eq(factoryRuns.factoryId, factoryId),
-          notInArray(factoryRuns.state, [...TERMINAL_STATES, ...PARKED_STATES, ...WAITING_STATES]),
+          notInArray(factoryRuns.state, [
+            ...TERMINAL_STATES,
+            ...PARKED_STATES,
+            ...HELD_STATES,
+            ...WAITING_STATES,
+          ]),
         ),
       ),
     storage,

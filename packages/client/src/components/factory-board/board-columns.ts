@@ -16,6 +16,7 @@ export type FactoryBoardColumnId =
   | 'merge'
   | 'needs_person'
   | 'waiting_parts'
+  | 'on_hold'
   | 'done';
 
 /** The board's columns, left to right. */
@@ -28,6 +29,7 @@ export const FACTORY_BOARD_COLUMNS: readonly FactoryBoardColumnId[] = [
   'merge',
   'needs_person',
   'waiting_parts',
+  'on_hold',
   'done',
 ];
 
@@ -48,6 +50,8 @@ const COLUMN_OF = {
   merged: 'done',
   done: 'done',
   stopped: 'done',
+  // Put on hold by a person: it asks nothing of anyone until it is released.
+  on_hold: 'on_hold',
 } satisfies Record<FactoryRunState, FactoryBoardColumnId>;
 
 const COLUMN_BY_STATE: ReadonlyMap<string, FactoryBoardColumnId> = new Map(
@@ -183,6 +187,7 @@ export function layoutFactoryBoard<R extends FactoryRun>(
     merge: [],
     needs_person: [],
     waiting_parts: [],
+    on_hold: [],
     done: [],
   };
   const placed = placeFactoryRuns(runs);

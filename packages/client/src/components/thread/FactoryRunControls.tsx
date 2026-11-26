@@ -7,6 +7,7 @@
  * the thread. Renders the buttons only; the caller lays them out.
  */
 import {
+  canHoldFactoryRun,
   canMarkFactoryRunDone,
   lintCleanupSource,
   lintCleanupVetoed,
@@ -22,7 +23,9 @@ import {
   approveFactoryMerge,
   closeFactoryReplacedPr,
   controlFactoryRun,
+  holdFactoryRun,
   markFactoryRunDone,
+  releaseFactoryRun,
   setFactoryRunLintCleanup,
 } from '@/data/factory/actions';
 import { useCanSteerProject } from '@/data/projects/hooks';
@@ -30,6 +33,8 @@ import type { FactoryRun } from '@/lib/api/factory';
 import { ENDED_FACTORY_STATES, isFactoryRunAwaitingMergeApproval } from '@/lib/factory-run-labels';
 import type { PRState } from '@/lib/git-icons';
 import { toastError } from '@/lib/toast-error';
+
+import { FactoryHoldDialog } from './FactoryHoldDialog';
 
 /** The number of a GitHub pull request URL, or null. */
 export function pullRequestNumber(url: string): number | null {
@@ -77,6 +82,8 @@ export function canCloseReplacedPr(
 export type FactoryRunActionId =
   | 'approve-merge'
   | 'close-replaced-pr'
+  | 'hold'
+  | 'release'
   | 'lint-cleanup'
   | 'lint-cleanup-off'
   | 'mark-done'
@@ -227,6 +234,43 @@ function useMarkDoneAction(projectId: string, run: FactoryRun): FactoryRunAction
 }
 
 /**
+ * Put a run on hold (with the member's reason, asked in a dialog) when it
+ * waits for a person or ended without merging, or release one on hold.
+ */
+function useHoldAction(projectId: string, run: FactoryRun): OfferedAction {
+  const { t } = useTranslation();
+  const [asking, setAsking] = useState(false);
+  if (run.state === 'on_hold') {
+    return {
+      action: {
+        id: 'release',
+        label: t('factory.release', 'Release'),
+        run: () =>
+          void releaseFactoryRun(projectId, run.id).orTee((error) => toastError(error, 'factory')),
+      },
+      dialog: null,
+    };
+  }
+  if (!canHoldFactoryRun(run.state)) return { action: null, dialog: null };
+  return {
+    action: { id: 'hold', label: t('factory.hold', 'Put on hold'), run: () => setAsking(true) },
+    dialog: (
+      <FactoryHoldDialog
+        open={asking}
+        onOpenChange={setAsking}
+        issueNumber={run.issueNumber}
+        onConfirm={(reason) => {
+          setAsking(false);
+          void holdFactoryRun(projectId, run.id, reason).orTee((error) =>
+            toastError(error, 'factory'),
+          );
+        }}
+      />
+    ),
+  };
+}
+
+/**
  * Close the pull request a replaced run left open, behind a confirmation that
  * names the newer run's pull request. The branch is deleted with it.
  */
@@ -362,6 +406,7 @@ export function useFactoryRunActions(
   const split = useSplitAction(projectId, run);
   const lint = useLintCleanupAction(projectId, run);
   const done = useMarkDoneAction(projectId, run);
+  const hold = useHoldAction(projectId, run);
   const closePr = useCloseReplacedPrAction(projectId, run, replaced.by, replaced.prState);
   if (!canSteer) return { actions: [], dialog: null };
   const offered: Array<FactoryRunAction | null> = [
@@ -377,6 +422,8 @@ export function useFactoryRunActions(
   if (canStopFactoryRun(run)) {
     offered.push({ id: 'stop', label: t('factory.stop', 'Stop'), run: () => control('stop') });
   }
+  // Last: a run that cannot go on until something outside it changes.
+  offered.push(hold.action);
   return {
     actions: offered.flatMap((action) => (action ? [action] : [])),
     dialog: (
@@ -385,6 +432,7 @@ export function useFactoryRunActions(
         {split.dialog}
         {lint.dialog}
         {closePr.dialog}
+        {hold.dialog}
       </>
     ),
   };
@@ -396,6 +444,8 @@ const BUTTON_VARIANT: Record<FactoryRunActionId, 'default' | 'outline' | 'ghost'
   'lint-cleanup': 'outline',
   'lint-cleanup-off': 'ghost',
   'mark-done': 'outline',
+  hold: 'ghost',
+  release: 'outline',
   split: 'outline',
   retry: 'outline',
   stop: 'ghost',

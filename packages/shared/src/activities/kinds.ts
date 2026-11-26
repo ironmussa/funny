@@ -203,6 +203,21 @@ export const ACTIVITY_KINDS = {
     record: 'always',
     input: z.object({ issueNumber: z.number().int().optional() }),
   },
+  // A run put on hold by a member (or an agent asked to): its issue gets the
+  // on-hold label in place of the factory's trigger label.
+  'factory.hold': {
+    scope: 'project',
+    destructive: false,
+    record: 'always',
+    input: z.object({ issueNumber: z.number().int().optional() }),
+  },
+  // A run on hold released: back in the queue, triaged again.
+  'factory.release': {
+    scope: 'project',
+    destructive: false,
+    record: 'always',
+    input: z.object({ issueNumber: z.number().int().optional() }),
+  },
   // A parked too-large run split into its parts' issues by a member.
   'factory.split': {
     scope: 'project',

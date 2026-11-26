@@ -50,8 +50,8 @@ function createFactoryParts(
   return {
     port,
     // The controls an agent has. The action type leaves `approve-merge` and `split` out.
-    controlled: (action, userId, projectId, runId, askedByThread) =>
-      controlled(action, userId, projectId, runId, { askedByThread }),
+    controlled: (action, userId, projectId, runId, askedByThread, reason) =>
+      controlled(action, userId, projectId, runId, { askedByThread, reason }),
   };
 }
 
@@ -61,6 +61,7 @@ type ControlRun = (
   projectId: string,
   runId: string,
   askedByThread: string,
+  reason?: string,
 ) => ResultAsync<FactoryRunView, ApiFailure>;
 
 const parts = createFactoryParts();

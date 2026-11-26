@@ -397,7 +397,16 @@ const OPERATION_MAPPINGS: Record<RunnerOperationEventType, OperationMapping> = {
   'data:factory_list_runs': ['factoryListRuns', inputThreadId],
   'data:factory_control_run': [
     'factoryControlRun',
-    (input) => ({ threadId: input.threadId, runId: input.runId, action: input.action }),
+    (input) => {
+      const value: JsonObject = {
+        threadId: input.threadId,
+        runId: input.runId,
+        action: input.action,
+      };
+      // Only a hold carries a reason; proto3 reads a missing one as empty.
+      if (input.reason) value.reason = input.reason;
+      return value;
+    },
   ],
   'data:factory_request_approval': [
     'factoryRequestApproval',

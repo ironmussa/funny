@@ -152,6 +152,25 @@ describe('funny_factory_control', () => {
     expect(result.text).toContain('#451 — done');
   });
 
+  test('puts a run on hold with its reason, and shows why it is held', async () => {
+    request.mockResolvedValue({
+      run: { ...held, state: 'on_hold', awaitsApproval: false, holdReason: 'upstream bug' },
+    });
+    const result = await tool('funny_factory_control')({
+      runId: 'run-1',
+      action: 'hold',
+      reason: 'upstream bug',
+    });
+    expect(request).toHaveBeenCalledWith('data:factory_control_run', {
+      runId: 'run-1',
+      action: 'hold',
+      reason: 'upstream bug',
+      threadId: THREAD,
+    });
+    expect(result.text).toContain('Put on hold.');
+    expect(result.text).toContain('on hold: upstream bug');
+  });
+
   test("passes the board's refusal on as an error", async () => {
     request.mockResolvedValue({ error: 'conflict', message: 'The run has already ended.' });
     expect(await tool('funny_factory_control')({ runId: 'run-1', action: 'stop' })).toEqual({

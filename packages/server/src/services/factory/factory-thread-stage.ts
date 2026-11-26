@@ -52,6 +52,8 @@ const RUN_STAGE = {
   done: 'done',
   // Stopped by a person: they decide where its threads go.
   stopped: null,
+  // Put on hold by a person: its threads stay where they are.
+  on_hold: null,
 } as const satisfies Record<FactoryRunState, RunThreadStage | null>;
 
 /** The stored stages a thread may leave for each target stage. */

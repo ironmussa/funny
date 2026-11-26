@@ -7,18 +7,23 @@
  * The factory runs queue (change factory-manual-queue), split out of
  * `factory-runs.ts`.
  */
-import { type FactoryTriage, type FactoryWaitReason } from '@funny/shared/contracts/factory';
+import {
+  type FactoryRunHold,
+  type FactoryTriage,
+  type FactoryWaitReason,
+} from '@funny/shared/contracts/factory';
 import { and, asc, eq, inArray } from 'drizzle-orm';
-import { ResultAsync } from 'neverthrow';
+import { okAsync, ResultAsync } from 'neverthrow';
 
 import { db } from '../../db/index.js';
-import { factoryRuns } from '../../db/schema.js';
+import { factoryRuns, workflowNodeExecutions } from '../../db/schema.js';
 import {
   storage,
   toView,
   QUEUE_TRANSITIONS,
   NO_ISSUE,
   newRunRow,
+  REOPENED_STEP,
   triggerFieldsOf,
   type Row,
   type FactoryRunsError,
@@ -197,6 +202,52 @@ export function queueOperations(newId: () => string) {
         completedAt: new Date().toISOString(),
         triage: JSON.stringify(triage),
       }),
+
+    /**
+     * A member put the run on hold (`putOnHold`): from a state where it waits
+     * for a person or ended without merging, a compare-and-set. False when
+     * it moved meanwhile. A run that ended with its issue already taken
+     * again by a newer run is refused by the one-run-per-issue index (a
+     * storage error).
+     */
+    putOnHold: (runId: string, hold: FactoryRunHold) =>
+      moveRun(runId, 'putOnHold', {
+        launchStartedAt: null,
+        waitReason: null,
+        completedAt: new Date().toISOString(),
+        hold: JSON.stringify(hold),
+      }),
+
+    /**
+     * A member released a run on hold (`release`): it goes to the back of the
+     * queue, with `threadIds` as the steps it keeps (as a retry would), and
+     * triage runs again on a new thread. Its journal is cleared, as on a
+     * reopen. The hold stays recorded (the board shows it was held). False
+     * when the run was not on hold.
+     */
+    release: (run: Pick<FactoryRunView, 'id' | 'factoryId' | 'triage'>, threadIds: string[]) =>
+      ResultAsync.fromPromise(nextQueueOrder(run.factoryId), storage)
+        .andThen((queueOrder) =>
+          moveRun(run.id, 'release', {
+            queueOrder,
+            admittedAt: null,
+            completedAt: null,
+            launchStartedAt: null,
+            failureReason: null,
+            waitReason: null,
+            currentStep: threadIds.length > 0 ? REOPENED_STEP : null,
+            threadIds: JSON.stringify(threadIds),
+            triage: run.triage ? JSON.stringify({ ...run.triage, superseded: true }) : null,
+          }),
+        )
+        .andThen((moved) =>
+          moved
+            ? ResultAsync.fromPromise(
+                db.delete(workflowNodeExecutions).where(eq(workflowNodeExecutions.runId, run.id)),
+                storage,
+              ).map(() => true)
+            : okAsync(false),
+        ),
 
     /** Record the parts opened so far, while the run is still parked (resumable). */
     recordSplitProgress: (runId: string, triage: FactoryTriage) =>

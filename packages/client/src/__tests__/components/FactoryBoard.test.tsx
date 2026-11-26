@@ -23,6 +23,8 @@ const mocks = ((): {
   navigate: ReturnType<typeof vi.fn>;
   control: ReturnType<typeof vi.fn>;
   markDone: ReturnType<typeof vi.fn>;
+  hold: ReturnType<typeof vi.fn>;
+  release: ReturnType<typeof vi.fn>;
 } => ({
   queue: [],
   threads: {},
@@ -31,6 +33,8 @@ const mocks = ((): {
   navigate: vi.fn(),
   control: vi.fn(),
   markDone: vi.fn(),
+  hold: vi.fn(),
+  release: vi.fn(),
 }))();
 
 mock.module('@/data/factory/hooks', () => ({
@@ -55,6 +59,14 @@ mock.module('@/data/factory/actions', () => ({
   setFactoryRunLintCleanup: () => ({ orTee: () => undefined }),
   markFactoryRunDone: (...args: unknown[]) => {
     mocks.markDone(...args);
+    return okAsync(null);
+  },
+  holdFactoryRun: (...args: unknown[]) => {
+    mocks.hold(...args);
+    return okAsync(null);
+  },
+  releaseFactoryRun: (...args: unknown[]) => {
+    mocks.release(...args);
     return okAsync(null);
   },
   controlFactoryRun: (...args: unknown[]) => {
@@ -129,6 +141,8 @@ beforeEach(() => {
   mocks.settings = null;
   mocks.navigate = vi.fn();
   mocks.control = vi.fn();
+  mocks.hold = vi.fn();
+  mocks.release = vi.fn();
   useFactoryViewStore.setState({ layout: 'list', hiddenColumns: [] });
   localStorage.clear();
 });
@@ -436,6 +450,45 @@ describe('FactoryBoard', () => {
     expect(screen.queryByTestId('factory-board-mark-done-r1')).toBeNull();
   });
 
+  // Blocked upstream: the member puts it on hold, with why, out of "Needs a person".
+  test('a failed run is put on hold with the reason the member gives', async () => {
+    renderBoard([queueRun('r1', 'failed', { completedAt: recent() })]);
+    const card = screen.getByTestId('factory-board-card-r1');
+    fireEvent.pointerDown(within(card).getByTestId('factory-board-more-r1'));
+    fireEvent.click(await screen.findByTestId('factory-board-hold-r1'));
+    const confirm = await screen.findByTestId('factory-hold-confirm');
+    // No reason, no hold.
+    expect((confirm as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(screen.getByTestId('factory-hold-reason'), {
+      target: { value: 'blocked by an upstream bug' },
+    });
+    fireEvent.click(confirm);
+    expect(mocks.hold).toHaveBeenCalledWith('p1', 'r1', 'blocked by an upstream bug');
+    // The dialog is a portal, but its React events bubble through the
+    // component tree: rendered inside the card, a click in it opened the run.
+    expect(mocks.navigate).not.toHaveBeenCalled();
+  });
+
+  test('a run on hold is in the On hold column, not Needs a person, and offers Release', async () => {
+    renderBoard([
+      queueRun('r1', 'on_hold', {
+        completedAt: recent(),
+        hold: { reason: 'upstream bug', userId: 'u1', at: recent(), from: 'failed' },
+      }),
+    ]);
+    const column = screen.getByTestId('factory-board-column-on_hold');
+    const card = within(column).getByTestId('factory-board-card-r1');
+    expect(
+      within(screen.getByTestId('factory-board-column-needs_person')).queryByTestId(
+        'factory-board-card-r1',
+      ),
+    ).toBeNull();
+    fireEvent.pointerDown(within(card).getByTestId('factory-board-more-r1'));
+    fireEvent.click(await screen.findByTestId('factory-board-release-r1'));
+    expect(mocks.release).toHaveBeenCalledWith('p1', 'r1');
+    expect(screen.queryByTestId('factory-board-stop-r1')).toBeNull();
+  });
+
   test('a run that ended done is in the Done column', () => {
     renderBoard([
       queueRun('fin', 'done', { issueNumber: null, triggerName: 'Nightly', completedAt: recent() }),
@@ -470,6 +523,7 @@ describe('FactoryBoard', () => {
     merge: 'merging',
     needs_person: 'waiting_human',
     waiting_parts: 'done',
+    on_hold: 'on_hold',
     done: 'merged',
   };
   // A done run whose work an issue the board does not list still tracks.

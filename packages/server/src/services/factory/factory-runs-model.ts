@@ -4,6 +4,7 @@ import {
   factoryReviewVerdictSchema,
   factoryMergeApprovalSchema,
   factoryRiskWaiverSchema,
+  factoryRunHoldSchema,
   factoryRiskSchema,
   factoryRoleThreadSchema,
   factoryStackedOnSchema,
@@ -13,6 +14,7 @@ import {
   type FactoryFlowSource,
   type FactoryMergeApproval,
   type FactoryRiskWaiver,
+  type FactoryRunHold,
   type FactoryRegressionProof,
   type FactoryReviewVerdict,
   type FactoryRisk,
@@ -102,7 +104,9 @@ export type FactoryRunState =
   | 'no_change'
   | 'done'
   | 'failed'
-  | 'stopped';
+  | 'stopped'
+  /** A member put it on hold: no flow, no slot, not waiting for a person. */
+  | 'on_hold';
 
 export const TERMINAL_STATES = [
   'merged',
@@ -121,6 +125,21 @@ export const TERMINAL: ReadonlySet<FactoryRunState> = new Set(TERMINAL_STATES);
 export const PARKED_STATES = ['waiting_human', 'needs_info'] as const satisfies FactoryRunState[];
 
 const PARKED: ReadonlySet<FactoryRunState> = new Set(PARKED_STATES);
+
+/**
+ * A run a member put on hold: it holds its issue (the watcher does not take
+ * it again) but no slot, and it does not wait for a person.
+ */
+export const HELD_STATES = ['on_hold'] as const satisfies FactoryRunState[];
+
+/** The states a member may put on hold (`FACTORY_RUN_HOLDABLE_STATES`). */
+export const HOLDABLE_STATES = [
+  'needs_info',
+  'waiting_human',
+  'failed',
+  'no_change',
+  'stopped',
+] as const satisfies FactoryRunState[];
 
 /** A sent issue waiting in the factory's queue: no flow, no slot. */
 export const WAITING_STATES = ['requested'] as const satisfies FactoryRunState[];
@@ -173,6 +192,13 @@ export const QUEUE_TRANSITIONS = {
    * now, and the run is done (as when triage splits it by itself).
    */
   split: { from: ['needs_info'], to: 'done' },
+  /**
+   * A member put the run on hold: it waited for a person or ended without
+   * merging, and cannot go on until something outside it changes.
+   */
+  putOnHold: { from: HOLDABLE_STATES, to: 'on_hold' },
+  /** A member released a run on hold: back in line, to be triaged again. */
+  release: { from: HELD_STATES, to: 'requested' },
 } as const satisfies Record<string, { from: readonly FactoryRunState[]; to: FactoryRunState }>;
 
 /** States in which a flow is driving the run: neither terminal, parked nor waiting. */
@@ -206,6 +232,7 @@ const LIVE_STATES = [
   ...WAITING_STATES,
   ...IN_FLIGHT_STATES,
   ...PARKED_STATES,
+  ...HELD_STATES,
 ] as const satisfies FactoryRunState[];
 
 /**
@@ -363,6 +390,8 @@ export interface FactoryRunView {
   mergeApproval: FactoryMergeApproval | null;
   /** A member's statement that the run is a lint cleanup, or null. */
   riskWaiver: FactoryRiskWaiver | null;
+  /** Why the run is (or last was) on hold, or null. */
+  hold: FactoryRunHold | null;
   /** The options each agent step ran with, in the order the steps started. */
   stepOptions: FactoryStepOptionsRecord[];
   /** The role threads (triage, review) it started, as each one started. */
@@ -441,7 +470,15 @@ const queueAndFlowOf = (row: Row) => ({
   stackedOn: parseStackedOn(row.stackedOn ?? null),
   mergeApproval: parseMergeApproval(row.mergeApproval ?? null),
   riskWaiver: parseRiskWaiver(row.riskWaiver ?? null),
+  hold: parseHold(row.hold ?? null),
 });
+
+/** The stored hold, or null (none, or no longer readable). */
+function parseHold(raw: string | null): FactoryRunHold | null {
+  if (!raw) return null;
+  const parsed = parseStoredJson(factoryRunHoldSchema, raw, 'factory_runs.hold');
+  return parsed.ok ? parsed.value : null;
+}
 
 /** The stored merge approval, or null (none, or no longer readable: nothing is approved). */
 export function parseMergeApproval(raw: string | null): FactoryMergeApproval | null {
@@ -701,6 +738,7 @@ export function newRunRow(
     stackedOn: null,
     mergeApproval: null,
     riskWaiver: null,
+    hold: null,
     roleThreads: null,
     issueTitle: null,
     triggerId: null,

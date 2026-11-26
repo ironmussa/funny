@@ -138,12 +138,14 @@ export function ReadFileCard({
 }) {
   const { t } = useTranslation();
   const defaultEditor = useSettingsStore((s) => s.defaultEditor);
-  // SAFETY: the Read tool declares file_path as a string in its input schema.
-  const filePath = parsed.file_path as string | undefined;
+  // Cursor's ACP reads can arrive with no path at all (upstream metadata bug,
+  // issue #9): an absent or empty file_path renders a degraded card.
+  const filePath =
+    isString(parsed.file_path) && parsed.file_path.length > 0 ? parsed.file_path : undefined;
   const projectPath = useCurrentProjectPath();
   const displayPath = filePath ? makeRelativePath(filePath, projectPath) : undefined;
   const ext = filePath ? getFileExtension(filePath).toLowerCase() : '';
-  const fileName = filePath ? getFileName(filePath) : 'unknown';
+  const fileName = filePath ? getFileName(filePath) : undefined;
   const isMarkdown = filePath ? isMarkdownFile(filePath) : false;
   const hasOutput = isString(output) && output.length > 0;
 
@@ -202,6 +204,14 @@ export function ReadFileCard({
             </span>
           )}
         </button>
+        {!filePath && (
+          <span
+            className="text-muted-foreground/60 min-w-0 flex-1 truncate text-xs italic"
+            data-testid="read-file-path-unavailable"
+          >
+            {t('tools.readFilePathUnavailable')}
+          </span>
+        )}
         {filePath && (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -237,7 +247,13 @@ export function ReadFileCard({
       {expanded && hasOutput && (
         <ToolContentArea viewportProps={{ className: 'max-h-[50vh] scroll-fade-none' }}>
           <div className="border-border/30 bg-background sticky top-0 z-10 flex items-center justify-between gap-2 border-b px-3 py-1 backdrop-blur-xs">
-            <span className="text-muted-foreground truncate text-xs font-medium">{fileName}</span>
+            {fileName ? (
+              <span className="text-muted-foreground truncate text-xs font-medium">{fileName}</span>
+            ) : (
+              <span className="text-muted-foreground/60 truncate text-xs italic">
+                {t('tools.readFilePathUnavailable')}
+              </span>
+            )}
             <div className="flex shrink-0 items-center gap-1">
               {ext && (
                 <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 font-mono text-xs">

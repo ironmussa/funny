@@ -13,7 +13,7 @@ import type {
   ThreadStatus,
   ToolCall,
 } from '@funny/shared';
-import type { JsonObject } from '@funny/shared/json';
+import type { JsonObject, JsonValue } from '@funny/shared/json';
 
 import type { NativeGitStatusState } from '../git-status-state';
 
@@ -47,27 +47,35 @@ function isGitState(state: string): state is GitStatusInfo['state'] {
 /** A realtime event's payload fields (it arrived as JSON), read before they are checked. */
 type EventFields = JsonObject;
 
-function isEventFields(value: unknown): value is EventFields {
+/** One field of a realtime event's payload, or the payload itself, before it is checked. */
+type EventValue = JsonValue | undefined;
+
+function isEventFields<T>(value: T): value is T & EventFields {
   return typeof value === 'object' && value !== null;
 }
 
-function isString(value: unknown): value is string {
+function isString(value: EventValue): value is string {
   return typeof value === 'string';
 }
 
-function isNumber(value: unknown): value is number {
+function isNumber(value: EventValue): value is number {
   return typeof value === 'number';
 }
 
-function isBoolean(value: unknown): value is boolean {
+function isBoolean(value: EventValue): value is boolean {
   return typeof value === 'boolean';
 }
 
-function record(value: unknown): EventFields {
+function record(value: EventValue): EventFields {
   return isEventFields(value) ? value : {};
 }
 
-function text(value: unknown): string | undefined {
+/** The event's payload fields; `{}` when the payload is not an object. */
+function eventFields(event: RealtimeEvent): EventFields {
+  return isEventFields(event.data) ? event.data : {};
+}
+
+function text(value: EventValue): string | undefined {
   return isString(value) ? value : undefined;
 }
 
@@ -77,7 +85,7 @@ function eventIdentity(event: RealtimeEvent, data: EventFields): string {
   return `${event.type}:${text(data.messageId) ?? text(data.toolCallId) ?? ''}:${JSON.stringify(data)}`;
 }
 
-function pendingPermission(value: unknown): PendingPermissionRequest | null {
+function pendingPermission(value: EventValue): PendingPermissionRequest | null {
   const data = record(value);
   const required = ['requestId', 'threadId', 'runId', 'toolCallId', 'toolName', 'requestedAt'];
   if (!required.every((key) => isString(data[key]))) return null;
@@ -95,7 +103,7 @@ function pendingPermission(value: unknown): PendingPermissionRequest | null {
   };
 }
 
-function gitStatus(value: unknown): GitStatusInfo | null {
+function gitStatus(value: EventValue): GitStatusInfo | null {
   const data = record(value);
   if (
     !isString(data.threadId) ||
@@ -135,14 +143,14 @@ function createAgentAction(options: {
   diagnostics: DiagnosticService;
 }) {
   const revisions = new Map<string, number>();
-  const nextRevision = (key: string, provided: unknown): number => {
+  const nextRevision = (key: string, provided: EventValue): number => {
     const numeric = isNumber(provided) ? provided : undefined;
     const next = numeric ?? (revisions.get(key) ?? 0) + 1;
     revisions.set(key, Math.max(next, revisions.get(key) ?? 0));
     return next;
   };
   return (event: RealtimeEvent): void => {
-    const data = record(event.data);
+    const data = eventFields(event);
     const threadId = event.threadId || text(data.threadId) || '';
     if (!threadId) return;
     if (event.type === 'agent:message') {
@@ -247,7 +255,7 @@ export function createNativeRealtimeActions(options: {
   return {
     agent: createAgentAction(options),
     thread(event) {
-      const data = record(event.data);
+      const data = eventFields(event);
       if (event.type === 'thread:share-revoked') {
         options.navigation.getState().removeThread(event.threadId);
         options.workspace.getState().removeThread(event.threadId);
@@ -258,7 +266,7 @@ export function createNativeRealtimeActions(options: {
     terminal: ignore,
     git(event) {
       if (event.type !== 'git:status') return;
-      const statuses = record(event.data).statuses;
+      const statuses = eventFields(event).statuses;
       if (!Array.isArray(statuses)) return;
       options.gitStatus.getState().replace(
         statuses.flatMap((value) => {

@@ -157,15 +157,15 @@ export class NativeThreadDataService {
     });
   }
 
-  private errorMessage(error: unknown): string {
+  private errorMessage(cause: unknown): string {
     this.options.composition.platform.diagnostics.report({
       capability: 'transport',
       operation: 'thread-data.request',
-      error,
+      error: cause,
     });
-    if (error instanceof NativeApiError && error.status === 401) this.options.auth.rejectSession();
-    if (error instanceof NativeApiError && error.status === 403) return 'Access denied';
-    return error instanceof Error ? error.message : String(error);
+    if (cause instanceof NativeApiError && cause.status === 401) this.options.auth.rejectSession();
+    if (cause instanceof NativeApiError && cause.status === 403) return 'Access denied';
+    return cause instanceof Error ? cause.message : String(cause);
   }
 
   /**

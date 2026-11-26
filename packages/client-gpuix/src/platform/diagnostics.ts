@@ -6,9 +6,9 @@ export interface SafeClientDiagnostic extends Omit<ClientDiagnostic, 'error'> {
 
 const SECRET_VALUE = /(cookie|session|token|password|authorization)(\s*[:=]\s*)([^\s,;]+)/gi;
 
-function safeError(error: unknown): SafeClientDiagnostic['error'] {
-  const name = error instanceof Error ? error.name : 'Error';
-  const rawMessage = error instanceof Error ? error.message : String(error);
+function safeError(cause: unknown): SafeClientDiagnostic['error'] {
+  const name = cause instanceof Error ? cause.name : 'Error';
+  const rawMessage = cause instanceof Error ? cause.message : String(cause);
   return { name, message: rawMessage.replaceAll(SECRET_VALUE, '$1$2[redacted]') };
 }
 

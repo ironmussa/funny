@@ -72,14 +72,14 @@ export function unsupportedVisualCaptureEvidence(
 
 export function failedVisualCaptureEvidence(
   fixtureId: string,
-  error: unknown,
+  cause: unknown,
 ): VisualCaptureEvidence {
   return {
     fixtureId,
     screenshot: {
       supported: true,
       captured: false,
-      error: error instanceof Error ? error.message : String(error),
+      error: cause instanceof Error ? cause.message : String(cause),
     },
     structuralEvidence: 'not-ready',
   };

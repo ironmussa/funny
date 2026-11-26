@@ -38,6 +38,10 @@ type Uuid = `${string}-${string}-${string}-${string}-${string}`;
 // protocol is still ACP v1.
 type ACPSDK = typeof import('@agentclientprotocol/sdk/unstable');
 type ACPSessionUpdate = import('@agentclientprotocol/sdk/unstable').SessionUpdate;
+type ACPUpdateOf<K extends ACPSessionUpdate['sessionUpdate']> = Extract<
+  ACPSessionUpdate,
+  { sessionUpdate: K }
+>;
 type ACPRequestPermissionResponse =
   import('@agentclientprotocol/sdk/unstable').RequestPermissionResponse;
 type ACPPromptRequest = import('@agentclientprotocol/sdk/unstable').PromptRequest;
@@ -376,6 +380,112 @@ export class DeepAgentProcess extends BaseAgentProcess {
   // ── Update translation ──────────────────────────────────────
 
   /**
+   * Emit an ACP `tool_call` as a tool_use block under the current assistant
+   * message (and its result when it arrives already completed). Returns the
+   * accumulated text to carry on: unchanged for a repeated call, else reset.
+   */
+  private handleToolCall(
+    update: ACPUpdateOf<'tool_call'>,
+    assistantMsgId: Uuid,
+    toolCallsSeen: Map<string, string>,
+    accumulatedText: string,
+  ): string {
+    const toolCallId = update.toolCallId;
+    if (toolCallsSeen.has(toolCallId)) return accumulatedText;
+
+    const acpKind = update.kind;
+    const title = update.title || '';
+    const locations = update.locations;
+    const toolName = inferACPToolName(acpKind, title, { thinkToolName: 'Think' });
+
+    toolCallsSeen.set(toolCallId, toolName);
+
+    const input = buildACPToolInput(toolName, {
+      kind: acpKind,
+      title,
+      rawInput: update.rawInput,
+      locations,
+    });
+
+    // Reuse the current assistantMsgId so consecutive tool calls share
+    // the same parent message in the DB (avoids empty message rows).
+    const msg: CLIMessage = {
+      type: 'assistant',
+      message: {
+        id: assistantMsgId,
+        content: [
+          {
+            type: 'tool_use',
+            id: toolCallId,
+            name: toolName,
+            input,
+          },
+        ],
+      },
+    };
+    this.emit('message', msg);
+    this.lastEmittedToolCall = true;
+
+    // If tool_call already carries a completed result, emit it immediately
+    const tcStatus = update.status;
+    if (tcStatus === 'completed' || tcStatus === 'failed') {
+      toolCallsSeen.set(toolCallId, 'done');
+      const output = extractACPToolOutput(
+        { rawOutput: update.rawOutput, content: update.content ?? undefined },
+        title,
+      );
+      this.emit('message', {
+        type: 'user',
+        message: {
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: toolCallId,
+              content: output,
+            },
+          ],
+        },
+      } satisfies CLIMessage);
+    }
+
+    // Keep the same assistantMsgId — consecutive tool calls will share
+    // this parent. A new ID is generated when text/thought arrives next.
+    return '';
+  }
+
+  /** Emit the tool_result of an ACP `tool_call_update` that reached a terminal status. */
+  private handleToolCallUpdate(
+    update: ACPUpdateOf<'tool_call_update'>,
+    toolCallsSeen: Map<string, string>,
+  ): void {
+    const toolCallId = update.toolCallId;
+    console.debug(
+      `[deepagent-acp] tool_call_update: id=${toolCallId}, status=${update.status}, title=${update.title ?? ''}`,
+    );
+
+    if (update.status === 'completed' || update.status === 'failed') {
+      toolCallsSeen.set(toolCallId, 'done');
+      const output = extractACPToolOutput(
+        { rawOutput: update.rawOutput, content: update.content ?? undefined },
+        update.title || '',
+      );
+      const msg: CLIMessage = {
+        type: 'user',
+        message: {
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: toolCallId,
+              content: output,
+            },
+          ],
+        },
+      };
+      this.emit('message', msg);
+    }
+  }
+
+  /**
    * Translate an ACP SessionUpdate into CLIMessage(s).
    * Returns the updated accumulated text and assistant message ID.
    */
@@ -543,98 +653,12 @@ export class DeepAgentProcess extends BaseAgentProcess {
         return ret(accumulatedText);
       }
 
-      case 'tool_call': {
-        const toolCallId = update.toolCallId;
-        if (toolCallsSeen.has(toolCallId)) return ret(accumulatedText);
+      case 'tool_call':
+        return ret(this.handleToolCall(update, assistantMsgId, toolCallsSeen, accumulatedText));
 
-        const acpKind = update.kind;
-        const title = update.title || '';
-        const locations = update.locations;
-        const toolName = inferACPToolName(acpKind, title, { thinkToolName: 'Think' });
-
-        toolCallsSeen.set(toolCallId, toolName);
-
-        const input = buildACPToolInput(toolName, {
-          kind: acpKind,
-          title,
-          rawInput: update.rawInput,
-          locations,
-        });
-
-        // Reuse the current assistantMsgId so consecutive tool calls share
-        // the same parent message in the DB (avoids empty message rows).
-        const msg: CLIMessage = {
-          type: 'assistant',
-          message: {
-            id: assistantMsgId,
-            content: [
-              {
-                type: 'tool_use',
-                id: toolCallId,
-                name: toolName,
-                input,
-              },
-            ],
-          },
-        };
-        this.emit('message', msg);
-        this.lastEmittedToolCall = true;
-
-        // If tool_call already carries a completed result, emit it immediately
-        const tcStatus = update.status;
-        if (tcStatus === 'completed' || tcStatus === 'failed') {
-          toolCallsSeen.set(toolCallId, 'done');
-          const output = extractACPToolOutput(
-            { rawOutput: update.rawOutput, content: update.content ?? undefined },
-            title,
-          );
-          this.emit('message', {
-            type: 'user',
-            message: {
-              content: [
-                {
-                  type: 'tool_result',
-                  tool_use_id: toolCallId,
-                  content: output,
-                },
-              ],
-            },
-          } satisfies CLIMessage);
-        }
-
-        // Keep the same assistantMsgId — consecutive tool calls will share
-        // this parent. A new ID is generated when text/thought arrives next.
-        return ret('', assistantMsgId);
-      }
-
-      case 'tool_call_update': {
-        const toolCallId = update.toolCallId;
-        console.debug(
-          `[deepagent-acp] tool_call_update: id=${toolCallId}, status=${update.status}, title=${update.title ?? ''}`,
-        );
-
-        if (update.status === 'completed' || update.status === 'failed') {
-          toolCallsSeen.set(toolCallId, 'done');
-          const output = extractACPToolOutput(
-            { rawOutput: update.rawOutput, content: update.content ?? undefined },
-            update.title || '',
-          );
-          const msg: CLIMessage = {
-            type: 'user',
-            message: {
-              content: [
-                {
-                  type: 'tool_result',
-                  tool_use_id: toolCallId,
-                  content: output,
-                },
-              ],
-            },
-          };
-          this.emit('message', msg);
-        }
+      case 'tool_call_update':
+        this.handleToolCallUpdate(update, toolCallsSeen);
         return ret(accumulatedText);
-      }
 
       case 'plan': {
         if (this.lastEmittedToolCall) {

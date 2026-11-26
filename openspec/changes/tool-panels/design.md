@@ -61,9 +61,9 @@ Availability is applied at read time (`useOpenPanel(location)` returns `undefine
 
 ### Phase 3: one dockview
 
-With no header above the split, `CenterDockview` is removed: the thread is the outer layout's center panel, the right location is one group whose panels come from the registry (the review sub-tabs stay dockview tabs in that group, as now), and terminal/browser are registry entries with `location: 'bottom'` and `'right'`. Sync goes through one hook (`use-tool-panel-sync`) that diffs `openPanels` against the dockview panels, replacing `use-center-right-pane-sync`, `use-right-tabs-sync` and the browser-specific paths. `STORAGE_KEY_LAYOUT` becomes `dockview.layout.v9`; `center-dockview.layout.v1` is deleted on boot.
+With no header above the split, `CenterDockview` is removed: the thread panel (header and thread) is the outer layout's center panel, and the right panels are a group of that same dockview, which already placed them at full height beside the bottom group and to the right of the browser (`[left | center | browser | right]`). `DockviewLayout` took over the two behaviours only the inner dockview had: inactive review tabs stay mounted but `hidden`, and after a restore the right panels are reconciled with the open flag (removed when it says closed, added when it says open), with a save once the close animation ends, so a reload never shows a pane the flag says is closed. `STORAGE_KEY_LAYOUT` becomes `dockview.layout.v9`; on load the v8 layout and `center-dockview.layout.v1` are deleted, and the inner dockview's right-pane width moves to `dockview.right_width`, so the pane keeps the width the user dragged it to.
 
-Browser today opens beside the right pane, not instead of it. As an entry in `right` it replaces the open right panel. Accepted for this change: one panel per location is the rule, and the user can switch with one click.
+**Terminal and browser stay out of `openPanels`.** The terminal's visibility is per project (`terminal-store`) and the browser's belongs to the thread's browser session (`browser-panel-store`); one global `openPanels.bottom` would lose both. The rail toggles them through their stores, and the browser keeps opening beside the right panel, not instead of it. Making them registry entries waits until a location can hold per-scope state.
 
 ## Risks / Trade-offs
 

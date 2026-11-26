@@ -5,12 +5,12 @@ import {
   useEffect,
   useMemo,
   useState,
+  type ComponentProps,
   type ComponentType,
   type ReactNode,
 } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
-import { CenterDockview } from '@/components/CenterDockview';
 import type { RightTabSpec } from '@/components/dockview/types';
 import { DockviewLayout } from '@/components/DockviewLayout';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
@@ -486,18 +486,7 @@ export function App() {
         </div>
       </ErrorBoundary>
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
-        <CenterDockview
-          thread={<ThreadPanel showHeader={!isFullScreenView}>{threadContent}</ThreadPanel>}
-          right={singleRightPanel}
-          rightTabs={rightTabs}
-          activeRightTab={reviewSubTab}
-          onActiveRightTabChange={(id) =>
-            // SAFETY: the ids come from rightTabs, built from REVIEW_TABS, whose ids are all ReviewSubTab names.
-            setReviewSubTabStore(id as typeof reviewSubTab)
-          }
-          rightPaneOpen={rightPaneVisible}
-          initialRightWidth={Math.round(window.innerWidth * (reviewPaneWidth / 100))}
-        />
+        <ThreadPanel showHeader={!isFullScreenView}>{threadContent}</ThreadPanel>
       </div>
     </SidebarInset>
   );
@@ -510,6 +499,16 @@ export function App() {
             <SidebarAwareDockview
               leftPanel={leftPanel}
               centerPanel={centerPanel}
+              rightPane={{
+                right: singleRightPanel,
+                rightTabs,
+                activeRightTab: reviewSubTab,
+                onActiveRightTabChange: (id) =>
+                  // SAFETY: the ids come from rightTabs, built from REVIEW_TABS, whose ids are all ReviewSubTab names.
+                  setReviewSubTabStore(id as typeof reviewSubTab),
+                rightPaneOpen: rightPaneVisible,
+                initialRightWidth: Math.round(window.innerWidth * (reviewPaneWidth / 100)),
+              }}
               terminalDockview={terminalDockview}
               isFullScreenView={isFullScreenView}
               hideLeftPane={!!workflowsProjectId}
@@ -534,12 +533,23 @@ export function App() {
   );
 }
 
+type RightPaneProps = Pick<
+  ComponentProps<typeof DockviewLayout>,
+  | 'right'
+  | 'rightTabs'
+  | 'activeRightTab'
+  | 'onActiveRightTabChange'
+  | 'rightPaneOpen'
+  | 'initialRightWidth'
+>;
+
 /** Reads the sidebar context (cookie-backed `open`) and feeds it into
  *  DockviewLayout as `leftPaneOpen` so the SidebarTopBar collapse button
  *  actually collapses the left edge group. Lives inside <SidebarProvider>. */
 function SidebarAwareDockview({
   leftPanel,
   centerPanel,
+  rightPane,
   terminalDockview,
   isFullScreenView,
   hideLeftPane,
@@ -550,6 +560,8 @@ function SidebarAwareDockview({
 }: {
   leftPanel: ReactNode;
   centerPanel: ReactNode;
+  /** The right tool panel (openspec `tool-panels`): one group of the same dockview. */
+  rightPane: RightPaneProps;
   terminalDockview: ReturnType<typeof useTerminalDockview>;
   isFullScreenView: boolean;
   hideLeftPane: boolean;
@@ -572,6 +584,7 @@ function SidebarAwareDockview({
     <DockviewLayout
       left={leftPanel}
       center={centerPanel}
+      {...rightPane}
       leftPaneOpen={resolveLeftPaneOpen(sidebarOpen, hideLeftPane)}
       bottomTabs={terminalDockview.bottomTabs}
       activeBottomTab={terminalDockview.activeBottomTab}

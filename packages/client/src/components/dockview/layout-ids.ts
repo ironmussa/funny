@@ -28,10 +28,15 @@ export const STORAGE_KEY_BOTTOM_HEIGHT = 'dockview.bottom_height';
 export const STORAGE_KEY_BROWSER_WIDTH = 'dockview.browser_width';
 /** Full serialized layout. The version suffix lets us invalidate stored
  *  layouts after structural code changes (rename, new panel ids, etc.).
- *  v8 forces a rebuild because the top edge group was removed — the header
- *  is now rendered inside the center panel directly. Saved v7 layouts still
- *  have a `top-edge` group that would restore as a stale empty band. */
-export const STORAGE_KEY_LAYOUT = 'dockview.layout.v8';
+ *  v9: the right panels moved here from the inner `CenterDockview`, which is
+ *  gone (openspec `tool-panels`); a v8 layout has no right group and the
+ *  thread header outside the grid. */
+export const STORAGE_KEY_LAYOUT = 'dockview.layout.v9';
+
+/** Keys written by layouts before {@link STORAGE_KEY_LAYOUT}, removed on load. */
+export const RETIRED_LAYOUT_KEYS = ['dockview.layout.v8', 'center-dockview.layout.v1'];
+/** The inner dockview's right-pane width, carried over to {@link STORAGE_KEY_RIGHT_WIDTH}. */
+export const RETIRED_RIGHT_WIDTH_KEY = 'center-dockview.right_width';
 
 export function readBottomOrder(api: DockviewApi): string[] {
   const group = api.panels.find((p) => p.id.startsWith('bottom:'))?.group;

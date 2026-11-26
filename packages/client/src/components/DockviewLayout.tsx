@@ -227,7 +227,24 @@ export function DockviewLayout({
       {isTabbedRight &&
         rightTabs?.map((tab) => {
           const host = hosts[rightPanelId(tab.id)];
-          return host ? createPortal(tab.content, host, tab.id) : null;
+          // Every tab stays mounted (`renderer: 'always'`); only the active one
+          // is shown, so a hidden tab cannot paint over or take focus.
+          const active = (activeRightTab ?? rightTabs[0]?.id) === tab.id;
+          return host
+            ? createPortal(
+                <div
+                  className="h-full w-full"
+                  hidden={!active}
+                  aria-hidden={!active}
+                  data-review-tab-content={tab.id}
+                  data-testid={`review-tab-content-${tab.id}`}
+                >
+                  {tab.content}
+                </div>,
+                host,
+                tab.id,
+              )
+            : null;
         })}
       {bottomTabs?.map((tab) => {
         const host = hosts[bottomPanelId(tab.id)];

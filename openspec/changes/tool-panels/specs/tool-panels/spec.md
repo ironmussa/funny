@@ -8,7 +8,7 @@ Lets the user open the tools that act on a thread (review, files, comments, acti
 
 ### Requirement: Tool panels are declared in one registry
 
-Every tool panel SHALL be declared once, with an id, an icon, a title, an optional keyboard shortcut, a location (`right`, `bottom` or `view`), a rule saying whether it is available for the open thread or project, and its content. The rail, the URL handling, the shortcuts and the layout SHALL all read that declaration; none of them SHALL list panels on their own.
+Every panel that opens in the right location SHALL be declared once, with an id, an icon, a title, an optional keyboard shortcut, its location, and a rule saying whether it is available for the open thread or project. The terminal, the browser and the test runner are toggled from the rail but keep their own visibility: per project for the terminal, per browser session for the browser, and a full-screen view for the test runner. The rail, the URL handling, the shortcuts and the layout SHALL all read that declaration; none of them SHALL list panels on their own.
 
 #### Scenario: A new panel needs one entry
 

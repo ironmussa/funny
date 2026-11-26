@@ -18,10 +18,10 @@
 
 ## 3. One dockview
 
-- [ ] 3.1 Add terminal (`bottom`) and browser (`right`) registry entries and move their visibility into `openPanels`; verify terminal and browser store tests
-- [ ] 3.2 Replace `CenterDockview` with the outer layout's center panel and one `use-tool-panel-sync` hook; delete the inner dockview and its sync hooks; verify `DockviewLayout` tests, the `grid-right-pane` tests and the layout story
-- [ ] 3.3 Bump the layout key to `dockview.layout.v9` and drop `center-dockview.layout.v1` on boot; verify with a test that an old stored layout is ignored
-- [ ] 3.4 Remove the compatibility selectors from 1.3 and the old localStorage seeding; verify `bun run lint` and `bun run typecheck`
+- [x] 3.1 ~~Add terminal and browser registry entries in `openPanels`~~ Dropped: their visibility is per project / per browser session (see design, Phase 3); the rail toggles them through their own stores, covered by the ToolRail test
+- [x] 3.2 Replace `CenterDockview` with the outer layout's center panel and right group; delete the inner dockview and its sync hooks; port its tab-hiding and restore reconcile to `DockviewLayout`; verified by `DockviewLayout.right-pane.test.tsx`, `DockviewLayout.integration.test.tsx` (real dockview) and the `grid-right-pane` tests
+- [x] 3.3 Bump the layout key to `dockview.layout.v9`, drop the v8 and inner layouts on load and carry the right width over; verified by the "drops the layouts saved before tool panels" test
+- [x] 3.4 No compatibility selectors were added in 1.3 (call sites moved directly); the one-time seeding from `right_pane_open` / `right_pane_tab` stays, it costs two reads; verified by `bun run lint` and `bun run typecheck`
 
 ## 4. Integration
 

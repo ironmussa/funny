@@ -4,7 +4,7 @@ import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useState } from 'react';
 
-import { CenterDockview } from '@/components/CenterDockview';
+import { DockviewLayout } from '@/components/DockviewLayout';
 
 mock.module('next-themes', () => ({
   useTheme: () => ({ resolvedTheme: 'light' }),
@@ -28,8 +28,9 @@ test('real Dockview switches review tabs and restores the saved layout', async (
   function Workspace({ initialTab = 'changes' }: { initialTab?: string }) {
     const [activeTab, setActiveTab] = useState(initialTab);
     return (
-      <CenterDockview
-        thread={<div>Thread content</div>}
+      <DockviewLayout
+        left={<div>Sidebar</div>}
+        center={<div>Thread content</div>}
         rightTabs={[
           { id: 'changes', title: 'Changes', content: <div>Commit buttons</div> },
           { id: 'graph', title: 'History', content: <div>Commit history</div> },
@@ -53,11 +54,12 @@ test('real Dockview switches review tabs and restores the saved layout', async (
     expect(screen.getByText('Commit buttons')).not.toBeVisible();
   }, WAIT);
   await waitFor(() => {
-    const saved = JSON.parse(localStorage.getItem('center-dockview.layout.v1') ?? 'null');
+    const saved = JSON.parse(localStorage.getItem('dockview.layout.v9') ?? 'null');
     expect(Object.keys(saved?.panels ?? {}).sort()).toEqual([
+      'center',
+      'left',
       'right:changes',
       'right:graph',
-      'thread',
     ]);
   }, WAIT);
 

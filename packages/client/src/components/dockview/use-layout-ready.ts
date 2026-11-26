@@ -1,5 +1,7 @@
 import type { DockviewApi, DockviewReadyEvent } from 'dockview-react';
-import { type MutableRefObject, type ReactNode, useCallback } from 'react';
+import { type MutableRefObject, type ReactNode, useCallback, useLayoutEffect, useRef } from 'react';
+
+import { isRightPanelId } from '@/lib/dockview-right-panels';
 
 import {
   LEFT_EDGE_ID,
@@ -7,6 +9,8 @@ import {
   PANEL_CENTER,
   PANEL_LEFT,
   PANEL_TOP,
+  RETIRED_LAYOUT_KEYS,
+  RETIRED_RIGHT_WIDTH_KEY,
   STORAGE_KEY_BOTTOM_HEIGHT,
   STORAGE_KEY_BROWSER_WIDTH,
   STORAGE_KEY_LAYOUT,
@@ -18,7 +22,7 @@ import {
   readBottomOrder,
   sameOrder,
 } from './layout-ids';
-import { restoreStoredLayout, writeStoredSize } from './layout-storage';
+import { dropRetiredLayouts, restoreStoredLayout, writeStoredSize } from './layout-storage';
 import { persistRightWidth } from './right-pane';
 import { useDebouncedLayoutPersist } from './use-debounced-layout-persist';
 import type { LayoutPanelOps } from './use-layout-panel-ops';
@@ -65,9 +69,15 @@ export function useLayoutReady({
     addRightPanels,
     hideHeader,
     isAnimatingRef,
+    removeRightPanels,
     suppressCloseRef,
     syncBottomPanels,
   } = ops;
+  // The open flag as of the latest render, for the one-time reconcile in onReady.
+  const rightPaneOpenRef = useRef(rightPaneOpen);
+  useLayoutEffect(() => {
+    rightPaneOpenRef.current = rightPaneOpen;
+  }, [rightPaneOpen]);
 
   /** Build the initial layout from scratch (no saved layout available). */
   const buildDefaultLayout = useCallback(
@@ -232,6 +242,7 @@ export function useLayoutReady({
   return useCallback(
     (event: DockviewReadyEvent) => {
       apiRef.current = event.api;
+      dropRetiredLayouts(RETIRED_LAYOUT_KEYS, RETIRED_RIGHT_WIDTH_KEY, STORAGE_KEY_RIGHT_WIDTH);
 
       // Try to restore the user's full saved layout first. If that fails (or
       // it leaves us in a corrupt state with missing left/center), clear the
@@ -245,6 +256,23 @@ export function useLayoutReady({
       );
       if (!restored) {
         buildDefaultLayout(event.api);
+      } else {
+        // Reconcile the restored right panels with the open flag. The flag
+        // (`tool_panels.open.right`) is written synchronously on toggle while
+        // the layout snapshot is debounced, and the close path removes panels
+        // while persistence is suppressed by `isAnimatingRef`, so after a
+        // reload the stored layout can still hold right panels the flag says
+        // are closed. Restored verbatim they render a zombie pane: visible,
+        // but every open-gated review refresh stays off, leaving the Changes
+        // tab stuck on a stale "No changes" for dirty worktrees.
+        const hasRight = event.api.panels.some((p) => isRightPanelId(p.id));
+        if (!rightPaneOpenRef.current && hasRight) {
+          removeRightPanels(event.api);
+          schedulePersistLayout(event.api);
+        } else if (rightPaneOpenRef.current && !hasRight) {
+          addRightPanels(event.api);
+          schedulePersistLayout(event.api);
+        }
       }
 
       subscribeLayoutEvents(event.api, {
@@ -263,6 +291,7 @@ export function useLayoutReady({
     [
       activeBottomTabRef,
       activeRightTabRef,
+      addRightPanels,
       apiRef,
       buildDefaultLayout,
       isAnimatingRef,
@@ -272,6 +301,7 @@ export function useLayoutReady({
       onBottomTabsReorderRef,
       onBrowserCloseRef,
       reconcileAfterRestore,
+      removeRightPanels,
       schedulePersistLayout,
       suppressCloseRef,
     ],

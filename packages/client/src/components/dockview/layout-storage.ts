@@ -88,3 +88,23 @@ export function restoreStoredLayout(
   }
   return false;
 }
+
+/**
+ * Drop the layouts saved before the current layout key, once per load. The
+ * right pane's width lived under the inner dockview's key; it is kept, so the
+ * pane comes back at the width the user dragged it to.
+ */
+export function dropRetiredLayouts(
+  retiredKeys: readonly string[],
+  widthFrom: string,
+  widthTo: string,
+): void {
+  try {
+    const width = readStoredSize(widthFrom);
+    if (width !== null && readStoredSize(widthTo) === null) writeStoredSize(widthTo, width);
+    localStorage.removeItem(widthFrom);
+    for (const key of retiredKeys) localStorage.removeItem(key);
+  } catch {
+    /* ignore quota / privacy-mode errors */
+  }
+}

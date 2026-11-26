@@ -1,9 +1,10 @@
-import { beforeEach, describe, expect, test, vi, type Mock, mock } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, type Mock, mock } from 'bun:test';
 
+import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { render, screen, waitFor, within } from '@testing-library/react';
 
-import { CenterDockview } from '@/components/CenterDockview';
 import type { RightTabSpec } from '@/components/dockview/types';
+import { DockviewLayout } from '@/components/DockviewLayout';
 
 interface DockviewMockState {
   api: MockDockviewApi | undefined;
@@ -78,7 +79,10 @@ type MockDockviewApi = {
   panels: MockDockviewPanel[];
   addPanel: Mock<(...args: any[]) => any>;
   getPanel: ReturnType<typeof vi.fn>;
+  addEdgeGroup: ReturnType<typeof vi.fn>;
+  getEdgeGroup: ReturnType<typeof vi.fn>;
   onDidActivePanelChange: ReturnType<typeof vi.fn>;
+  onDidRemovePanel: ReturnType<typeof vi.fn>;
   onDidLayoutChange: ReturnType<typeof vi.fn>;
   toJSON: ReturnType<typeof vi.fn>;
   fromJSON: ReturnType<typeof vi.fn>;
@@ -93,6 +97,7 @@ function createMockDockviewApi(): MockDockviewApi {
     },
   };
 
+  const edgeGroups = new Map<string, { isCollapsed: () => boolean }>();
   const api = {
     panels: new Array<MockDockviewPanel>(),
     addPanel: vi.fn(
@@ -137,7 +142,12 @@ function createMockDockviewApi(): MockDockviewApi {
       },
     ),
     getPanel: vi.fn((id: string) => api.panels.find((panel) => panel.id === id)),
+    addEdgeGroup: vi.fn((_side: string, options: { id: string }) => {
+      edgeGroups.set(options.id, { isCollapsed: () => false });
+    }),
+    getEdgeGroup: vi.fn((side: string) => edgeGroups.get(`${side}-edge`) ?? null),
     onDidActivePanelChange: vi.fn(),
+    onDidRemovePanel: vi.fn(),
     onDidLayoutChange: vi.fn(),
     toJSON: vi.fn(() => ({ grid: {}, panels: {} })),
     fromJSON: vi.fn(),
@@ -158,6 +168,15 @@ function addPanelTo(
   api.addPanel(options);
 }
 
+/** What every saved layout holds: the sidebar edge group, the sidebar and the center. */
+function restoreShell(api: MockDockviewApi) {
+  api.addEdgeGroup('left', { id: 'left-edge' });
+  addPanelTo(api, { id: 'left', component: 'left' });
+  addPanelTo(api, { id: 'center', component: 'center' });
+}
+
+const SAVED_LAYOUT_KEY = 'dockview.layout.v9';
+
 function reviewTabs(): RightTabSpec[] {
   return [
     { id: 'changes', title: 'Changes', content: <div>Commit buttons</div> },
@@ -165,7 +184,8 @@ function reviewTabs(): RightTabSpec[] {
   ];
 }
 
-describe('CenterDockview right tabs', () => {
+describe('DockviewLayout right pane', () => {
+  afterEach(() => unstubAllGlobals());
   beforeEach(() => {
     localStorage.clear();
     dockviewMock.api = createMockDockviewApi();
@@ -175,8 +195,9 @@ describe('CenterDockview right tabs', () => {
   test('keeps inactive review tab content hidden while mounted', async () => {
     const tabs = reviewTabs();
     const { rerender } = render(
-      <CenterDockview
-        thread={<div>Thread</div>}
+      <DockviewLayout
+        left={<div>Sidebar</div>}
+        center={<div>Thread</div>}
         rightTabs={tabs}
         activeRightTab="changes"
         rightPaneOpen
@@ -189,8 +210,9 @@ describe('CenterDockview right tabs', () => {
     });
 
     rerender(
-      <CenterDockview
-        thread={<div>Thread</div>}
+      <DockviewLayout
+        left={<div>Sidebar</div>}
+        center={<div>Thread</div>}
         rightTabs={tabs}
         activeRightTab="graph"
         rightPaneOpen
@@ -213,10 +235,10 @@ describe('CenterDockview right tabs', () => {
   // reviewPaneOpen-gated refresh off, leaving the Changes tab stuck on a stale
   // "No changes" for dirty worktrees.
   test('removes restored right panels when the pane flag says closed', async () => {
-    localStorage.setItem('center-dockview.layout.v1', JSON.stringify({ grid: {}, panels: {} }));
+    localStorage.setItem(SAVED_LAYOUT_KEY, JSON.stringify({ grid: {}, panels: {} }));
     const api = dockviewMock.api!;
     api.fromJSON = vi.fn(() => {
-      addPanelTo(api, { id: 'thread', component: 'thread' });
+      restoreShell(api);
       addPanelTo(api, {
         id: 'right:changes',
         component: 'right-tab',
@@ -232,8 +254,9 @@ describe('CenterDockview right tabs', () => {
     });
 
     render(
-      <CenterDockview
-        thread={<div>Thread</div>}
+      <DockviewLayout
+        left={<div>Sidebar</div>}
+        center={<div>Thread</div>}
         rightTabs={reviewTabs()}
         activeRightTab="changes"
         rightPaneOpen={false}
@@ -241,20 +264,21 @@ describe('CenterDockview right tabs', () => {
     );
 
     await waitFor(() => {
-      expect(api.panels.map((panel) => panel.id)).toEqual(['thread']);
+      expect(api.panels.map((panel) => panel.id)).toEqual(['left', 'center']);
     });
   });
 
   test('re-adds right panels when the flag says open but the restored layout lost them', async () => {
-    localStorage.setItem('center-dockview.layout.v1', JSON.stringify({ grid: {}, panels: {} }));
+    localStorage.setItem(SAVED_LAYOUT_KEY, JSON.stringify({ grid: {}, panels: {} }));
     const api = dockviewMock.api!;
     api.fromJSON = vi.fn(() => {
-      addPanelTo(api, { id: 'thread', component: 'thread' });
+      restoreShell(api);
     });
 
     render(
-      <CenterDockview
-        thread={<div>Thread</div>}
+      <DockviewLayout
+        left={<div>Sidebar</div>}
+        center={<div>Thread</div>}
         rightTabs={reviewTabs()}
         activeRightTab="changes"
         rightPaneOpen
@@ -263,7 +287,8 @@ describe('CenterDockview right tabs', () => {
 
     await waitFor(() => {
       expect(api.panels.map((panel) => panel.id)).toEqual([
-        'thread',
+        'left',
+        'center',
         'right:changes',
         'right:graph',
       ]);
@@ -274,10 +299,16 @@ describe('CenterDockview right tabs', () => {
   // suppressed (isAnimatingRef), so the stored layout kept the right panels
   // forever — the entry point for the zombie-pane divergence above.
   test('persists the layout after the pane closes', async () => {
+    // The close animation runs on requestAnimationFrame; finish it at once so
+    // the test does not depend on frame timing under parallel load.
+    stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) =>
+      setTimeout(() => cb(performance.now() + 10_000), 0),
+    );
     const api = dockviewMock.api!;
     const { rerender } = render(
-      <CenterDockview
-        thread={<div>Thread</div>}
+      <DockviewLayout
+        left={<div>Sidebar</div>}
+        center={<div>Thread</div>}
         rightTabs={reviewTabs()}
         activeRightTab="changes"
         rightPaneOpen
@@ -287,11 +318,12 @@ describe('CenterDockview right tabs', () => {
     await waitFor(() => {
       expect(api.panels.some((panel) => panel.id === 'right:changes')).toBe(true);
     });
-    expect(localStorage.getItem('center-dockview.layout.v1')).toBeNull();
+    expect(localStorage.getItem(SAVED_LAYOUT_KEY)).toBeNull();
 
     rerender(
-      <CenterDockview
-        thread={<div>Thread</div>}
+      <DockviewLayout
+        left={<div>Sidebar</div>}
+        center={<div>Thread</div>}
         rightTabs={reviewTabs()}
         activeRightTab="changes"
         rightPaneOpen={false}
@@ -301,9 +333,34 @@ describe('CenterDockview right tabs', () => {
     await waitFor(
       () => {
         expect(api.panels.some((panel) => panel.id === 'right:changes')).toBe(false);
-        expect(localStorage.getItem('center-dockview.layout.v1')).not.toBeNull();
+        expect(localStorage.getItem(SAVED_LAYOUT_KEY)).not.toBeNull();
       },
-      { timeout: 2000 },
+      // The 500 ms debounced save, with room for parallel load.
+      { timeout: 3000 },
     );
+  });
+});
+
+describe('DockviewLayout drops the layouts saved before tool panels', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    dockviewMock.api = createMockDockviewApi();
+    dockviewMock.readyCalled = false;
+  });
+
+  test('ignores the old layouts and keeps the right pane width', async () => {
+    localStorage.setItem('dockview.layout.v8', JSON.stringify({ grid: {}, panels: {} }));
+    localStorage.setItem('center-dockview.layout.v1', JSON.stringify({ grid: {}, panels: {} }));
+    localStorage.setItem('center-dockview.right_width', '612');
+    const api = dockviewMock.api!;
+
+    render(<DockviewLayout left={<div>Sidebar</div>} center={<div>Thread</div>} />);
+
+    await waitFor(() => expect(api.panels.map((p) => p.id)).toEqual(['center', 'left']));
+    expect(api.fromJSON).not.toHaveBeenCalled();
+    expect(localStorage.getItem('dockview.layout.v8')).toBeNull();
+    expect(localStorage.getItem('center-dockview.layout.v1')).toBeNull();
+    expect(localStorage.getItem('center-dockview.right_width')).toBeNull();
+    expect(localStorage.getItem('dockview.right_width')).toBe('612');
   });
 });

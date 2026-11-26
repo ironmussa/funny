@@ -5,8 +5,13 @@
  * import (the first one is the logger's telemetry identity). Loading lazily
  * shows what fails after that.
  */
+/** The Hono bindings the probe passes: the client address the server reads. */
+interface ProbeEnv {
+  IP: { address: string };
+}
+
 let appPromise: Promise<{
-  fetch: (r: Request, env?: unknown) => Response | Promise<Response>;
+  fetch: (r: Request, env?: ProbeEnv) => Response | Promise<Response>;
 }> | null = null;
 
 export default {

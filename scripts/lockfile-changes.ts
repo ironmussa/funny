@@ -77,7 +77,18 @@ function declared(manifest: any): Map<string, string> {
   return specs;
 }
 
-function sameJson(a: unknown, b: unknown): boolean {
+/** A manifest or lockfile value, as JSON parsing yields it (`undefined` when absent). */
+type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | JsonValue[]
+  | LockEntry
+  | { [key: string]: JsonValue };
+
+function sameJson(a: JsonValue, b: JsonValue): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 

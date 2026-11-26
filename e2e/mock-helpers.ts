@@ -56,14 +56,16 @@ export function mockMessage(
   };
 }
 
-export interface MockToolCall {
+// A type alias, not an interface: an interface has no implicit index signature,
+// so it would not be assignable to the `JsonValue` that `fulfillTrpc` sends.
+export type MockToolCall = {
   id: string;
   messageId: string;
   name: string;
   input: string;
   output?: string;
   author?: string;
-}
+};
 
 function mockToolCall(overrides: Partial<MockToolCall> = {}): MockToolCall {
   const id = overrides.id ?? mockId();
@@ -436,8 +438,18 @@ export function trpcInput<T = TrpcStringFields>(request: Request): T | undefined
   return raw ? (JSON.parse(raw) as T) : undefined;
 }
 
+/** A value `JSON.stringify` writes as is: what a tRPC answer carries. */
+type JsonValue =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | JsonValue[]
+  | { [key: string]: JsonValue };
+
 /** Answers a tRPC call with `data`. */
-export function fulfillTrpc(route: Route, data: unknown) {
+export function fulfillTrpc(route: Route, data: JsonValue) {
   return route.fulfill({
     status: 200,
     contentType: 'application/json',
@@ -455,7 +467,11 @@ export function fulfillTrpcError(route: Route, status: number, message: string) 
 }
 
 /** The thread event timeline is still REST (`GET /api/threads/:id/events`). */
-async function mockThreadEvents(page: Page, threadId: string, events: unknown) {
+async function mockThreadEvents(
+  page: Page,
+  threadId: string,
+  events: ReturnType<typeof mockThreadEvent>[],
+) {
   await page.route(`**/api/threads/${threadId}/events**`, async (route) => {
     if (route.request().method() !== 'GET') return route.continue();
     await route.fulfill({

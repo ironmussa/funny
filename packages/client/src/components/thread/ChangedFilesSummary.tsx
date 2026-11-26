@@ -175,7 +175,8 @@ export function ChangedFilesSummary({
           size="xs"
           onClick={handleUndoAll}
           disabled={reverting || running}
-          className="ml-auto gap-1"
+          gap="tight"
+          className="ml-auto"
           data-testid="changed-files-undo"
         >
           <RotateCcw className={cn('icon-xs', reverting && 'animate-spin')} />

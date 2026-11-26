@@ -41,7 +41,7 @@ export function CopyThreadButton({
       label={t('thread.copyLatestTurn', 'Copy latest prompt and response')}
       copiedLabel={t('thread.latestTurnCopied', 'Latest response copied')}
       data-testid="agent-result-copy-latest-turn"
-      className="size-auto p-1 [&_svg]:size-3.5"
+      size="icon-fit"
     />
   );
 }

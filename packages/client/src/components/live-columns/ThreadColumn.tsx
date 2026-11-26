@@ -196,15 +196,17 @@ export const ThreadColumn = memo(function ThreadColumn({
           />
         </div>
 
-        <ThreadSearchBar
-          threadId={threadId}
-          open={searchOpen}
-          onClose={handleSearchClose}
-          onNavigateToMessage={handleSearchNavigate}
-          onClearHighlights={handleSearchClear}
-          testIdPrefix={`grid-search-${threadId}`}
-          className="border-border bg-popover absolute top-9 right-2 z-30 gap-1.5 rounded-md border px-2 py-1.5 shadow-md"
-        />
+        <div className="absolute top-9 right-2 z-30">
+          <ThreadSearchBar
+            threadId={threadId}
+            open={searchOpen}
+            onClose={handleSearchClose}
+            onNavigateToMessage={handleSearchNavigate}
+            onClearHighlights={handleSearchClear}
+            testIdPrefix={`grid-search-${threadId}`}
+            variant="column-overlay"
+          />
+        </div>
 
         <ThreadConversation
           streamRef={streamRef}

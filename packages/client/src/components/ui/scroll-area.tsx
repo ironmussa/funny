@@ -8,9 +8,13 @@ const SCROLL_AREA_VARIANT = {
   default: '',
   muted: 'rounded bg-muted',
   'muted-outline': 'rounded border border-border bg-muted',
+  // A code well with a faint frame (a failed workflow step's error output).
+  'muted-outline-faint': 'rounded border border-border/50 bg-muted',
   divided: 'border-t border-border/40',
   // A list pane beside a detail pane.
   'divided-end': 'border-r',
+  // A document outline beside its content: a faint rule on the end, 12px above and below.
+  outline: 'border-r border-border/40 py-3',
   // The output well of a failed step.
   destructive: 'rounded bg-destructive/5',
   // A short list with a little room above and below it.

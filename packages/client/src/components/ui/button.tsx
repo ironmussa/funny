@@ -49,6 +49,14 @@ const buttonVariants = cva(
         'ghost-success-soft': 'text-status-success/80 hover:bg-accent hover:text-status-success',
         // A red text action whose label turns neutral on hover (stop all).
         'destructive-text': 'text-destructive hover:bg-accent hover:text-accent-foreground',
+        // A muted toggle that is on, tinted in the primary color (hide factory threads).
+        'pressed-primary':
+          'bg-primary/10 text-primary hover:bg-accent hover:text-accent-foreground',
+        // A muted menu trigger that keeps the foreground color while its menu is open.
+        'muted-menu':
+          'text-muted-foreground hover:bg-accent hover:text-accent-foreground data-[state=open]:text-foreground',
+        // A ghost row on the sidebar background (the user menu in the sidebar footer).
+        'ghost-sidebar': 'hover:bg-sidebar-accent hover:text-accent-foreground',
       },
       // Field heights / padding / text come from the shared control scale so a
       // text button lines up with an input or select of the same `size`. The
@@ -75,6 +83,20 @@ const buttonVariants = cva(
         chip: cn('h-6 px-2 text-2xs', CONTROL_ICON.sm),
         // A 24px square icon button inside a dense list row.
         'icon-2xs': cn('size-6 p-0 text-sm', CONTROL_ICON.sm),
+        // A 20px text action with 4px side padding (dismiss at the end of a banner).
+        '3xs-tight': cn('h-5 px-1 text-2xs', CONTROL_ICON.sm),
+        // The `xs` height with roomier side padding: the send button beside a plan comment.
+        'xs-wide': cn('h-7 px-3 text-xs', CONTROL_ICON.xs),
+        // The submit button beside an inline comment field: `xs` height, `sm` text.
+        'xs-submit': cn('h-7 px-3 text-sm', CONTROL_ICON.xs),
+        // A text action set inside prose (a link button): no box of its own.
+        inline: cn('h-auto p-0 text-sm', CONTROL_ICON.sm),
+        // An icon button as small as its glyph plus 4px on every side.
+        'icon-fit': cn('size-auto p-1', CONTROL_ICON.sm),
+        // A row that grows with its content (the sidebar footer's user menu).
+        row: cn('h-auto px-1 py-1 text-sm', CONTROL_ICON.sm),
+        // A full-width, square-cornered 44px touch row that opens a preview.
+        'touch-row': cn('h-11 rounded-none px-3 text-xs', CONTROL_ICON.xs),
       },
       // The right half of a split control: square left corners, ruled off.
       segment: {

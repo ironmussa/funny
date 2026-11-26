@@ -7,16 +7,20 @@ import { cn } from '@/lib/utils';
 
 function Command({
   className,
+  outlined = false,
   ref,
   ...props
 }: React.ComponentPropsWithoutRef<typeof CommandPrimitive> & {
   ref?: React.Ref<React.ComponentRef<typeof CommandPrimitive>>;
+  /** A framed picker laid inline in a dialog rather than in its own popover. */
+  outlined?: boolean;
 }) {
   return (
     <CommandPrimitive
       ref={ref}
       className={cn(
         'flex h-full w-full flex-col overflow-hidden rounded-lg bg-popover text-popover-foreground',
+        outlined && 'border',
         className,
       )}
       {...props}

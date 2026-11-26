@@ -62,10 +62,10 @@ describe('lint severity (#465)', () => {
     ]);
   });
 
-  test('shadcn/no-inline-styles is an error and no-restyle a warning in the client', () => {
+  test('shadcn/no-inline-styles and no-restyle are errors in the client', () => {
     const client = clientRules();
     expect(level(client['shadcn/no-inline-styles'])).toBe('error');
-    expect(level(client['shadcn/no-restyle'])).toBe('warn');
+    expect(level(client['shadcn/no-restyle'])).toBe('error');
   });
 
   // Counted here, the way max-lines-per-function counts with skipBlankLines and

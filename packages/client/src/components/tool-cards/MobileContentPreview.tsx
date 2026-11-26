@@ -45,10 +45,10 @@ export function MobileContentPreview({
         <div className="from-card pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-t" />
       </div>
       <Button
-        size="xs"
+        size="touch-row"
         ref={triggerRef}
         variant="ghost"
-        className="h-11 w-full justify-start rounded-none px-3"
+        className="w-full justify-start"
         onClick={() => (onExpand ? onExpand() : setOpen(true))}
       >
         <Maximize2 className="icon-xs" />

@@ -57,12 +57,12 @@ function FactoryThreadsToggle() {
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
-          variant="muted"
+          variant={hideFactoryThreads ? 'pressed-primary' : 'muted'}
           data-testid="sidebar-toggle-factory-threads"
           size="icon"
           aria-pressed={hideFactoryThreads}
           aria-label={label}
-          className={cn('size-5', hideFactoryThreads && 'text-primary bg-primary/10')}
+          className="size-5"
           onClick={toggleHideFactoryThreads}
         >
           <Factory className="icon-sm" />

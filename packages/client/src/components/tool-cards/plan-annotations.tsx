@@ -123,14 +123,15 @@ export function SelectionPopover({
               }}
               placeholder={t('plan.addComment', 'Add comment...')}
               data-testid="plan-selection-comment-input"
-              className="text-foreground placeholder:text-muted-foreground/50 h-auto min-w-0 flex-1 rounded-none border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-0"
+              variant="bare-comment"
+              className="h-auto min-w-0 flex-1"
             />
             <Button
-              size="xs"
+              size="xs-submit"
               onClick={handleSubmitComment}
               disabled={!comment.trim()}
               data-testid="plan-selection-comment-submit"
-              className="shrink-0 px-3 text-sm"
+              className="shrink-0"
             >
               {t('plan.comment', 'Comment')}
             </Button>

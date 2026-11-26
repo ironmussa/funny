@@ -4,6 +4,8 @@ import { render } from '@testing-library/react';
 
 import { Badge } from '@/components/ui/badge';
 import { Button, buttonVariants } from '@/components/ui/button';
+import { Command } from '@/components/ui/command';
+import { DialogFooter } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -152,5 +154,98 @@ describe('container variants', () => {
     const { container: c } = render(<Input inset="icon" />);
     const { container: d } = render(<Input />);
     expect(classSet(c.firstElementChild)).toEqual(withOld(d.firstElementChild, 'pl-8'));
+  });
+});
+
+// Issue #556 cleared the last shadcn/no-restyle findings and made the rule an
+// error. Each case pins that the new variant, size or prop renders what the
+// call site used to write by hand.
+describe('#556 Button variants and sizes', () => {
+  const variants: [string, string, string][] = [
+    // [new variant, old variant, old className]
+    ['pressed-primary', 'muted', 'text-primary bg-primary/10'],
+    ['muted-menu', 'muted', 'data-[state=open]:text-foreground'],
+    ['ghost-sidebar', 'ghost', 'hover:bg-sidebar-accent'],
+    ['ghost-primary', 'muted', 'text-primary hover:text-primary'],
+  ];
+  test.each(variants)('variant %s = %s + "%s"', (variant, oldVariant, oldClass) => {
+    const now = cn(buttonVariants({ variant: variant as 'muted' }));
+    const before = cn(buttonVariants({ variant: oldVariant as 'muted', className: oldClass }));
+    expect(sorted(now)).toEqual(sorted(before));
+  });
+
+  const sizes: [string, string, string][] = [
+    // [new size, old size, old className]
+    ['3xs-tight', 'sm', 'text-2xs h-5 px-1'],
+    ['xs-wide', 'xs', 'px-3'],
+    ['xs-submit', 'xs', 'px-3 text-sm'],
+    ['inline', 'sm', 'h-auto p-0'],
+    ['icon-fit', 'icon-xs', 'size-auto p-1 [&_svg]:size-3.5'],
+    ['row', 'default', 'h-auto px-1 py-1'],
+    ['touch-row', 'xs', 'h-11 rounded-none px-3'],
+  ];
+  test.each(sizes)('size %s = %s + "%s"', (size, oldSize, oldClass) => {
+    const now = cn(buttonVariants({ size: size as 'xs' }));
+    const before = cn(buttonVariants({ size: oldSize as 'xs', className: oldClass }));
+    expect(sorted(now)).toEqual(sorted(before));
+  });
+});
+
+describe('#556 field and container variants', () => {
+  test('Input bare-comment and caps', () => {
+    const first = (c: HTMLElement) => c.firstElementChild;
+    expect(classSet(first(render(<Input variant="bare-comment" />).container))).toEqual(
+      withOld(
+        first(render(<Input />).container),
+        'text-foreground placeholder:text-muted-foreground/50 rounded-none border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-0',
+      ),
+    );
+    expect(classSet(first(render(<Input caps />).container))).toEqual(
+      withOld(first(render(<Input />).container), 'uppercase'),
+    );
+  });
+
+  test('ScrollArea muted-outline-faint / outline', () => {
+    const base = () => render(<ScrollArea>x</ScrollArea>).container.firstElementChild;
+    const now = (variant: 'muted-outline-faint' | 'outline') =>
+      classSet(render(<ScrollArea variant={variant}>x</ScrollArea>).container.firstElementChild);
+    expect(now('muted-outline-faint')).toEqual(
+      withOld(base(), 'border-border/50 bg-muted rounded border'),
+    );
+    expect(now('outline')).toEqual(withOld(base(), 'border-border/40 border-r py-3'));
+  });
+
+  test('SearchBar column-overlay = the live column find bar over floating', () => {
+    const props = { query: '', onQueryChange: () => {}, totalMatches: 0, autoFocus: false };
+    const { getByTestId: now } = render(
+      <SearchBar {...props} testIdPrefix="a" variant="column-overlay" />,
+    );
+    const { getByTestId: base } = render(
+      <SearchBar {...props} testIdPrefix="b" variant="floating" />,
+    );
+    expect(classSet(now('a-bar'))).toEqual(
+      withOld(
+        base('b-bar'),
+        'border-border bg-popover gap-1.5 rounded-md border px-2 py-1.5 shadow-md',
+      ),
+    );
+  });
+
+  test('DialogFooter stacked / bordered wide', () => {
+    const first = (c: HTMLElement) => c.firstElementChild;
+    const plain = () => first(render(<DialogFooter />).container);
+    expect(classSet(first(render(<DialogFooter stacked />).container))).toEqual(
+      withOld(plain(), 'flex-col gap-1.5 sm:flex-col sm:justify-stretch sm:space-x-0'),
+    );
+    expect(classSet(first(render(<DialogFooter bordered="wide" />).container))).toEqual(
+      withOld(plain(), 'border-border border-t px-6 py-4'),
+    );
+  });
+
+  test('Command outlined = border', () => {
+    const first = (c: HTMLElement) => c.firstElementChild;
+    expect(classSet(first(render(<Command outlined />).container))).toEqual(
+      withOld(first(render(<Command />).container), 'border'),
+    );
   });
 });

@@ -386,7 +386,8 @@ function LinkRunnerForm({ onLinked }: { onLinked: () => void }) {
         }}
         placeholder="Enter runner code, e.g. WXYZ-1234"
         size="xs"
-        className="flex-1 uppercase"
+        caps
+        className="flex-1"
         data-testid="link-runner-code"
       />
       <Button

@@ -120,6 +120,19 @@ function HighlightedFileContent({ content, filePath }: { content: string; filePa
   );
 }
 
+/** Shown in place of the path when the agent sent none (Cursor ACP, issue #9). */
+function PathUnavailableLabel({ className, testId }: { className?: string; testId?: string }) {
+  const { t } = useTranslation();
+  return (
+    <span
+      className={cn('text-muted-foreground/60 truncate text-xs italic', className)}
+      data-testid={testId}
+    >
+      {t('tools.readFilePathUnavailable')}
+    </span>
+  );
+}
+
 function escapeHtml(str: string): string {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
@@ -205,12 +218,7 @@ export function ReadFileCard({
           )}
         </button>
         {!filePath && (
-          <span
-            className="text-muted-foreground/60 min-w-0 flex-1 truncate text-xs italic"
-            data-testid="read-file-path-unavailable"
-          >
-            {t('tools.readFilePathUnavailable')}
-          </span>
+          <PathUnavailableLabel className="min-w-0 flex-1" testId="read-file-path-unavailable" />
         )}
         {filePath && (
           <Tooltip>
@@ -250,9 +258,7 @@ export function ReadFileCard({
             {fileName ? (
               <span className="text-muted-foreground truncate text-xs font-medium">{fileName}</span>
             ) : (
-              <span className="text-muted-foreground/60 truncate text-xs italic">
-                {t('tools.readFilePathUnavailable')}
-              </span>
+              <PathUnavailableLabel />
             )}
             <div className="flex shrink-0 items-center gap-1">
               {ext && (

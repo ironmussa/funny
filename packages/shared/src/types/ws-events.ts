@@ -134,12 +134,13 @@ export interface WSResultData {
   stage?: ThreadStage;
   errorReason?: string;
   /**
-   * The turn ended while a background job of the thread (`funny_run_checks` /
-   * `funny_spawn` with `background: true`) is still running. The job wakes the
-   * agent when it ends, so the run is not over: the client and Web Push do not
-   * announce this result as a finished run.
+   * funny starts the agent again on its own after this turn: a queued
+   * follow-up is next, or a background job of the thread (`funny_run_checks` /
+   * `funny_spawn` with `background: true`) is still running and wakes the agent
+   * when it ends. The run is not over, so the client and Web Push do not
+   * announce this result as finished.
    */
-  backgroundJobPending?: boolean;
+  continuesAutomatically?: boolean;
 }
 
 export interface WSErrorData {

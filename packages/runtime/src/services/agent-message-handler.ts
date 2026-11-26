@@ -874,6 +874,11 @@ export class AgentMessageHandler {
     this.state.pendingUserInput.delete(threadId);
     this.state.providerErrorPending.delete(threadId);
 
+    // Read before `agent:completed` below: its queue handler dequeues the
+    // next follow-up, after which the queue no longer shows it.
+    const continuesAutomatically =
+      finalStatus === 'completed' && (await this.continuesAutomatically(threadId));
+
     await this.threadManager.updateThread(threadId, {
       status: finalStatus,
       cost: msg.total_cost_usd,
@@ -923,8 +928,6 @@ export class AgentMessageHandler {
     // Re-fetch thread only if we didn't already in the block above
     const threadWithStage =
       finalStatus !== 'waiting' ? await this.threadManager.getThread(threadId) : preThread;
-    const backgroundJobPending =
-      finalStatus === 'completed' && (await this.hasRunningBackgroundJob(threadId));
 
     await this.emitWS(threadId, 'agent:result', {
       result: msg.result ? decodeUnicodeEscapes(msg.result) : msg.result,
@@ -937,7 +940,7 @@ export class AgentMessageHandler {
       permissionRequest: permReq
         ? { toolName: permReq.toolName, toolInput: permReq.toolInput }
         : undefined,
-      ...(backgroundJobPending ? { backgroundJobPending: true } : null),
+      ...(continuesAutomatically ? { continuesAutomatically: true } : null),
     });
 
     if (permReq) {
@@ -965,17 +968,21 @@ export class AgentMessageHandler {
   }
 
   /**
-   * Whether the thread has a background job still running (`funny_run_checks`
-   * / `funny_spawn` with `background: true`). Its end wakes the agent again
-   * (`agent-job-manager.ts`), so the turn that just ended is not the end of the
-   * run. A failed lookup answers false: the result is then announced as before.
+   * Whether funny starts the agent again on its own once this turn ends: a
+   * queued follow-up (drained on `agent:completed`) or a background job still
+   * running (`funny_run_checks` / `funny_spawn` with `background: true`, whose
+   * end wakes the agent, `agent-job-manager.ts`). Then the turn that just
+   * ended is not the end of the run. A failed lookup answers false: the result
+   * is then announced as before.
    */
-  private async hasRunningBackgroundJob(threadId: string): Promise<boolean> {
+  private async continuesAutomatically(threadId: string): Promise<boolean> {
     try {
-      const running = await getServices().jobs.listRunningJobs();
+      const services = getServices();
+      if ((await services.messageQueue.queueCount(threadId)) > 0) return true;
+      const running = await services.jobs.listRunningJobs();
       return running.some((job) => job.threadId === threadId);
     } catch (err) {
-      log.warn('Running background jobs lookup failed', {
+      log.warn('Automatic continuation lookup failed', {
         namespace: 'agent-message',
         threadId,
         error: err instanceof Error ? err.message : String(err),

@@ -40,9 +40,10 @@ function makeHandler() {
   return { handler, emitted };
 }
 
-function withRunningJobs(threadIds: string[]) {
+function withRunningJobs(threadIds: string[], queuedFollowUps = 0) {
   setServices(
     createServiceProviderFake({
+      messageQueue: { queueCount: vi.fn(async () => queuedFollowUps) },
       jobs: {
         listRunningJobs: vi.fn(
           async () => threadIds.map((threadId, i) => ({ id: `job-${i}`, threadId })) as any,
@@ -63,7 +64,7 @@ const successResult: CLIMessage = {
   session_id: 'sess-1',
 };
 
-describe('AgentMessageHandler — turn ends with a background job running', () => {
+describe('AgentMessageHandler — turn after which funny starts the agent again', () => {
   test('marks the result so clients do not announce the run as finished', async () => {
     withRunningJobs([THREAD_ID]);
     const { handler, emitted } = makeHandler();
@@ -72,7 +73,18 @@ describe('AgentMessageHandler — turn ends with a background job running', () =
 
     const result = emitted.find((e) => e.type === 'agent:result');
     expect(result?.data.status).toBe('completed');
-    expect(result?.data.backgroundJobPending).toBe(true);
+    expect(result?.data.continuesAutomatically).toBe(true);
+  });
+
+  test('marks the result when a queued follow-up is next', async () => {
+    withRunningJobs([], 1);
+    const { handler, emitted } = makeHandler();
+
+    await handler.handle(THREAD_ID, successResult);
+
+    const result = emitted.find((e) => e.type === 'agent:result');
+    expect(result?.data.status).toBe('completed');
+    expect(result?.data.continuesAutomatically).toBe(true);
   });
 
   test('leaves the result unmarked when only another thread has a running job', async () => {
@@ -83,6 +95,6 @@ describe('AgentMessageHandler — turn ends with a background job running', () =
 
     const result = emitted.find((e) => e.type === 'agent:result');
     expect(result?.data.status).toBe('completed');
-    expect(result?.data.backgroundJobPending).toBeUndefined();
+    expect(result?.data.continuesAutomatically).toBeUndefined();
   });
 });

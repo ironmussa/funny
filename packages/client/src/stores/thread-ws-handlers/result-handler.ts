@@ -232,7 +232,7 @@ export function handleWSResult(get: Get, set: Set, threadId: string, data: any):
   // patched scratchThreads above, and scratch threads have no project so a
   // bare scheduleProjectRefresh() would just storm every loaded project.
   if (sidebarHitScratch) {
-    if (!data.backgroundJobPending)
+    if (!data.continuesAutomatically)
       notifyThreadResult(threadId, resultStatus, get, data.errorReason);
     return;
   }
@@ -254,9 +254,9 @@ export function handleWSResult(get: Get, set: Set, threadId: string, data: any):
     scheduleProjectRefresh(get);
   }
 
-  // A background job of the thread wakes the agent when it ends: the run is
-  // not over, so do not announce it as finished.
-  if (data.backgroundJobPending) return;
+  // funny starts the agent again on its own (queued follow-up, background
+  // job): the run is not over, so do not announce it as finished.
+  if (data.continuesAutomatically) return;
 
   // Toast notification
   notifyThreadResult(threadId, resultStatus, get, data.errorReason);

@@ -84,10 +84,10 @@ export async function pushAgentResult(userId: string, event: BrowserEvent) {
   if (!pushConfig() || event.type !== 'agent:result' || !isString(event.threadId)) return;
   // SAFETY: data is read only as `data?.status` and compared by includes() with string
   // literals below, which accepts any value.
-  const data = event.data as { status?: string; backgroundJobPending?: unknown } | undefined;
+  const data = event.data as { status?: string; continuesAutomatically?: unknown } | undefined;
   if (!['completed', 'failed', 'error'].includes(data?.status ?? '')) return;
-  // A background job wakes the agent when it ends: the run is not over yet.
-  if (data?.backgroundJobPending === true) return;
+  // A queued follow-up or a background job starts the agent again: not over yet.
+  if (data?.continuesAutomatically === true) return;
   const thread = await dbGet<typeof threads.$inferSelect>(
     db
       .select()

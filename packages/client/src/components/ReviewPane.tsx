@@ -147,9 +147,6 @@ export function ReviewPane() {
               readOnly: viewerReadOnly,
             }}
             commitDraft={{
-              commitEntry: review.commitEntry,
-              commitProgressId: review.commitProgressId,
-              setActionInProgress: review.setActionInProgress,
               summaries: review.summaries,
               commitInProgress: review.commitInProgress,
               commitTitle: review.commitTitle,

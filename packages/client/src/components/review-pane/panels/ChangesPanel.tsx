@@ -118,9 +118,6 @@ export function ChangesPanel() {
           openOnHost: ctx.openOnHost,
         }}
         commitDraft={{
-          commitEntry: ctx.commitEntry,
-          commitProgressId: ctx.commitProgressId,
-          setActionInProgress: ctx.setActionInProgress,
           summaries: ctx.summaries,
           commitInProgress: ctx.commitInProgress,
           commitTitle: ctx.commitTitle,

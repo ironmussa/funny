@@ -12,22 +12,15 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-import { InlineProgressSteps } from '@/components/InlineProgressSteps';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { ProjectGitStatus } from '@/data/git-status/keys';
 import type { CommitAction } from '@/hooks/use-commit-workflow';
 import { cn } from '@/lib/utils';
-import { type CommitProgressEntry, useCommitProgressStore } from '@/stores/commit-progress-store';
 import { editorLabels, useSettingsStore } from '@/stores/settings-store';
 
 interface CommitDraftPanelProps {
-  // Workflow progress (top section)
-  commitEntry: CommitProgressEntry | undefined;
-  commitProgressId: string;
-  setActionInProgress: (v: string | null) => void;
-
   // Visibility gates
   summaries: FileDiffSummary[];
   commitInProgress: boolean;
@@ -67,17 +60,13 @@ interface CommitDraftPanelProps {
 }
 
 /**
- * Bottom of the Changes tab: commit-progress steps when a workflow is running,
- * the commit-message input + action selector + submit button when there are
+ * Bottom of the Changes tab: the commit-message input + action selector + submit button when there are
  * uncommitted changes, and a rebase-conflict banner when a merge/rebase failed.
  *
  * Extracted from ReviewPane.tsx as part of the god-file split — see
  * .claude/plans/reviewpane-split.md.
  */
 export function CommitDraftPanel({
-  commitEntry,
-  commitProgressId,
-  setActionInProgress,
   summaries,
   commitInProgress,
   commitTitle,
@@ -110,38 +99,6 @@ export function CommitDraftPanel({
 
   return (
     <>
-      {/* Workflow progress */}
-      {commitEntry && (
-        <div className="border-sidebar-border shrink-0 space-y-2 border-t p-2">
-          <p className="text-foreground text-xs font-medium">{commitEntry.title}</p>
-          <InlineProgressSteps steps={commitEntry.steps} />
-          {(() => {
-            const hasFailed = commitEntry.steps.some((s) => s.status === 'failed');
-            const isRunning = commitEntry.steps.some((s) => s.status === 'running');
-            const isFinished =
-              !isRunning &&
-              (commitEntry.steps.every((s) => s.status === 'completed' || s.status === 'failed') ||
-                hasFailed);
-            if (isFinished && hasFailed) {
-              return (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => {
-                    useCommitProgressStore.getState().finishCommit(commitProgressId);
-                    setActionInProgress(null);
-                  }}
-                >
-                  {t('review.progress.dismiss', 'Dismiss')}
-                </Button>
-              );
-            }
-            return null;
-          })()}
-        </div>
-      )}
-
       {/* Commit input + action selector */}
       {summaries.length > 0 && !commitInProgress && (
         <div className="border-sidebar-border shrink-0 space-y-1.5 border-t p-2">

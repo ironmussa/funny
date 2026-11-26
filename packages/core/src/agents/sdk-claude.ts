@@ -9,6 +9,7 @@ import { query } from '@anthropic-ai/claude-agent-sdk';
  * AgentRunner and AgentMessageHandler work unchanged.
  */
 import type {
+  McpServerConfig,
   SDKMessage,
   SDKUserMessage,
   Options,
@@ -452,7 +453,10 @@ export class SDKClaudeProcess extends BaseAgentProcess {
 
     // Pass MCP servers (e.g., CDP browser tools) if provided
     if (this.options.mcpServers) {
-      sdkOptions.mcpServers = this.options.mcpServers;
+      // SAFETY: runtime hands Claude its servers Claude-shaped (an SDK config, or a
+      // project server converted by `toSdkEntry`); `McpServerMap` keeps only the
+      // fields the other agents' converters read.
+      sdkOptions.mcpServers = this.options.mcpServers as Record<string, McpServerConfig>;
       sdkOptions.allowedTools = [
         ...(sdkOptions.allowedTools || []),
         ...mcpAutoAllowWildcards(Object.keys(this.options.mcpServers)),
@@ -800,7 +804,8 @@ export class SDKClaudeProcess extends BaseAgentProcess {
   ): object | null {
     if (!this.options.redirectChecks || toolName !== 'Bash') return null;
     const command = toolInput?.command;
-    const reason = isString(command) ? checkRedirectReason(command) : null;
+    if (!isString(command)) return null;
+    const reason = checkRedirectReason(command);
     if (!reason) return null;
     dlog.info('preToolUseHook REDIRECT check to funny_run_checks', {
       cwd: this.options.cwd,

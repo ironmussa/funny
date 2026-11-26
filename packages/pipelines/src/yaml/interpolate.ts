@@ -17,6 +17,7 @@
  *     fall-through-on-empty respectively.
  */
 
+import type { JsonObject } from '@funny/shared/json';
 import Mustache, { type TemplateSpans } from 'mustache';
 
 // Disable HTML escaping globally — see header comment for rationale.
@@ -28,10 +29,10 @@ Mustache.escape = (text: string) => text;
  *   - Per-node outputs accessible by node id (e.g. `review.output.verdict`)
  *   - Reserved templating variables (`LAST_ERROR`, `REJECTION_REASON`, etc.)
  *
- * Implemented as `Record<string, unknown>` to keep the boundary simple —
- * the engine controls what goes in.
+ * Plain JSON: inputs are validated as JSON where a run starts, and node
+ * outputs are agent / command text or parsed JSON.
  */
-export type TemplateScope = Record<string, unknown>;
+export type TemplateScope = JsonObject;
 
 export interface InterpolateOptions {
   /**

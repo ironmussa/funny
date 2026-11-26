@@ -11,6 +11,7 @@
  * to know about projects upfront.
  */
 
+import type { JsonObject } from './json.js';
 import type {
   AgentModel,
   AgentProvider,
@@ -386,7 +387,8 @@ export interface GitOperationPayload {
   type: 'git_operation';
   operation: GitOperationType;
   cwd: string;
-  params: Record<string, unknown>;
+  /** The `GitCommand.parameters` protobuf Struct: plain JSON. */
+  params: JsonObject;
 }
 
 // ─── HTTP: Task Result ──────────────────────────────────
@@ -404,7 +406,8 @@ export interface RunnerTaskResultRequest {
 export interface RunnerGitRequest {
   operation: GitOperationType;
   cwd: string;
-  params: Record<string, unknown>;
+  /** The `GitCommand.parameters` protobuf Struct: plain JSON. */
+  params: JsonObject;
 }
 
 export interface RunnerGitResponse {
@@ -494,7 +497,11 @@ export interface DataUpdateThread {
   type: 'data:update_thread';
   payload: {
     threadId: string;
-    updates: Record<string, any>;
+    /**
+     * Column changes, carried as the `UpdateThread.updates` protobuf Struct.
+     * The server parses them as a JSON object and drops the immutable columns.
+     */
+    updates: JsonObject;
   };
 }
 
@@ -522,7 +529,8 @@ export interface DataSaveThreadEvent {
   payload: {
     threadId: string;
     eventType: string;
-    data: Record<string, unknown>;
+    /** The `SaveThreadEvent.data` protobuf Struct, stored as the event's JSON. */
+    data: JsonObject;
   };
 }
 
@@ -677,6 +685,13 @@ export interface DataFindToolCall {
   };
 }
 
+/**
+ * A row the server reads from its database (a thread, or a message with its
+ * tool calls) as the runner receives it: encoded as a protobuf Struct, so plain
+ * JSON with the repository's column names as keys.
+ */
+export type WireRow = JsonObject;
+
 // Server → Runner: query responses
 export type ServerDataQueryResponse =
   | DataGetThreadResponse
@@ -690,31 +705,31 @@ export type ServerDataQueryResponse =
 export interface DataGetThreadResponse {
   type: 'data:get_thread_response';
   requestId: string;
-  thread: Record<string, any> | null;
+  thread: WireRow | null;
 }
 
 export interface DataGetThreadByExternalRequestIdResponse {
   type: 'data:get_thread_by_external_request_id_response';
   requestId: string;
-  thread: Record<string, any> | null;
+  thread: WireRow | null;
 }
 
 export interface DataGetThreadBySessionIdResponse {
   type: 'data:get_thread_by_session_id_response';
   requestId: string;
-  thread: Record<string, any> | null;
+  thread: WireRow | null;
 }
 
 export interface DataGetThreadWithMessagesResponse {
   type: 'data:get_thread_with_messages_response';
   requestId: string;
-  thread: Record<string, any> | null;
+  thread: WireRow | null;
 }
 
 export interface DataGetThreadMessagesResponse {
   type: 'data:get_thread_messages_response';
   requestId: string;
-  messages: Array<Record<string, any>>;
+  messages: WireRow[];
   hasMore: boolean;
   hasMoreAfter?: boolean;
   /** Full message count for the thread. */
@@ -722,7 +737,7 @@ export interface DataGetThreadMessagesResponse {
   /** Number of messages before the loaded window. */
   windowStart?: number;
   /** User message that owns the first loaded section when it sits before the window. */
-  leadingUserMessage?: Record<string, any>;
+  leadingUserMessage?: WireRow;
 }
 
 export interface DataGetToolCallResponse {

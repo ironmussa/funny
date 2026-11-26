@@ -12,6 +12,8 @@ import type {
   ContextBreakdown,
 } from '@funny/shared';
 
+import type { McpServerMap } from './mcp-server-map.js';
+
 // ── CLI Message Types ──────────────────────────────────────────────
 
 export interface CLISystemMessage {
@@ -175,7 +177,7 @@ export interface ClaudeProcessOptions {
   /** Provider identifier — used by AgentProcessOptions, passed through here for convenience. */
   provider?: string;
   /** MCP servers to pass to the SDK query() call (e.g., CDP browser tools) */
-  mcpServers?: Record<string, any>;
+  mcpServers?: McpServerMap;
   /** Extra instructions appended to the system prompt (e.g., project instructions). */
   systemPrefix?: string;
   /** Effort level for Claude SDK — controls thinking depth ('low' | 'medium' | 'high' | 'xhigh' | 'max') */

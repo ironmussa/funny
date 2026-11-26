@@ -76,8 +76,8 @@ export function IssueContextBanner({ title, onDismiss }: { title: string; onDism
       </span>
       <Button
         variant="ghost"
-        size="sm"
-        className="text-2xs ml-auto h-5 px-1"
+        size="3xs-tight"
+        className="ml-auto"
         onClick={onDismiss}
         data-testid="issue-context-dismiss"
       >

@@ -20,7 +20,7 @@ import { spawn, type ChildProcess } from 'child_process';
 import { randomUUID } from 'crypto';
 
 import type { AgentAccountInfo } from '@funny/shared';
-import type { JsonObject } from '@funny/shared/json';
+import { definedJsonFields, type JsonObject } from '@funny/shared/json';
 import type { ProviderManifest } from '@funny/shared/provider-manifest';
 import { resolveSpawnCommand, type SpawnCommand } from '@funny/shared/provider-manifest';
 
@@ -277,7 +277,7 @@ export class GenericACPProcess extends BaseAgentProcess {
       if (allMcp.length !== mcpServerList.length) {
         this.dlog.warn('dropped MCP servers unsupported by agent', {
           dropped: allMcp.length - mcpServerList.length,
-          mcpCapabilities: mcpCaps,
+          mcpCapabilities: mcpCaps && definedJsonFields({ http: mcpCaps.http, sse: mcpCaps.sse }),
         });
       }
 

@@ -19,15 +19,13 @@ const PROMOTED = [
   'anti-slop/no-runtime-typeof',
   'anti-slop/no-unknown-parameters',
   'anti-slop/no-unknown-returns',
+  'anti-slop/no-unsafe-dictionary-type',
   'anti-slop/require-safety-comment-for-type-assertion',
   'react/refs',
   'react/set-state-in-effect',
   'max-lines',
   'max-lines-per-function',
 ];
-
-/** Rules that still have findings (#465's pull request lists them with their counts). */
-const STILL_WARN = ['anti-slop/no-unsafe-dictionary-type'];
 
 const rules: Record<string, RuleSetting> = config.rules;
 
@@ -47,10 +45,6 @@ describe('lint severity (#465)', () => {
     expect(level(rules[rule])).toBe('error');
   });
 
-  test.each(STILL_WARN)('%s stays a warning', (rule) => {
-    expect(level(rules[rule])).toBe('warn');
-  });
-
   test('no-runtime-typeof keeps allowInTypeGuards', () => {
     expect(rules['anti-slop/no-runtime-typeof']).toEqual(['error', { allowInTypeGuards: true }]);
   });
@@ -62,10 +56,10 @@ describe('lint severity (#465)', () => {
     ]);
   });
 
-  test('shadcn/no-inline-styles is an error and no-restyle a warning in the client', () => {
+  test('shadcn/no-inline-styles and no-restyle are errors in the client', () => {
     const client = clientRules();
     expect(level(client['shadcn/no-inline-styles'])).toBe('error');
-    expect(level(client['shadcn/no-restyle'])).toBe('warn');
+    expect(level(client['shadcn/no-restyle'])).toBe('error');
   });
 
   // Counted here, the way max-lines-per-function counts with skipBlankLines and

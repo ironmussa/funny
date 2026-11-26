@@ -498,12 +498,11 @@ export function UserMessageCard({
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button
-                  variant="muted"
+                  variant="muted-menu"
                   size="icon-xs"
                   data-testid={`user-message-actions-menu-${props['data-testid'] ?? ''}`}
                   disabled={forkDisabled && !hasCopyableContent}
                   onClick={(e) => e.stopPropagation()}
-                  className="data-[state=open]:text-foreground"
                   aria-label={t('thread.threadActions', 'Thread actions')}
                 >
                   <MoreVertical className="icon-xs" />

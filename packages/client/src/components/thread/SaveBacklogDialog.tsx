@@ -35,7 +35,7 @@ export function SaveBacklogDialog({
           <DialogTitle>{t('saveBacklog.title')}</DialogTitle>
           <DialogDescription>{t('saveBacklog.description')}</DialogDescription>
         </DialogHeader>
-        <DialogFooter className="flex-col gap-1.5 sm:flex-col sm:justify-stretch sm:space-x-0">
+        <DialogFooter stacked>
           <Button
             data-testid="save-backlog-save"
             variant="default"

@@ -89,13 +89,16 @@ export function ThreadChatView({ activeThread }: Props) {
           onVisibleMessageChange={setVisibleMessageId}
           aboveInput={<ThreadRecapCard thread={activeThread} />}
           searchBar={
-            <ThreadSearchBar
-              threadId={activeThread.id}
-              open={searchOpen}
-              onClose={handleSearchClose}
-              onNavigateToMessage={handleSearchNavigate}
-              onClearHighlights={handleSearchClear}
-            />
+            <div className="absolute top-0 right-4 z-30">
+              <ThreadSearchBar
+                variant="floating"
+                threadId={activeThread.id}
+                open={searchOpen}
+                onClose={handleSearchClose}
+                onNavigateToMessage={handleSearchNavigate}
+                onClearHighlights={handleSearchClear}
+              />
+            </div>
           }
         />
         {timelineVisible && stableMessages && stableMessages.length > 0 && (

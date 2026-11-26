@@ -324,13 +324,16 @@ export const flowOf = (job: FactoryRunJob): string => job.run.flowName ?? job.fa
 
 /**
  * The step outputs a journal stored: an object per step. JSON drops an
- * undefined `output`, so a missing one reads back as undefined.
+ * undefined `output`, so a missing one reads back as undefined. A `json` or
+ * `error` of another shape reads as absent rather than failing the resume.
  */
 const STORED_OUTPUTS = z.record(
   z.string(),
-  z
-    .looseObject({ output: z.unknown().optional() })
-    .transform((stored): NodeOutput => ({ ...stored, output: stored.output })),
+  z.object({
+    output: z.json().optional(),
+    json: z.record(z.string(), z.json()).optional().catch(undefined),
+    error: z.string().optional().catch(undefined),
+  }) satisfies z.ZodType<NodeOutput>,
 );
 
 /** The flow's step outputs by node id, as a journal stores them. */

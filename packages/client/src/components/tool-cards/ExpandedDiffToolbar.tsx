@@ -75,7 +75,8 @@ function DiffViewModeToggle({
       value={value}
       onValueChange={onValueChange}
       disabled={disabled}
-      className="border-border shrink-0 gap-0 rounded-md border"
+      segmented
+      className="shrink-0"
       data-testid={`${testIdPrefix}-view-mode-group`}
     >
       {VIEW_MODE_OPTIONS.map(({ value: mode, label, icon: Icon, className }) => (

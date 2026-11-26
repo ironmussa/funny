@@ -18,10 +18,10 @@ const ANTI_SLOP_ERROR = [
   'no-unknown-parameters',
   'no-unknown-returns',
   'no-unknown-type-aliases',
+  'no-unsafe-dictionary-type',
   'no-widen-then-assert',
   'require-safety-comment-for-type-assertion',
 ];
-const ANTI_SLOP_WARN = ['no-unsafe-dictionary-type'];
 // Off on purpose: the formatter (bun fmt) owns blank lines (require-readable-spacing), and the
 // tests mock modules with vi.mock by design (no-module-mocking).
 const ANTI_SLOP_OFF = ['require-readable-spacing', 'no-module-mocking'];
@@ -36,10 +36,10 @@ const ANTI_SLOP_EFFECT_WARN: string[] = [];
 const SHADCN_ERROR = [
   'no-inline-styles',
   'no-raw-colors',
+  'no-restyle',
   'no-unknown-classes',
   'require-static-classes',
 ];
-const SHADCN_WARN = ['no-restyle'];
 // Off: the font-size rule in CLAUDE.md requires arbitrary values such as
 // `text-[length:var(--diff-font-size)]`.
 const SHADCN_OFF = ['no-arbitrary-values'];
@@ -65,7 +65,6 @@ const existing = {
   rules: {
     'oxc/no-accumulating-spread': 'error',
     ...severity('anti-slop', ANTI_SLOP_ERROR, 'error'),
-    ...severity('anti-slop', ANTI_SLOP_WARN, 'warn'),
     // A `typeof` inside a `value is T` guard is the decoder the rule asks for.
     'anti-slop/no-runtime-typeof': ['error', { allowInTypeGuards: true }],
     ...severity('anti-slop', ANTI_SLOP_OFF, 'off'),
@@ -234,7 +233,6 @@ const existing = {
       files: ['packages/client/src/**/*.{ts,tsx}'],
       rules: {
         ...severity('shadcn', SHADCN_ERROR, 'error'),
-        ...severity('shadcn', SHADCN_WARN, 'warn'),
         ...severity('shadcn', SHADCN_OFF, 'off'),
         // Marker classes with no styles of their own: dockview's right-pane
         // tabs and the PR detail conversation, which an inline <style> targets.
@@ -242,7 +240,7 @@ const existing = {
         // Layout classes (flex-1, shrink-0, w-full, margins) place a component in its
         // parent and do not restyle it, which is the baseline @shadcn/lint documents.
         'shadcn/no-restyle': [
-          'warn',
+          'error',
           {
             allow: ['layout'],
             contracts: [
@@ -271,7 +269,7 @@ const existing = {
     {
       // The shadcn/ui primitives themselves define the component styles.
       files: ['packages/client/src/components/ui/**'],
-      rules: severity('shadcn', [...SHADCN_ERROR, ...SHADCN_WARN, ...SHADCN_OFF], 'off'),
+      rules: severity('shadcn', [...SHADCN_ERROR, ...SHADCN_OFF], 'off'),
     },
     {
       files: ['**/__tests__/**', '**/*.test.*', '**/*.spec.*', 'packages/test-kit/**'],

@@ -201,7 +201,7 @@ export function ShareThreadDialog({
       <DialogContent flush className="max-w-md overflow-hidden" data-testid="share-thread-dialog">
         <div className="min-w-0 px-6 pt-6">
           <DialogHeader className="min-w-0">
-            <DialogTitle className="min-w-0 leading-snug wrap-anywhere">
+            <DialogTitle leading="snug" className="min-w-0 wrap-anywhere">
               {threadTitle ? `Share “${threadTitle}”` : 'Share this thread'}
             </DialogTitle>
           </DialogHeader>
@@ -278,7 +278,7 @@ function MemberPicker({
 }) {
   return (
     <div className="min-w-0 px-6 pt-4">
-      <Command className="border" shouldFilter>
+      <Command outlined shouldFilter>
         <CommandInput placeholder="Add a project member…" className="h-10" />
         <CommandList className="max-h-44">
           <CommandEmpty>No project members to add.</CommandEmpty>
@@ -390,11 +390,11 @@ function AccessList({
 function ShareFooter({ copied, onCopyLink }: { copied: boolean; onCopyLink: () => void }) {
   const CopyIcon = copied ? Check : Link2;
   return (
-    <DialogFooter className="mt-5 items-center justify-between border-t px-6 py-4 sm:justify-between">
+    <DialogFooter bordered="wide" className="mt-5 items-center justify-between sm:justify-between">
       <Button
         variant="outline"
         size="sm"
-        className="gap-1.5"
+        gap="snug"
         onClick={onCopyLink}
         data-testid="share-copy-link"
       >

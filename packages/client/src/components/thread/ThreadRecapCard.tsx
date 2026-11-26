@@ -70,7 +70,7 @@ function RecapShell({
   return (
     <div className="px-3 pt-2 pb-2 sm:px-4">
       <div className="mx-auto w-full max-w-3xl min-w-0">
-        <Card className="shadow-none" data-testid={testId}>
+        <Card flat data-testid={testId}>
           <div className="flex items-start gap-3 px-3 py-2.5">
             <Sparkles className="icon-sm text-muted-foreground mt-0.5 shrink-0" aria-hidden />
             <div className="min-w-0 flex-1">
@@ -115,8 +115,7 @@ function UtilityModelHint({ recapKey, openKey }: { recapKey: string; openKey: st
       <p className="text-muted-foreground text-sm">{t('thread.recap.unavailableHint')}</p>
       <Button
         variant="link"
-        size="sm"
-        className="h-auto p-0"
+        size="inline"
         onClick={() => {
           setFocusId('models.utility-model');
           navigate(buildPath('/preferences/models'));

@@ -34,7 +34,6 @@ import { useEditorDictation } from '@/hooks/use-editor-dictation';
 import { useSlashSkills } from '@/hooks/use-slash-skills';
 import { createClientLogger } from '@/lib/client-logger';
 import { remarkPlugins } from '@/lib/markdown-components';
-import { cn } from '@/lib/utils';
 
 import { AnnotatableContent } from './AnnotatableContent';
 import {
@@ -215,11 +214,10 @@ function PlanCustomResponseEditor({
             <Button
               data-testid="plan-send-feedback"
               onClick={onSubmitInput}
-              variant="muted"
+              variant={hasContent ? 'ghost-primary' : 'muted'}
               size="icon-sm"
               tabIndex={-1}
               disabled={!hasContent}
-              className={cn(hasContent && 'text-primary hover:text-primary')}
             >
               <Send className="icon-xs" />
             </Button>
@@ -295,10 +293,10 @@ function PlanResponseControls({
         />
         {planComments.length > 0 && (
           <Button
-            size="xs"
+            size="xs-wide"
             onClick={onSendComments}
             data-testid="plan-send-comments"
-            className="shrink-0 px-3"
+            className="shrink-0"
           >
             {labels.sendComments}
           </Button>

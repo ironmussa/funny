@@ -155,7 +155,7 @@ const HooksEventCard = memo(function HooksEventCard({
         )}
       </button>
       {expanded && errorOutput && (
-        <ScrollArea className="border-border/50 bg-muted mx-3 mt-1 mb-2 max-h-60 rounded border">
+        <ScrollArea variant="muted-outline-faint" className="mx-3 mt-1 mb-2 max-h-60">
           <pre
             className="text-compact text-foreground p-2 font-mono leading-relaxed break-all whitespace-pre-wrap"
             dangerouslySetInnerHTML={{ __html: errorOutput }}

@@ -46,6 +46,14 @@ const inputVariants = cva(
         bare: 'rounded-none border-0 bg-transparent p-0 shadow-none focus-visible:ring-0',
         'bare-strong':
           'rounded-none border-0 bg-transparent p-0 text-foreground shadow-none focus-visible:ring-0',
+        // A `bare-strong` comment field whose placeholder fades further (plan annotations).
+        'bare-comment':
+          'rounded-none border-0 bg-transparent p-0 text-foreground shadow-none placeholder:text-muted-foreground/50 focus-visible:ring-0',
+      },
+      // A code always shown in capitals (a runner enrollment code).
+      caps: {
+        true: 'uppercase',
+        false: '',
       },
       // A name the row is about (a group name), not a value.
       weight: {
@@ -75,6 +83,7 @@ const inputVariants = cva(
       textSize: 'default',
       weight: 'default',
       touch: false,
+      caps: false,
     },
   },
 );
@@ -89,6 +98,7 @@ function Input({
   textSize,
   weight,
   touch,
+  caps,
   ref,
   ...props
 }: Omit<React.ComponentProps<'input'>, 'size'> &
@@ -97,7 +107,7 @@ function Input({
     <input
       type={type}
       className={cn(
-        inputVariants({ size, mono, inset, variant, textSize, weight, touch }),
+        inputVariants({ size, mono, inset, variant, textSize, weight, touch, caps }),
         className,
       )}
       ref={ref}

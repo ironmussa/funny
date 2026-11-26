@@ -75,5 +75,5 @@ Phase 2 is groups 9–10. Phase 3 is group 11. Group 12 closes each phase.
 
 ## 12. Integration
 
-- [ ] 12.1 Run `bun run lint`, `bun run typecheck` and the factory test suites; verify all pass
-- [ ] 12.2 Run an end-to-end scenario on the fake GitHub: two lanes, an issue in each and one unlaned, a commit on `dev` syncing both lanes (one clean, one through the agent), a cross-lane blocker admitted only after its lane is finished and the other synced, and the finished lane removed; verify the run states, branches and closed issues match the specs
+- [x] 12.1 Run `bun run lint`, `bun run typecheck` and the factory test suites; verify all pass
+- [x] 12.2 Run an end-to-end scenario on the fake GitHub: two lanes, an issue in each and one unlaned, a commit on `dev` syncing both lanes (one clean, one through the agent), a cross-lane blocker admitted only after its lane is finished and the other synced, and the finished lane removed; verify the run states, branches and closed issues match the specs

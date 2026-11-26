@@ -16,6 +16,7 @@ import { NO_CHANGE_LINE } from '../../../services/factory/factory-action-provide
 import { noteOwnerFollowUp } from '../../../services/factory/factory-follow-ups.js';
 import type { FactoryGithubPort, FactoryIssue } from '../../../services/factory/factory-github.js';
 import { createFactoryLanesRepository } from '../../../services/factory/factory-lanes.js';
+import { prNumberOf } from '../../../services/factory/factory-pull-requests.js';
 import type {
   FactoryMergeOutcome,
   FactoryProofCheck,
@@ -156,7 +157,15 @@ interface GithubScript {
   /** The branches that contain each commit. */
   contains?: Record<string, string[]>;
   /** The repository as a lane sync sees it: branch heads. With it, the factory syncs its lanes. */
-  laneSync?: { heads: Record<string, string>; conflict?: boolean };
+  laneSync?: {
+    heads: Record<string, string>;
+    /** Every sync merge conflicts. */
+    conflict?: boolean;
+    /** Only the sync merges into these scratch branches conflict (mutable by the test). */
+    conflictOn?: string[];
+    /** The sync pull request opened from each scratch branch (default 77). */
+    prNumbers?: Record<string, number>;
+  };
   /** GitHub refuses to close an issue. */
   closeRefused?: boolean;
   /** GitHub refuses to make a branch. */
@@ -382,11 +391,12 @@ function fakeGithub(
       },
       mergeInto: (branch: string, sha: string) => {
         port.syncCalls.push(`merge ${sha} into ${branch}`);
-        return okAsync(laneSync.conflict ? ('conflict' as const) : ('merged' as const));
+        const conflicts = laneSync.conflict || laneSync.conflictOn?.includes(branch);
+        return okAsync(conflicts ? ('conflict' as const) : ('merged' as const));
       },
       openPullRequest: (input: { head: string; base: string }) => {
         port.syncCalls.push(`pr ${input.head} -> ${input.base}`);
-        return okAsync(77);
+        return okAsync(laneSync.prNumbers?.[input.head] ?? 77);
       },
       deleteBranch: () => okAsync(undefined),
     });
@@ -1067,6 +1077,158 @@ describe('factory watcher', () => {
         expect(github.syncCalls).toEqual([]);
         expect(syncState().sync_state).toBe('idle');
       });
+    });
+
+    // Task 12.2 of openspec factory-lanes: the whole lifecycle on the fake GitHub, tick by tick.
+    test('end to end: two lanes, a commit on dev, a cross-lane blocker and a finished lane', async () => {
+      const factoryId = await enableFactory({ maxConcurrent: 5, dependencies: 'stack' });
+      const issues: FactoryIssue[] = [
+        { number: 1, title: 'Pay by card', url: 'u/1' },
+        { number: 2, title: 'Search box', url: 'u/2' },
+        { number: 3, title: 'Fix a typo', url: 'u/3' },
+      ];
+      // What GitHub holds; the test moves it as people and the agent would.
+      const heads: Record<string, string> = {
+        dev: 'dev-1',
+        'feature/a': 'a-1',
+        'feature/b': 'b-1',
+      };
+      const contains: Record<string, string[]> = { 'dev-1': ['dev', 'feature/a', 'feature/b'] };
+      const conflictOn = ['factory/sync/a'];
+      const prStates: Record<number, 'open' | 'merged' | 'closed'> = {};
+      const mergeCommits: Record<number, string> = {};
+      const github = fakeGithub('acme/repo', issues, {
+        mergeInto: { branch: 'dev' },
+        labels: { 1: ['feature:a'], 2: ['feature:b'], 3: [], 31: ['feature:a'] },
+        blockers: { 31: [{ number: 2, repo: 'acme/repo', open: false }] },
+        laneSync: {
+          heads,
+          conflictOn,
+          prNumbers: { 'factory/sync/a': 81, 'factory/sync/b': 82 },
+        },
+        contains,
+        prStates,
+        mergeCommits,
+      });
+      // Every agent's turn has ended by the next tick.
+      const launches: StartThreadInput[] = [];
+      const launch = async (input: StartThreadInput): Promise<LaunchResult> => {
+        if (isReviewerLaunch(input)) return launchReviewer(input);
+        launches.push(input);
+        const id = `e2e-${launches.length}`;
+        seedThread(testDb.db, {
+          id,
+          projectId: 'p1',
+          userId: 'alice',
+          title: String(input.body.title),
+          status: 'completed',
+          source: 'factory',
+        });
+        return launchedThread(id);
+      };
+      const poll = fakePoll();
+      await startWatcherWithProof({
+        ports,
+        github,
+        createPoll: poll.createPoll,
+        launch,
+        resolveRuntime,
+      });
+      const tick = () => poll.ticks[0]!();
+      const runs = async () =>
+        (await createFactoryRunsRepository().list(factoryId))._unsafeUnwrap();
+      const runOf = async (issue: number) => (await runs()).find((r) => r.issueNumber === issue);
+      const lanes = async () =>
+        (await createFactoryLanesRepository().list(factoryId))._unsafeUnwrap();
+      const laneOf = async (name: string) =>
+        present(
+          (await lanes()).find((l) => l.name === name),
+          name,
+        );
+      // Flows go on after the tick that started them.
+      const until = async (what: string, done: () => Promise<boolean>) => {
+        for (let i = 0; i < 400; i++) {
+          if (await done()) return;
+          await new Promise((resolve) => setTimeout(resolve, 5));
+        }
+        throw new Error(`never reached: ${what}`);
+      };
+
+      // 1. Admission: a lane per feature label, made with its branch; the unlaned issue on dev.
+      await tick();
+      expect(await runOf(1)).toMatchObject({ lane: 'a', baseBranch: 'feature/a' });
+      expect(await runOf(2)).toMatchObject({ lane: 'b', baseBranch: 'feature/b' });
+      expect(await runOf(3)).toMatchObject({ lane: null, baseBranch: 'dev' });
+      expect([...github.ensuredBranches].sort()).toEqual(['feature/a', 'feature/b']);
+      await until(
+        'the three runs merged',
+        async () => (await runs()).filter((r) => r.state === 'merged').length === 3,
+      );
+      // The factory closes a lane's issue itself; GitHub closes the one merged into dev.
+      await until('the lane issues closed', async () => github.closedIssues.length === 2);
+      expect([...github.closedIssues].sort()).toEqual([1, 2]);
+
+      // 2. A commit on dev: both lanes sync. b merges cleanly; a conflicts and goes to an agent.
+      heads.dev = 'dev-2';
+      await tick();
+      expect((await laneOf('b')).syncState).toBe('checking');
+      expect((await laneOf('a')).syncState).toBe('resolving');
+      const syncAgent = launches.find((l) => l.body.branch === 'factory/sync/a');
+      expect(syncAgent?.body).toMatchObject({ baseBranch: 'feature/a', requireBranch: true });
+      expect(launches.some((l) => l.body.branch === 'factory/sync/b')).toBe(false);
+
+      // The agent pushed the merge to the scratch branch.
+      contains['dev-2'] = ['dev', 'factory/sync/a'];
+      await tick();
+      await tick();
+      expect(await laneOf('a')).toMatchObject({ syncState: 'idle', lastSyncedBaseSha: 'dev-2' });
+      expect(await laneOf('b')).toMatchObject({ syncState: 'idle', lastSyncedBaseSha: 'dev-2' });
+      expect(github.syncCalls).toContain('pr factory/sync/a -> feature/a');
+      expect(github.syncCalls).toContain('pr factory/sync/b -> feature/b');
+      contains['dev-2'].push('feature/a', 'feature/b');
+
+      // 3. #31 in lane a is blocked by #2, merged into lane b: it waits for that work.
+      mergeCommits[present(prNumberOf((await runOf(2))?.prUrl ?? ''), '#2 PR')] = 'sha-2';
+      contains['sha-2'] = ['feature/b'];
+      issues.push({ number: 31, title: 'Pay from search results', url: 'u/31' });
+      await tick();
+      expect(await runOf(31)).toMatchObject({
+        state: 'requested',
+        waitReason: { kind: 'blocker-on-other-branch', blockers: [2] },
+      });
+
+      // Lane b is finished: its pull request into dev merged.
+      await createFactoryLanesRepository().setFinishPullRequest((await laneOf('b')).id, 90);
+      prStates[90] = 'merged';
+      heads.dev = 'dev-3';
+      contains['sha-2'] = ['feature/b', 'dev'];
+      conflictOn.length = 0;
+      // An hour later: lane a may sync again.
+      testDb.sqlite.run(`UPDATE factory_lanes SET sync_started_at = '2026-01-01T00:00:00.000Z'`);
+      await tick();
+      expect((await laneOf('b')).state).toBe('finished');
+      // In dev, not yet in feature/a: still waiting.
+      expect((await runOf(31))?.state).toBe('requested');
+      await tick();
+      expect(await laneOf('a')).toMatchObject({ syncState: 'idle', lastSyncedBaseSha: 'dev-3' });
+      // A finished lane is not synced any more.
+      expect((await laneOf('b')).lastSyncedBaseSha).toBe('dev-2');
+
+      // The sync brought #2's work into feature/a: #31 is admitted on its lane.
+      contains['sha-2'].push('feature/a');
+      await tick();
+      expect(await runOf(31)).toMatchObject({
+        lane: 'a',
+        baseBranch: 'feature/a',
+        waitReason: null,
+      });
+      await until('#31 merged', async () => (await runOf(31))?.state === 'merged');
+      await until('#31 closed', async () => github.closedIssues.includes(31));
+
+      // 4. The finished lane is removed; its branch is left on GitHub.
+      const removed = await createFactorySettingsService().removeLane('alice', 'p1', 'b');
+      expect(removed.isOk()).toBe(true);
+      expect((await lanes()).map((l) => l.name)).toEqual(['a']);
     });
 
     test("a finished lane's label sends the issue to the factory's own branch", async () => {

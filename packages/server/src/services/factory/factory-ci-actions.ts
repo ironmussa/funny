@@ -17,7 +17,10 @@
  *   registers its checks a moment later, and merging before they appear would
  *   skip the CI — and as green ("no CI") after it.
  * - `merge` merges (or enables auto-merge) only on green checks, and reports
- *   the run merged; anything else is not ok and leaves the PR alone.
+ *   the run merged. Checks still running (pending) are waited for, up to
+ *   `MERGE_PENDING_TIMEOUT_MS`, and the merge is tried again: a check that
+ *   finishes seconds after the merge's look is not a reason for a person.
+ *   Anything else is not ok and leaves the PR alone.
  * - `required_checks` narrows both to the named checks (a named check not
  *   reported yet is pending); `merge` uses the names of the last `wait_ci`.
  */
@@ -79,6 +82,10 @@ const DEFAULT_CI_TIMEOUT_MS = 60 * 60 * 1000;
 const DEFAULT_CI_INTERVAL_MS = 30 * 1000;
 /** How long a head commit may report no checks before the repository counts as having no CI. */
 export const NO_CHECKS_GRACE_MS = 2 * 60 * 1000;
+/** How long `merge` waits for checks still running before it gives up (it holds the repository's merge lane). */
+export const MERGE_PENDING_TIMEOUT_MS = 15 * 60 * 1000;
+/** How many times `merge` waits for pending checks and tries again. */
+const MAX_PENDING_MERGE_ROUNDS = 5;
 
 export interface FactoryCiActionsDeps {
   prs: FactoryPullRequests;
@@ -180,9 +187,12 @@ export function createFactoryCiActions(deps: FactoryCiActionsDeps) {
 
   /** The checks the last `wait_ci` waited on; `merge` holds the PR to the same ones. */
   let required: readonly string[] | undefined;
+  /** The last `wait_ci`'s polling interval; `merge` looks at pending checks as often. */
+  let interval = DEFAULT_CI_INTERVAL_MS;
 
   async function waitCi(options: WaitCiOptions = {}): Promise<CiActionResult> {
     required = options.requiredChecks?.length ? options.requiredChecks : undefined;
+    interval = options.intervalMs ?? DEFAULT_CI_INTERVAL_MS;
     const pr = deps.pullRequest();
     if (!pr) return noPullRequest;
     return poll(
@@ -224,9 +234,51 @@ export function createFactoryCiActions(deps: FactoryCiActionsDeps) {
     return verdictOf(ci.value, elapsedMs) ?? timedOut(elapsedMs + intervalMs, timeoutMs);
   }
 
+  /**
+   * Merge on green. Checks still running are waited for and the merge tried
+   * again, within `MERGE_PENDING_TIMEOUT_MS` and `MAX_PENDING_MERGE_ROUNDS`;
+   * checks that turn red while waited for end the step with their failure.
+   */
   async function merge(options: MergeOptions = {}): Promise<CiActionResult> {
     const pr = deps.pullRequest();
     if (!pr) return noPullRequest;
+    const started = now();
+    for (let round = 1; ; round++) {
+      const result = await mergeOnce(pr, options);
+      if (result.metadata?.ci !== 'pending') return result;
+      const ended = await waitForPending(pr, result, started, round);
+      if (ended) return ended;
+    }
+  }
+
+  /**
+   * Wait for the checks a merge found still running. Null: try the merge
+   * again; otherwise the step's end (checks failed, or waited too long).
+   */
+  async function waitForPending(
+    pr: FactoryPullRequestRef,
+    pending: CiActionResult,
+    started: number,
+    round: number,
+  ): Promise<CiActionResult | null> {
+    const remaining = MERGE_PENDING_TIMEOUT_MS - (now() - started);
+    if (remaining <= 0 || round >= MAX_PENDING_MERGE_ROUNDS) {
+      const minutes = Math.round((now() - started) / 60_000);
+      return {
+        ...pending,
+        error: `Not merged: the checks were still running after ${minutes} min of waiting (pending).`,
+      };
+    }
+    const settled = await poll(pr, remaining, interval);
+    // The wait's own timeout: the next round reports it as checks still running.
+    if (settled.ok || settled.metadata?.verdict === 'timeout') return null;
+    return settled;
+  }
+
+  async function mergeOnce(
+    pr: FactoryPullRequestRef,
+    options: MergeOptions,
+  ): Promise<CiActionResult> {
     const merged = await deps.prs.merge(pr, {
       method: options.method,
       deleteBranch: options.deleteBranch,

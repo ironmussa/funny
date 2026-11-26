@@ -1797,10 +1797,13 @@
       "failed": "Falhou",
       "stopped": "Parada",
       "split": "Dividido",
+      "tracked": "Acompanhado em #{{issue}}",
+      "trackedMore": "Acompanhado em #{{issue}} +{{count}}",
       "notStarted": "Não iniciada",
       "notStartedQueued": "Retirada da fila antes de começar: nenhum agente executou, sem branch nem pull request",
       "notStartedStopped": "Parada antes do primeiro passo: nenhum agente executou, sem branch nem pull request",
-      "tooBig": "Grande demais"
+      "tooBig": "Grande demais",
+      "alreadyDone": "Já feito"
     },
     "wait": {
       "pathsAwaitingApproval": "Aguardando {{blockers}}: reserva os mesmos arquivos enquanto aguarda uma aprovação",
@@ -1875,7 +1878,9 @@
     "noChange": {
       "title": "O agente não fez nenhuma alteração",
       "body": "Não abriu nenhum pull request nem fez commits. A explicação está na issue #{{issue}}, agora marcada para triagem: feche a issue ou tente o run novamente.",
-      "unsavedBody": "Não abriu nenhum pull request nem fez commits, mas deixou trabalho não salvo no checkout, que foi mantido (o caminho está na issue #{{issue}}). Escreva nesta thread para que faça o commit e abra o pull request, ou tente o run novamente."
+      "unsavedBody": "Não abriu nenhum pull request nem fez commits, mas deixou trabalho não salvo no checkout, que foi mantido (o caminho está na issue #{{issue}}). Escreva nesta thread para que faça o commit e abra o pull request, ou tente o run novamente.",
+      "notPushedTitle": "O agente não fez push dos commits",
+      "notPushedBody": "Fez commit no checkout, mas encerrou o turno antes do push, então não há pull request. O checkout foi mantido (o caminho está na issue #{{issue}}). Envie uma mensagem nesta thread para que ele faça push e abra o pull request, ou tente o run novamente."
     },
     "risk": {
       "low": "Risco baixo",
@@ -1885,7 +1890,8 @@
       "noReview": "Sem merge: este commit não tem review",
       "reviewFailed": "Sem merge: o review não passou",
       "highRisk": "Sem merge: risco alto, precisa de você",
-      "rewritten": "Sem merge: a branch foi reescrita"
+      "rewritten": "Sem merge: a branch foi reescrita",
+      "notPushed": "Fez commit, mas nunca fez push: sem pull request"
     },
     "reasonDetail": {
       "highRisk": "Este factory só faz merge sozinho de mudanças de risco baixo, e esta é de risco alto: {{reasons}}. Revise o pull request e faça o merge você, ou mude \"Merge automático\" para \"Todos\" nas configurações do factory.",
@@ -2080,6 +2086,7 @@
       "review": "Revisão",
       "merge": "Merge",
       "needsPerson": "Precisa de uma pessoa",
+      "waitingParts": "Aguardando as partes",
       "done": "Concluído"
     },
     "emptyColumn": "Nenhuma execução aqui",
@@ -2122,7 +2129,8 @@
       "noVerdict": "Sem veredito",
       "noCommit": "Sem commit",
       "stepFailed": "{{step}} falhou",
-      "other": "Problema"
+      "other": "Problema",
+      "notPushed": "Sem push"
     },
     "waiting": {
       "questions": "A triagem fez {{count}} perguntas na issue",
@@ -2132,7 +2140,11 @@
       "noChange": "Nada a mudar: a issue precisa de uma pessoa",
       "failed": "Falhou",
       "unsaved": "Sem commit, mas com trabalho não salvo no checkout",
-      "person": "Esperando uma pessoa"
+      "person": "Esperando uma pessoa",
+      "alreadyDone": "Já feito: a factory fechou o issue",
+      "alreadyDoneOpen": "A triagem o achou já feito; feche o issue se concordar",
+      "trackedBy": "Acompanhado em {{issues}}",
+      "notPushed": "Fez commit no checkout, mas nunca fez push"
     },
     "time": {
       "inStep": "Em {{step}} {{duration}}",
@@ -2192,7 +2204,8 @@
       "ready": "Contrato: o que deve ser verdade",
       "needsInfo": "Perguntado na issue",
       "tooBig": "Divisão proposta",
-      "none": "A triagem não deu contrato: a revisão julga contra a issue."
+      "none": "A triagem não deu contrato: a revisão julga contra a issue.",
+      "alreadyDone": "Já feito: as evidências"
     },
     "timeline": {
       "title": "Linha do tempo",

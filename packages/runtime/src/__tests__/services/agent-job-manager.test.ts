@@ -7,7 +7,21 @@ import type { DomainError } from '@funny/shared/errors';
 import { advanceTimersByTimeAsync } from '@funny/test-kit';
 import { okAsync } from 'neverthrow';
 
-const { fakeJobs } = (() => ({
+const { fakeJobs, fakeThreads, agentState, startAgentMock } = (() => ({
+  agentState: { running: false },
+  startAgentMock: vi.fn((..._args: unknown[]) => okAsync<void, DomainError>(undefined)),
+  fakeThreads: {
+    insertMessage: vi.fn(async () => 'msg-1'),
+    insertToolCall: vi.fn(async () => 'tc-1'),
+    updateToolCallOutput: vi.fn(async () => undefined),
+    getThread: vi.fn(async (id: string) => ({
+      id,
+      userId: 'u1',
+      projectId: '',
+      isScratch: true,
+      mode: 'local',
+    })),
+  },
   fakeJobs: {
     listRunningJobs: vi.fn<() => Promise<Array<{ pid: number; exitPath: string }>>>(async () => []),
     getJob: vi.fn<(id: string) => Promise<Record<string, unknown> | undefined>>(),
@@ -18,12 +32,12 @@ const { fakeJobs } = (() => ({
 // Mock the heavy service deps so importing the manager is cheap; deriveStatus
 // itself only touches fs + process.kill, none of these.
 mock.module('../../services/agent-runner-control.js', () => ({
-  isAgentRunning: () => false,
-  startAgent: vi.fn((..._args: unknown[]) => okAsync<void, DomainError>(undefined)),
+  isAgentRunning: () => agentState.running,
+  startAgent: startAgentMock,
 }));
 mock.module('../../services/agent-watcher-manager.js', () => ({ createOrReschedule: vi.fn() }));
 mock.module('../../services/service-registry.js', () => ({
-  getServices: () => ({ jobs: fakeJobs }),
+  getServices: () => ({ jobs: fakeJobs, threads: fakeThreads }),
 }));
 mock.module('../../services/thread-service/messaging.js', () => ({ sendMessage: vi.fn() }));
 mock.module('../../services/ws-broker.js', () => ({ wsBroker: { emitToUser: vi.fn() } }));
@@ -52,6 +66,8 @@ afterEach(() => {
   fakeJobs.listRunningJobs.mockResolvedValue([]);
   fakeJobs.getJob.mockReset();
   fakeJobs.updateJob.mockReset();
+  startAgentMock.mockClear();
+  agentState.running = false;
   vi.useRealTimers();
 });
 
@@ -116,6 +132,41 @@ describe('job scanner lifecycle', () => {
 
     await advanceTimersByTimeAsync(5_000);
     expect(fakeJobs.listRunningJobs).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('job completion during an open turn', () => {
+  test('waits for the turn to end, then records the end and wakes the agent (#542)', async () => {
+    vi.useFakeTimers();
+    const exitPath = join(dir, 'exit-during-turn');
+    writeFileSync(exitPath, 'EXIT=0\n');
+    const job = {
+      id: 'job-1',
+      threadId: 'thread-1',
+      userId: 'u1',
+      command: 'bun test',
+      label: 'check test',
+      pid: 1,
+      logPath: join(dir, 'no-log'),
+      exitPath,
+      status: 'running',
+    };
+    fakeJobs.listRunningJobs.mockResolvedValue([job]);
+    fakeJobs.updateJob.mockResolvedValue(true);
+    agentState.running = true;
+
+    startAgentJobs();
+    await flushMicrotasks();
+    // The turn is open: the job stays running and nobody is woken.
+    expect(fakeJobs.updateJob).not.toHaveBeenCalled();
+    expect(startAgentMock).not.toHaveBeenCalled();
+
+    agentState.running = false;
+    await advanceTimersByTimeAsync(5_000);
+    await flushMicrotasks();
+    expect(fakeJobs.updateJob).toHaveBeenCalledWith('job-1', { status: 'exited', exitCode: 0 });
+    expect(startAgentMock).toHaveBeenCalledTimes(1);
+    expect(startAgentMock.mock.calls[0]?.[0]).toBe('thread-1');
   });
 });
 

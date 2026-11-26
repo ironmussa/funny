@@ -10,6 +10,7 @@ import type { FactoryRun } from '@/lib/api/factory';
 import { factoryRunStateLabel } from '@/lib/factory-run-labels';
 
 import { plainFactoryReason } from './run-dependencies';
+import { factoryRunThreadLinks } from './run-detail/thread-links';
 import { factoryRunWaitingText } from './run-waiting';
 
 const TONE_OF = {
@@ -40,13 +41,38 @@ export interface FactoryRunStateChip {
   detail?: string;
 }
 
-/** What the card's state chip says; a run the factory split says so instead of "Done". */
+/**
+ * What the card's state chip says; a run the factory split, or whose work
+ * existing issues track, says so instead of "Done".
+ */
 export function factoryRunStateChip(
   t: TFunction,
   run: Pick<FactoryRun, 'state' | 'triage'>,
 ): FactoryRunStateChip {
   if ((run.triage?.splitInto?.length ?? 0) > 0 && run.state === 'done') {
     return { label: t('factory.state.split', 'Split'), tone: 'info' };
+  }
+  const existing = run.state === 'done' ? (run.triage?.existing ?? []) : [];
+  if (existing.length > 0) {
+    // Its work is in other issues, still to be done: not "Done".
+    return {
+      label:
+        existing.length === 1
+          ? t('factory.state.tracked', 'Tracked #{{issue}}', { issue: existing[0] })
+          : t('factory.state.trackedMore', 'Tracked #{{issue}} +{{count}}', {
+              issue: existing[0],
+              count: existing.length - 1,
+            }),
+      tone: 'info',
+    };
+  }
+  if (run.triage?.decision === 'already_done') {
+    // Not closed (the factory could not): a person closes the issue.
+    const closed = run.state === 'done';
+    return {
+      label: t('factory.state.alreadyDone', 'Already done'),
+      tone: closed ? 'success' : 'warning',
+    };
   }
   if (run.state === 'needs_info' && run.triage?.decision === 'too_big') {
     return { label: t('factory.state.tooBig', 'Too big'), tone: 'warning' };
@@ -58,10 +84,11 @@ export function factoryRunStateChip(
 }
 
 /**
- * Waiting for you is what the "Needs a person" column means: the other states
- * there (failed, needs info, no change) keep their chip to tell them apart.
+ * Waiting for you is what the "Needs a person" column means, and in queue what
+ * the Queue column means: the other states there (failed, needs info, no
+ * change; admitted) keep their chip to tell them apart.
  */
-const SHOWN_BY_COLUMN: ReadonlySet<FactoryRun['state']> = new Set(['waiting_human']);
+const SHOWN_BY_COLUMN: ReadonlySet<FactoryRun['state']> = new Set(['waiting_human', 'requested']);
 
 /** States a thread's status icon already shows. */
 const SHOWN_BY_THREAD_ICON: ReadonlySet<FactoryRun['state']> = new Set(['working', 'stopped']);
@@ -76,15 +103,28 @@ const EXPLAINED_BY_STATE: ReadonlySet<FactoryRun['state']> = new Set([
 
 const MAX_DETAIL = 600;
 
+type StartedRun = Pick<
+  FactoryRun,
+  'threadIds' | 'triage' | 'stepOptions' | 'reviews' | 'roleThreads'
+>;
+
+/**
+ * Whether the run started an agent. A triage's thread is not in `threadIds`:
+ * it is named by the triage's answer or `roleThreads`, as the card's link reads it.
+ */
+function startedAnAgent(run: StartedRun): boolean {
+  return run.threadIds.length > 0 || factoryRunThreadLinks(run).length > 0;
+}
+
 /**
  * A stopped run that never started an agent: taken out of the queue, or
  * stopped before its flow's first step. Said so, since the card has nothing else.
  */
 function stoppedBeforeStartChip(
   t: TFunction,
-  run: Pick<FactoryRun, 'state' | 'threadIds' | 'admittedAt'>,
+  run: StartedRun & Pick<FactoryRun, 'state' | 'admittedAt'>,
 ): FactoryRunStateChip | null {
-  if (run.state !== 'stopped' || run.threadIds.length > 0) return null;
+  if (run.state !== 'stopped' || startedAnAgent(run)) return null;
   return {
     label: t('factory.state.notStarted', 'Not started'),
     tone: 'neutral',
@@ -110,7 +150,15 @@ export function factoryBoardStateChip(
   t: TFunction,
   run: Pick<
     FactoryRun,
-    'state' | 'triage' | 'waitReason' | 'failureReason' | 'threadIds' | 'admittedAt'
+    | 'state'
+    | 'triage'
+    | 'waitReason'
+    | 'failureReason'
+    | 'threadIds'
+    | 'admittedAt'
+    | 'stepOptions'
+    | 'reviews'
+    | 'roleThreads'
   >,
   hasThread: boolean,
 ): FactoryRunStateChip | null {

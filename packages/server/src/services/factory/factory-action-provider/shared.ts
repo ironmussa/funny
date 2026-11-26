@@ -114,6 +114,24 @@ export const MAX_MERGE_ROUNDS_TO_AGENT = 2;
  */
 export const NO_CHANGE_REASON = 'no change';
 
+/**
+ * Why a run whose agent committed but never pushed waits for a person: its
+ * checkout holds unpushed commits (kept), so the work is done but not on
+ * GitHub. Said apart from `no change`, which has nothing committed (#542).
+ */
+export const NOT_PUSHED_REASON = 'not pushed';
+
+/**
+ * The reason a run waits with when its checkouts were kept: `not pushed` when
+ * they hold commits and nothing uncommitted, else `no change` (unsaved files
+ * are the work a person must not lose).
+ */
+export function keptWorkReason(kept: readonly KeptWorktree[]): string {
+  const committed = kept.some((one) => one.unpushedCommitCount > 0);
+  const unsaved = kept.some((one) => one.dirtyFileCount > 0);
+  return committed && !unsaved ? NOT_PUSHED_REASON : NO_CHANGE_REASON;
+}
+
 /** The label an issue gets when its run ended with no change: a person decides what is next. */
 export const NO_CHANGE_TRIAGE_LABEL = 'needs-triage';
 
@@ -303,9 +321,11 @@ export interface FactoryActionProviderDeps {
    * before it answers; a thread already recorded is not added twice.
    */
   recordRoleThread?: (role: FactoryRoleThread['role'], threadId: string) => Promise<void>;
+  /** Take only the factory's label off the run's issue, so it is not admitted again. */
+  dropLabel?: () => Promise<void>;
   github: Pick<
     FactoryGithubPort,
-    'findPullRequest' | 'pullRequests' | 'branchAhead' | 'commentOnIssue'
+    'findPullRequest' | 'pullRequests' | 'branchAhead' | 'commentOnIssue' | 'closeIssue'
   >;
   /**
    * Hand the issue back to a person after a run that ended with no change:

@@ -10,6 +10,7 @@ import { errAsync, okAsync } from 'neverthrow';
 
 import {
   createFactoryCiActions,
+  MERGE_PENDING_TIMEOUT_MS,
   NO_CHECKS_GRACE_MS,
 } from '../../../services/factory/factory-ci-actions.js';
 import type {
@@ -20,11 +21,19 @@ import type {
 
 const pr = { repo: 'o/r', number: 7, userId: 'alice', projectId: 'p1' };
 
-/** A port that answers `ciState` from a script (last answer repeats) and `merge` with `outcome`. */
+/**
+ * A port that answers `ciState` from a script (last answer repeats) and `merge`
+ * with `outcome`, or with each outcome of a list in turn (the last repeats).
+ */
 function scripted(
   states: Array<CiState | FactoryPullRequestError>,
-  outcome: FactoryMergeOutcome = { kind: 'merged', method: 'squash', branchDeleted: false },
+  outcome: FactoryMergeOutcome | FactoryMergeOutcome[] = {
+    kind: 'merged',
+    method: 'squash',
+    branchDeleted: false,
+  },
 ) {
+  const outcomes = Array.isArray(outcome) ? outcome : [outcome];
   let polls = 0;
   const merges: unknown[] = [];
   const prs: FactoryPullRequests = {
@@ -46,7 +55,7 @@ function scripted(
     },
     merge: (_pr, options) => {
       merges.push(options);
-      return okAsync(outcome);
+      return okAsync(outcomes[Math.min(merges.length - 1, outcomes.length - 1)]!);
     },
   };
   return { prs, merges, polls: () => polls };
@@ -230,15 +239,74 @@ describe('merge', () => {
     expect(marked).toBe(true);
   });
 
-  test('a PR that is not green is not merged and the run is not marked', async () => {
+  test('a PR whose checks failed is not merged, the run is not marked, and nothing is waited for', async () => {
     let marked = false;
-    const { prs } = scripted([], { kind: 'not-green', ci: { kind: 'pending' } });
+    const failing: CiState = { kind: 'failing', checks: [] };
+    const { prs, merges, polls } = scripted([], { kind: 'not-green', ci: failing });
     const result = await actionsFor(prs, {
       markMerged: async () => {
         marked = true;
       },
     }).merge();
     expect(result).toMatchObject({ ok: false, metadata: { outcome: 'not-green' } });
+    expect(marked).toBe(false);
+    expect(merges).toHaveLength(1);
+    expect(polls()).toBe(0);
+  });
+
+  test('checks still running are waited for, then the PR is merged', async () => {
+    let marked = false;
+    const { prs, merges, polls } = scripted(
+      [{ kind: 'pending' }, { kind: 'green' }],
+      [
+        { kind: 'not-green', ci: { kind: 'pending' } },
+        { kind: 'merged', method: 'squash', branchDeleted: false },
+      ],
+    );
+    const result = await actionsFor(prs, {
+      markMerged: async () => {
+        marked = true;
+      },
+    }).merge();
+    expect(result).toMatchObject({ ok: true, output: 'merged' });
+    expect(merges).toHaveLength(2);
+    expect(polls()).toBe(2);
+    expect(marked).toBe(true);
+  });
+
+  test('checks that turn red while waited for end the merge with their failure', async () => {
+    const failing: CiState = {
+      kind: 'failing',
+      checks: [{ name: 'security', conclusion: 'failure', excerpt: 'boom' }],
+    };
+    const { prs, merges } = scripted([{ kind: 'pending' }, failing], {
+      kind: 'not-green',
+      ci: { kind: 'pending' },
+    });
+    const result = await actionsFor(prs).merge();
+    expect(result.ok).toBe(false);
+    expect(result.error).toContain('Failing checks: security');
+    expect(merges).toHaveLength(1);
+  });
+
+  test('checks that never finish are not merged once the wait runs out', async () => {
+    let marked = false;
+    const c = clock();
+    const { prs } = scripted([{ kind: 'pending' }], {
+      kind: 'not-green',
+      ci: { kind: 'pending' },
+    });
+    const result = await createFactoryCiActions({
+      prs,
+      pullRequest: () => pr,
+      ...c,
+      markMerged: async () => {
+        marked = true;
+      },
+    }).merge();
+    expect(result).toMatchObject({ ok: false, metadata: { outcome: 'not-green', ci: 'pending' } });
+    expect(result.error).toContain('still running');
+    expect(c.now()).toBeLessThanOrEqual(MERGE_PENDING_TIMEOUT_MS);
     expect(marked).toBe(false);
   });
 

@@ -65,6 +65,12 @@ export function createRunRoles(core: ActionCore, links: RoleLinks) {
       const posted = await deps.github.commentOnIssue(reader, roleScope.issueNumber, body);
       return posted.isOk() ? ok(undefined) : err(posted.error.message);
     },
+    closeIssue: deps.github.closeIssue
+      ? async () => {
+          const closed = await deps.github.closeIssue!(reader, roleScope.issueNumber);
+          return closed.isOk() ? ok(undefined) : err(closed.error.message);
+        }
+      : undefined,
     // A run with a pull request has no implementer to start: it waits for no
     // paths, or the runs started after it would merge first (openspec
     // factory-merge-fewer-bounces, D5).
@@ -73,6 +79,7 @@ export function createRunRoles(core: ActionCore, links: RoleLinks) {
     issueText: deps.issueText,
     hold: deps.holdForPaths,
     split: deps.split,
+    dropLabel: deps.dropLabel,
     exclusive: deps.exclusive,
     noteThread: async (threadId) => deps.recordRoleThread?.('triage', threadId),
     record: deps.record,

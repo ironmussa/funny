@@ -172,7 +172,7 @@ async function scanOnce(): Promise<void> {
     const running = await getServices().jobs.listRunningJobs();
     for (const job of running) {
       const { status, exitCode } = deriveStatus(job);
-      if (status === 'running') {
+      if (status === 'running' || completionWaitsForTurn(job)) {
         hasRunningJobs = true;
         continue;
       }
@@ -195,6 +195,20 @@ async function scanOnce(): Promise<void> {
     scanning = false;
     if (hasRunningJobs || scanRequested) armScanner();
   }
+}
+
+/**
+ * A job that ended while its agent's turn is still open stays `running` until
+ * that turn ends; the next scan then records its end and wakes the agent.
+ *
+ * The open turn cannot receive the completion (the agent never reads the tool
+ * card), and a turn about to end would drop it: #542's agent ended its turn
+ * saying it would push once the job finished, the job ended 150 ms before the
+ * turn did, and the agent was never woken. Left `running`, the job also keeps
+ * the issue factory waiting (`awaitsWake` counts a running job as a wake due).
+ */
+function completionWaitsForTurn(job: Pick<Job, 'threadId'>): boolean {
+  return isAgentRunning(job.threadId);
 }
 
 function armScanner(): void {
@@ -224,9 +238,10 @@ async function onTerminal(job: Job, status: JobStatus, exitCode: number | null):
   const completion = renderCompletion(finished);
   await persistCompletionToolCard(finished, completion);
 
-  // Wake an idle agent with the verdict + log tail without persisting a user
-  // message. If a turn is already running, the visible tool card is enough; do
-  // not enqueue a synthetic "user" follow-up that will later render as user text.
+  // Wake the idle agent with the verdict + log tail without persisting a user
+  // message (the scan waited for its turn to end: `completionWaitsForTurn`).
+  // A turn that started since keeps the tool card only: do not enqueue a
+  // synthetic "user" follow-up that would later render as user text.
   if (isAgentRunning(job.threadId)) return;
   await wakeAgentWithCompletion(finished, completion).catch((err) => {
     log.error('Job wake failed to start agent', {

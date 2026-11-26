@@ -313,6 +313,36 @@ describe('FactoryBoard', () => {
     expect(String(mocks.navigate.mock.calls[0]?.[0])).toContain('/threads/t-impl');
   });
 
+  // A run triage handed to a person has no implementer, so its card had no way
+  // to the thread whose answer the person must judge.
+  test('a run waiting on a person links its last thread on the card, without opening the run panel', () => {
+    const run = queueRun('r1', 'needs_info', {
+      triage: { decision: 'needs_info', at: recent(), threadId: 't-triage', items: ['Which?'] },
+    });
+    renderBoard([run]);
+    const link = screen.getByTestId('factory-board-last-thread-r1');
+    expect(link.textContent).toBe('Triage');
+    fireEvent.click(link);
+    expect(mocks.navigate).toHaveBeenCalledTimes(1);
+    expect(String(mocks.navigate.mock.calls[0]?.[0])).toContain('/threads/t-triage');
+  });
+
+  test('the card links the latest thread the run started: the reviewer after the implementer', () => {
+    mocks.threads['t-impl'] = buildThread({ id: 't-impl', title: '[Factory] #434 Thread recap' });
+    const run = queueRun('r1', 'reviewing', {
+      threadIds: ['t-impl'],
+      stepOptions: [implementStep('t-impl')],
+      roleThreads: [{ role: 'review', threadId: 't-rev', startedAt: recent() }],
+    });
+    renderBoard([run]);
+    expect(screen.getByTestId('factory-board-last-thread-r1').textContent).toBe('Reviewer');
+  });
+
+  test('a queued run with no thread links none', () => {
+    renderBoard([queueRun('r1', 'requested')]);
+    expect(screen.queryByTestId('factory-board-last-thread-r1')).toBeNull();
+  });
+
   test('cards cannot be dragged, and opening one selects the run', () => {
     const run = queueRun('r1', 'working', { threadIds: ['t-impl'] });
     renderBoard([run]);
@@ -409,7 +439,15 @@ describe('FactoryBoard', () => {
     review: 'reviewing',
     merge: 'merging',
     needs_person: 'waiting_human',
+    waiting_parts: 'done',
     done: 'merged',
+  };
+  // A done run whose work an issue the board does not list still tracks.
+  const trackedTriage = {
+    decision: 'too_big' as const,
+    at: new Date().toISOString(),
+    items: [],
+    existing: [9999],
   };
   const longColumn = (column: FactoryBoardColumnId) =>
     Array.from({ length: 60 }, (_, i) =>
@@ -417,6 +455,7 @@ describe('FactoryBoard', () => {
         issueNumber: 1000 + i,
         queueOrder: i,
         completedAt: column === 'done' ? new Date(Date.now() - i * 60_000).toISOString() : null,
+        triage: column === 'waiting_parts' ? trackedTriage : null,
       }),
     );
   const cardsIn = (column: FactoryBoardColumnId) =>

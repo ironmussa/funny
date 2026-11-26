@@ -13,7 +13,7 @@ import type { Result } from 'neverthrow';
 
 import { log } from '../../../lib/logger.js';
 import type { ActionCore } from './core.js';
-import { keptWorktreeLine, NO_CHANGE_LINE, NO_CHANGE_REASON } from './shared.js';
+import { keptWorkReason, keptWorktreeLine, NO_CHANGE_LINE } from './shared.js';
 
 /** Where the run's pull request must merge, and how to point it there. */
 export interface PullRequestTarget {
@@ -49,8 +49,9 @@ export function createPullRequestStep(core: ActionCore, target?: PullRequestTarg
    *
    * A checkout with uncommitted files or unpushed commits is kept and named in
    * the comment, and the run waits for a person (`waiting_human`, reason `no
-   * change`): the agent may have stopped before committing (issue #229 lost 85
-   * edited files this way).
+   * change`, or `not pushed` when it holds commits): the agent may have stopped
+   * before committing (issue #229 lost 85 edited files this way) or before
+   * pushing (#542).
    */
   async function noChange(): Promise<ActionResult> {
     const threadId = threadIds[0];
@@ -62,7 +63,7 @@ export function createPullRequestStep(core: ActionCore, target?: PullRequestTarg
     // A run without an issue has none to comment on or hand back: with nothing kept, it is done.
     if (scope.issueNumber !== null) await commentNoChange(scope.issueNumber, body);
     if (kept.length > 0) {
-      await deps.record({ state: 'waiting_human', failureReason: NO_CHANGE_REASON });
+      await deps.record({ state: 'waiting_human', failureReason: keptWorkReason(kept) });
     } else {
       await deps.releaseIssue?.();
       // The step stays recorded: the run's step chain shows how far it went.

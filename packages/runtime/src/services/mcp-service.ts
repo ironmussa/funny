@@ -361,6 +361,7 @@ function codexTransportToMcpType(transport: string | undefined): McpServerType {
   return 'stdio';
 }
 
+/** A command line split into the program and its arguments. */
 interface SplitCommand {
   command?: string;
   args?: string[];

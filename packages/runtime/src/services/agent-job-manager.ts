@@ -144,6 +144,7 @@ function isAlive(pid: number): boolean {
   }
 }
 
+/** A job's status read from its exit marker and process, with its exit code when it recorded one. */
 interface DerivedJobStatus {
   status: JobStatus;
   exitCode: number | null;

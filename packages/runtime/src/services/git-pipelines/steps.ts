@@ -14,22 +14,21 @@ import { reviewFixSubPipeline } from './review-fix.js';
 import { testFixSubPipeline } from './test-fix.js';
 
 /** Human-readable labels for each pipeline node, keyed by node name. */
-interface StepLabels {
-  readonly [node: string]: string;
-}
-const STEP_LABELS: StepLabels = {
-  unstage: 'Unstaging files',
-  stage: 'Staging files',
-  hooks: 'Running pre-commit hooks',
-  commit: 'Committing',
-  review: 'Reviewing code',
-  fix: 'Fixing issues',
-  'test-run': 'Running tests',
-  'test-fixer': 'Fixing test failures',
-  push: 'Pushing',
-  pr: 'Creating pull request',
-  merge: 'Merging',
-};
+const STEP_LABELS = new Map(
+  Object.entries({
+    unstage: 'Unstaging files',
+    stage: 'Staging files',
+    hooks: 'Running pre-commit hooks',
+    commit: 'Committing',
+    review: 'Reviewing code',
+    fix: 'Fixing issues',
+    'test-run': 'Running tests',
+    'test-fixer': 'Fixing test failures',
+    push: 'Pushing',
+    pr: 'Creating pull request',
+    merge: 'Merging',
+  }),
+);
 
 /**
  * Derive the progress steps array by walking the pipeline's node list
@@ -55,7 +54,7 @@ export function deriveSteps(
     // commit-fix) that don't have UI labels.
     if (n.name === 'review-fix') {
       for (const child of reviewFixSubPipeline.nodes) {
-        const label = STEP_LABELS[child.name];
+        const label = STEP_LABELS.get(child.name);
         if (!label) continue; // skip internal nodes without UI labels
         steps.push({ id: child.name, label, status: 'pending' });
       }
@@ -64,7 +63,7 @@ export function deriveSteps(
 
     if (n.name === 'test-fix') {
       for (const child of testFixSubPipeline.nodes) {
-        const label = STEP_LABELS[child.name];
+        const label = STEP_LABELS.get(child.name);
         if (!label) continue;
         steps.push({ id: child.name, label, status: 'pending' });
       }
@@ -76,7 +75,7 @@ export function deriveSteps(
       label:
         n.name === 'commit' && ctx.action === 'amend'
           ? 'Amending commit'
-          : (STEP_LABELS[n.name] ?? n.name),
+          : (STEP_LABELS.get(n.name) ?? n.name),
       status: 'pending',
     };
 

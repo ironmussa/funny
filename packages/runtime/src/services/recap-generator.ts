@@ -46,21 +46,18 @@ export interface RecapResult {
   newestMessageId: string;
 }
 
-/** Language codes (no region) to their English names. */
-interface LanguageNames {
-  readonly [code: string]: string;
-}
-
-const LANGUAGE_NAMES: LanguageNames = {
-  en: 'English',
-  es: 'Spanish',
-  pt: 'Portuguese',
-};
+const LANGUAGE_NAMES = new Map(
+  Object.entries({
+    en: 'English',
+    es: 'Spanish',
+    pt: 'Portuguese',
+  }),
+);
 
 /** A language code as a name the model reads unambiguously. */
 function languageName(language: string): string {
   const base = language.toLowerCase().split('-')[0];
-  return LANGUAGE_NAMES[base] ?? language;
+  return LANGUAGE_NAMES.get(base) ?? language;
 }
 
 function recapSystemPrompt(language: string): string {

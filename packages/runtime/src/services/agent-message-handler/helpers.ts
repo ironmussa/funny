@@ -104,6 +104,7 @@ export function resultEventType(
   return subtype === 'success' && providerError === undefined ? 'COMPLETE' : 'FAIL';
 }
 
+/** The failure fields of a result: why it failed and the error text, when there is one. */
 interface ResultErrorFields {
   errorReason: string;
   error: string | undefined;

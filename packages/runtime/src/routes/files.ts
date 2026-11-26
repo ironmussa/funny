@@ -322,46 +322,48 @@ app.post('/write', async (c) => {
   return c.json({ ok: true });
 });
 
-/** File extensions (lowercase, no dot) to MIME types. */
-interface MimeTypes {
-  readonly [extension: string]: string;
-}
-
-/** HTTP header names to values. */
-interface RawFileHeaders {
-  [name: string]: string;
-}
-
 /** Map common extensions to MIME types for the /raw endpoint. */
-const EXT_TO_MIME: MimeTypes = {
-  png: 'image/png',
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  gif: 'image/gif',
-  webp: 'image/webp',
-  svg: 'image/svg+xml',
-  bmp: 'image/bmp',
-  avif: 'image/avif',
-  ico: 'image/x-icon',
-  mp3: 'audio/mpeg',
-  wav: 'audio/wav',
-  ogg: 'audio/ogg',
-  flac: 'audio/flac',
-  m4a: 'audio/mp4',
-  aac: 'audio/aac',
-  mp4: 'video/mp4',
-  webm: 'video/webm',
-  mov: 'video/quicktime',
-  mkv: 'video/x-matroska',
-  pdf: 'application/pdf',
-  md: 'text/markdown; charset=utf-8',
-  markdown: 'text/markdown; charset=utf-8',
-  txt: 'text/plain; charset=utf-8',
-  log: 'text/plain; charset=utf-8',
-  json: 'application/json; charset=utf-8',
-  yaml: 'application/yaml; charset=utf-8',
-  yml: 'application/yaml; charset=utf-8',
-  csv: 'text/csv; charset=utf-8',
+const EXT_TO_MIME = new Map(
+  Object.entries({
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    gif: 'image/gif',
+    webp: 'image/webp',
+    svg: 'image/svg+xml',
+    bmp: 'image/bmp',
+    avif: 'image/avif',
+    ico: 'image/x-icon',
+    mp3: 'audio/mpeg',
+    wav: 'audio/wav',
+    ogg: 'audio/ogg',
+    flac: 'audio/flac',
+    m4a: 'audio/mp4',
+    aac: 'audio/aac',
+    mp4: 'video/mp4',
+    webm: 'video/webm',
+    mov: 'video/quicktime',
+    mkv: 'video/x-matroska',
+    pdf: 'application/pdf',
+    md: 'text/markdown; charset=utf-8',
+    markdown: 'text/markdown; charset=utf-8',
+    txt: 'text/plain; charset=utf-8',
+    log: 'text/plain; charset=utf-8',
+    json: 'application/json; charset=utf-8',
+    yaml: 'application/yaml; charset=utf-8',
+    yml: 'application/yaml; charset=utf-8',
+    csv: 'text/csv; charset=utf-8',
+  }),
+);
+
+/** The headers of a raw file response; an SVG also gets a sandboxing CSP. */
+type RawFileHeaders = {
+  'Content-Type': string;
+  'Cache-Control': string;
+  'Content-Disposition': string;
+  'Accept-Ranges': string;
+  'X-Content-Type-Options': string;
+  'Content-Security-Policy'?: string;
 };
 
 /**
@@ -371,7 +373,7 @@ export function rawFileHeaders(filePath: string): RawFileHeaders {
   const ext = filePath.includes('.')
     ? filePath.substring(filePath.lastIndexOf('.') + 1).toLowerCase()
     : '';
-  const contentType = EXT_TO_MIME[ext] ?? 'application/octet-stream';
+  const contentType = EXT_TO_MIME.get(ext) ?? 'application/octet-stream';
   const headers: RawFileHeaders = {
     'Content-Type': contentType,
     'Cache-Control': 'private, max-age=60',

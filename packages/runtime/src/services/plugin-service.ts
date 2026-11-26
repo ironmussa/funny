@@ -37,6 +37,7 @@ interface PluginJson {
   author?: { name: string; email?: string };
 }
 
+/** The description a command .md frontmatter declares. */
 interface CommandFrontmatter {
   description?: string;
 }

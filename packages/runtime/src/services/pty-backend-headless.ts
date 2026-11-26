@@ -50,6 +50,7 @@ function accountWrite(byteLen: number): void {
   }
 }
 
+/** The shell executable a session starts, and its arguments. */
 interface ShellCommand {
   exe: string;
   args: string[];

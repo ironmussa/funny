@@ -19,6 +19,7 @@ interface PtySession {
   proc: Subprocess;
 }
 
+/** The shell executable a session starts, and its arguments. */
 interface ShellCommand {
   exe: string;
   args: string[];

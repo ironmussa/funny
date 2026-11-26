@@ -173,30 +173,27 @@ function detectWindowsShells(): DetectedShell[] {
   return shells;
 }
 
-/** Shell binary names to display names. */
-interface ShellDisplayNames {
-  readonly [name: string]: string;
-}
-
 /** Get a human-friendly display name for a shell binary name. */
 function shellDisplayName(name: string): string {
-  const map: ShellDisplayNames = {
-    bash: 'Bash',
-    zsh: 'Zsh',
-    fish: 'Fish',
-    sh: 'sh',
-    dash: 'Dash',
-    ksh: 'KornShell',
-    tcsh: 'tcsh',
-    csh: 'csh',
-    nushell: 'Nushell',
-    nu: 'Nushell',
-    elvish: 'Elvish',
-    powershell: 'Windows PowerShell',
-    pwsh: 'PowerShell Core',
-    cmd: 'Command Prompt',
-  };
-  return map[name] ?? name;
+  const map = new Map(
+    Object.entries({
+      bash: 'Bash',
+      zsh: 'Zsh',
+      fish: 'Fish',
+      sh: 'sh',
+      dash: 'Dash',
+      ksh: 'KornShell',
+      tcsh: 'tcsh',
+      csh: 'csh',
+      nushell: 'Nushell',
+      nu: 'Nushell',
+      elvish: 'Elvish',
+      powershell: 'Windows PowerShell',
+      pwsh: 'PowerShell Core',
+      cmd: 'Command Prompt',
+    }),
+  );
+  return map.get(name) ?? name;
 }
 
 /** Detect all available shells on the current system. Results are cached. */

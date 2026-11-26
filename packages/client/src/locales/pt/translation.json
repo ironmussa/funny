@@ -889,6 +889,7 @@
     "viewFullContent": "Ver conteúdo completo",
     "viewFullDiff": "Ver diff completo",
     "readFile": "Ler Arquivo",
+    "readFilePathUnavailable": "caminho indisponível",
     "writeFile": "Escrever Arquivo",
     "editFile": "Editar Arquivo",
     "runCommand": "Executar Comando",

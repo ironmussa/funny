@@ -6,7 +6,8 @@ import { join } from 'node:path';
 import { makeRendererBenchmarkFixtures } from '@funny/client-benchmark';
 import { createTestRoot, hasNativeTestRenderer } from '@gpuix/react/testing';
 
-import { GpuixClientApp, THREAD_RETAINED_WINDOW_SIZE } from '../app';
+import { GpuixClientApp } from '../app';
+import { THREAD_RETAINED_WINDOW_SIZE } from '../app/thread-transcript';
 import { createNativeApplicationServices } from '../application';
 import { createNativeClientComposition } from '../platform/composition';
 import type { NativeHeaders } from '../platform/transport';

@@ -2,7 +2,11 @@ import { describe, expect, test } from 'bun:test';
 
 import { createTestRoot, hasNativeTestRenderer } from '@gpuix/react/testing';
 
-import { ExpandableNativeDiff, NATIVE_DIFF_INITIAL_MAX_LINES, areMessageRowsEqual } from '../app';
+import {
+  ExpandableNativeDiff,
+  NATIVE_DIFF_INITIAL_MAX_LINES,
+  areMessageRowsEqual,
+} from '../app/message-row';
 import { buildMessage } from './helpers/fixtures';
 
 function patchWithContextLines(count: number): string {

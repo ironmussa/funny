@@ -8,7 +8,7 @@ import { flushSync } from '@gpuix/react';
 import { createTestRoot, hasNativeTestRenderer } from '@gpuix/react/testing';
 import { Profiler } from 'react';
 
-import { NativeFileTreeDock } from '../app';
+import { NativeFileTreeDock } from '../app/file-tree-dock';
 import { createNativeApplicationServices } from '../application';
 import { createNativeClientComposition } from '../platform/composition';
 import type { NativeHeaders } from '../platform/transport';

@@ -172,6 +172,7 @@ function ViewportMenu() {
     return (
       <DropdownMenuItem
         key={preset.name}
+        size="xs"
         onClick={() => void resizeViewport(preset.width, preset.height)}
         aria-checked={selected}
         role="menuitemradio"
@@ -207,15 +208,16 @@ function ViewportMenu() {
       </Tooltip>
       <DropdownMenuContent
         align="start"
+        size="xs"
         className="max-h-[70vh] overflow-y-auto"
         {...menu.contentProps}
       >
         {item(DESKTOP_PRESET)}
         <DropdownMenuSeparator />
-        <DropdownMenuLabel>Phones</DropdownMenuLabel>
+        <DropdownMenuLabel className="text-2xs px-1.5 py-1">Phones</DropdownMenuLabel>
         {BROWSER_SESSION_PHONE_PRESETS.map(item)}
         <DropdownMenuSeparator />
-        <DropdownMenuLabel>Tablets</DropdownMenuLabel>
+        <DropdownMenuLabel className="text-2xs px-1.5 py-1">Tablets</DropdownMenuLabel>
         {BROWSER_SESSION_TABLET_PRESETS.map(item)}
       </DropdownMenuContent>
     </DropdownMenu>

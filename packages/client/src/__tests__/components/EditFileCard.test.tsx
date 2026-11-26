@@ -408,4 +408,90 @@ describe('EditFileCard', () => {
 
     expect(screen.queryByTestId('edit-file-inline-diff-placeholder')).not.toBeInTheDocument();
   });
+
+  test('renders file path and inline diff for Antigravity PascalCase Target/Replacement input', async () => {
+    render(
+      <TooltipProvider>
+        <EditFileCard
+          hideLabel
+          parsed={{
+            file_path: '/repo/src/antigravity.ts',
+            Path: '/repo/src/antigravity.ts',
+            Target: 'const a = 1;',
+            Replacement: 'const a = 2;',
+          }}
+        />
+      </TooltipProvider>,
+    );
+
+    expect(screen.getByText('/repo/src/antigravity.ts')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'tools.editFile' }));
+    await act(async () => {
+      intersectionObserverState.callback?.(
+        [buildIntersectionEntry({ isIntersecting: true })],
+        buildIntersectionObserver(),
+      );
+    });
+
+    const diff = await screen.findByTestId('edit-file-inline-diff');
+    expect(diff.getAttribute('data-unified-diff')).toContain('-const a = 1;');
+    expect(diff.getAttribute('data-unified-diff')).toContain('+const a = 2;');
+  });
+
+  test('keeps the file path visible and loads live diff for path-only Edit calls', async () => {
+    apiMocks.getFileDiff.mockResolvedValue({
+      isErr: () => false,
+      isOk: () => true,
+      value: {
+        diff: '@@ -1,1 +1,1 @@\n-const a = 1;\n+const a = 2;',
+      },
+    });
+
+    render(
+      <TooltipProvider>
+        <EditFileCard hideLabel parsed={{ file_path: '/repo/src/path-only.ts' }} />
+      </TooltipProvider>,
+    );
+
+    expect(screen.getByText('/repo/src/path-only.ts')).toBeInTheDocument();
+    expect(apiMocks.getFileDiff).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'tools.editFile' }));
+    await waitFor(() =>
+      expect(apiMocks.getFileDiff).toHaveBeenCalledWith(
+        'thread-1',
+        '/repo/src/path-only.ts',
+        false,
+        undefined,
+        'full',
+      ),
+    );
+  });
+
+  test('keeps the file path visible when old_string equals new_string without fetching a live diff', () => {
+    render(
+      <TooltipProvider>
+        <EditFileCard
+          parsed={{
+            file_path: '/repo/src/same.ts',
+            old_string: 'const x = 1;',
+            new_string: 'const x = 1;',
+          }}
+        />
+      </TooltipProvider>,
+    );
+
+    expect(screen.getByText('/repo/src/same.ts')).toBeInTheDocument();
+    expect(apiMocks.getFileDiff).not.toHaveBeenCalled();
+  });
+
+  test('falls back to description when an Edit call has no file path', () => {
+    render(
+      <TooltipProvider>
+        <EditFileCard hideLabel parsed={{ description: 'File a.txt' }} />
+      </TooltipProvider>,
+    );
+
+    expect(screen.getByText('File a.txt')).toBeInTheDocument();
+  });
 });

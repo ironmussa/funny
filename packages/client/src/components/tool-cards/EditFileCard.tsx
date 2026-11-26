@@ -58,6 +58,34 @@ function statusForChangeType(
   return 'modified';
 }
 
+function firstStringField(parsed: JsonObject, keys: readonly string[]): string | undefined {
+  for (const key of keys) {
+    const value = parsed[key];
+    if (isString(value)) return value;
+  }
+  return undefined;
+}
+
+function firstNonEmptyStringField(parsed: JsonObject, keys: readonly string[]): string | undefined {
+  for (const key of keys) {
+    const value = parsed[key];
+    if (isString(value) && value.length > 0) return value;
+  }
+  return undefined;
+}
+
+const SINGLE_FILE_PATH_KEYS = ['file_path', 'Path', 'path'] as const;
+const OLD_TEXT_KEYS = ['old_string', 'Target', 'oldText', 'old_text', 'oldString'] as const;
+const NEW_TEXT_KEYS = [
+  'new_string',
+  'Replacement',
+  'newText',
+  'new_text',
+  'newString',
+  'Content',
+  'content',
+] as const;
+
 function getEditChangeEntries(parsed: JsonObject): EditChangeEntry[] {
   const changes = parsed.changes;
   if (isJsonObject(changes)) {
@@ -106,18 +134,23 @@ function getEditChangeEntries(parsed: JsonObject): EditChangeEntry[] {
     });
   }
 
-  const filePath = parsed.file_path;
-  const oldString = parsed.old_string;
-  const newString = parsed.new_string;
-  if (!isString(filePath) || !isString(newString)) return [];
-  const oldValue = isString(oldString) ? oldString : '';
-  if (oldValue === newString) return [];
+  const filePath = firstNonEmptyStringField(parsed, SINGLE_FILE_PATH_KEYS);
+  if (!filePath) return [];
+  const oldString = firstStringField(parsed, OLD_TEXT_KEYS);
+  const newString = firstStringField(parsed, NEW_TEXT_KEYS);
+  if (newString === undefined) {
+    // Keep path-only edits (e.g. ACP providers whose initial tool_call had
+    // file_path without inline diff text) so the header renders the file path
+    // and expanding fetches the live Git diff on demand.
+    return [{ filePath, status: 'modified' }];
+  }
+  const oldValue = oldString ?? '';
   return [
     {
       filePath,
       oldValue,
       newValue: newString,
-      status: isString(oldString) ? 'modified' : 'added',
+      status: oldString !== undefined ? 'modified' : 'added',
     },
   ];
 }
@@ -163,6 +196,9 @@ export function EditFileCard({
   const activeEntry =
     changeEntries.find((entry) => entry.filePath === requestedFilePath) ?? changeEntries[0];
   const filePath = activeEntry?.filePath;
+  const fallbackDescription = !filePath
+    ? firstNonEmptyStringField(parsed, ['description'])
+    : undefined;
   // Codex reports absolute paths when its working directory is absolute, while
   // the Git endpoint (and native Git implementation) expects a path relative
   // to the thread worktree.
@@ -273,7 +309,7 @@ export function EditFileCard({
               </span>
             )}
           </button>
-          {filePath && (
+          {filePath ? (
             <EditFilePathLink
               filePath={filePath}
               displayPath={displayPath}
@@ -281,6 +317,12 @@ export function EditFileCard({
               defaultEditor={defaultEditor}
               onExpand={openExpandedDiff}
             />
+          ) : (
+            fallbackDescription && (
+              <span className="text-muted-foreground min-w-0 truncate font-mono text-xs">
+                {fallbackDescription}
+              </span>
+            )
           )}
           {displayTime && (
             <span className="text-muted-foreground/50 text-2xs ml-auto shrink-0 tabular-nums">

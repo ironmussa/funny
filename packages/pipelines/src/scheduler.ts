@@ -98,7 +98,7 @@ function defaultMerge<T>(base: T, results: T[]): T {
   return { ...base, outputs: merged };
 }
 
-const messageOf = (err: unknown) => (err instanceof Error ? err.message : String(err));
+const messageOf = (cause: unknown) => (cause instanceof Error ? cause.message : String(cause));
 
 /** Run a pipeline as a graph. See the module comment for the rules. */
 export async function runGraph<T>(

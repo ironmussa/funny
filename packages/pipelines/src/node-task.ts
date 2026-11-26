@@ -9,6 +9,7 @@ import type { NodeRunInfo, PipelineStateChange } from './engine.js';
 import type { SlotGrant } from './gate.js';
 import type { GraphNode, Region } from './graph.js';
 import { causeMessage, invoke, runSingleNode } from './node-runner.js';
+import type { NodeData } from './types.js';
 
 /** What one node task reports back to the scheduler. */
 export type TaskResult<T> =
@@ -23,7 +24,7 @@ export interface TaskParams<T> {
   iteration: number;
   stopGraceMs?: number;
   acquireSlot?: (signal: AbortSignal, onWait: () => void) => Promise<SlotGrant>;
-  adoptBatchOutput?: (input: T, output: unknown) => T;
+  adoptBatchOutput?: (input: T, output: NodeData) => T;
   /** The loop this node declares, if any. */
   loopRegion?: Region<T>;
   info?: Omit<NodeRunInfo, 'iteration'>;

@@ -1,4 +1,5 @@
 export type {
+  CoreAgentMessage,
   CoreAgentProcessLike,
   CoreAgentProcessOptions,
   CoreProcessFactoryLike,

@@ -70,10 +70,10 @@ export const PromptInput = memo(function PromptInput({
     onProviderChange,
   });
 
-  const setReviewPaneOpen = useUIStore((s) => s.setReviewPaneOpen);
+  const openPanel = useUIStore((s) => s.openPanel);
   const handleOpenReview = useCallback(() => {
-    setReviewPaneOpen(true);
-  }, [setReviewPaneOpen]);
+    openPanel('review');
+  }, [openPanel]);
 
   return (
     <>

@@ -129,7 +129,7 @@ export function CenterDockview({
         buildDefaultLayout(event.api);
       } else {
         // Reconcile the restored right panels with the open flag. The flag
-        // (`right_pane_open`) is written synchronously on toggle while the
+        // (`tool_panels.open.right`) is written synchronously on toggle while the
         // layout snapshot is debounced — and the close path removes panels
         // while the persister is suppressed by `isAnimatingRef` — so after a
         // reload the stored layout can still contain right panels the flag

@@ -36,7 +36,7 @@ export function ProjectHeaderLeftContent({ leading }: ProjectHeaderLeftContentPr
   const activeThreadTemplateId = useThreadSelector((t) => t?.agentTemplateId);
   const activeTemplate = useAgentTemplate(activeThreadTemplateId);
   const renameThread = useThreadStore((s) => s.renameThread);
-  const setReviewPaneOpen = useUIStore((s) => s.setReviewPaneOpen);
+  const closeRightPanel = useUIStore((s) => s.closeRightPanel);
   const kanbanContext = useUIStore((s) => s.kanbanContext);
   const [isEditingTitle, setIsEditingTitle] = useResettableState(false, [activeThreadId]);
   const [titleDraft, setTitleDraft] = useState('');
@@ -87,7 +87,7 @@ export function ProjectHeaderLeftContent({ leading }: ProjectHeaderLeftContentPr
     const basePath = kanbanContext.viewMode === 'list' ? '/list' : '/kanban';
 
     // Close the review pane when returning to the board/list
-    setReviewPaneOpen(false);
+    closeRightPanel();
 
     // Navigate back to the originating view (list or kanban).
     // kanbanContext is cleared by useRouteSync when it detects the route,
@@ -102,7 +102,7 @@ export function ProjectHeaderLeftContent({ leading }: ProjectHeaderLeftContentPr
     if (kanbanContext.threadId) params.set('highlight', kanbanContext.threadId);
     const qs = params.toString();
     navigate(buildPath(qs ? `${basePath}?${qs}` : basePath));
-  }, [kanbanContext, navigate, setReviewPaneOpen]);
+  }, [kanbanContext, navigate, closeRightPanel]);
 
   return (
     <div className="flex min-w-0 flex-1 items-center gap-2">

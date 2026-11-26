@@ -52,7 +52,7 @@ describe('AppStore', () => {
         selectedProjectId: null,
         selectedThreadId: null,
         expandedProjects: new Set<string>(),
-        reviewPaneOpen: false,
+        openPanels: {},
         newThreadProjectId: null,
       }),
     );
@@ -73,7 +73,7 @@ describe('AppStore', () => {
     });
 
     test('review pane is closed', () => {
-      expect(useAppStore.getState().reviewPaneOpen).toBe(false);
+      expect(useAppStore.getState().openPanels.right !== undefined).toBe(false);
     });
   });
 
@@ -173,16 +173,16 @@ describe('AppStore', () => {
     });
   });
 
-  describe('setReviewPaneOpen', () => {
+  describe('openPanel / closeRightPanel', () => {
     test('opens review pane', () => {
-      useAppStore.getState().setReviewPaneOpen(true);
-      expect(useAppStore.getState().reviewPaneOpen).toBe(true);
+      useAppStore.getState().openPanel('review');
+      expect(useAppStore.getState().openPanels.right !== undefined).toBe(true);
     });
 
     test('closes review pane', () => {
-      useAppStore.setState({ reviewPaneOpen: true });
-      useAppStore.getState().setReviewPaneOpen(false);
-      expect(useAppStore.getState().reviewPaneOpen).toBe(false);
+      useAppStore.setState({ openPanels: { right: 'review' } });
+      useAppStore.getState().closeRightPanel();
+      expect(useAppStore.getState().openPanels.right !== undefined).toBe(false);
     });
   });
 

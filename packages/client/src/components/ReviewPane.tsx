@@ -29,7 +29,7 @@ export function ReviewPane() {
     remoteCheckProjectId,
     reviewPaneOpen,
     reviewSubTab,
-    setReviewPaneOpen,
+    closeRightPanel,
     confirmDialog,
     setConfirmDialog,
     review,
@@ -55,7 +55,7 @@ export function ReviewPane() {
       >
         <div className="flex h-full flex-col text-xs [contain:strict]">
           {/* Header with tabs */}
-          <ReviewPaneTabsHeader onClose={() => setReviewPaneOpen(false)} />
+          <ReviewPaneTabsHeader onClose={() => closeRightPanel()} />
 
           <ReviewChangesTab
             truncatedInfo={review.truncatedInfo}

@@ -118,7 +118,7 @@ beforeEach(() => {
     }),
   );
   useUIStore.setState({
-    reviewPaneOpen: true,
+    openPanels: { right: 'review' },
   });
   vi.clearAllMocks();
 });

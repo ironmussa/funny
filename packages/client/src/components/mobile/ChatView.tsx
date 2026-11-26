@@ -22,7 +22,7 @@ import {
   type ThreadCore,
 } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
-import { useUIStore } from '@/stores/ui-store';
+import { selectRightPaneOpen, useUIStore } from '@/stores/ui-store';
 
 // Reuse the desktop review pane; lazy-loaded so it stays out of the mobile
 // first-paint bundle (mirrors how App.tsx lazy-loads it).
@@ -39,8 +39,8 @@ interface Props {
 export function ChatView({ projectId: _projectId, threadId, onBack }: Props) {
   const { t } = useTranslation();
   const selectThread = useThreadStore((s) => s.selectThread);
-  const reviewPaneOpen = useUIStore((s) => s.reviewPaneOpen);
-  const setReviewPaneOpen = useUIStore((s) => s.setReviewPaneOpen);
+  const reviewPaneOpen = useUIStore(selectRightPaneOpen);
+  const closeRightPanel = useUIStore((s) => s.closeRightPanel);
   const activeThread = useThreadSelector((th) => th);
   const stableMessages = useThreadMessages();
   const stableThreadEvents = useThreadEvents();
@@ -72,9 +72,9 @@ export function ChatView({ projectId: _projectId, threadId, onBack }: Props) {
   // flag is persisted, so force it closed when entering/leaving a chat — we
   // never want to land directly in the review overlay.
   useEffect(() => {
-    setReviewPaneOpen(false);
-    return () => setReviewPaneOpen(false);
-  }, [threadId, setReviewPaneOpen]);
+    closeRightPanel();
+    return () => closeRightPanel();
+  }, [threadId, closeRightPanel]);
 
   // Track which message/tool-call IDs existed when the thread was loaded, so
   // already-present items skip the entrance animation (matches desktop).
@@ -100,7 +100,7 @@ export function ChatView({ projectId: _projectId, threadId, onBack }: Props) {
           <header className="border-border flex h-14 shrink-0 items-center gap-3 border-b px-4">
             <button
               type="button"
-              onClick={() => setReviewPaneOpen(false)}
+              onClick={() => closeRightPanel()}
               aria-label={t('common.back', 'Back')}
               className="hover:bg-accent -ml-1 rounded p-1"
               data-testid="mobile-review-back"

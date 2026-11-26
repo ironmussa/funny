@@ -210,11 +210,11 @@ describe('useGlobalShortcuts — shortcut table precedence and actions', () => {
   });
 
   test('Alt+Shift+G does not toggle the review panel', () => {
-    useUIStore.setState({ reviewPaneOpen: false });
+    useUIStore.setState({ openPanels: {} });
     renderShortcuts();
     const e = press({ key: 'G', altKey: true, shiftKey: true });
     expect(e.defaultPrevented).toBe(false);
-    expect(useUIStore.getState().reviewPaneOpen).toBe(false);
+    expect(useUIStore.getState().openPanels.right !== undefined).toBe(false);
   });
 
   test('Ctrl+Shift+L opens the thread list scoped to the selected thread', () => {

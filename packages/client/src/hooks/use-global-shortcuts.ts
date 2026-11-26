@@ -8,6 +8,7 @@ import { listedProjectThreadIds, readThreadIndex, readThreadRow } from '@/data/t
 import { getTerminalScope } from '@/hooks/use-terminal-scope';
 import { createClientLogger } from '@/lib/client-logger';
 import { getThreadRoute } from '@/lib/thread-variant';
+import { TOOL_PANELS } from '@/lib/tool-panels/registry';
 import { buildPath } from '@/lib/url';
 import { useProjectStore } from '@/stores/project-store';
 import {
@@ -208,22 +209,24 @@ function startNewScratchThread(e: KeyboardEvent, ctx: ShortcutContext): void {
 
 type UIState = ReturnType<typeof useUIStore.getState>;
 
-/** Alt+key pane toggles, keyed by the lower-cased key. */
-const PANEL_TOGGLES = new Map<string, (ui: UIState) => void>(
-  Object.entries({
-    g: (ui) => {
-      log.info('shortcut.toggle_review');
-      ui.setReviewPaneOpen(!(ui.reviewPaneOpen && ui.rightPaneTab === 'review'));
-    },
-    f: (ui) => {
-      log.info('shortcut.toggle_files');
-      ui.setFilesPaneOpen(!(ui.reviewPaneOpen && ui.rightPaneTab === 'files'));
-    },
-    m: (ui) => {
-      log.info('shortcut.toggle_comments');
-      ui.setCommentsPaneOpen(!(ui.reviewPaneOpen && ui.rightPaneTab === 'comments'));
-    },
-    h: (ui) => {
+/** Alt+key toggles: one per tool panel with an `altKey` in the registry, plus share. */
+const PANEL_TOGGLES = new Map<string, (ui: UIState) => void>([
+  ...TOOL_PANELS.flatMap((panel): Array<[string, (ui: UIState) => void]> =>
+    panel.altKey
+      ? [
+          [
+            panel.altKey,
+            (ui) => {
+              log.info(`shortcut.toggle_${panel.id}`);
+              ui.togglePanel(panel.id);
+            },
+          ],
+        ]
+      : [],
+  ),
+  [
+    'h',
+    (ui) => {
       // Share is owner-only: the dialog mounts (with its hidden marker) only on
       // a thread the user owns. Gate on the marker so we never strand a stale
       // `shareDialogOpen` flag on a thread with no share dialog.
@@ -232,8 +235,8 @@ const PANEL_TOGGLES = new Map<string, (ui: UIState) => void>(
         ui.toggleShareDialog();
       }
     },
-  } satisfies Record<string, (ui: UIState) => void>),
-);
+  ],
+]);
 
 function isPanelToggle(e: KeyboardEvent): boolean {
   return hasModifiers(e, ALT_ONLY) && PANEL_TOGGLES.has(e.key.toLowerCase());

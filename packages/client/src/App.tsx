@@ -47,7 +47,7 @@ import {
   useThreadViewSelect,
 } from '@/stores/thread-context';
 import { setAppNavigate, useThreadStore } from '@/stores/thread-store';
-import { useUIStore } from '@/stores/ui-store';
+import { selectRightPaneOpen, selectRightPanel, useUIStore } from '@/stores/ui-store';
 import { registerBuiltinVisualizers } from '@/visualizers/builtin';
 import { installVisualizerHostGlobals } from '@/visualizers/host-runtime';
 
@@ -224,9 +224,9 @@ export function App() {
 
   const loadScratchThreads = useThreadStore((s) => s.loadScratchThreads);
   const loadSharedThreads = useThreadStore((s) => s.loadSharedThreads);
-  const reviewPaneOpen = useUIStore((s) => s.reviewPaneOpen);
+  const reviewPaneOpen = useUIStore(selectRightPaneOpen);
   const reviewPaneWidth = useUIStore((s) => s.reviewPaneWidth);
-  const rightPaneTab = useUIStore((s) => s.rightPaneTab);
+  const rightPaneTab = useUIStore(selectRightPanel);
   const settingsOpen = useUIStore((s) => s.settingsOpen);
   const generalSettingsOpen = useUIStore((s) => s.generalSettingsOpen);
   const allThreadsProjectId = useUIStore((s) => s.allThreadsProjectId);

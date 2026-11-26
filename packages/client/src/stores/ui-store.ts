@@ -1,6 +1,12 @@
 import { create, type StoreApi } from 'zustand';
 
 import { readProject } from '@/data/projects/read';
+import {
+  type RightPanelId,
+  type ToolPanelId,
+  findToolPanel,
+  isRightToolPanelId,
+} from '@/lib/tool-panels/registry';
 
 import { useProjectStore } from './project-store';
 import {
@@ -14,12 +20,19 @@ const DEFAULT_REVIEW_PANE_WIDTH = 28; // percentage of viewport width
 const MIN_REVIEW_PANE_WIDTH = 20;
 const MAX_REVIEW_PANE_WIDTH = 70;
 const TIMELINE_VISIBLE_KEY = 'timeline_visible';
-const RIGHT_PANE_OPEN_KEY = 'right_pane_open';
-const RIGHT_PANE_TAB_KEY = 'right_pane_tab';
+/** Pre-`tool-panels` keys, read once to seed {@link OPEN_RIGHT_PANEL_KEY}. */
+const LEGACY_RIGHT_PANE_OPEN_KEY = 'right_pane_open';
+const LEGACY_RIGHT_PANE_TAB_KEY = 'right_pane_tab';
+/** The panel open on the right, or {@link NO_PANEL}. One key per location. */
+const OPEN_RIGHT_PANEL_KEY = 'tool_panels.open.right';
+const NO_PANEL = 'none';
 const REVIEW_SUB_TAB_KEY = 'review_sub_tab';
 const GRID_SELECTED_THREAD_KEY = 'funny:grid-selected-thread:v1';
 
-type RightPaneTab = 'review' | 'activity' | 'files' | 'comments';
+/** The tool panel open in each location (openspec `tool-panels`); absent = closed. */
+export interface OpenPanels {
+  right?: RightPanelId;
+}
 export type ReviewSubTab = 'changes' | 'graph' | 'stash' | 'prs' | 'ci' | 'issues' | 'worktrees';
 const VALID_REVIEW_SUB_TABS: ReviewSubTab[] = [
   'changes',
@@ -31,12 +44,46 @@ const VALID_REVIEW_SUB_TABS: ReviewSubTab[] = [
   'issues',
 ];
 
-function persistRightPane(open: boolean, tab?: RightPaneTab) {
+/** No stored state: the right pane opens on Activity, as before `tool-panels`. */
+const DEFAULT_OPEN_PANELS: OpenPanels = { right: 'activity' };
+
+/** The open panels stored on this device. Exported for tests. */
+export function readOpenPanels(): OpenPanels {
   try {
-    localStorage.setItem(RIGHT_PANE_OPEN_KEY, String(open));
-    if (tab) localStorage.setItem(RIGHT_PANE_TAB_KEY, tab);
+    const stored = localStorage.getItem(OPEN_RIGHT_PANEL_KEY);
+    if (stored !== null) return isRightToolPanelId(stored) ? { right: stored } : {};
+    // Seed once from the keys written before `tool-panels`.
+    const legacyOpen = localStorage.getItem(LEGACY_RIGHT_PANE_OPEN_KEY);
+    if (legacyOpen === null) return DEFAULT_OPEN_PANELS;
+    if (legacyOpen !== 'true') return {};
+    const legacyTab = localStorage.getItem(LEGACY_RIGHT_PANE_TAB_KEY);
+    return { right: isRightToolPanelId(legacyTab) ? legacyTab : 'activity' };
+  } catch {
+    return DEFAULT_OPEN_PANELS;
+  }
+}
+
+function persistOpenPanels(openPanels: OpenPanels) {
+  try {
+    localStorage.setItem(OPEN_RIGHT_PANEL_KEY, openPanels.right ?? NO_PANEL);
   } catch {}
 }
+
+/** `openPanels` with the right location closed. */
+function withRightClosed(openPanels: OpenPanels): OpenPanels {
+  return openPanels.right === undefined ? openPanels : { ...openPanels, right: undefined };
+}
+
+/** Whether a panel is open on the right. */
+export const selectRightPaneOpen = (s: { openPanels: OpenPanels }) =>
+  s.openPanels.right !== undefined;
+
+/** The panel open on the right, if any. */
+export const selectRightPanel = (s: { openPanels: OpenPanels }) => s.openPanels.right;
+
+/** Whether this panel is the one open in its location. */
+export const selectPanelOpen = (id: ToolPanelId) => (s: { openPanels: OpenPanels }) =>
+  s.openPanels.right === id;
 
 function clearSelectedThread() {
   invalidateSelectThread();
@@ -44,10 +91,10 @@ function clearSelectedThread() {
 }
 
 interface UIState {
-  reviewPaneOpen: boolean;
+  /** The tool panel open in each location. Change it only through the panel actions. */
+  openPanels: OpenPanels;
   reviewPaneWidth: number; // percentage of viewport width
   reviewPaneResizing: boolean;
-  rightPaneTab: RightPaneTab;
   settingsOpen: boolean;
   activeSettingsPage: string | null;
   /** Path the user came from before entering Settings — restored on back-arrow click. */
@@ -141,14 +188,15 @@ interface UIState {
   toggleTextSearch: () => void;
   toggleKeyboardShortcuts: () => void;
   setReviewSubTab: (tab: ReviewSubTab) => void;
-  setReviewPaneOpen: (open: boolean) => void;
+  /** Open a tool panel, replacing the panel open in its location. */
+  openPanel: (id: ToolPanelId) => void;
+  /** Close the panel open on the right. */
+  closeRightPanel: () => void;
+  /** Close the panel if it is the one open in its location, open it otherwise. */
+  togglePanel: (id: ToolPanelId) => void;
   setTestRunnerOpen: (open: boolean) => void;
-  setActivityPaneOpen: (open: boolean) => void;
-  setFilesPaneOpen: (open: boolean) => void;
-  setCommentsPaneOpen: (open: boolean) => void;
   setReviewPaneWidth: (width: number) => void;
   setReviewPaneResizing: (resizing: boolean) => void;
-  setRightPaneTab: (tab: RightPaneTab) => void;
   setSettingsOpen: (open: boolean) => void;
   setActiveSettingsPage: (page: string | null) => void;
   setSettingsReturnPath: (path: string | null) => void;
@@ -206,28 +254,12 @@ interface UIState {
 }
 
 type SetUIState = StoreApi<UIState>['setState'];
+type GetUIState = StoreApi<UIState>['getState'];
 
 /** Initial UI state, with the persisted panes read from localStorage. */
 function readInitialUIState() {
   return {
-    reviewPaneOpen: (() => {
-      try {
-        const stored = localStorage.getItem(RIGHT_PANE_OPEN_KEY);
-        if (stored !== null) return stored === 'true';
-        return true;
-      } catch {
-        return true;
-      }
-    })(),
-    rightPaneTab: ((): RightPaneTab => {
-      try {
-        const stored = localStorage.getItem(RIGHT_PANE_TAB_KEY);
-        const tabs: RightPaneTab[] = ['review', 'activity', 'files', 'comments'];
-        return tabs.find((tab) => tab === stored) ?? 'activity';
-      } catch {
-        return 'activity';
-      }
-    })(),
+    openPanels: readOpenPanels(),
     reviewPaneWidth: (() => {
       try {
         const stored = localStorage.getItem(REVIEW_PANE_WIDTH_KEY);
@@ -399,8 +431,8 @@ function overlayActions(set: SetUIState) {
   } satisfies Partial<UIState>;
 }
 
-/** Right pane (review / activity / files / comments) and its persisted layout. */
-function rightPaneActions(set: SetUIState) {
+/** Tool panels (openspec `tool-panels`) and the right pane's persisted layout. */
+function rightPaneActions(set: SetUIState, get: GetUIState) {
   return {
     setReviewSubTab: (tab) => {
       try {
@@ -408,20 +440,31 @@ function rightPaneActions(set: SetUIState) {
       } catch {}
       set({ reviewSubTab: tab });
     },
-    setReviewPaneOpen: (open) => {
-      persistRightPane(open, open ? 'review' : undefined);
-      set(open ? { reviewPaneOpen: true, rightPaneTab: 'review' } : { reviewPaneOpen: false });
+    openPanel: (id) => {
+      const panel = findToolPanel(id);
+      if (!panel) return;
+      set((s) => ({ openPanels: { ...s.openPanels, [panel.location]: id } }));
+    },
+    closeRightPanel: () => set((s) => ({ openPanels: withRightClosed(s.openPanels) })),
+    togglePanel: (id) => {
+      const panel = findToolPanel(id);
+      if (!panel) return;
+      set((s) => ({
+        openPanels: {
+          ...s.openPanels,
+          [panel.location]: s.openPanels[panel.location] === id ? undefined : id,
+        },
+      }));
     },
     setTestRunnerOpen: (open) => {
       if (open) {
         clearSelectedThread();
-        persistRightPane(false);
       }
       set(
         open
           ? {
               testRunnerOpen: true,
-              reviewPaneOpen: false,
+              openPanels: withRightClosed(get().openPanels),
               settingsOpen: false,
               activeSettingsPage: null,
               allThreadsProjectId: null,
@@ -433,22 +476,6 @@ function rightPaneActions(set: SetUIState) {
             }
           : { testRunnerOpen: false },
       );
-    },
-    setActivityPaneOpen: (open) => {
-      persistRightPane(open, open ? 'activity' : undefined);
-      set(open ? { reviewPaneOpen: true, rightPaneTab: 'activity' } : { reviewPaneOpen: false });
-    },
-    setFilesPaneOpen: (open) => {
-      persistRightPane(open, open ? 'files' : undefined);
-      set(open ? { reviewPaneOpen: true, rightPaneTab: 'files' } : { reviewPaneOpen: false });
-    },
-    setCommentsPaneOpen: (open) => {
-      persistRightPane(open, open ? 'comments' : undefined);
-      set(open ? { reviewPaneOpen: true, rightPaneTab: 'comments' } : { reviewPaneOpen: false });
-    },
-    setRightPaneTab: (tab) => {
-      persistRightPane(true, tab);
-      set({ rightPaneTab: tab, reviewPaneOpen: true });
     },
     setReviewPaneWidth: (width) => {
       const clamped = Math.max(MIN_REVIEW_PANE_WIDTH, Math.min(MAX_REVIEW_PANE_WIDTH, width));
@@ -462,7 +489,7 @@ function rightPaneActions(set: SetUIState) {
 }
 
 /** Full-page views: settings, automations, new thread compose, search, analytics. */
-function navigationActions(set: SetUIState) {
+function navigationActions(set: SetUIState, get: GetUIState) {
   return {
     setSettingsOpen: (open) =>
       set(
@@ -480,16 +507,13 @@ function navigationActions(set: SetUIState) {
     setActiveSettingsPage: (page) => set({ activeSettingsPage: page }),
     setSettingsReturnPath: (path) => set({ settingsReturnPath: path }),
     setGeneralSettingsOpen: (open) => {
-      if (open) {
-        persistRightPane(false);
-      }
       set(
         open
           ? {
               generalSettingsOpen: true,
               settingsOpen: false,
               activeSettingsPage: null,
-              reviewPaneOpen: false,
+              openPanels: withRightClosed(get().openPanels),
               automationInboxOpen: false,
               addProjectOpen: false,
               allThreadsProjectId: null,
@@ -504,13 +528,12 @@ function navigationActions(set: SetUIState) {
     setAutomationInboxOpen: (open) => {
       if (open) {
         clearSelectedThread();
-        persistRightPane(false);
       }
       set(
         open
           ? {
               automationInboxOpen: true,
-              reviewPaneOpen: false,
+              openPanels: withRightClosed(get().openPanels),
               settingsOpen: false,
               activeSettingsPage: null,
               allThreadsProjectId: null,
@@ -555,12 +578,11 @@ function navigationActions(set: SetUIState) {
         allThreadsProjectId: null,
         automationInboxOpen: false,
         addProjectOpen: false,
-        reviewPaneOpen: false,
+        openPanels: withRightClosed(get().openPanels),
         testRunnerOpen: false,
       }));
       clearSelectedThread();
       useProjectStore.getState().selectProject(projectId);
-      persistRightPane(false);
     },
 
     startNewScratchThread: () => {
@@ -575,12 +597,11 @@ function navigationActions(set: SetUIState) {
         allThreadsProjectId: null,
         automationInboxOpen: false,
         addProjectOpen: false,
-        reviewPaneOpen: false,
+        openPanels: withRightClosed(get().openPanels),
         testRunnerOpen: false,
       }));
       clearSelectedThread();
       useProjectStore.getState().selectProject(null);
-      persistRightPane(false);
     },
 
     cancelNewThread: () => {
@@ -599,7 +620,6 @@ function navigationActions(set: SetUIState) {
 
     showGlobalSearch: () => {
       clearSelectedThread();
-      persistRightPane(false);
       set({
         allThreadsProjectId: '__all__',
         newThreadProjectId: null,
@@ -609,7 +629,7 @@ function navigationActions(set: SetUIState) {
         settingsOpen: false,
         analyticsOpen: false,
         liveColumnsOpen: false,
-        reviewPaneOpen: false,
+        openPanels: withRightClosed(get().openPanels),
         testRunnerOpen: false,
       });
     },
@@ -617,13 +637,12 @@ function navigationActions(set: SetUIState) {
     setAnalyticsOpen: (open) => {
       if (open) {
         clearSelectedThread();
-        persistRightPane(false);
       }
       set(
         open
           ? {
               analyticsOpen: true,
-              reviewPaneOpen: false,
+              openPanels: withRightClosed(get().openPanels),
               settingsOpen: false,
               activeSettingsPage: null,
               allThreadsProjectId: null,
@@ -639,13 +658,12 @@ function navigationActions(set: SetUIState) {
     setLiveColumnsOpen: (open) => {
       if (open) {
         clearSelectedThread();
-        persistRightPane(false);
       }
       set(
         open
           ? {
               liveColumnsOpen: true,
-              reviewPaneOpen: false,
+              openPanels: withRightClosed(get().openPanels),
               settingsOpen: false,
               activeSettingsPage: null,
               allThreadsProjectId: null,
@@ -661,7 +679,7 @@ function navigationActions(set: SetUIState) {
 }
 
 /** Designs, timeline, grid selection, kanban handoff, compose prefill and recaps. */
-function designAndMiscActions(set: SetUIState) {
+function designAndMiscActions(set: SetUIState, get: GetUIState) {
   return {
     setDesignView: (projectId, designId) => {
       set({
@@ -689,13 +707,12 @@ function designAndMiscActions(set: SetUIState) {
 
     setDesignsListOpen: (projectId) => {
       clearSelectedThread();
-      persistRightPane(false);
       set({
         designsListProjectId: projectId,
         designViewProjectId: null,
         designViewDesignId: null,
         activeDesignId: null,
-        reviewPaneOpen: false,
+        openPanels: withRightClosed(get().openPanels),
         settingsOpen: false,
         activeSettingsPage: null,
         generalSettingsOpen: false,
@@ -776,13 +793,18 @@ function designAndMiscActions(set: SetUIState) {
   } satisfies Partial<UIState>;
 }
 
-export const useUIStore = create<UIState>((set) => ({
+export const useUIStore = create<UIState>((set, get) => ({
   ...readInitialUIState(),
   ...overlayActions(set),
-  ...rightPaneActions(set),
-  ...navigationActions(set),
-  ...designAndMiscActions(set),
+  ...rightPaneActions(set, get),
+  ...navigationActions(set, get),
+  ...designAndMiscActions(set, get),
 }));
+
+// Every write of `openPanels` is remembered on the device, whoever made it.
+useUIStore.subscribe((state, prev) => {
+  if (state.openPanels !== prev.openPanels) persistOpenPanels(state.openPanels);
+});
 
 // Reset transient UI panes whenever a thread is selected.
 // Registered via the listener API to avoid a thread-store ↔ ui-store import cycle.

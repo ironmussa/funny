@@ -377,7 +377,7 @@ export function ActivityPane() {
             <Button
               variant="muted"
               size="icon-xs"
-              onClick={() => useUIStore.getState().setReviewPaneOpen(false)}
+              onClick={() => useUIStore.getState().closeRightPanel()}
               data-testid="activity-close"
             >
               <PanelRightClose className="icon-sm" />

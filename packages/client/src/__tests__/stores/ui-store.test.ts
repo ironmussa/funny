@@ -36,7 +36,7 @@ import { buildProject, seedProjects } from '@/data/projects/testing';
 
 // Imported after the mocks: ui-store registers its thread-select listener at
 // import time, and bun's mock.module is not hoisted.
-const { useUIStore } = await import('@/stores/ui-store');
+const { useUIStore, readOpenPanels } = await import('@/stores/ui-store');
 
 describe('useUIStore', () => {
   beforeEach(() => {
@@ -44,9 +44,8 @@ describe('useUIStore', () => {
     localStorage.clear();
     // Reset the store to its initial state
     useUIStore.setState({
-      reviewPaneOpen: false,
+      openPanels: {},
       reviewPaneWidth: 28,
-      rightPaneTab: 'activity',
       reviewSubTab: 'changes',
       settingsOpen: false,
       activeSettingsPage: null,
@@ -74,12 +73,14 @@ describe('useUIStore', () => {
       activeDesignId: null,
       designsListProjectId: null,
     });
+    // The reset above persists `openPanels`; start every test from an empty device.
+    localStorage.clear();
     vi.clearAllMocks();
   });
 
   describe('initial state', () => {
-    test('reviewPaneOpen is false', () => {
-      expect(useUIStore.getState().reviewPaneOpen).toBe(false);
+    test('no right panel is open', () => {
+      expect(useUIStore.getState().openPanels.right !== undefined).toBe(false);
     });
 
     test('settingsOpen is false', () => {
@@ -115,25 +116,25 @@ describe('useUIStore', () => {
     });
   });
 
-  describe('setReviewPaneOpen', () => {
+  describe('openPanel / closeRightPanel', () => {
     test('opens review pane', () => {
-      useUIStore.getState().setReviewPaneOpen(true);
-      expect(useUIStore.getState().reviewPaneOpen).toBe(true);
+      useUIStore.getState().openPanel('review');
+      expect(useUIStore.getState().openPanels.right !== undefined).toBe(true);
     });
 
     test('closes review pane', () => {
-      useUIStore.setState({ reviewPaneOpen: true });
-      useUIStore.getState().setReviewPaneOpen(false);
-      expect(useUIStore.getState().reviewPaneOpen).toBe(false);
+      useUIStore.setState({ openPanels: { right: 'review' } });
+      useUIStore.getState().closeRightPanel();
+      expect(useUIStore.getState().openPanels.right !== undefined).toBe(false);
     });
 
     test('toggling multiple times works correctly', () => {
-      useUIStore.getState().setReviewPaneOpen(true);
-      expect(useUIStore.getState().reviewPaneOpen).toBe(true);
-      useUIStore.getState().setReviewPaneOpen(false);
-      expect(useUIStore.getState().reviewPaneOpen).toBe(false);
-      useUIStore.getState().setReviewPaneOpen(true);
-      expect(useUIStore.getState().reviewPaneOpen).toBe(true);
+      useUIStore.getState().openPanel('review');
+      expect(useUIStore.getState().openPanels.right !== undefined).toBe(true);
+      useUIStore.getState().closeRightPanel();
+      expect(useUIStore.getState().openPanels.right !== undefined).toBe(false);
+      useUIStore.getState().openPanel('review');
+      expect(useUIStore.getState().openPanels.right !== undefined).toBe(true);
     });
   });
 
@@ -263,7 +264,7 @@ describe('useUIStore', () => {
   describe('setAutomationInboxOpen', () => {
     test('opening closes other panels', () => {
       useUIStore.setState({
-        reviewPaneOpen: true,
+        openPanels: { right: 'review' },
         settingsOpen: true,
         activeSettingsPage: 'profile',
         allThreadsProjectId: '__all__',
@@ -273,7 +274,7 @@ describe('useUIStore', () => {
 
       const state = useUIStore.getState();
       expect(state.automationInboxOpen).toBe(true);
-      expect(state.reviewPaneOpen).toBe(false);
+      expect(state.openPanels.right !== undefined).toBe(false);
       expect(state.settingsOpen).toBe(false);
       expect(state.activeSettingsPage).toBeNull();
       expect(state.allThreadsProjectId).toBeNull();
@@ -293,13 +294,13 @@ describe('useUIStore', () => {
     test('closing only sets automationInboxOpen to false', () => {
       useUIStore.setState({
         automationInboxOpen: true,
-        reviewPaneOpen: true,
+        openPanels: { right: 'review' },
         settingsOpen: true,
       });
       useUIStore.getState().setAutomationInboxOpen(false);
       expect(useUIStore.getState().automationInboxOpen).toBe(false);
       // Other state should remain unchanged
-      expect(useUIStore.getState().reviewPaneOpen).toBe(true);
+      expect(useUIStore.getState().openPanels.right !== undefined).toBe(true);
       expect(useUIStore.getState().settingsOpen).toBe(true);
     });
 
@@ -388,7 +389,7 @@ describe('useUIStore', () => {
   describe('setAnalyticsOpen', () => {
     test('opening closes other panels', () => {
       useUIStore.setState({
-        reviewPaneOpen: true,
+        openPanels: { right: 'review' },
         settingsOpen: true,
         activeSettingsPage: 'users',
         allThreadsProjectId: '__all__',
@@ -399,7 +400,7 @@ describe('useUIStore', () => {
 
       const state = useUIStore.getState();
       expect(state.analyticsOpen).toBe(true);
-      expect(state.reviewPaneOpen).toBe(false);
+      expect(state.openPanels.right !== undefined).toBe(false);
       expect(state.settingsOpen).toBe(false);
       expect(state.activeSettingsPage).toBeNull();
       expect(state.allThreadsProjectId).toBeNull();
@@ -418,10 +419,10 @@ describe('useUIStore', () => {
     });
 
     test('closing only sets analyticsOpen to false', () => {
-      useUIStore.setState({ analyticsOpen: true, reviewPaneOpen: true });
+      useUIStore.setState({ analyticsOpen: true, openPanels: { right: 'review' } });
       useUIStore.getState().setAnalyticsOpen(false);
       expect(useUIStore.getState().analyticsOpen).toBe(false);
-      expect(useUIStore.getState().reviewPaneOpen).toBe(true);
+      expect(useUIStore.getState().openPanels.right !== undefined).toBe(true);
     });
 
     test('closing does not call invalidateSelectThread', () => {
@@ -539,16 +540,46 @@ describe('useUIStore', () => {
       expect(localStorage.getItem('review_pane_width')).toBe('70');
     });
 
-    test('setRightPaneTab opens review pane on selected tab', () => {
-      useUIStore.getState().setRightPaneTab('files');
-      expect(useUIStore.getState().reviewPaneOpen).toBe(true);
-      expect(useUIStore.getState().rightPaneTab).toBe('files');
+    test('openPanel replaces the panel open in its location', () => {
+      useUIStore.getState().openPanel('review');
+      useUIStore.getState().openPanel('files');
+      expect(useUIStore.getState().openPanels).toEqual({ right: 'files' });
     });
 
-    test('setActivityPaneOpen switches to activity tab', () => {
-      useUIStore.getState().setActivityPaneOpen(true);
-      expect(useUIStore.getState().rightPaneTab).toBe('activity');
-      expect(useUIStore.getState().reviewPaneOpen).toBe(true);
+    test('togglePanel closes the open panel and opens another one', () => {
+      useUIStore.getState().togglePanel('activity');
+      expect(useUIStore.getState().openPanels.right).toBe('activity');
+      useUIStore.getState().togglePanel('comments');
+      expect(useUIStore.getState().openPanels.right).toBe('comments');
+      useUIStore.getState().togglePanel('comments');
+      expect(useUIStore.getState().openPanels.right).toBeUndefined();
+    });
+
+    test('every change of the open panels is persisted', () => {
+      useUIStore.getState().openPanel('files');
+      expect(localStorage.getItem('tool_panels.open.right')).toBe('files');
+      useUIStore.getState().setAnalyticsOpen(true);
+      expect(localStorage.getItem('tool_panels.open.right')).toBe('none');
+    });
+
+    test('readOpenPanels opens Activity when nothing is stored', () => {
+      expect(readOpenPanels()).toEqual({ right: 'activity' });
+    });
+
+    test('readOpenPanels seeds from the keys written before tool panels', () => {
+      localStorage.setItem('right_pane_open', 'true');
+      localStorage.setItem('right_pane_tab', 'files');
+      expect(readOpenPanels()).toEqual({ right: 'files' });
+      localStorage.setItem('right_pane_open', 'false');
+      expect(readOpenPanels()).toEqual({});
+    });
+
+    test('readOpenPanels prefers the new key and drops unknown panels', () => {
+      localStorage.setItem('right_pane_open', 'true');
+      localStorage.setItem('tool_panels.open.right', 'comments');
+      expect(readOpenPanels()).toEqual({ right: 'comments' });
+      localStorage.setItem('tool_panels.open.right', 'none');
+      expect(readOpenPanels()).toEqual({});
     });
 
     test('setReviewSubTab persists valid tab', () => {
@@ -593,18 +624,18 @@ describe('useUIStore', () => {
     });
 
     test('setGeneralSettingsOpen closes review pane and settings', () => {
-      useUIStore.setState({ settingsOpen: true, reviewPaneOpen: true });
+      useUIStore.setState({ settingsOpen: true, openPanels: { right: 'review' } });
       useUIStore.getState().setGeneralSettingsOpen(true);
       expect(useUIStore.getState().generalSettingsOpen).toBe(true);
       expect(useUIStore.getState().settingsOpen).toBe(false);
-      expect(useUIStore.getState().reviewPaneOpen).toBe(false);
+      expect(useUIStore.getState().openPanels.right !== undefined).toBe(false);
     });
 
     test('setTestRunnerOpen closes review pane and clears thread selection', () => {
-      useUIStore.setState({ reviewPaneOpen: true });
+      useUIStore.setState({ openPanels: { right: 'review' } });
       useUIStore.getState().setTestRunnerOpen(true);
       expect(useUIStore.getState().testRunnerOpen).toBe(true);
-      expect(useUIStore.getState().reviewPaneOpen).toBe(false);
+      expect(useUIStore.getState().openPanels.right !== undefined).toBe(false);
       expect(mockClearThreadSelection).toHaveBeenCalled();
     });
   });

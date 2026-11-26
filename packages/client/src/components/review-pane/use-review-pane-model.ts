@@ -19,7 +19,7 @@ import {
   useThreadStatus,
   useThreadWorktreePath,
 } from '@/stores/thread-context';
-import { useUIStore, type ReviewSubTab } from '@/stores/ui-store';
+import { selectRightPaneOpen, useUIStore, type ReviewSubTab } from '@/stores/ui-store';
 
 import { expandedFileIcon } from './review-pane-props';
 import type { ConfirmDialogState } from './ReviewDialogs';
@@ -289,8 +289,8 @@ function useExpandedDiff({
  */
 export function useReviewPaneModel() {
   // ── Stores ──
-  const setReviewPaneOpen = useUIStore((s) => s.setReviewPaneOpen);
-  const reviewPaneOpen = useUIStore((s) => s.reviewPaneOpen);
+  const closeRightPanel = useUIStore((s) => s.closeRightPanel);
+  const reviewPaneOpen = useUIStore(selectRightPaneOpen);
   const reviewSubTab = useUIStore((s) => s.reviewSubTab);
 
   const target = useReviewPaneTarget();
@@ -315,7 +315,7 @@ export function useReviewPaneModel() {
     remoteCheckProjectId: target.remoteCheckProjectId,
     reviewPaneOpen,
     reviewSubTab,
-    setReviewPaneOpen,
+    closeRightPanel,
     setConfirmDialog,
   });
 
@@ -335,7 +335,7 @@ export function useReviewPaneModel() {
     ...target,
     reviewPaneOpen,
     reviewSubTab,
-    setReviewPaneOpen,
+    closeRightPanel,
     confirmDialog,
     setConfirmDialog,
     review,

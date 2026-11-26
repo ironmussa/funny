@@ -19,7 +19,7 @@ import { useAuthStore } from '@/stores/auth-store';
 import { useThreadSelector } from '@/stores/thread-context';
 
 /**
- * Docked Comments panel for a thread (right pane, `rightPaneTab === 'comments'`).
+ * Docked Comments panel for a thread (right pane, `openPanels.right === 'comments'`).
  * A flat, thread-level discussion shared by the owner and every sharee — opened
  * from the 💬 header icon, the sibling of the file-manager pane. Both owner and
  * sharee can read and post; only the owner can delete (mirrors the server's

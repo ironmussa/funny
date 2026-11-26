@@ -26,7 +26,7 @@ import {
   useThreadStatus,
   useThreadWorktreePath,
 } from '@/stores/thread-context';
-import { useUIStore } from '@/stores/ui-store';
+import { selectRightPanel, useUIStore } from '@/stores/ui-store';
 
 import { ShareThreadDialog } from './ShareThreadDialog';
 import { StartupCommandsPopover } from './StartupCommandsPopover';
@@ -239,13 +239,10 @@ export const ThreadHeaderActionsBase = memo(function ThreadHeaderActionsBase({
   );
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const projects = useProjects();
-  const setReviewPaneOpen = useUIStore((s) => s.setReviewPaneOpen);
-  const reviewPaneOpen = useUIStore((s) => s.reviewPaneOpen);
+  const togglePanel = useUIStore((s) => s.togglePanel);
+  const rightPanel = useUIStore(selectRightPanel);
   const setTestRunnerOpen = useUIStore((s) => s.setTestRunnerOpen);
   const testRunnerOpen = useUIStore((s) => s.testRunnerOpen);
-  const setFilesPaneOpen = useUIStore((s) => s.setFilesPaneOpen);
-  const setCommentsPaneOpen = useUIStore((s) => s.setCommentsPaneOpen);
-  const rightPaneTab = useUIStore((s) => s.rightPaneTab);
   const canShowComments = useThreadSelector((thread) => variant.canShowComments(thread));
   const commentCount = useThreadSelector((thread) => thread?.commentCount ?? 0);
   const { openPreview, isTauri } = usePreviewWindow();
@@ -288,9 +285,9 @@ export const ThreadHeaderActionsBase = memo(function ThreadHeaderActionsBase({
 
   if (activeThreadStatus === 'setting_up') return null;
 
-  const reviewPanelActive = reviewPaneOpen && rightPaneTab === 'review';
-  const filesPanelActive = reviewPaneOpen && rightPaneTab === 'files';
-  const commentsPanelActive = reviewPaneOpen && rightPaneTab === 'comments';
+  const reviewPanelActive = rightPanel === 'review';
+  const filesPanelActive = rightPanel === 'files';
+  const commentsPanelActive = rightPanel === 'comments';
   // Sharing is owner-only and not for scratch threads.
   const canShare = !!activeThreadId && !!projectId && !activeThreadIsScratch && isThreadOwner;
 
@@ -323,7 +320,7 @@ export const ThreadHeaderActionsBase = memo(function ThreadHeaderActionsBase({
           testId="header-toggle-review"
           onClick={() =>
             startTransition(() => {
-              setReviewPaneOpen(!reviewPanelActive);
+              togglePanel('review');
               updatePanelParam(reviewPanelActive ? null : 'review');
             })
           }
@@ -355,7 +352,7 @@ export const ThreadHeaderActionsBase = memo(function ThreadHeaderActionsBase({
           disabled={!projectId}
           onClick={() =>
             startTransition(() => {
-              setFilesPaneOpen(!filesPanelActive);
+              togglePanel('files');
               updatePanelParam(filesPanelActive ? null : 'files');
             })
           }
@@ -380,7 +377,7 @@ export const ThreadHeaderActionsBase = memo(function ThreadHeaderActionsBase({
                 count: commentCount,
                 onToggle: () =>
                   startTransition(() => {
-                    setCommentsPaneOpen(!commentsPanelActive);
+                    togglePanel('comments');
                     updatePanelParam(commentsPanelActive ? null : 'comments');
                   }),
               }

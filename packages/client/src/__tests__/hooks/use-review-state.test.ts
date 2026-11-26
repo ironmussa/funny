@@ -132,7 +132,7 @@ function baseArgs(
     remoteCheckProjectId: 'p1',
     reviewPaneOpen: true,
     reviewSubTab,
-    setReviewPaneOpen: vi.fn(),
+    closeRightPanel: vi.fn(),
     setConfirmDialog: vi.fn(),
   };
 }

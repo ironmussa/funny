@@ -35,7 +35,7 @@ type ReviewPaneContextValue = ReturnType<typeof useReviewState> & {
   // UI store-derived
   reviewPaneOpen: boolean;
   reviewSubTab: ReviewSubTab;
-  setReviewPaneOpen: (open: boolean) => void;
+  closeRightPanel: () => void;
   setReviewSubTab: (tab: ReviewSubTab) => void;
   refreshAll: () => Promise<void>;
   // Local UI state
@@ -90,7 +90,7 @@ export function ReviewPaneStateProvider({ children }: { children: ReactNode }) {
     remoteCheckProjectId,
     reviewPaneOpen,
     reviewSubTab,
-    setReviewPaneOpen,
+    closeRightPanel,
     confirmDialog,
     setConfirmDialog,
     review,
@@ -126,7 +126,7 @@ export function ReviewPaneStateProvider({ children }: { children: ReactNode }) {
       remoteCheckProjectId,
       reviewPaneOpen,
       reviewSubTab,
-      setReviewPaneOpen,
+      closeRightPanel,
       setReviewSubTab,
       refreshAll,
       confirmDialog,
@@ -151,7 +151,7 @@ export function ReviewPaneStateProvider({ children }: { children: ReactNode }) {
       remoteCheckProjectId,
       reviewPaneOpen,
       reviewSubTab,
-      setReviewPaneOpen,
+      closeRightPanel,
       setReviewSubTab,
       refreshAll,
       confirmDialog,

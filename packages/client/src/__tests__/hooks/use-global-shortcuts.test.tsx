@@ -189,8 +189,7 @@ describe('useGlobalShortcuts — Alt+G/F/H/M toggle the right-sidebar panels', (
 
   beforeEach(() => {
     useUIStore.setState({
-      reviewPaneOpen: false,
-      rightPaneTab: 'activity',
+      openPanels: {},
       shareDialogOpen: false,
     });
   });
@@ -198,8 +197,7 @@ describe('useGlobalShortcuts — Alt+G/F/H/M toggle the right-sidebar panels', (
   afterEach(() => {
     document.body.innerHTML = '';
     useUIStore.setState({
-      reviewPaneOpen: false,
-      rightPaneTab: 'activity',
+      openPanels: {},
       shareDialogOpen: false,
     });
   });
@@ -208,33 +206,33 @@ describe('useGlobalShortcuts — Alt+G/F/H/M toggle the right-sidebar panels', (
     renderShortcuts();
 
     pressAlt('g');
-    expect(useUIStore.getState().reviewPaneOpen).toBe(true);
-    expect(useUIStore.getState().rightPaneTab).toBe('review');
+    expect(useUIStore.getState().openPanels.right !== undefined).toBe(true);
+    expect(useUIStore.getState().openPanels.right).toBe('review');
 
     pressAlt('g');
-    expect(useUIStore.getState().reviewPaneOpen).toBe(false);
+    expect(useUIStore.getState().openPanels.right !== undefined).toBe(false);
   });
 
   test('Alt+F opens the file manager panel', () => {
     renderShortcuts();
     pressAlt('f');
-    expect(useUIStore.getState().reviewPaneOpen).toBe(true);
-    expect(useUIStore.getState().rightPaneTab).toBe('files');
+    expect(useUIStore.getState().openPanels.right !== undefined).toBe(true);
+    expect(useUIStore.getState().openPanels.right).toBe('files');
   });
 
   test('Alt+M opens the comments panel', () => {
     renderShortcuts();
     pressAlt('m');
-    expect(useUIStore.getState().reviewPaneOpen).toBe(true);
-    expect(useUIStore.getState().rightPaneTab).toBe('comments');
+    expect(useUIStore.getState().openPanels.right !== undefined).toBe(true);
+    expect(useUIStore.getState().openPanels.right).toBe('comments');
   });
 
   test('switching from one panel to another keeps the pane open on the new tab', () => {
     renderShortcuts();
     pressAlt('g');
     pressAlt('f');
-    expect(useUIStore.getState().reviewPaneOpen).toBe(true);
-    expect(useUIStore.getState().rightPaneTab).toBe('files');
+    expect(useUIStore.getState().openPanels.right !== undefined).toBe(true);
+    expect(useUIStore.getState().openPanels.right).toBe('files');
   });
 
   test('Alt+H toggles the share dialog only when the share dialog is mounted', () => {

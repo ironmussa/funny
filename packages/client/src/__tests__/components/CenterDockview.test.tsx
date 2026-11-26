@@ -206,7 +206,7 @@ describe('CenterDockview right tabs', () => {
     expect(graphContent).not.toHaveAttribute('hidden');
   });
 
-  // Regression: the open flag (`right_pane_open`) persists synchronously while
+  // Regression: the open flag (`tool_panels.open.right`) persists synchronously while
   // the layout snapshot is debounced/suppressed, so after a reload the stored
   // layout can still contain right panels the flag says are closed. Restoring
   // them verbatim rendered a "zombie" review pane — visible, but with every

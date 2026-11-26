@@ -486,16 +486,16 @@ function openRetryTarget(activity: Activity, navigate: (path: string) => void): 
       useCloneRetryStore.getState().request(values);
       useUIStore.getState().setAddProjectOpen(true);
     },
-    openReviewPane: () => useUIStore.getState().setReviewPaneOpen(true),
+    openReviewPane: () => useUIStore.getState().openPanel('review'),
     openWorktrees: () => {
       const ui = useUIStore.getState();
       ui.setReviewSubTab('worktrees');
-      ui.setReviewPaneOpen(true);
+      ui.openPanel('review');
     },
     openPullRequests: () => {
       const ui = useUIStore.getState();
       ui.setReviewSubTab('prs');
-      ui.setReviewPaneOpen(true);
+      ui.openPanel('review');
     },
   });
 }

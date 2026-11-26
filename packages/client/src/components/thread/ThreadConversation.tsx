@@ -217,7 +217,7 @@ export function ThreadConversation({
                 <button
                   type="button"
                   className="text-status-info hover:underline"
-                  onClick={() => useUIStore.getState().setCommentsPaneOpen(true)}
+                  onClick={() => useUIStore.getState().openPanel('comments')}
                   data-testid="thread-readonly-open-comments"
                 >
                   {t('thread.readOnlyShareComment', 'Open Comments to leave a note.')}

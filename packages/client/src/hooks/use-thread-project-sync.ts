@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 
+import { findToolPanel } from '@/lib/tool-panels/registry';
 import { useProjectStore } from '@/stores/project-store';
 import { getSelectingThreadId, useThreadStore } from '@/stores/thread-store';
 import { useUIStore, type ReviewSubTab } from '@/stores/ui-store';
@@ -26,26 +27,26 @@ function isOverlayActive(parsed: ParsedRoute): boolean {
   );
 }
 
-function syncPanelParam(search: string, ui: UIState) {
+/** `?panel=<id>` opens a registered tool panel; `?panel=tests` the test runner view. Exported for tests. */
+export function syncPanelParam(search: string, ui: UIState) {
   const panelParam = new URLSearchParams(search).get('panel');
-  if (panelParam === 'review') {
-    if (!ui.reviewPaneOpen || ui.rightPaneTab !== 'review') ui.setReviewPaneOpen(true);
-  } else if (panelParam === 'files') {
-    if (!ui.reviewPaneOpen || ui.rightPaneTab !== 'files') ui.setFilesPaneOpen(true);
-  } else if (panelParam === 'tests') {
+  if (panelParam === 'tests') {
     if (!ui.testRunnerOpen) ui.setTestRunnerOpen(true);
+    return;
   }
+  const panel = findToolPanel(panelParam);
+  if (panel?.urlParam && ui.openPanels[panel.location] !== panel.id) ui.openPanel(panel.id);
 }
 
 const VALID_TABS: ReviewSubTab[] = ['changes', 'graph', 'stash', 'worktrees', 'prs', 'issues'];
 
-function syncTabParam(search: string, ui: UIState) {
+export function syncTabParam(search: string, ui: UIState) {
   const rawTab = new URLSearchParams(search).get('tab');
   const tabParam = VALID_TABS.find((tab) => tab === rawTab);
   if (!tabParam || tabParam === ui.reviewSubTab) return;
   ui.setReviewSubTab(tabParam);
-  if (!ui.reviewPaneOpen || ui.rightPaneTab !== 'review') {
-    ui.setReviewPaneOpen(true);
+  if (ui.openPanels.right !== 'review') {
+    ui.openPanel('review');
   }
 }
 

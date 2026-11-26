@@ -11,7 +11,7 @@ import { useThreadHistoryTracker } from '@/hooks/use-thread-history-tracker';
 import { useWS } from '@/hooks/use-ws';
 import { useProjectStore } from '@/stores/project-store';
 import { setAppNavigate, useThreadStore } from '@/stores/thread-store';
-import { useUIStore } from '@/stores/ui-store';
+import { selectRightPaneOpen, useUIStore } from '@/stores/ui-store';
 
 interface ShellState {
   designViewProjectId: string | null;
@@ -48,7 +48,7 @@ export function useAppShell(): ShellState {
   const loadScratchThreads = useThreadStore((s) => s.loadScratchThreads);
   const loadSharedThreads = useThreadStore((s) => s.loadSharedThreads);
 
-  const reviewPaneOpen = useUIStore((s) => s.reviewPaneOpen);
+  const reviewPaneOpen = useUIStore(selectRightPaneOpen);
   const settingsOpen = useUIStore((s) => s.settingsOpen);
   const generalSettingsOpen = useUIStore((s) => s.generalSettingsOpen);
   const allThreadsProjectId = useUIStore((s) => s.allThreadsProjectId);

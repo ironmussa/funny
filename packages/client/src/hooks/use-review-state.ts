@@ -48,7 +48,7 @@ interface UseReviewStateArgs {
   reviewSubTab: ReviewSubTab;
 
   // Outbound callbacks (owned by ReviewPane)
-  setReviewPaneOpen: (open: boolean) => void;
+  closeRightPanel: () => void;
   setConfirmDialog: Dispatch<SetStateAction<ConfirmDialogState | null>>;
 }
 
@@ -122,7 +122,7 @@ function useAutoCloseAfterWorkflow({
   stashCount,
   unpushedCommitCount,
   hasRebaseConflict,
-  setReviewPaneOpen,
+  closeRightPanel,
 }: {
   justCompletedWorkflowRef: CommitWorkflow['justCompletedWorkflowRef'];
   loading: boolean;
@@ -130,7 +130,7 @@ function useAutoCloseAfterWorkflow({
   stashCount: number;
   unpushedCommitCount: number;
   hasRebaseConflict: boolean;
-  setReviewPaneOpen: (open: boolean) => void;
+  closeRightPanel: () => void;
 }) {
   useEffect(() => {
     if (
@@ -142,7 +142,7 @@ function useAutoCloseAfterWorkflow({
       !hasRebaseConflict
     ) {
       justCompletedWorkflowRef.current = false;
-      setReviewPaneOpen(false);
+      closeRightPanel();
     }
   }, [
     loading,
@@ -150,7 +150,7 @@ function useAutoCloseAfterWorkflow({
     stashCount,
     unpushedCommitCount,
     hasRebaseConflict,
-    setReviewPaneOpen,
+    closeRightPanel,
     justCompletedWorkflowRef,
   ]);
 }
@@ -359,7 +359,7 @@ export function useReviewState(args: UseReviewStateArgs) {
     remoteCheckProjectId,
     reviewPaneOpen,
     reviewSubTab,
-    setReviewPaneOpen,
+    closeRightPanel,
     setConfirmDialog,
   } = args;
 
@@ -483,7 +483,7 @@ export function useReviewState(args: UseReviewStateArgs) {
     stashCount: stash.stashEntries.length,
     unpushedCommitCount,
     hasRebaseConflict,
-    setReviewPaneOpen,
+    closeRightPanel,
   });
 
   useResetOnContextChange({

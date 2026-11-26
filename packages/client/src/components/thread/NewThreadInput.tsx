@@ -122,7 +122,7 @@ export function NewThreadInput({
   const clearIssueContext = useUIStore((s) => s.clearIssueContext);
   const cancelNewThreadGlobal = useUIStore((s) => s.cancelNewThread);
   const cancelNewThread = onCancel ?? cancelNewThreadGlobal;
-  const setReviewPaneOpen = useUIStore((s) => s.setReviewPaneOpen);
+  const closeRightPanel = useUIStore((s) => s.closeRightPanel);
   const loadThreadsForProject = useThreadStore((s) => s.loadThreadsForProject);
   const toolPermissions = useSettingsStore((s) => s.toolPermissions);
 
@@ -172,7 +172,7 @@ export function NewThreadInput({
       if (kind === 'scratch' || kind === 'normal') {
         justSubmittedRef.current = true;
       }
-      if (!isAbandoned()) setReviewPaneOpen(false);
+      if (!isAbandoned()) closeRightPanel();
 
       if (kind === 'scratch') {
         addScratchThread(thread);
@@ -214,7 +214,7 @@ export function NewThreadInput({
       loadThreadsForProject,
       navigate,
       onCreated,
-      setReviewPaneOpen,
+      closeRightPanel,
       t,
       submittedPromptRef,
       submittedMetadataRef,

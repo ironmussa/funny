@@ -441,10 +441,9 @@ function seedStores(
   });
 
   useUIStore.setState({
-    reviewPaneOpen: true,
+    openPanels: { right: 'review' },
     reviewSubTab: tab,
     settingsOpen: false,
-    rightPaneTab: 'review',
   });
 
   useReviewPaneStore.setState({

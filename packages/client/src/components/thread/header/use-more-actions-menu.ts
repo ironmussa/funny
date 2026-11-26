@@ -21,7 +21,7 @@ import {
   useThreadWorktreePath,
 } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
-import { useUIStore } from '@/stores/ui-store';
+import { selectPanelOpen, useUIStore } from '@/stores/ui-store';
 
 import { threadToMarkdown } from './thread-to-markdown';
 
@@ -51,11 +51,9 @@ export function useMoreActionsMenu() {
   const projectBranch = useProjectCurrentBranch(threadProjectId);
   const timelineVisible = useUIStore((s) => s.timelineVisible);
   const setTimelineVisible = useUIStore((s) => s.setTimelineVisible);
-  const reviewPaneOpen = useUIStore((s) => s.reviewPaneOpen);
-  const setReviewPaneOpen = useUIStore((s) => s.setReviewPaneOpen);
-  const rightPaneTab = useUIStore((s) => s.rightPaneTab);
-  const setActivityPaneOpen = useUIStore((s) => s.setActivityPaneOpen);
-  const activityActive = reviewPaneOpen && rightPaneTab === 'activity';
+  const closeRightPanel = useUIStore((s) => s.closeRightPanel);
+  const togglePanel = useUIStore((s) => s.togglePanel);
+  const activityActive = useUIStore(selectPanelOpen('activity'));
 
   const [copiedText, copyText] = useCopyToClipboard();
   const [copiedTools, copyTools] = useCopyToClipboard();
@@ -161,8 +159,8 @@ export function useMoreActionsMenu() {
   }, [pinThread, t, threadId, threadProjectId, threadPinned]);
 
   const toggleActivity = useCallback(() => {
-    setActivityPaneOpen(!activityActive);
-  }, [activityActive, setActivityPaneOpen]);
+    togglePanel('activity');
+  }, [togglePanel]);
 
   const toggleTimeline = useCallback(() => {
     setTimelineVisible(!timelineVisible);
@@ -170,9 +168,9 @@ export function useMoreActionsMenu() {
 
   const handleViewOnBoard = useCallback(() => {
     if (!threadId || !threadProjectId) return;
-    setReviewPaneOpen(false);
+    closeRightPanel();
     navigate(buildPath(`/kanban?project=${threadProjectId}&highlight=${threadId}`));
-  }, [navigate, setReviewPaneOpen, threadId, threadProjectId]);
+  }, [navigate, closeRightPanel, threadId, threadProjectId]);
 
   const handleStageChange = useCallback(
     (stage: NonNullable<typeof threadStage>) => {

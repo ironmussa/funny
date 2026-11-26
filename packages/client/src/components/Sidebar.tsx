@@ -108,7 +108,7 @@ function AppSidebarBody({ singleProjectId }: { singleProjectId?: string | null }
     (projectId: string) => {
       startTransition(() => {
         useProjectStore.getState().selectProject(projectId);
-        useUIStore.getState().setReviewPaneOpen(false);
+        useUIStore.getState().closeRightPanel();
         navigate(buildPath(`/projects/${projectId}`));
       });
       requestAnimationFrame(() => {

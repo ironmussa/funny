@@ -63,6 +63,18 @@ describe('AntigravityACPProcess spawn command', () => {
     expect(command).toBe('agy');
     expect(args).toEqual(['acp']);
   });
+
+  // Google supports third-party clients only through the official `agy acp`
+  // runtime talking to Google's own endpoint. Never present funny as another
+  // client or point agy at another backend: that is the OAuth-shim pattern
+  // that gets Google accounts suspended.
+  test('never overrides the user agent or the Cloud Code endpoint', () => {
+    const { proc } = makeProcess({ model: 'default' });
+    const { args } = proc['resolveCommand']();
+    const forbidden =
+      /override_user_agent|override-user-agent|cloud_code_endpoint|cloud-code-endpoint/;
+    expect(args.some((a: string) => forbidden.test(a))).toBe(false);
+  });
 });
 
 describe('AntigravityACPProcess model and mode selection', () => {

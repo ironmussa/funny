@@ -44,7 +44,7 @@ const piModelSchema = z.string().min(1);
 const cursorModelSchema = z.string().min(1);
 // opencode's catalog is dynamic too (see opencode-discover.ts) — same shape as pi.
 const opencodeModelSchema = z.string().min(1);
-// Antigravity (`agy`) discovers its catalog at runtime too (antigravity-discover.ts).
+// Antigravity (`agy`) discovers its catalog at runtime too (`session/new`, read by acp-discover.ts).
 const antigravityModelSchema = z.string().min(1);
 const deepagentModelSchema = registryEnum('deepagent');
 const agentModelSchema = z.union([

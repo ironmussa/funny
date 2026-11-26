@@ -5,7 +5,7 @@ export interface ValidationResult {
   reasons: string[];
 }
 
-function mismatch(reasons: string[], label: string, left: unknown, right: unknown): void {
+function mismatch<Value>(reasons: string[], label: string, left: Value, right: Value): void {
   if (JSON.stringify(left) !== JSON.stringify(right)) {
     reasons.push(`${label} mismatch: ${JSON.stringify(left)} !== ${JSON.stringify(right)}`);
   }

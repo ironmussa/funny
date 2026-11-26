@@ -30,90 +30,44 @@ import { childAcpStream } from './acp-stream.js';
 import {
   buildACPToolInput,
   buildTodoWriteInputFromPlanEntries,
-  buildTodoWriteInputFromRaw,
-  enrichTodoWriteInputFromOutput,
   extractACPToolOutput,
-  hasRenderableTodoInput,
   inferACPToolName,
   parseACPPreambleTitle,
-  type ACPToolResultData,
 } from './acp-tool-input.js';
-import { BaseAgentProcess, killProcessTree, type ResultSubtype } from './base-process.js';
+import { BaseAgentProcess, killProcessTree } from './base-process.js';
+import {
+  readToolCallFields,
+  isTerminalToolStatus,
+  finalizeTodoInput,
+  formatPlanChecklist,
+  isRenderableToolInput,
+  mergeToolInput,
+  serializeToolInputForRule,
+  stripBanner,
+  stopReasonToSubtype,
+  toolResultMessage,
+  toolUseMessage,
+  findSelectConfigOption,
+  type ACPSDK,
+  type ACPSessionUpdate,
+  type ACPRequestPermissionRequest,
+  type ACPRequestPermissionResponse,
+  type ACPConnection,
+  type ACPPromptRequest,
+  type ACPSessionConfigOptions,
+  type ACPAgentContext,
+  type ACPMethods,
+  type ACPUpdateOf,
+  type ACPContentBlock,
+  type ACPToolCallUpdateLike,
+  type ACPPlanUpdate,
+  type ACPToolCallFields,
+  type ModelFallbackDetail,
+  type PlanTextEntry,
+  type SelectConfigOption,
+} from './generic-acp-helpers.js';
 import { buildAgentChildEnv } from './reap-orphaned-agents.js';
 import type { CLIMessage, ClaudeProcessOptions } from './types.js';
-
-// Lazy-loaded SDK types (avoid crash if not installed). `/unstable` keeps the
-// full v1 surface the 1.x default import exposed (prompt `usage`, `usage_update`,
-// session config options); the wire protocol is still ACP v1.
-
-/**
- * GenericACPProcess — one manifest-parameterized adapter that wraps any
- * communicating via the Agent Client Protocol (ACP) over stdio.
- *
- * This is the hoist of the ~700-line skeleton that was duplicated across the
- * five per-provider adapters (codex/gemini/pi/cursor/opencode). All of the
- * model-select, mode-set, the prompt turn loop, permission handling, and the
- * `translateUpdate` switch — lives here ONCE, parameterized by a
- * {@link ProviderManifest}. The small per-provider divergences are toggled by
- * the manifest's {@link QuirkFlags} (the Phase-0 audited set).
- *
- * Each provider becomes a zero-logic constructor shim that binds its manifest
- * (see `opencode-acp.ts`), so the existing per-provider test suites pass
- * unchanged.
- */
-// Lazy-loaded SDK types (avoid crash if not installed). `/unstable` keeps the
-// session config options); the wire protocol is still ACP v1.
-type ACPSDK = typeof import('@agentclientprotocol/sdk/unstable');
-type ACPSessionUpdate = import('@agentclientprotocol/sdk/unstable').SessionUpdate;
-type ACPRequestPermissionRequest =
-  import('@agentclientprotocol/sdk/unstable').RequestPermissionRequest;
-type ACPRequestPermissionResponse =
-  import('@agentclientprotocol/sdk/unstable').RequestPermissionResponse;
-type ACPConnection = import('@agentclientprotocol/sdk/unstable').ClientConnection;
-type ACPPromptRequest = import('@agentclientprotocol/sdk/unstable').PromptRequest;
-type ACPSessionConfigOption = import('@agentclientprotocol/sdk/unstable').SessionConfigOption;
-type ACPSessionConfigSelectOptions =
-  import('@agentclientprotocol/sdk/unstable').SessionConfigSelectOptions;
-type ACPToolCallStatus = import('@agentclientprotocol/sdk/unstable').ToolCallStatus;
-/** `configOptions` of a newSession / loadSession response. */
-type ACPSessionConfigOptions = readonly ACPSessionConfigOption[] | null | undefined;
-/** Context for calling agent-side ACP methods on a live connection. */
-type ACPAgentContext = ACPConnection['agent'];
-type ACPMethods = ACPSDK['methods'];
-
-type ACPUpdateOf<K extends ACPSessionUpdate['sessionUpdate']> = Extract<
-  ACPSessionUpdate,
-  { sessionUpdate: K }
->;
-type ACPContentBlock = ACPUpdateOf<'agent_message_chunk'>['content'];
-type ACPToolCallUpdateLike = ACPUpdateOf<'tool_call'> | ACPUpdateOf<'tool_call_update'>;
-type ACPPlanUpdate = ACPUpdateOf<'plan'>;
-
-/** The ACP fields `buildACPToolInput` / `inferACPToolName` read from a tool call event. */
-interface ACPToolCallFields {
-  kind: string | undefined;
-  title: string;
-  rawInput: unknown;
-  locations: Array<{ path: string; line?: number | null }> | undefined;
-  content: unknown[] | undefined;
-}
-
-/** What a model-selection fallback logs besides the requested model. */
-interface ModelFallbackDetail {
-  available?: string[];
-  error?: string;
-}
-
-/**
- * A plan entry as `planRender: 'text'` reads it: ACP's `content`, or the
- * `title` / `description` some providers send instead.
- */
-interface PlanTextEntry {
-  status?: string;
-  content?: string;
-  title?: string;
-  description?: string;
-}
 
 export class GenericACPProcess extends BaseAgentProcess {
   protected readonly manifest: ProviderManifest;
@@ -135,13 +89,13 @@ export class GenericACPProcess extends BaseAgentProcess {
    * option's `configId` and the set of selectable value ids so the model can
    * be applied via `setSessionConfigOption`.
    */
-  private modelConfigOption: { configId: string; valueIds: Set<string> } | null = null;
+  private modelConfigOption: SelectConfigOption | null = null;
   /**
    * The agent's "thought level" / reasoning-effort select config option,
    * captured from the newSession response. Some ACP agents expose this as
    * `category: 'thought_level'` with values like low/medium/high/xhigh.
    */
-  private thoughtLevelConfigOption: { configId: string; valueIds: Set<string> } | null = null;
+  private thoughtLevelConfigOption: SelectConfigOption | null = null;
   /** True once a model-selection fallback has been surfaced to the user this process. */
   private modelFallbackNotified = false;
 
@@ -192,20 +146,8 @@ export class GenericACPProcess extends BaseAgentProcess {
     this.pendingThought = null;
     if (!text.trim()) return;
 
-    this.emitMessage({
-      type: 'assistant',
-      message: {
-        id: randomUUID(),
-        content: [{ type: 'tool_use', id, name: 'Think', input: { content: text } }],
-      },
-    });
-
-    this.emitMessage({
-      type: 'user',
-      message: {
-        content: [{ type: 'tool_result', tool_use_id: id, content: text }],
-      },
-    });
+    this.emitMessage(toolUseMessage(id, 'Think', { content: text }));
+    this.emitMessage(toolResultMessage(id, text));
   }
 
   // ── Overrides ──────────────────────────────────────────────────
@@ -539,52 +481,14 @@ export class GenericACPProcess extends BaseAgentProcess {
   }
 
   /**
-   * Capture the agent's "model" select config option from a newSession
-   * response so {@link applyModelSelection} can apply the model via
-   * `setSessionConfigOption` (ACP 0.26+). Flattens grouped option lists and
-   * records the configId + selectable value ids. No-op when the agent does
-   * not advertise a model option.
+   * Capture the agent's "model" and "thought level" select config options from
+   * a newSession / loadSession response so {@link applyModelSelection} and
+   * {@link applyThoughtLevelSelection} can apply them via
+   * `setSessionConfigOption` (ACP 0.26+). Absent options are recorded as null.
    */
-  private captureModelConfigOption(configOptions: ACPSessionConfigOptions): void {
-    this.modelConfigOption = null;
-    if (!Array.isArray(configOptions)) return;
-    for (const o of configOptions) {
-      if (!o || o.category !== 'model' || o.type !== 'select') continue;
-      const valueIds = this.collectSelectValueIds(o.options);
-      this.modelConfigOption = { configId: String(o.id), valueIds };
-      return;
-    }
-  }
-
-  private captureThoughtLevelConfigOption(configOptions: ACPSessionConfigOptions): void {
-    this.thoughtLevelConfigOption = null;
-    if (!Array.isArray(configOptions)) return;
-    for (const o of configOptions) {
-      if (!o || o.category !== 'thought_level' || o.type !== 'select') continue;
-      const valueIds = this.collectSelectValueIds(o.options);
-      this.thoughtLevelConfigOption = { configId: String(o.id), valueIds };
-      return;
-    }
-  }
-
   private captureSessionConfigOptions(configOptions: ACPSessionConfigOptions): void {
-    this.captureModelConfigOption(configOptions);
-    this.captureThoughtLevelConfigOption(configOptions);
-  }
-
-  private collectSelectValueIds(options: ACPSessionConfigSelectOptions | undefined): Set<string> {
-    const valueIds = new Set<string>();
-    const collect = (entries: ACPSessionConfigSelectOptions | undefined): void => {
-      if (!Array.isArray(entries)) return;
-      for (const e of entries) {
-        if (!e || !isObject(e)) continue;
-        // A select option carries `value`; a group carries its own `options`.
-        if ('value' in e && isString(e.value)) valueIds.add(e.value);
-        if ('options' in e && Array.isArray(e.options)) collect(e.options);
-      }
-    };
-    collect(options);
-    return valueIds;
+    this.modelConfigOption = findSelectConfigOption(configOptions, 'model');
+    this.thoughtLevelConfigOption = findSelectConfigOption(configOptions, 'thought_level');
   }
 
   private async applyThoughtLevelSelection(
@@ -831,19 +735,8 @@ export class GenericACPProcess extends BaseAgentProcess {
       `${this.manifest.label} requested permissions to use ${toolName} but the user hasn't been granted approval. ` +
       `Waiting for user approval.`;
 
-    this.emitMessage({
-      type: 'assistant',
-      message: {
-        id: randomUUID(),
-        content: [{ type: 'tool_use', id: toolUseId, name: toolName, input: toolInput }],
-      },
-    });
-    this.emitMessage({
-      type: 'user',
-      message: {
-        content: [{ type: 'tool_result', tool_use_id: toolUseId, content: denialText }],
-      },
-    });
+    this.emitMessage(toolUseMessage(toolUseId, toolName, toolInput));
+    this.emitMessage(toolResultMessage(toolUseId, denialText));
 
     return await new Promise<ACPRequestPermissionResponse>((resolve) => {
       const onAbort = () =>
@@ -868,25 +761,14 @@ export class GenericACPProcess extends BaseAgentProcess {
   private emitToolUse(toolCallId: string, toolName: string, input: JsonObject): void {
     this.deferredToolInputs.delete(toolCallId);
     this.toolCallsSeen.set(toolCallId, toolName);
-    this.emitMessage({
-      type: 'assistant',
-      message: {
-        id: randomUUID(),
-        content: [{ type: 'tool_use', id: toolCallId, name: toolName, input }],
-      },
-    });
+    this.emitMessage(toolUseMessage(toolCallId, toolName, input));
     this.accumulatedText = '';
     this.assistantMsgId = randomUUID();
   }
 
   private emitToolResult(toolCallId: string, content: string): void {
     this.toolCallsSeen.set(toolCallId, 'done');
-    this.emitMessage({
-      type: 'user',
-      message: {
-        content: [{ type: 'tool_result', tool_use_id: toolCallId, content }],
-      },
-    });
+    this.emitMessage(toolResultMessage(toolCallId, content));
   }
 
   private closeInFlightTaskToolCalls(content: string): void {
@@ -1135,19 +1017,8 @@ export class GenericACPProcess extends BaseAgentProcess {
     // own card with a fresh id — matching how the Claude SDK surfaces
     // successive TodoWrite calls.
     const toolCallId = randomUUID();
-    this.emitMessage({
-      type: 'assistant',
-      message: {
-        id: randomUUID(),
-        content: [{ type: 'tool_use', id: toolCallId, name: 'TodoWrite', input }],
-      },
-    });
-    this.emitMessage({
-      type: 'user',
-      message: {
-        content: [{ type: 'tool_result', tool_use_id: toolCallId, content: 'Plan updated' }],
-      },
-    });
+    this.emitMessage(toolUseMessage(toolCallId, 'TodoWrite', input));
+    this.emitMessage(toolResultMessage(toolCallId, 'Plan updated'));
     this.accumulatedText = '';
     this.assistantMsgId = randomUUID();
   }
@@ -1191,129 +1062,6 @@ export class GenericACPProcess extends BaseAgentProcess {
 
 // ── Helpers ─────────────────────────────────────────────────────
 
-function readToolCallFields(update: ACPToolCallUpdateLike): ACPToolCallFields {
-  // SAFETY: both `tool_call` and `tool_call_update` carry optional `kind`, `rawInput`,
-  // `locations` and `content`; they are read untyped here so an older or looser
-  // provider payload passes through unchanged, and every consumer reads them optionally.
-  const u = update as any;
-  // SAFETY: same invariant as above; the casts only name the ACP field types.
-  return {
-    kind: u.kind as string | undefined,
-    title: update.title || '',
-    rawInput: u.rawInput,
-    locations: u.locations as ACPToolCallFields['locations'],
-    content: u.content as unknown[] | undefined,
-  };
-}
-
-function isTerminalToolStatus(status: ACPToolCallStatus | null | undefined): boolean {
-  return status === 'completed' || status === 'failed';
-}
-
-/** TodoWrite: pull todos from the tool output when missing and normalize to `{ todos }`. */
-function finalizeTodoInput(
-  toolName: string,
-  input: JsonObject,
-  result: Pick<ACPToolResultData, 'rawOutput'>,
-): JsonObject {
-  if (toolName !== 'TodoWrite') return input;
-  const enriched = enrichTodoWriteInputFromOutput(input, result);
-  const clean = buildTodoWriteInputFromRaw(enriched);
-  return clean ? { todos: clean.todos } : enriched;
-}
-
-/** Plan entry status → markdown checkbox (completed → [x], in_progress → [~], else [ ]). */
-function planStatusMark(status: string | undefined): string {
-  if (status === 'completed') return '[x]';
-  if (status === 'in_progress') return '[~]';
-  return '[ ]';
-}
-
-/** Render `[status, text]` pairs as a numbered checklist, one entry per line. */
-function formatPlanChecklist(items: Array<[string | undefined, unknown]>): string {
-  return items.map(([status, text], i) => `${planStatusMark(status)} ${i + 1}. ${text}`).join('\n');
-}
-
-/**
- * Whether a built tool input has the primary field its client card needs to
- * render a meaningful summary. Used by `deferUnrenderableToolInput` providers.
- */
-function isRenderableToolInput(toolName: string, input: JsonObject): boolean {
-  const has = (key: string) => {
-    const value = input[key];
-    return isString(value) && value.length > 0;
-  };
-  switch (toolName) {
-    case 'Read':
-    case 'Write':
-    case 'Edit':
-      return has('file_path');
-    case 'Bash':
-      return has('command');
-    case 'Glob':
-    case 'Grep':
-      return has('pattern');
-    case 'TodoWrite':
-      return hasRenderableTodoInput(input);
-    default:
-      return true;
-  }
-}
-
-/**
- * Merge a buffered tool input with a freshly built one, preferring non-empty
- * values from `next` (e.g. a file_path the initial deferred event was missing).
- */
-function mergeToolInput(prev: JsonObject, next: JsonObject): JsonObject {
-  const merged = { ...prev };
-  for (const [key, value] of Object.entries(next)) {
-    if (value !== undefined && value !== null && value !== '') {
-      merged[key] = value;
-    }
-  }
-  return merged;
-}
-
-/**
- * Match the serialization Claude SDK uses for permission-rule lookup so a single
- * rule (e.g. "Bash: git status") behaves the same regardless of provider.
- */
-function serializeToolInputForRule(
-  toolName: string,
-  toolInput: JsonObject | undefined,
-): string | undefined {
-  if (!toolInput || !isObject(toolInput)) return undefined;
-  if (toolName === 'Bash' && isString(toolInput.command)) {
-    return toolInput.command;
-  }
-  try {
-    return JSON.stringify(toolInput);
-  } catch {
-    return undefined;
-  }
-}
-
-/**
- * Max prefix length the banner regex is applied to. The banner always sits at
- * the very start (the source is also length-capped at validation), so bounding
- * the regex input to a fixed head is behavior-preserving for real banners while
- * preventing catastrophic backtracking (ReDoS) from running against an
- * arbitrarily long message body — the runtime half of the §1.3 guard.
- */
-const BANNER_SCAN_LIMIT = 8192;
-
-/** Strip a provider banner (manifest regex-as-data) from the start of text. */
-function stripBanner(text: string, regexSource: string): string {
-  try {
-    const re = new RegExp(regexSource);
-    if (text.length <= BANNER_SCAN_LIMIT) return text.replace(re, '').replace(/^\s+/, '');
-    const head = text.slice(0, BANNER_SCAN_LIMIT).replace(re, '').replace(/^\s+/, '');
-    return head + text.slice(BANNER_SCAN_LIMIT);
-  } catch {
-    return text;
-  }
-}
-
 /**
  * Mark the cwd as a trusted folder for gemini's `--yolo` mode by writing to
  * `~/.gemini/trustedFolders.json`. gemini-cli silently downgrades `--yolo` to
@@ -1344,19 +1092,4 @@ async function ensureGeminiTrustedFolder(cwd: string, dlog: DebugLogger): Promis
     // SAFETY: fs and JSON errors are Error instances; the message is only logged.
     dlog.warn('failed to mark gemini trusted folder', { cwd, error: (e as Error)?.message });
   }
-}
-
-function stopReasonToSubtype(stopReason: string | undefined): ResultSubtype {
-  if (stopReason === 'cancelled') return 'error_during_execution';
-  if (stopReason === 'max_tokens') return 'error_max_turns';
-  return 'success';
-}
-
-function isString<T>(value: T): value is T & string {
-  return typeof value === 'string';
-}
-
-/** `typeof value === 'object'` without null; keeps `any` as `any`. */
-function isObject<T>(value: T): value is T & object {
-  return typeof value === 'object' && value !== null;
 }

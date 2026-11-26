@@ -36,10 +36,7 @@ export async function loadLocomoDataset(dataDir: string): Promise<LocomoDataset>
     console.log(`Cached LOCOMO dataset at ${cachePath}`);
   }
 
-  const raw = await readFile(cachePath, 'utf-8');
-  const data = JSON.parse(raw);
-
-  return parseLocomoData(data);
+  return parseLocomoData(await readFile(cachePath, 'utf-8'));
 }
 
 function isObject<T>(value: T): value is T & object {
@@ -87,7 +84,9 @@ interface RawLocomoConversation {
   date?: string;
 }
 
-function parseLocomoData(data: unknown): LocomoDataset {
+/** The LOCOMO file's text → the dataset. */
+function parseLocomoData(text: string): LocomoDataset {
+  const data: unknown = JSON.parse(text);
   // LOCOMO format: array of conversation objects or object with conversations key
   const conversations: LocomoConversation[] = [];
   let rawConvos: unknown[];

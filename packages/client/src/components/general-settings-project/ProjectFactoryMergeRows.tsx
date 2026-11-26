@@ -274,93 +274,23 @@ function QueueReadiness({ projectId }: { projectId: string }) {
   );
 }
 
-export function ProjectFactoryMergeRows({
-  projectId,
-  flowName,
+/** The size gate and the adjustment an approval follows (change factory-agent-roles). */
+function SizeRows({
   settings,
   rowKey,
   onSave,
 }: {
-  projectId: string;
-  flowName: string;
-  settings: MergeSettings;
-  /** Changes after every save, so the inputs re-read the confirmed values. */
+  settings: Pick<
+    MergeSettings,
+    'sizeGateEnabled' | 'maxLowRiskLines' | 'sizeIgnoredPaths' | 'approvalAdjustMaxLines'
+  >;
   rowKey: string;
   onSave: (input: Pick<SaveFactorySettingsInput, keyof MergeSettings>) => void;
 }) {
   const { t } = useTranslation();
-  const { definition } = useFactoryFlowDefinition(projectId, flowName);
-  const { autoMerge, sensitivePaths, stageLimits, batch, dependencies } = settings;
-  const { maxLowRiskLines, sizeIgnoredPaths, tooBig, approvalAdjustMaxLines } = settings;
-  const { holdPathsAwaitingApproval, sizeGateEnabled } = settings;
-
+  const { sizeGateEnabled, maxLowRiskLines, sizeIgnoredPaths, approvalAdjustMaxLines } = settings;
   return (
     <>
-      {definition?.reviewerSameAsImplementer && (
-        <Alert className="mx-4 my-2 w-auto" data-testid="settings-factory-same-reviewer">
-          <AlertDescription>
-            {t(
-              'settings.projectFactorySameReviewer',
-              'The review step of this flow uses the same provider and model as the implementing agent, so it tends to miss what the implementer missed. Set a different provider or model on the review step of the flow.',
-            )}
-          </AlertDescription>
-        </Alert>
-      )}
-
-      <ProjectSettingRow
-        settingId="factory.autoMerge"
-        title={t('settings.projectFactoryAutoMerge', 'Merges by itself')}
-        description={
-          autoMerge === 'all'
-            ? t(
-                'settings.projectFactoryAutoMergeAllDesc',
-                'Every change that passed its review, also high-risk ones',
-              )
-            : t(
-                'settings.projectFactoryAutoMergeLowDesc',
-                'Only low-risk changes that passed their review. A high-risk change waits for you',
-              )
-        }
-      >
-        <SegmentedControl<AutoMerge>
-          value={autoMerge}
-          onChange={(value) => onSave({ autoMerge: value })}
-          options={[
-            {
-              value: 'low_risk',
-              label: t('settings.projectFactoryAutoMergeLow', 'Low risk'),
-              testId: 'settings-factory-automerge-low',
-            },
-            {
-              value: 'all',
-              label: t('settings.projectFactoryAutoMergeAll', 'All'),
-              testId: 'settings-factory-automerge-all',
-            },
-          ]}
-        />
-      </ProjectSettingRow>
-
-      <ProjectSettingRow
-        settingId="factory.sensitivePaths"
-        title={t('settings.projectFactorySensitivePaths', 'Sensitive paths')}
-        description={t(
-          'settings.projectFactorySensitivePathsDesc',
-          'Globs, separated by commas. A change that touches one is high risk, besides .github/, migrations and auth/',
-        )}
-      >
-        <Input
-          key={`paths-${rowKey}`}
-          defaultValue={sensitivePaths.join(', ')}
-          placeholder="billing/**, infra/**"
-          className="w-[220px]"
-          data-testid="settings-factory-sensitive-paths"
-          onBlur={(e) => {
-            const next = parsePathList(e.target.value);
-            if (next.join('\n') !== sensitivePaths.join('\n')) onSave({ sensitivePaths: next });
-          }}
-        />
-      </ProjectSettingRow>
-
       <ProjectSettingRow
         settingId="factory.sizeGateEnabled"
         title={t('settings.projectFactorySizeGate', 'Size gate')}
@@ -450,6 +380,97 @@ export function ProjectFactoryMergeRows({
           }}
         />
       </ProjectSettingRow>
+    </>
+  );
+}
+
+export function ProjectFactoryMergeRows({
+  projectId,
+  flowName,
+  settings,
+  rowKey,
+  onSave,
+}: {
+  projectId: string;
+  flowName: string;
+  settings: MergeSettings;
+  /** Changes after every save, so the inputs re-read the confirmed values. */
+  rowKey: string;
+  onSave: (input: Pick<SaveFactorySettingsInput, keyof MergeSettings>) => void;
+}) {
+  const { t } = useTranslation();
+  const { definition } = useFactoryFlowDefinition(projectId, flowName);
+  const { autoMerge, sensitivePaths, stageLimits, batch, dependencies } = settings;
+  const { tooBig, holdPathsAwaitingApproval } = settings;
+
+  return (
+    <>
+      {definition?.reviewerSameAsImplementer && (
+        <Alert className="mx-4 my-2 w-auto" data-testid="settings-factory-same-reviewer">
+          <AlertDescription>
+            {t(
+              'settings.projectFactorySameReviewer',
+              'The review step of this flow uses the same provider and model as the implementing agent, so it tends to miss what the implementer missed. Set a different provider or model on the review step of the flow.',
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <ProjectSettingRow
+        settingId="factory.autoMerge"
+        title={t('settings.projectFactoryAutoMerge', 'Merges by itself')}
+        description={
+          autoMerge === 'all'
+            ? t(
+                'settings.projectFactoryAutoMergeAllDesc',
+                'Every change that passed its review, also high-risk ones',
+              )
+            : t(
+                'settings.projectFactoryAutoMergeLowDesc',
+                'Only low-risk changes that passed their review. A high-risk change waits for you',
+              )
+        }
+      >
+        <SegmentedControl<AutoMerge>
+          value={autoMerge}
+          onChange={(value) => onSave({ autoMerge: value })}
+          options={[
+            {
+              value: 'low_risk',
+              label: t('settings.projectFactoryAutoMergeLow', 'Low risk'),
+              testId: 'settings-factory-automerge-low',
+            },
+            {
+              value: 'all',
+              label: t('settings.projectFactoryAutoMergeAll', 'All'),
+              testId: 'settings-factory-automerge-all',
+            },
+          ]}
+        />
+      </ProjectSettingRow>
+
+      <ProjectSettingRow
+        settingId="factory.sensitivePaths"
+        title={t('settings.projectFactorySensitivePaths', 'Sensitive paths')}
+        description={t(
+          'settings.projectFactorySensitivePathsDesc',
+          'Globs, separated by commas. A change that touches one is high risk, besides .github/, migrations and auth/',
+        )}
+      >
+        <Input
+          key={`paths-${rowKey}`}
+          defaultValue={sensitivePaths.join(', ')}
+          placeholder="billing/**, infra/**"
+          className="w-[220px]"
+          data-testid="settings-factory-sensitive-paths"
+          onBlur={(e) => {
+            const next = parsePathList(e.target.value);
+            if (next.join('\n') !== sensitivePaths.join('\n')) onSave({ sensitivePaths: next });
+          }}
+        />
+      </ProjectSettingRow>
+
+      <SizeRows settings={settings} rowKey={rowKey} onSave={onSave} />
 
       <ProjectSettingRow
         settingId="factory.holdPathsAwaitingApproval"

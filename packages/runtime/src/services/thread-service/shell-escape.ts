@@ -151,10 +151,13 @@ function normalizeShellResult(args: {
   };
 }
 
-function truncateCombinedOutput(
-  stdout: string,
-  stderr: string,
-): { stdout: string; stderr: string; truncated: boolean } {
+interface TruncatedOutput {
+  stdout: string;
+  stderr: string;
+  truncated: boolean;
+}
+
+function truncateCombinedOutput(stdout: string, stderr: string): TruncatedOutput {
   let remaining = SHELL_ESCAPE_MAX_OUTPUT_CHARS;
   const nextStdout = stdout.slice(0, remaining);
   remaining -= nextStdout.length;

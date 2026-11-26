@@ -50,7 +50,12 @@ function accountWrite(byteLen: number): void {
   }
 }
 
-function resolveShell(shellId?: string): { exe: string; args: string[] } {
+interface ShellCommand {
+  exe: string;
+  args: string[];
+}
+
+function resolveShell(shellId?: string): ShellCommand {
   if (!shellId || shellId === 'default') {
     return { exe: process.env.SHELL || 'bash', args: [] };
   }

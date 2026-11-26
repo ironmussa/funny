@@ -19,13 +19,18 @@ export const factoryGitDir = () => join(homedir(), '.funny', 'factory-git');
  * without them, the runner's own, which the agent inherits), so neither set
  * overwrites the other.
  */
+/** Environment variables, with the appended `GIT_CONFIG_*` entries. */
+interface GitConfigEnv {
+  [name: string]: string;
+}
+
 export function appendGitConfigEnv(
   env: Record<string, string> | undefined,
   extra: Record<string, string>,
-): Record<string, string> {
+): GitConfigEnv {
   const base = Number(env?.GIT_CONFIG_COUNT ?? process.env.GIT_CONFIG_COUNT ?? 0) || 0;
   const count = Number(extra.GIT_CONFIG_COUNT ?? 0) || 0;
-  const merged: Record<string, string> = { ...env };
+  const merged: GitConfigEnv = { ...env };
   for (let i = 0; i < count; i++) {
     const key = extra[`GIT_CONFIG_KEY_${i}`];
     const value = extra[`GIT_CONFIG_VALUE_${i}`];

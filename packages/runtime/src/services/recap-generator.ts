@@ -46,7 +46,12 @@ export interface RecapResult {
   newestMessageId: string;
 }
 
-const LANGUAGE_NAMES: Record<string, string> = {
+/** Language codes (no region) to their English names. */
+interface LanguageNames {
+  readonly [code: string]: string;
+}
+
+const LANGUAGE_NAMES: LanguageNames = {
   en: 'English',
   es: 'Spanish',
   pt: 'Portuguese',

@@ -63,7 +63,12 @@ export interface RunnerGrpcClientOptions {
   onStreamMessage?: (name: RunnerGrpcStreamName, message: RunnerGrpcWireMessage) => void;
 }
 
-function normalizeEndpoint(raw: string): { address: string; secure: boolean } {
+interface GrpcEndpoint {
+  address: string;
+  secure: boolean;
+}
+
+function normalizeEndpoint(raw: string): GrpcEndpoint {
   const value = raw.trim();
   if (!value) throw new Error('runner gRPC endpoint is required');
   if (!value.includes('://')) return { address: value, secure: false };

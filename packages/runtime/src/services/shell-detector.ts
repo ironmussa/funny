@@ -173,9 +173,14 @@ function detectWindowsShells(): DetectedShell[] {
   return shells;
 }
 
+/** Shell binary names to display names. */
+interface ShellDisplayNames {
+  readonly [name: string]: string;
+}
+
 /** Get a human-friendly display name for a shell binary name. */
 function shellDisplayName(name: string): string {
-  const map: Record<string, string> = {
+  const map: ShellDisplayNames = {
     bash: 'Bash',
     zsh: 'Zsh',
     fish: 'Fish',

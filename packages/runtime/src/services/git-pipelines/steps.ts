@@ -14,7 +14,10 @@ import { reviewFixSubPipeline } from './review-fix.js';
 import { testFixSubPipeline } from './test-fix.js';
 
 /** Human-readable labels for each pipeline node, keyed by node name. */
-const STEP_LABELS: Record<string, string> = {
+interface StepLabels {
+  readonly [node: string]: string;
+}
+const STEP_LABELS: StepLabels = {
   unstage: 'Unstaging files',
   stage: 'Staging files',
   hooks: 'Running pre-commit hooks',

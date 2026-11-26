@@ -61,10 +61,7 @@ export function isExternallyManagedMcpServer(name: string): boolean {
   );
 }
 
-function mergeUserMcpServers(
-  config: ClaudeConfig,
-  settings: ClaudeProjectSettings,
-): Record<string, ClaudeMcpServerEntry> {
+function mergeUserMcpServers(config: ClaudeConfig, settings: ClaudeProjectSettings) {
   return { ...(config.mcpServers ?? {}), ...(settings.mcpServers ?? {}) };
 }
 
@@ -364,7 +361,12 @@ function codexTransportToMcpType(transport: string | undefined): McpServerType {
   return 'stdio';
 }
 
-function splitCommand(value: string | undefined): { command?: string; args?: string[] } {
+interface SplitCommand {
+  command?: string;
+  args?: string[];
+}
+
+function splitCommand(value: string | undefined): SplitCommand {
   if (!value) return {};
   const parts = value.split(/\s+/).filter(Boolean);
   return { command: parts[0], args: parts.slice(1) };

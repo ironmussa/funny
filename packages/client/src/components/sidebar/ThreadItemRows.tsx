@@ -3,8 +3,7 @@ import { Bot, Factory, Globe, NotebookPen } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { GitStatChip } from '@/components/git/GitStatChip';
-import { PRBadge } from '@/components/PRBadge';
+import { GitStatsChip } from '@/components/git/GitStatsChip';
 import { ThreadTitle } from '@/components/thread/ThreadAttachmentsBadge';
 import { ThreadWatcherIndicator } from '@/components/thread/ThreadWatcherIndicator';
 import { ThreadPowerline } from '@/components/ThreadPowerline';
@@ -12,7 +11,6 @@ import { getSummary, getToolLabel } from '@/components/tool-cards/format-utils';
 import { HighlightText } from '@/components/ui/highlight-text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAgentTemplate } from '@/data/templates/hooks';
-import { gitSyncStateConfig } from '@/lib/thread-utils';
 import { canShowPowerline, isFactoryThread, isScratch } from '@/lib/thread-variant';
 import { cn } from '@/lib/utils';
 import { useThreadHasLiveBrowser } from '@/stores/browser-live-threads-store';
@@ -130,18 +128,15 @@ export function ThreadItemTitleRow({
       {/* Background jobs (funny_spawn) / watchers (funny_watch), right of the title */}
       <ThreadWatcherIndicator threadId={thread.id} />
       {titleBadge}
-      {/* The thread's PR sits beside the title, not in the powerline row */}
-      {gitStatus?.prNumber ? (
-        <PRBadge
-          prNumber={gitStatus.prNumber}
-          prState={gitStatus.prState ?? 'OPEN'}
-          prUrl={gitStatus.prUrl}
-          variant="plain"
-          showExternalIcon={false}
-          data-testid={`thread-pr-badge-${thread.id}`}
+      {/* The thread's PR and pending git work, grouped in one chip */}
+      {gitStatus && (
+        <GitStatsChip
+          gitStatus={gitStatus}
+          id={thread.id}
+          testIdPrefix="thread-git"
+          prTestId={`thread-pr-badge-${thread.id}`}
         />
-      ) : null}
-      {gitStatus && <GitStateIcons threadId={thread.id} gitStatus={gitStatus} />}
+      )}
       {/* External creator icon */}
       <CreatedByIcon createdBy={thread.createdBy} />
       {/* Issue factory thread */}
@@ -151,56 +146,6 @@ export function ThreadItemTitleRow({
       {/* Agent template badge */}
       <AgentTemplateBadge thread={thread} />
     </div>
-  );
-}
-
-// ── Git state icons (shown in row 1) ─────────────────────────────────
-
-/**
- * Pending work the PR badge cannot show: uncommitted files (with the +/- line
- * counts in the tooltip so rows sharing a working tree don't repeat the same
- * numbers) and commits not yet pushed. Pushed / merged branches have no icon:
- * the PR badge beside the title carries that state.
- */
-function GitStateIcons({ threadId, gitStatus }: { threadId: string; gitStatus: GitStatusInfo }) {
-  const { t } = useTranslation();
-  const dirty = gitStatus.dirtyFileCount > 0;
-  const unpushed = gitStatus.state !== 'clean' && gitStatus.unpushedCommitCount > 0;
-  const dirtyCfg = gitSyncStateConfig.dirty;
-  const unpushedCfg = gitSyncStateConfig.unpushed;
-  return (
-    <>
-      {dirty && (
-        <GitStatChip
-          testId={`thread-git-dirty-${threadId}`}
-          className={dirtyCfg.className}
-          icon={dirtyCfg.icon}
-          count={gitStatus.dirtyFileCount}
-          tooltip={
-            <>
-              <div>{t(dirtyCfg.labelKey)}</div>
-              <div className="font-mono">
-                <span className="text-muted-foreground">
-                  {t('gitStats.dirtyFiles', { count: gitStatus.dirtyFileCount })}
-                  {' · '}
-                </span>
-                <span className="text-diff-added">+{gitStatus.linesAdded}</span>{' '}
-                <span className="text-diff-removed">-{gitStatus.linesDeleted}</span>
-              </div>
-            </>
-          }
-        />
-      )}
-      {unpushed && (
-        <GitStatChip
-          testId={`thread-git-sync-${threadId}`}
-          className={unpushedCfg.className}
-          icon={unpushedCfg.icon}
-          count={gitStatus.unpushedCommitCount}
-          tooltip={t(unpushedCfg.labelKey)}
-        />
-      )}
-    </>
   );
 }
 

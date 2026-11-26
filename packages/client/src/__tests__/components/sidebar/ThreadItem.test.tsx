@@ -217,6 +217,11 @@ describe('ThreadItem', () => {
 
     expect(screen.getByTestId('thread-git-dirty-t-4')).toHaveTextContent('2');
     expect(screen.getByTestId('thread-git-sync-t-4')).toHaveTextContent('3');
+    // Both counters sit in one chip, split by a separator
+    const group = screen.getByTestId('thread-git-stats-t-4');
+    expect(group).toContainElement(screen.getByTestId('thread-git-dirty-t-4'));
+    expect(group).toContainElement(screen.getByTestId('thread-git-sync-t-4'));
+    expect(group.querySelector('[data-orientation="vertical"]')).not.toBeNull();
   });
 
   test.each([
@@ -243,6 +248,8 @@ describe('ThreadItem', () => {
     );
 
     expect(screen.queryByTestId('thread-git-sync-t-5')).not.toBeInTheDocument();
+    // No pending work: the chip itself is not rendered
+    expect(screen.queryByTestId('thread-git-stats-t-5')).not.toBeInTheDocument();
   });
 
   test('shows the PR badge on the title row, not in the powerline', () => {
@@ -279,6 +286,8 @@ describe('ThreadItem', () => {
     const badge = screen.getByTestId('thread-pr-badge-t-3');
     expect(badge).toHaveTextContent('731');
     expect(screen.getByTestId('thread-powerline-t-3').parentElement).not.toContainElement(badge);
+    // The PR is grouped with the other git stats in one chip
+    expect(screen.getByTestId('thread-git-stats-t-3')).toContainElement(badge);
   });
 
   test('shows a browser icon while the thread has a live browser session', () => {

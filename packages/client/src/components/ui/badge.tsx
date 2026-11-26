@@ -37,6 +37,8 @@ const badgeVariants = cva(
         xxs: 'px-1 py-0 text-2xs [&>svg]:size-2',
         // Status chips in dense panels (the background-activity list).
         '3xs': 'rounded px-1 py-0 text-3xs leading-none',
+        // Several icon + count stats grouped in one chip (a thread's git state).
+        'stat-group': 'gap-1.5 px-1 py-0.5 text-2xs leading-none',
         // A count beside a label (unread items).
         count: 'px-1 py-0.5 text-base leading-none',
       },

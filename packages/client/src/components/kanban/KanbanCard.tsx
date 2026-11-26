@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import { BOARD_CARD_TITLE_CLASS, BoardCard } from '@/components/board/BoardCard';
-import { PRBadge } from '@/components/PRBadge';
+import { GitStatsChip } from '@/components/git/GitStatsChip';
 import { StopThreadMenuItem } from '@/components/thread/StopThreadMenuItem';
 import { ThreadTitle } from '@/components/thread/ThreadAttachmentsBadge';
 import { ThreadOpenMenuItems } from '@/components/thread/ThreadOpenMenuItems';
@@ -112,7 +112,7 @@ function useKanbanCardDrag(
   return isDragging;
 }
 
-/** The card's footer: powerline, watcher indicator and pull request. */
+/** The card's footer: powerline, watcher indicator and the git stats chip (PR, changes, commits). */
 function KanbanCardFooter({
   thread,
   projectInfo,
@@ -130,6 +130,8 @@ function KanbanCardFooter({
         <ThreadPowerline
           thread={thread}
           showPRBadge={false}
+          // The git stats chip beside it carries the uncommitted files
+          showDiffStats={false}
           projectName={projectInfo?.name}
           projectColor={projectInfo?.color}
           gitStatus={gitStatus}
@@ -138,17 +140,14 @@ function KanbanCardFooter({
         />
       )}
       <ThreadWatcherIndicator threadId={thread.id} />
-      {gitStatus?.prNumber ? (
-        <PRBadge
-          prNumber={gitStatus.prNumber}
-          prState={gitStatus.prState ?? 'OPEN'}
-          prUrl={gitStatus.prUrl}
-          variant="plain"
-          size="compact"
-          showExternalIcon={false}
-          data-testid={`kanban-card-pr-${thread.id}`}
+      {gitStatus && (
+        <GitStatsChip
+          gitStatus={gitStatus}
+          id={thread.id}
+          testIdPrefix="kanban-card-git"
+          prTestId={`kanban-card-pr-${thread.id}`}
         />
-      ) : null}
+      )}
     </>
   );
 }

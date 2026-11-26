@@ -42,13 +42,13 @@ export class HarnessError extends Error {
 }
 
 export function toHarnessError(
-  err: unknown,
+  cause: unknown,
   code: HarnessErrorCode = 'agent_execution_failed',
   fallback = 'Harness operation failed',
 ): HarnessError {
-  if (err instanceof HarnessError) return err;
-  if (err instanceof Error) {
-    return new HarnessError(code, err.message || fallback, { cause: err });
+  if (cause instanceof HarnessError) return cause;
+  if (cause instanceof Error) {
+    return new HarnessError(code, cause.message || fallback, { cause });
   }
-  return new HarnessError(code, String(err || fallback), { cause: err });
+  return new HarnessError(code, String(cause || fallback), { cause });
 }

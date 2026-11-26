@@ -85,6 +85,7 @@ export type {
   ProgressReporter,
   StepErrorConfig,
   OnErrorStrategy,
+  NodeData,
 } from './types.js';
 export { nullReporter } from './types.js';
 

@@ -15,6 +15,7 @@ import type { Batch, ConcurrencyGate } from './gate.js';
 import type { Journal, ResumeInfo } from './journal.js';
 import { runGraph } from './scheduler.js';
 import { SUB_PIPELINE_PARENT_CB } from './symbols.js';
+import type { NodeData } from './types.js';
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -44,7 +45,7 @@ export interface NodeRunInfo {
    */
   resume?: ResumeInfo;
   /** Record data about the work in progress (e.g. the thread started) in the journal. */
-  checkpoint(data: unknown): Promise<void>;
+  checkpoint(data: NodeData): Promise<void>;
   /**
    * Set when this node leads a batch: the other runs it executes for. Settle
    * each member before the node ends; members left unsettled wait again.
@@ -165,7 +166,7 @@ export interface NodeBatch<T> {
    * A member's result context from the output its leader settled. Default:
    * the member's input, unchanged.
    */
-  adopt?: (input: T, output: unknown) => T;
+  adopt?: (input: T, output: NodeData) => T;
 }
 
 /**

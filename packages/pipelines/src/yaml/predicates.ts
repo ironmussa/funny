@@ -85,19 +85,29 @@ function isString<T>(value: T): value is T & string {
   return typeof value === 'string';
 }
 
-function isBoolean(value: unknown): value is boolean {
+function isBoolean<T>(value: T): value is T & boolean {
   return typeof value === 'boolean';
 }
 
-function isNumber(value: unknown): value is number {
+function isNumber<T>(value: T): value is T & number {
   return typeof value === 'number';
 }
 
-function isObject(value: unknown): value is object {
+function isObject<T>(value: T): value is T & object {
   return typeof value === 'object' && value !== null;
 }
 
-function toBoolean(value: unknown): boolean {
+/** What a JSONata expression evaluates to: a JSON value, or undefined when nothing matched. */
+type PredicateResult =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | PredicateResult[]
+  | { [key: string]: PredicateResult };
+
+function toBoolean(value: PredicateResult): boolean {
   if (value === undefined || value === null) return false;
   if (isBoolean(value)) return value;
   if (isNumber(value)) return value !== 0 && !Number.isNaN(value);

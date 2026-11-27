@@ -5,20 +5,17 @@
  */
 import { startTransition } from 'react';
 
-import { restoreAgentAccounts } from '@/data/agent-account/store';
-import { restoreContextUsage } from '@/data/context-usage/store';
 import { seedQueueSummary } from '@/data/queue/store';
 import { newestActivity } from '@/data/thread-recap/activity';
 import { adoptThreadDetail } from '@/data/threads/loaders';
 import { isProjectListed } from '@/data/threads/read';
-import { loadAgentAccounts } from '@/lib/agent-account-storage';
 import { createClientLogger, isClientLogLevelEnabled } from '@/lib/client-logger';
-import { loadContextUsage } from '@/lib/context-usage-storage';
 import { markMemoryPhase } from '@/lib/memory-phase';
 import { metric, startSpan } from '@/lib/telemetry';
 
 import { settlePreSendStateFromFetch } from './optimistic-run-state';
 import { expandProject, selectProject as bridgeSelectProject } from './store-bridge';
+import { flushWSBuffer, hydrateThreadSnapshot } from './thread-hydrate';
 import {
   prefetchThreadData,
   loadThreadData,
@@ -27,18 +24,11 @@ import {
 } from './thread-machine-bridge';
 import * as mutations from './thread-mutations';
 import { recordThreadOpened, useThreadReadStore } from './thread-read-store';
-import {
-  computeNextActiveThread,
-  deriveResultInfo,
-  deriveWaitingState,
-  reconstructCompactionEvents,
-} from './thread-select-helpers';
+import { computeNextActiveThread } from './thread-select-helpers';
 import type { ThreadState } from './thread-state';
 import {
   nextSelectGeneration,
   getSelectGeneration,
-  getBufferedInitInfo,
-  getAndClearWSBuffer,
   clearWSBuffer,
   getSelectingThreadId,
   setSelectingThreadId,
@@ -52,38 +42,6 @@ const SELECT_LOG_NS = 'thread-select';
 const selectLog = createClientLogger(SELECT_LOG_NS);
 
 type ThreadSnapshot = Awaited<ReturnType<typeof loadThreadData>>;
-
-// ── Buffer replay ────────────────────────────────────────────────
-
-function flushWSBuffer(threadId: string, store: ThreadState) {
-  const events = getAndClearWSBuffer(threadId);
-  if (!events) return;
-  for (const event of events) {
-    switch (event.type) {
-      case 'message':
-        store.handleWSMessage(threadId, event.data);
-        break;
-      case 'tool_call':
-        store.handleWSToolCall(threadId, event.data);
-        break;
-      case 'tool_output':
-        store.handleWSToolOutput(threadId, event.data);
-        break;
-      case 'status':
-        store.handleWSStatus(threadId, event.data);
-        break;
-      case 'error':
-        store.handleWSError(threadId, event.data);
-        break;
-      case 'result':
-        store.handleWSResult(threadId, event.data);
-        break;
-      case 'compact_boundary':
-        store.handleWSCompactBoundary(threadId, event.data);
-        break;
-    }
-  }
-}
 
 /**
  * Diagnostic: who is driving selection? Surfaces the caller chain behind the
@@ -218,58 +176,6 @@ async function fetchSelectedThread(
   }
 }
 
-/** The message window a fetched snapshot covers. */
-function snapshotWindow(
-  thread: Omit<ThreadSnapshot['thread'], 'queuedCount' | 'queuedNextMessage'>,
-): Pick<ThreadWithMessages, 'hasMore' | 'hasMoreAfter' | 'totalMessages' | 'windowStart'> {
-  return {
-    hasMore: thread.hasMore ?? false,
-    hasMoreAfter: thread.hasMoreAfter ?? false,
-    totalMessages: thread.total ?? thread.messages?.length ?? 0,
-    windowStart: thread.windowStart ?? 0,
-  };
-}
-
-/** Build the loaded payload from a fetched snapshot, restoring the per-thread
- *  state kept outside it (context usage, agent accounts, queue summary). */
-function hydrateSnapshot(
-  get: Get,
-  threadId: string,
-  thread: Omit<ThreadSnapshot['thread'], 'queuedCount' | 'queuedNextMessage'>,
-  threadEvents: ThreadSnapshot['events'],
-): ThreadWithMessages {
-  const buffered = getBufferedInitInfo(threadId);
-  const resultInfo = deriveResultInfo(thread);
-
-  // Derive waitingReason and pendingPermission from the last tool call when reloading a waiting thread
-  const { waitingReason, pendingPermission } = deriveWaitingState(thread);
-
-  // Reconstruct compactionEvents from persisted thread events so they survive refreshes
-  const compactionEvents = reconstructCompactionEvents(threadEvents);
-
-  // Merge stored setup progress for setting_up threads
-  const storedSetupProgress =
-    thread.status === 'setting_up' ? get().setupProgressByThread[threadId] : undefined;
-
-  // Restore context usage from localStorage when this session has none yet
-  // (e.g. fresh tab), so the ring re-appears before the next WS event fires.
-  restoreContextUsage(threadId, () => loadContextUsage(threadId));
-  restoreAgentAccounts(loadAgentAccounts);
-
-  return {
-    ...thread,
-    ...snapshotWindow(thread),
-    leadingUserMessage: thread.leadingUserMessage,
-    threadEvents,
-    initInfo: thread.initInfo || buffered || undefined,
-    resultInfo,
-    waitingReason,
-    pendingPermission,
-    setupProgress: storedSetupProgress,
-    compactionEvents: compactionEvents.length > 0 ? compactionEvents : undefined,
-  };
-}
-
 /** Publish a fetched thread as the selected payload, then mark it opened and
  *  replay the WebSocket events that arrived while it loaded. */
 function landSelectedThread(
@@ -290,7 +196,7 @@ function landSelectedThread(
     get().loadThreadsForProject(projectId);
   }
 
-  const hydrated = hydrateSnapshot(get, threadId, thread, snapshot.events);
+  const hydrated = hydrateThreadSnapshot(get, threadId, thread, snapshot.events);
   seedQueueSummary(threadId, queuedCount ?? 0, queuedNextMessage);
 
   // Hydrating the full thread payload mounts the heavy message list. When

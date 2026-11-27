@@ -1375,19 +1375,65 @@ describe('thread store actions', () => {
       }
     });
 
-    test('fetches and hydrates thread when not yet loaded', async () => {
-      const fetched = { ...baseThread, title: 'Live column' };
+    test('fetches and hydrates thread with events, resultInfo, and waiting state when not yet loaded', async () => {
+      const fetched = {
+        ...baseThread,
+        title: 'Live column',
+        status: 'failed' as const,
+        cost: 0.42,
+      };
+      const turnOutcomeEvent = {
+        id: 'ev-1',
+        threadId: 't1',
+        type: 'turn_outcome' as const,
+        data: JSON.stringify({ userMessageId: 'u1', status: 'failed' }),
+        createdAt: '2026-01-01T00:00:00.000Z',
+      };
       mockGetThread.mockReturnValue(okAsync(fetched));
+      mockGetThreadEvents.mockReturnValue(okAsync({ events: [turnOutcomeEvent] }));
 
       await useThreadStore.getState().registerLiveThread('t1');
 
-      expect(useThreadStore.getState().threadDataById.t1.title).toBe('Live column');
+      const hydrated = useThreadStore.getState().threadDataById.t1;
+      expect(hydrated.title).toBe('Live column');
+      expect(hydrated.threadEvents).toEqual([turnOutcomeEvent]);
+      expect(hydrated.resultInfo).toEqual({
+        status: 'failed',
+        cost: 0.42,
+        duration: 0,
+        error: undefined,
+      });
+      useThreadStore.getState().unregisterLiveThread('t1');
+    });
+
+    test('derives waitingReason for a live column thread waiting on a ProviderError', async () => {
+      const fetched = {
+        ...baseThread,
+        status: 'waiting' as const,
+        messages: [
+          {
+            id: 'm1',
+            threadId: 't1',
+            role: 'assistant' as const,
+            content: '',
+            timestamp: '2026-01-01T00:00:00.000Z',
+            toolCalls: [{ id: 'tc1', messageId: 'm1', name: 'ProviderError', input: '{}' }],
+          },
+        ],
+      };
+      mockGetThread.mockReturnValue(okAsync(fetched));
+      mockGetThreadEvents.mockReturnValue(okAsync({ events: [] }));
+
+      await useThreadStore.getState().registerLiveThread('t1');
+
+      expect(useThreadStore.getState().threadDataById.t1.waitingReason).toBe('provider_error');
       useThreadStore.getState().unregisterLiveThread('t1');
     });
 
     test('evicts payload after unregister when not selected', async () => {
       const fetched = { ...baseThread, title: 'Live column' };
       mockGetThread.mockReturnValue(okAsync(fetched));
+      mockGetThreadEvents.mockReturnValue(okAsync({ events: [] }));
       useThreadStore.setState({ selectedThreadId: null, activeThread: null });
 
       await useThreadStore.getState().registerLiveThread('t1');

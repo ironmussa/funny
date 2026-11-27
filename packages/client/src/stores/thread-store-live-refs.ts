@@ -6,12 +6,14 @@
  * `evictIfUnreferenced` removes the payload so memory doesn't grow without
  * bound.
  */
+import { seedQueueSummary } from '@/data/queue/store';
 import { adoptThreadDetail } from '@/data/threads/loaders';
 import { api } from '@/lib/api';
 import { THREAD_MESSAGE_PAGE_SIZE } from '@/lib/thread-message-page';
 import { loadThreadScrollFetchOptions } from '@/lib/thread-scroll-position';
 
 import { settlePreSendStateFromFetch } from './optimistic-run-state';
+import { flushWSBuffer, hydrateThreadSnapshot } from './thread-hydrate';
 import { cleanupThreadActor } from './thread-machine-bridge';
 import * as mutations from './thread-mutations';
 import type { ThreadState } from './thread-state';
@@ -74,20 +76,32 @@ export function createLiveThreadActions(
       if (get().threadDataById[threadId]) return;
       if (prev > 0) return; // a sibling registration is racing the same fetch
 
-      const result = await api.getThread(
-        threadId,
-        THREAD_MESSAGE_PAGE_SIZE,
-        undefined,
-        loadThreadScrollFetchOptions(threadId),
-      );
+      const [result, eventsResult] = await Promise.all([
+        api.getThread(
+          threadId,
+          THREAD_MESSAGE_PAGE_SIZE,
+          undefined,
+          loadThreadScrollFetchOptions(threadId),
+        ),
+        api.getThreadEvents(threadId),
+      ]);
       if (result.isErr()) return;
 
       // Refcount may have dropped while fetching (unmount, race) — only land
       // the data if someone still wants it.
       if ((liveThreadRefCounts.get(threadId) ?? 0) <= 0) return;
-      settlePreSendStateFromFetch(result.value.id, result.value.status);
-      adoptThreadDetail(result.value);
-      set((state) => mutations.setThreadData(state, threadId, result.value));
+
+      // Hydrate with the same pipeline as `selectThread` so grid columns render
+      // `threadEvents` (failed turn outcomes, sandbox/git cards), `resultInfo`,
+      // `waitingReason` (e.g. ProviderErrorCard), and `compactionEvents`.
+      const { queuedCount, queuedNextMessage, ...thread } = result.value;
+      const threadEvents = eventsResult?.isOk() ? eventsResult.value.events : [];
+      const hydrated = hydrateThreadSnapshot(get, threadId, thread, threadEvents);
+      seedQueueSummary(threadId, queuedCount ?? 0, queuedNextMessage);
+      settlePreSendStateFromFetch(thread.id, thread.status);
+      adoptThreadDetail(thread);
+      set((state) => mutations.setThreadData(state, threadId, hydrated));
+      flushWSBuffer(threadId, get());
     },
 
     unregisterLiveThread: (threadId) => {

@@ -28,6 +28,15 @@ describe('renderer-neutral route parser', () => {
       settingsPage: 'git',
     });
     expect(parseClientRoute('/grid').liveColumns).toBe(true);
+    expect(parseClientRoute('/inbox')).toMatchObject({ inbox: true, inboxAutomations: false });
+    expect(parseClientRoute('/inbox/automations')).toMatchObject({
+      inbox: true,
+      inboxAutomations: true,
+    });
+    expect(parseClientRoute('/acme/inbox/automations')).toMatchObject({
+      orgSlug: 'acme',
+      inboxAutomations: true,
+    });
     expect(parseClientRoute('/factory')).toMatchObject({ factory: true, orgSlug: null });
     expect(parseClientRoute('/acme/factory')).toMatchObject({ factory: true, orgSlug: 'acme' });
   });

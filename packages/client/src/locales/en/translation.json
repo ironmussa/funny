@@ -19,8 +19,6 @@
     "openExistingProject": "Open existing project",
     "projects": "Projects",
     "addProject": "Add project",
-    "hideFactoryThreads": "Hide factory threads",
-    "showFactoryThreads": "Show factory threads",
     "newThread": "New thread",
     "renameProject": "Rename project",
     "deleteProject": "Delete project",
@@ -521,7 +519,9 @@
         "noMilestones": "No milestones",
         "searchTypes": "Search types…",
         "noTypes": "No types",
-        "clear": "Clear"
+        "clear": "Clear",
+        "filterByLabel": "Filter by label “{{label}}”",
+        "removeLabelFilter": "Remove the “{{label}}” label filter"
       },
       "sort": {
         "newest": "Newest",
@@ -1091,10 +1091,10 @@
     "filterAll": "All",
     "filterMode": "Mode",
     "filterOrigin": "Origin",
+    "filterAutomation": "Automation",
+    "searchAutomations": "Search automations…",
     "originFactory": "Factory",
     "originAutomation": "Automation",
-    "viewThreads": "View threads",
-    "viewThreadsTooltip": "Open the threads of these runs in the search view",
     "originUser": "User",
     "showArchived": "Archived",
     "clearFilters": "Clear filters",
@@ -1659,6 +1659,7 @@
     "noIssues": "No issues found",
     "viewOnGithub": "View on GitHub",
     "selectIssue": "Select #{{number}}",
+    "selectAll": "Select all issues",
     "selectedCount": "{{count}} selected",
     "clearSelection": "Clear",
     "delete": "Delete",
@@ -2435,5 +2436,40 @@
     "approach": "Approach",
     "outOfScope": "Out of scope",
     "validation": "Validation checklist"
+  },
+  "automationInbox": {
+    "title": "Automation Inbox",
+    "subtitle": "{{projects}} projects · {{runs}} runs",
+    "manage": "Manage Automations",
+    "searchPlaceholder": "Search by automation name or thread title...",
+    "findings": "Findings",
+    "hasFindings": "Has findings",
+    "noFindings": "No findings",
+    "automation": "Automation",
+    "searchAutomation": "Search automations...",
+    "status": {
+      "pending": "Pending",
+      "all": "All",
+      "reviewed": "Reviewed",
+      "dismissed": "Dismissed"
+    },
+    "markReviewed": "Mark reviewed",
+    "dismiss": "Dismiss",
+    "moveToPending": "Move to pending",
+    "selectAll": "Select all runs",
+    "selectRun": "Select run of {{name}}",
+    "selectedCount_one": "{{count}} selected",
+    "selectedCount_other": "{{count}} selected",
+    "clearSelection": "Clear selection",
+    "empty": "No automation runs to review.",
+    "emptyHint": "Automation results that need review will appear here.",
+    "noMatch": "No runs match your filters",
+    "runState": {
+      "label": "State",
+      "running": "Running",
+      "completed": "Completed",
+      "failed": "Failed",
+      "archived": "Archived"
+    }
   }
 }

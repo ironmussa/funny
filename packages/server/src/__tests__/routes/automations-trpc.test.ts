@@ -264,7 +264,7 @@ describe('automations tRPC procedures', () => {
       expect(res.body.error.message).toContain('pending, reviewed, dismissed');
     });
 
-    test('inbox returns only the caller’s finished runs, with filters', async () => {
+    test('inbox returns the caller’s running and finished runs, not archived ones, with filters', async () => {
       seedAutomation(t.db, { id: 'a1', projectId: 'p1', userId: 'user-1' });
       seedAutomation(t.db, { id: 'a2', projectId: 'p2', userId: 'user-2' });
       seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
@@ -279,9 +279,17 @@ describe('automations tRPC procedures', () => {
         status: 'running',
         triageStatus: 'pending',
       });
+      seedAutomationRun(t.db, {
+        id: 'r4',
+        automationId: 'a1',
+        threadId: 't1',
+        status: 'archived',
+        triageStatus: 'pending',
+      });
 
       const res = await query('user-1', 'inbox', { projectId: 'p1', triageStatus: 'pending' });
-      expect(res.body.result.data.map((item: any) => item.run.id)).toEqual(['r1']);
+      const ids = res.body.result.data.map((item: any) => item.run.id);
+      expect(ids.toSorted()).toEqual(['r1', 'r3']);
       expect((await query('user-2', 'runs', { id: 'a1' })).status).toBe(404);
     });
 

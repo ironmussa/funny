@@ -9,7 +9,7 @@ import { getDataLayer } from '../runtime';
  * - automations, loaded per project (`replaceWhere` on `projectId`) or all at
  *   once (`replaceAll`);
  * - runs, loaded per automation while its history is open;
- * - inbox rows (completed/failed runs with their automation and thread),
+ * - inbox rows (running, completed and failed runs with their automation and thread),
  *   keyed by run id.
  * `automation:run_*` events are synced writes into whichever are loaded.
  */
@@ -75,7 +75,10 @@ export function compareRuns(a: AutomationRun, b: AutomationRun): number {
   return b.startedAt.localeCompare(a.startedAt);
 }
 
-/** Most recently completed first (the server's inbox order). */
+/** Most recently completed (or started, while running) first: the server's inbox order. */
 export function compareInbox(a: InboxRow, b: InboxRow): number {
-  return (b.run.completedAt ?? '').localeCompare(a.run.completedAt ?? '');
+  // A running run has no completion yet: it sorts by when it started.
+  return (b.run.completedAt ?? b.run.startedAt ?? '').localeCompare(
+    a.run.completedAt ?? a.run.startedAt ?? '',
+  );
 }

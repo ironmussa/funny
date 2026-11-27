@@ -19,8 +19,6 @@
     "openExistingProject": "Abrir projeto existente",
     "projects": "Projetos",
     "addProject": "Adicionar projeto",
-    "hideFactoryThreads": "Ocultar threads da fábrica",
-    "showFactoryThreads": "Mostrar threads da fábrica",
     "newThread": "Nova thread",
     "renameProject": "Renomear projeto",
     "deleteProject": "Excluir projeto",
@@ -513,7 +511,9 @@
         "noMilestones": "Nenhum marco",
         "searchTypes": "Buscar tipos…",
         "noTypes": "Nenhum tipo",
-        "clear": "Limpar"
+        "clear": "Limpar",
+        "filterByLabel": "Filtrar pela etiqueta “{{label}}”",
+        "removeLabelFilter": "Remover o filtro da etiqueta “{{label}}”"
       },
       "sort": {
         "newest": "Mais recentes",
@@ -1079,10 +1079,10 @@
     "filterAll": "Todos",
     "filterMode": "Modo",
     "filterOrigin": "Origem",
+    "filterAutomation": "Automação",
+    "searchAutomations": "Buscar automações…",
     "originFactory": "Fábrica",
     "originAutomation": "Automação",
-    "viewThreads": "Ver threads",
-    "viewThreadsTooltip": "Abrir os threads destas execuções na visualização de busca",
     "originUser": "Usuário",
     "showArchived": "Arquivadas",
     "clearFilters": "Limpar filtros",
@@ -1618,6 +1618,7 @@
     "noIssues": "Nenhuma issue encontrada",
     "viewOnGithub": "Ver no GitHub",
     "selectIssue": "Selecionar #{{number}}",
+    "selectAll": "Selecionar todas as issues",
     "selectedCount": "{{count}} selecionadas",
     "clearSelection": "Limpar",
     "delete": "Excluir",
@@ -2394,5 +2395,40 @@
     "approach": "Abordagem",
     "outOfScope": "Fora do escopo",
     "validation": "Lista de validação"
+  },
+  "automationInbox": {
+    "title": "Caixa de automações",
+    "subtitle": "{{projects}} projetos · {{runs}} execuções",
+    "manage": "Gerenciar automações",
+    "searchPlaceholder": "Buscar por automação ou título da conversa...",
+    "findings": "Achados",
+    "hasFindings": "Com achados",
+    "noFindings": "Sem achados",
+    "automation": "Automação",
+    "searchAutomation": "Buscar automações...",
+    "status": {
+      "pending": "Pendente",
+      "all": "Todas",
+      "reviewed": "Revisada",
+      "dismissed": "Descartada"
+    },
+    "markReviewed": "Marcar como revisada",
+    "dismiss": "Descartar",
+    "moveToPending": "Voltar para pendente",
+    "selectAll": "Selecionar todas as execuções",
+    "selectRun": "Selecionar execução de {{name}}",
+    "selectedCount_one": "{{count}} selecionada",
+    "selectedCount_other": "{{count}} selecionadas",
+    "clearSelection": "Limpar seleção",
+    "empty": "Nenhuma execução para revisar.",
+    "emptyHint": "Os resultados de automações que precisam de revisão aparecerão aqui.",
+    "noMatch": "Nenhuma execução corresponde aos filtros",
+    "runState": {
+      "label": "Estado",
+      "running": "Em execução",
+      "completed": "Concluída",
+      "failed": "Falhou",
+      "archived": "Arquivada"
+    }
   }
 }

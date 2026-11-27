@@ -19,8 +19,6 @@
     "openExistingProject": "Abrir proyecto existente",
     "projects": "Proyectos",
     "addProject": "Agregar proyecto",
-    "hideFactoryThreads": "Ocultar hilos del factory",
-    "showFactoryThreads": "Mostrar hilos del factory",
     "newThread": "Nuevo hilo",
     "renameProject": "Renombrar proyecto",
     "deleteProject": "Eliminar proyecto",
@@ -519,7 +517,9 @@
         "noMilestones": "Sin hitos",
         "searchTypes": "Buscar tipos…",
         "noTypes": "Sin tipos",
-        "clear": "Limpiar"
+        "clear": "Limpiar",
+        "filterByLabel": "Filtrar por la etiqueta «{{label}}»",
+        "removeLabelFilter": "Quitar el filtro de la etiqueta «{{label}}»"
       },
       "sort": {
         "newest": "Más recientes",
@@ -1089,10 +1089,10 @@
     "filterAll": "Todos",
     "filterMode": "Modo",
     "filterOrigin": "Origen",
+    "filterAutomation": "Automatización",
+    "searchAutomations": "Buscar automatizaciones…",
     "originFactory": "Factory",
     "originAutomation": "Automatización",
-    "viewThreads": "Ver hilos",
-    "viewThreadsTooltip": "Abrir los hilos de estas ejecuciones en la vista de búsqueda",
     "originUser": "Usuario",
     "showArchived": "Archivados",
     "clearFilters": "Limpiar filtros",
@@ -1652,6 +1652,7 @@
     "noIssues": "No se encontraron issues",
     "viewOnGithub": "Ver en GitHub",
     "selectIssue": "Seleccionar #{{number}}",
+    "selectAll": "Seleccionar todos los issues",
     "selectedCount": "{{count}} seleccionados",
     "clearSelection": "Limpiar",
     "delete": "Eliminar",
@@ -2428,5 +2429,40 @@
     "approach": "Enfoque",
     "outOfScope": "Fuera de alcance",
     "validation": "Lista de validación"
+  },
+  "automationInbox": {
+    "title": "Bandeja de automatizaciones",
+    "subtitle": "{{projects}} proyectos · {{runs}} ejecuciones",
+    "manage": "Gestionar automatizaciones",
+    "searchPlaceholder": "Buscar por automatización o título del hilo...",
+    "findings": "Hallazgos",
+    "hasFindings": "Con hallazgos",
+    "noFindings": "Sin hallazgos",
+    "automation": "Automatización",
+    "searchAutomation": "Buscar automatizaciones...",
+    "status": {
+      "pending": "Pendiente",
+      "all": "Todas",
+      "reviewed": "Revisada",
+      "dismissed": "Descartada"
+    },
+    "markReviewed": "Marcar como revisada",
+    "dismiss": "Descartar",
+    "moveToPending": "Volver a pendiente",
+    "selectAll": "Seleccionar todas las ejecuciones",
+    "selectRun": "Seleccionar ejecución de {{name}}",
+    "selectedCount_one": "{{count}} seleccionada",
+    "selectedCount_other": "{{count}} seleccionadas",
+    "clearSelection": "Limpiar selección",
+    "empty": "No hay ejecuciones por revisar.",
+    "emptyHint": "Aquí aparecerán los resultados de automatizaciones que necesiten revisión.",
+    "noMatch": "Ninguna ejecución coincide con los filtros",
+    "runState": {
+      "label": "Estado",
+      "running": "En curso",
+      "completed": "Completada",
+      "failed": "Fallida",
+      "archived": "Archivada"
+    }
   }
 }

@@ -12,7 +12,7 @@ import {
   triggerAutomation,
   updateAutomation,
 } from '@/data/automations/actions';
-import { handleRunCompleted } from '@/data/automations/events';
+import { handleRunCompleted, handleRunStarted } from '@/data/automations/events';
 import { useAutomationInbox, useProjectAutomations } from '@/data/automations/hooks';
 import { loadAutomations, loadInbox } from '@/data/automations/loaders';
 import { getAutomationsData, getInboxData } from '@/data/automations/store';
@@ -147,6 +147,20 @@ describe('inbox', () => {
     seedProjectThreads({ p1: [thread] });
     handleRunCompleted({ automationId: 'a1', runId: 'r9', threadId: 't1', hasFindings: true });
     expect(getInboxData().getSynced('r9')?.run).toMatchObject({ status: 'completed' });
+    expect(api.getAutomationInbox).not.toHaveBeenCalled();
+  });
+
+  test('a started run joins the inbox as running and does not count as pending', async () => {
+    seedAutomations({ automations: [automation('a1')], inbox: [item(run('r1'))] });
+    seedProjectThreads({ p1: [thread] });
+    handleRunStarted({ automationId: 'a1', runId: 'r9', threadId: 't1' });
+    expect(getInboxData().getSynced('r9')?.run).toMatchObject({ status: 'running' });
+    const { result } = renderHook(() => useAutomationInbox());
+    await waitFor(() => expect(result.current.inbox).toHaveLength(2));
+    expect(result.current.pendingCount).toBe(1);
+
+    handleRunCompleted({ automationId: 'a1', runId: 'r9', threadId: 't1', hasFindings: true });
+    await waitFor(() => expect(result.current.pendingCount).toBe(2));
     expect(api.getAutomationInbox).not.toHaveBeenCalled();
   });
 

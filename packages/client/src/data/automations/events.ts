@@ -15,19 +15,28 @@ export function handleRunStarted(
   data: { automationId: string; runId: string; threadId: string },
   layer: DataLayer = getDataLayer(),
 ): void {
+  const run: AutomationRun = {
+    id: data.runId,
+    automationId: data.automationId,
+    threadId: data.threadId,
+    status: 'running',
+    triageStatus: 'pending',
+    startedAt: new Date().toISOString(),
+  };
   const runs = getRunsData(layer);
   // A run history that is not loaded is fetched whole when opened.
-  if (!runs.loadedFor.has(data.automationId) || runs.getSynced(data.runId)) return;
-  runs.upsert([
-    {
-      id: data.runId,
-      automationId: data.automationId,
-      threadId: data.threadId,
-      status: 'running',
-      triageStatus: 'pending',
-      startedAt: new Date().toISOString(),
-    },
-  ]);
+  if (runs.loadedFor.has(data.automationId) && !runs.getSynced(data.runId)) runs.upsert([run]);
+
+  // The inbox lists running runs too, with their state.
+  const inbox = getInboxData(layer);
+  if (inbox.getSynced(data.runId)) return;
+  const automation = getAutomationsData(layer).getSynced(data.automationId);
+  const thread = readThreadRow(data.threadId, layer);
+  if (!automation || !thread) {
+    void loadInbox(layer);
+    return;
+  }
+  inbox.upsert([{ id: data.runId, run, automation, thread }]);
 }
 
 export function handleRunCompleted(
@@ -89,7 +98,7 @@ export function handleRunUpdated(
   }
   getRunsData(layer).patch(data.runId, (r) => ({ ...r, ...changes }));
   const inbox = getInboxData(layer);
-  // The inbox holds completed/failed runs only.
-  if (changes.status === 'archived' || changes.status === 'running') inbox.remove([data.runId]);
+  // The inbox holds running, completed and failed runs.
+  if (changes.status === 'archived') inbox.remove([data.runId]);
   else inbox.patch(data.runId, (row) => ({ ...row, run: { ...row.run, ...changes } }));
 }

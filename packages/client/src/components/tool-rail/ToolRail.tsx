@@ -4,6 +4,7 @@ import {
   Factory,
   FlaskConical,
   Globe,
+  Inbox,
   LayoutGrid,
   MessagesSquare,
   Terminal,
@@ -16,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { ShortcutHint } from '@/components/ui/kbd';
 import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useAutomationInbox } from '@/data/automations/hooks';
 import { useProjects } from '@/data/projects/hooks';
 import { usePanelParam } from '@/hooks/use-panel-param';
 import { usePreviewWindow } from '@/hooks/use-preview-window';
@@ -259,8 +261,10 @@ function pathBehindGrid(): string {
 /**
  * Shows one view in the left sidebar: the thread list, the kanban board or
  * the factory queue. Pressing the active board or queue goes back to the
- * thread list. The thread in the center does not change, except when leaving
- * the grid, which goes back to the thread that was open before it.
+ * thread list. The board and the queue open alone, filling the window with no
+ * thread; opening a thread from them moves them into the sidebar beside it.
+ * The thread list keeps the thread in the center, except when leaving the
+ * grid, which goes back to the thread that was open before it.
  */
 function LeftViewButton({
   view,
@@ -273,7 +277,10 @@ function LeftViewButton({
   const navigate = useStableNavigate();
   const gridOpen = useUIStore((s) => s.liveColumnsOpen);
   // The views are one choice: while the grid is shown, none of these is lit.
-  const active = useUIStore((s) => !s.liveColumnsOpen && s.leftPanelMode === view.mode);
+  const inboxOpen = useUIStore((s) => s.automationInboxOpen);
+  const active = useUIStore(
+    (s) => !s.liveColumnsOpen && !s.automationInboxOpen && s.leftPanelMode === view.mode,
+  );
   const setLeftPanelMode = useUIStore((s) => s.setLeftPanelMode);
   const label = t(view.labelKey, view.labelFallback);
   const Icon = view.icon;
@@ -284,10 +291,19 @@ function LeftViewButton({
       ariaLabel={label}
       onClick={() => {
         const closing = active && view.mode !== 'threads';
-        setLeftPanelMode(closing ? 'threads' : view.mode);
-        if (gridOpen) {
+        const nextMode = closing ? 'threads' : view.mode;
+        setLeftPanelMode(nextMode);
+        if (nextMode === 'kanban' || nextMode === 'factory') {
+          // The board and the queue open alone, with no thread beside them;
+          // opening a thread from them brings the thread back (App.tsx).
+          if (gridOpen) useUIStore.getState().setLiveColumnsOpen(false);
+          navigate(buildPath('/'));
+        } else if (gridOpen) {
           // Flag and URL in one click, as when the grid opens (see PageButton).
           useUIStore.getState().setLiveColumnsOpen(false);
+          navigate(buildPath(pathBehindGrid()));
+        } else if (inboxOpen) {
+          // The inbox takes the sidebar's place: leave it for the chosen view.
           navigate(buildPath(pathBehindGrid()));
         }
         if (!closing) onShowSidebar?.();
@@ -295,6 +311,48 @@ function LeftViewButton({
       label={label}
     >
       <Icon className="icon-base" />
+    </RailButton>
+  );
+}
+
+/**
+ * Opens the automation inbox, which fills the window beside the rail. Opening
+ * a thread from it moves the inbox into the left sidebar, as a column beside
+ * the thread (like the factory queue). Pressing the button while the inbox
+ * shows closes it: back to the thread open before, with the thread list. The badge counts the pending runs; the
+ * app shell polls them (`useAutomationInboxPolling`).
+ */
+function InboxButton() {
+  const { t } = useTranslation();
+  const navigate = useStableNavigate();
+  const fullWindow = useUIStore((s) => s.automationInboxOpen);
+  const inSidebar = useUIStore((s) => s.leftPanelMode === 'inbox');
+  const setLeftPanelMode = useUIStore((s) => s.setLeftPanelMode);
+  const { pendingCount } = useAutomationInbox();
+  const label = t('automationInbox.title', 'Automation Inbox');
+  return (
+    <RailButton
+      active={fullWindow || inSidebar}
+      testId="tool-rail-inbox"
+      ariaLabel={label}
+      onClick={() => {
+        // Pressing it while the inbox shows (full window or beside a thread)
+        // closes it and brings the thread list back.
+        if (inSidebar) setLeftPanelMode('threads');
+        if (fullWindow) navigate(buildPath(pathBehindGrid()));
+        else if (!inSidebar) navigate(buildPath('/inbox'));
+      }}
+      label={label}
+    >
+      <Inbox className="icon-base" />
+      {pendingCount > 0 && (
+        <span
+          className="text-3xs absolute -top-0.5 -right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-white px-0.5 leading-none font-medium text-black"
+          data-testid="tool-rail-inbox-badge"
+        >
+          {countLabel(pendingCount)}
+        </span>
+      )}
     </RailButton>
   );
 }
@@ -368,7 +426,8 @@ function PageButton({ page }: { page: RailPage }) {
  * of the window. The panel icons come from the registry and open, switch or
  * close the right panel; below them, the test runner, terminal and browser;
  * then the views (thread list, kanban board and factory queue in the left
- * sidebar, and the full-screen thread grid); last, analytics.
+ * sidebar, and the full-screen thread grid); last, the automation inbox and
+ * analytics.
  * Rendered inside a `ThreadProvider` for the thread the right pane acts on.
  */
 export const ToolRail = memo(function ToolRail({
@@ -423,6 +482,7 @@ export const ToolRail = memo(function ToolRail({
       ))}
       <PageButton page={GRID_PAGE} />
       <Separator className="my-1 w-6" />
+      <InboxButton />
       <PageButton page={ANALYTICS_PAGE} />
     </nav>
   );

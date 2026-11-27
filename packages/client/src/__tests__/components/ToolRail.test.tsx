@@ -7,7 +7,7 @@
 import { beforeEach, describe, expect, test, mock } from 'bun:test';
 
 import type { Thread } from '@funny/shared';
-import { fireEvent, screen } from '@testing-library/react';
+import { act, fireEvent, screen } from '@testing-library/react';
 import { useLocation } from 'react-router-dom';
 
 mock.module('react-i18next', () => ({
@@ -47,7 +47,12 @@ function seedThread(thread: Partial<Thread>) {
 describe('ToolRail', () => {
   beforeEach(() => {
     useBrowserPanelStore.getState().reset();
-    useUIStore.setState({ openPanels: {}, liveColumnsOpen: false, analyticsOpen: false });
+    useUIStore.setState({
+      openPanels: {},
+      liveColumnsOpen: false,
+      analyticsOpen: false,
+      automationInboxOpen: false,
+    });
   });
 
   test('opens, switches and closes the right panel', () => {
@@ -223,6 +228,89 @@ describe('ToolRail', () => {
     expect(useUIStore.getState().liveColumnsOpen).toBe(false);
     expect(useUIStore.getState().leftPanelMode).toBe('threads');
   });
+
+  test('the inbox button opens the inbox and goes back to the thread open before it', () => {
+    seedThread({});
+    useThreadHistoryStore.setState({ past: [{ threadId: 't1', projectId: 'p1' }], future: [] });
+    renderWithProviders(
+      <>
+        <ToolRail />
+        <LocationProbe />
+      </>,
+      { threadId: 't1', route: '/projects/p1/threads/t1' },
+    );
+
+    fireEvent.click(screen.getByTestId('tool-rail-inbox'));
+    expect(screen.getByTestId('location')).toHaveTextContent('/inbox');
+
+    act(() => useUIStore.setState({ automationInboxOpen: true }));
+    expect(screen.getByTestId('tool-rail-inbox')).toHaveAttribute('aria-pressed', 'true');
+    // The inbox takes the sidebar's place: no sidebar view is lit.
+    expect(screen.getByTestId('tool-rail-threads')).toHaveAttribute('aria-pressed', 'false');
+
+    fireEvent.click(screen.getByTestId('tool-rail-inbox'));
+    expect(screen.getByTestId('location')).toHaveTextContent('/projects/p1/threads/t1');
+  });
+
+  test('with the inbox beside a thread, the inbox button brings the thread list back', () => {
+    seedThread({});
+    useUIStore.setState({ leftPanelMode: 'inbox' });
+    renderWithProviders(
+      <>
+        <ToolRail />
+        <LocationProbe />
+      </>,
+      { threadId: 't1', route: '/projects/p1/threads/t1' },
+    );
+
+    const inbox = screen.getByTestId('tool-rail-inbox');
+    expect(inbox).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(inbox);
+    expect(useUIStore.getState().leftPanelMode).toBe('threads');
+    // The thread stays open in the center.
+    expect(screen.getByTestId('location')).toHaveTextContent('/projects/p1/threads/t1');
+  });
+
+  test('choosing a sidebar view while the inbox is open leaves the inbox', () => {
+    seedThread({});
+    useThreadHistoryStore.setState({ past: [{ threadId: 't1', projectId: 'p1' }], future: [] });
+    useUIStore.setState({ automationInboxOpen: true, leftPanelMode: 'threads' });
+    renderWithProviders(
+      <>
+        <ToolRail />
+        <LocationProbe />
+      </>,
+      { threadId: 't1', route: '/inbox' },
+    );
+
+    fireEvent.click(screen.getByTestId('tool-rail-threads'));
+    expect(screen.getByTestId('location')).toHaveTextContent('/projects/p1/threads/t1');
+    expect(useUIStore.getState().leftPanelMode).toBe('threads');
+  });
+
+  for (const mode of ['factory', 'kanban'] as const) {
+    test(`entering the ${mode} view shows it alone, with no thread in the center`, () => {
+      seedThread({});
+      useUIStore.setState({ leftPanelMode: 'threads', leftViewFillsWindow: false });
+      renderWithProviders(
+        <>
+          <ToolRail />
+          <LocationProbe />
+        </>,
+        { threadId: 't1', route: '/projects/p1/threads/t1' },
+      );
+
+      fireEvent.click(screen.getByTestId(`tool-rail-${mode}`));
+      expect(useUIStore.getState().leftPanelMode).toBe(mode);
+      expect(useUIStore.getState().leftViewFillsWindow).toBe(true);
+      expect(screen.getByTestId('location')).toHaveTextContent(/^\/$/);
+
+      // Pressing it again goes back to the thread list, which does not fill the window.
+      fireEvent.click(screen.getByTestId(`tool-rail-${mode}`));
+      expect(useUIStore.getState().leftPanelMode).toBe('threads');
+      expect(useUIStore.getState().leftViewFillsWindow).toBe(false);
+    });
+  }
 });
 
 function LocationProbe() {

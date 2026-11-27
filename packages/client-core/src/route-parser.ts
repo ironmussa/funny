@@ -6,6 +6,8 @@ export interface ParsedClientRoute {
   threadId: string | null;
   globalSearch: boolean;
   inbox: boolean;
+  /** `/inbox/automations`: the inbox's automation list (set together with `inbox`). */
+  inboxAutomations: boolean;
   analytics: boolean;
   workflowsProjectId: string | null;
   liveColumns: boolean;
@@ -65,6 +67,7 @@ function blank(orgSlug: string | null): ParsedClientRoute {
     threadId: null,
     globalSearch: false,
     inbox: false,
+    inboxAutomations: false,
     analytics: false,
     workflowsProjectId: null,
     liveColumns: false,
@@ -131,6 +134,7 @@ export function parseClientRoute(pathname: string): ParsedClientRoute {
   const project = matchPath('/projects/:projectId', path);
   if (project) return { ...result, projectId: project.projectId ?? null };
   if (path === '/inbox') return { ...result, inbox: true };
+  if (path === '/inbox/automations') return { ...result, inbox: true, inboxAutomations: true };
   if (path === '/list' || path === '/kanban') return { ...result, globalSearch: true };
   const projectAnalytics = matchPath('/projects/:projectId/analytics', path);
   if (projectAnalytics) {

@@ -27,6 +27,8 @@ export const STORAGE_KEY_LEFT_WIDTH = 'dockview.left_width';
 export const STORAGE_KEY_FACTORY_LEFT_WIDTH = 'dockview.left_width.factory';
 /** The left sidebar's width while it shows the kanban board. */
 export const STORAGE_KEY_KANBAN_LEFT_WIDTH = 'dockview.left_width.kanban';
+/** The left sidebar's width while it shows the automation inbox beside an open thread. */
+export const STORAGE_KEY_INBOX_LEFT_WIDTH = 'dockview.left_width.inbox';
 export const STORAGE_KEY_RIGHT_WIDTH = 'dockview.right_width';
 export const STORAGE_KEY_BOTTOM_HEIGHT = 'dockview.bottom_height';
 export const STORAGE_KEY_BROWSER_WIDTH = 'dockview.browser_width';

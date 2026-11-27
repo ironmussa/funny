@@ -60,7 +60,7 @@ export function useAutomationRuns(automationId: string | null | undefined): Auto
   }, [rows, data]);
 }
 
-/** The inbox, most recently completed first, and how many items await triage. */
+/** The inbox, most recent first, and how many finished items await triage. */
 export function useAutomationInbox(): { inbox: InboxRow[]; pendingCount: number } {
   const data = getInboxData(useDataLayer());
   const { data: rows } = useLiveQuery({
@@ -70,7 +70,9 @@ export function useAutomationInbox(): { inbox: InboxRow[]; pendingCount: number 
   return useMemo(() => {
     if (!rows || rows.length === 0) return { inbox: NONE, pendingCount: 0 };
     const inbox = rows.map((row) => data.fromRow(row)).sort(compareInbox);
-    const pendingCount = inbox.filter((item) => item.run.triageStatus === 'pending').length;
+    const pendingCount = inbox.filter(
+      (item) => item.run.triageStatus === 'pending' && item.run.status !== 'running',
+    ).length;
     return { inbox, pendingCount };
   }, [rows, data]);
 }

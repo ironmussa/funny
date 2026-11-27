@@ -27,7 +27,7 @@ import {
   DEFAULT_THREAD_MODE,
   DEFAULT_PERMISSION_MODE,
 } from '@funny/shared/models';
-import { eq, and, or, desc, type SQL } from 'drizzle-orm';
+import { eq, and, desc, inArray, sql, type SQL } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { err, ok } from 'neverthrow';
 
@@ -161,7 +161,8 @@ function invalidSchedule(schedule: string) {
 export const automationsPort: AutomationsPort = {
   async inbox(userId, query) {
     const conditions: (SQL | undefined)[] = [
-      or(eq(automationRuns.status, 'completed'), eq(automationRuns.status, 'failed')),
+      // Running runs show too, with their state, until they finish.
+      inArray(automationRuns.status, ['running', 'completed', 'failed']),
       eq(automations.userId, userId),
     ];
     if (query.triageStatus) {
@@ -177,7 +178,7 @@ export const automationsPort: AutomationsPort = {
       .innerJoin(automations, eq(automationRuns.automationId, automations.id))
       .innerJoin(threads, eq(automationRuns.threadId, threads.id))
       .where(and(...conditions))
-      .orderBy(desc(automationRuns.completedAt));
+      .orderBy(desc(sql`coalesce(${automationRuns.completedAt}, ${automationRuns.startedAt})`));
 
     return ok(
       items.map((item) => ({

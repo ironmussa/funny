@@ -31,8 +31,8 @@ const GRID_SELECTED_THREAD_KEY = 'funny:grid-selected-thread:v1';
 const LEFT_PANEL_MODE_KEY = 'left_panel_mode';
 
 /** What the left sidebar shows: the thread list, or the kanban board or factory queue in its place. */
-export type LeftPanelMode = 'threads' | 'kanban' | 'factory';
-const LEFT_PANEL_MODES: readonly LeftPanelMode[] = ['threads', 'kanban', 'factory'];
+export type LeftPanelMode = 'threads' | 'kanban' | 'factory' | 'inbox';
+const LEFT_PANEL_MODES: readonly LeftPanelMode[] = ['threads', 'kanban', 'factory', 'inbox'];
 
 /** The tool panel open in each location (openspec `tool-panels`); absent = closed. */
 export interface OpenPanels {
@@ -101,6 +101,13 @@ interface UIState {
   /** What the left sidebar shows; remembered on the device. */
   leftPanelMode: LeftPanelMode;
   setLeftPanelMode: (mode: LeftPanelMode) => void;
+  /**
+   * The kanban board or factory queue fills the window, with no thread beside
+   * it: set when one of them is entered, cleared when a thread is opened from
+   * it (the view then moves into the left sidebar, beside the thread).
+   */
+  leftViewFillsWindow: boolean;
+  setLeftViewFillsWindow: (fills: boolean) => void;
   reviewPaneWidth: number; // percentage of viewport width
   reviewPaneResizing: boolean;
   settingsOpen: boolean;
@@ -284,6 +291,7 @@ function readInitialUIState() {
         return DEFAULT_REVIEW_PANE_WIDTH;
       }
     })(),
+    leftViewFillsWindow: false,
     reviewPaneResizing: false,
     settingsOpen: false,
     activeSettingsPage: null,
@@ -497,8 +505,10 @@ function rightPaneActions(set: SetUIState, get: GetUIState) {
       try {
         localStorage.setItem(LEFT_PANEL_MODE_KEY, mode);
       } catch {}
-      set({ leftPanelMode: mode });
+      // Entering the board or the queue shows it alone; any other view does not.
+      set({ leftPanelMode: mode, leftViewFillsWindow: mode === 'kanban' || mode === 'factory' });
     },
+    setLeftViewFillsWindow: (fills) => set({ leftViewFillsWindow: fills }),
     setReviewPaneWidth: (width) => {
       const clamped = Math.max(MIN_REVIEW_PANE_WIDTH, Math.min(MAX_REVIEW_PANE_WIDTH, width));
       try {

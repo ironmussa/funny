@@ -1,37 +1,20 @@
 import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
-import { act, render } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 import { ResultAsync } from 'neverthrow';
 
 const mockLoadInbox = (() => vi.fn())();
-
-mock.module('react-router-dom', () => ({
-  useNavigate: () => vi.fn(),
-}));
-
-mock.module('@/components/ui/button', () => ({
-  Button: () => null,
-}));
 
 mock.module('@/stores/auth-store', () => ({
   useAuthStore: (selector: (state: { isAuthenticated: boolean }) => unknown) =>
     selector({ isAuthenticated: true }),
 }));
 
-mock.module('@/data/automations/hooks', () => ({
-  useAutomationInbox: () => ({ inbox: [], pendingCount: 0 }),
-}));
 mock.module('@/data/automations/loaders', () => ({ loadInbox: mockLoadInbox }));
 
-mock.module('@/stores/ui-store', () => ({
-  useUIStore: (selector: (state: { automationInboxOpen: boolean }) => unknown) =>
-    selector({ automationInboxOpen: false }),
-}));
+import { useAutomationInboxPolling } from '@/hooks/use-automation-inbox-polling';
 
-import { AutomationInboxButton } from '@/components/sidebar/AutomationInboxButton';
-import { TooltipProvider } from '@/components/ui/tooltip';
-
-describe('AutomationInboxButton', () => {
+describe('useAutomationInboxPolling', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     mockLoadInbox.mockReset();
@@ -48,11 +31,7 @@ describe('AutomationInboxButton', () => {
     });
     mockLoadInbox.mockReturnValue(ResultAsync.fromSafePromise(load));
 
-    const { unmount } = render(
-      <TooltipProvider>
-        <AutomationInboxButton />
-      </TooltipProvider>,
-    );
+    const { unmount } = renderHook(() => useAutomationInboxPolling());
     expect(mockLoadInbox).toHaveBeenCalledTimes(1);
 
     unmount();

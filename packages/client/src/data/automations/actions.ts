@@ -5,7 +5,7 @@ import type {
   UpdateAutomationRequest,
 } from '@funny/shared';
 import type { DomainError } from '@funny/shared/errors';
-import { errAsync, type ResultAsync } from 'neverthrow';
+import { errAsync, ResultAsync } from 'neverthrow';
 
 import i18n from '@/i18n/config';
 import { automationsApi } from '@/lib/api/automations';
@@ -138,4 +138,16 @@ export function triageRun(
     },
     failureMessageKey: FAILURE_KEY,
   });
+}
+
+/** Triage several inbox runs at once (the inbox's selection). Each run is
+ *  its own optimistic write, so one failure rolls back only that run. */
+export function triageRuns(
+  runIds: readonly string[],
+  triageStatus: RunTriageStatus,
+  layer: DataLayer = getDataLayer(),
+): ResultAsync<unknown[], DomainError[]> {
+  return ResultAsync.combineWithAllErrors(
+    runIds.map((runId) => triageRun(runId, triageStatus, layer)),
+  );
 }

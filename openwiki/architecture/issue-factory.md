@@ -724,6 +724,14 @@ A factory can work on several long-lived feature branches in parallel (openspec 
   from production collect on the lane and land on QA together. It is not fixed while lanes exist,
   and a lane's branch may not be it (`lane-invalid`). Issues without a lane label still merge into
   **Merge into**.
+- **Branches chosen at the send** (D13): the send dialog's branches go with that send
+  (`route` of `factory.submitIssues`, kept on the queued runs as `factory_runs.requested_route`,
+  migration 146), never to the settings. Without a lane, the run's base is the chosen branch. For
+  a lane the send makes, the lane is cut from the chosen **Starts from** and keeps it and
+  **Finish into** on its row (`factory_lanes.base_branch`, `finish_branch`; null: the factory's
+  settings): it syncs with its own base and finishes into its own branch, then the factory's
+  **Finish into**, then its base. A lane that exists keeps its branches. A send naming a branch
+  GitHub does not have is refused.
 
 ## Security boundaries
 

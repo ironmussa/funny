@@ -449,7 +449,8 @@ export function createTestDb() {
       inputs TEXT,
       base_branch TEXT,
       lane TEXT,
-      merge_sha TEXT
+      merge_sha TEXT,
+      requested_route TEXT
     )
   `);
   testDb.run(sql`
@@ -471,6 +472,8 @@ export function createTestDb() {
       sync_error TEXT,
       last_synced_base_sha TEXT,
       finish_pr_number INTEGER,
+      base_branch TEXT,
+      finish_branch TEXT,
       conflicts TEXT,
       conflicts_checked_at TEXT,
       conflicts_note TEXT

@@ -10,6 +10,7 @@ import {
   UserCheck,
   X,
 } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
@@ -98,6 +99,8 @@ interface IssueFilterBarProps {
   optionsLoading?: boolean;
   state: IssueState;
   onStateChange: (next: IssueState) => void;
+  /** Shown before the filters: the select-all checkbox. */
+  leading?: ReactNode;
 }
 
 export function IssueFilterBar({
@@ -107,6 +110,7 @@ export function IssueFilterBar({
   optionsLoading,
   state,
   onStateChange,
+  leading,
 }: IssueFilterBarProps) {
   const { t } = useTranslation();
   const opts = useOptions(options);
@@ -138,6 +142,7 @@ export function IssueFilterBar({
       className="border-sidebar-border flex flex-wrap items-center gap-1.5 border-b px-2 py-1.5"
       data-testid="issues-filter-bar"
     >
+      {leading}
       <Select
         value={state}
         onValueChange={(v) => {

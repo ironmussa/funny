@@ -273,4 +273,48 @@ describe('factory port lanes (3.3, 6.6, 8.1)', () => {
     expect(opened[0]!.base).toBe('qa');
     expect(opened[0]!.title).toBe('Finish hotfix: merge lane/hotfix into qa');
   });
+
+  test("finishLane uses the lane's own branches before the factory's settings (D13)", async () => {
+    const { github, opened } = makeFakeGithub();
+    const { settings, lanes, port } = makePort(github, []);
+
+    (await settings.save('alice', 'p1', { enabled: true, laneFinishBranch: 'qa' }))._unsafeUnwrap();
+    const factoryId = (await settings.factoryId('alice', 'p1'))._unsafeUnwrap()!;
+    // Its send chose both branches: it lands on its own "Finish into".
+    (
+      await lanes.ensure(factoryId, {
+        name: 'pay',
+        branch: 'lane/pay',
+        baseBranch: 'release',
+        finishBranch: 'staging',
+      })
+    )._unsafeUnwrap();
+    // Its send chose where it starts only: the factory's "Finish into" still applies.
+    (
+      await lanes.ensure(factoryId, { name: 'docs', branch: 'lane/docs', baseBranch: 'release' })
+    )._unsafeUnwrap();
+
+    expect((await port.finishLane('alice', 'p1', 'pay'))._unsafeUnwrap().base).toBe('staging');
+    expect((await port.finishLane('alice', 'p1', 'docs'))._unsafeUnwrap().base).toBe('qa');
+    expect(opened.map((pr) => pr.base)).toEqual(['staging', 'qa']);
+
+    const listed = (await port.lanes('alice', 'p1'))._unsafeUnwrap();
+    expect(listed.find((lane) => lane.name === 'pay')).toMatchObject({
+      baseBranch: 'release',
+      finishBranch: 'staging',
+    });
+  });
+
+  test('a lane that started from its own branch and has no "Finish into" lands on that branch (D13)', async () => {
+    const { github, opened } = makeFakeGithub();
+    const { settings, lanes, port } = makePort(github, []);
+    (await settings.save('alice', 'p1', { enabled: true }))._unsafeUnwrap();
+    const factoryId = (await settings.factoryId('alice', 'p1'))._unsafeUnwrap()!;
+    (
+      await lanes.ensure(factoryId, { name: 'docs', branch: 'lane/docs', baseBranch: 'release' })
+    )._unsafeUnwrap();
+
+    expect((await port.finishLane('alice', 'p1', 'docs'))._unsafeUnwrap().base).toBe('release');
+    expect(opened[0]!.base).toBe('release');
+  });
 });

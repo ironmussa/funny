@@ -248,6 +248,34 @@ lane MAY be adopted.
 - **WHEN** Bob's factory has the lane `auth` on `lane/auth`, and Alice's factory on the same project admits its first issue labelled `lane:auth`
 - **THEN** Alice's issue stays queued with `lane-invalid`, saying that `lane/auth` is another factory's lane, and no lane is made
 
+### Requirement: A send may name its own branches
+
+A send SHALL be able to name the branch its issues run on, and, for a lane the send makes, the
+branch the lane starts from and the branch it is finished into. Those branches SHALL apply to the
+runs of that send only: the factory's settings and its other runs and lanes SHALL NOT change. A
+lane that exists SHALL keep the branches it was made with. A send naming a branch that does not
+exist on GitHub SHALL be refused and queue nothing.
+
+#### Scenario: Issues without a lane, on another branch
+
+- **WHEN** a factory merges into `dev`, and a member sends issue #3 naming the branch `release`
+- **THEN** #3's run starts from and merges into `release`, and an issue sent without a branch still runs on `dev`
+
+#### Scenario: A new lane with its own branches
+
+- **WHEN** a member sends issue #1 labelled `lane:payments` naming "Starts from" `release` and "Finish into" `qa`, and the lane does not exist
+- **THEN** `lane/payments` is cut from `release`, the lane syncs with `release`, and "Finish lane" opens its pull request into `qa`
+
+#### Scenario: A lane that exists
+
+- **WHEN** a later send names other branches for the lane `payments`
+- **THEN** the lane keeps `release` and `qa`
+
+#### Scenario: A branch that does not exist
+
+- **WHEN** a send names the branch `relase`, which GitHub does not have
+- **THEN** the send is refused with a message naming the branch, and no issue is queued
+
 ### Requirement: Lane prefixes default to the factory's own convention
 
 A factory that never saved its lane prefixes SHALL use `lane:` for the label and `lane/` for the

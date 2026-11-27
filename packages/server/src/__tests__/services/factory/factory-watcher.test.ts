@@ -213,6 +213,8 @@ type FakeGithub = FactoryGithubPort & {
   baseBranches: string[];
   /** Branches the factory asked to exist (a lane's), in order. */
   ensuredBranches: string[];
+  /** The base each of those branches was to be cut from; null: the factory's own. */
+  ensuredFrom: Array<string | null>;
   /** How many times a merged pull request's commit was read. */
   mergeCommitReads: number;
   /** What a lane sync did to branches and pull requests, in order. */
@@ -240,6 +242,7 @@ function fakeGithub(
     closedReplaced: [],
     baseBranches: [],
     ensuredBranches: [],
+    ensuredFrom: [],
     syncCalls: [],
     closedIssues: [],
     closeIssue: (_reader: unknown, number: number) => {
@@ -254,10 +257,11 @@ function fakeGithub(
     },
     branchContains: (_reader: unknown, branch: string, sha: string) =>
       okAsync(script.contains?.[sha]?.includes(branch) ?? false),
-    ensureBranch: (_reader: unknown, branch: string) => {
+    ensureBranch: (reader: { baseBranch?: string | null }, branch: string) => {
       if (script.branchesRefused) return errAsync({ message: 'GitHub answered 403', status: 403 });
       const existed = port.ensuredBranches.includes(branch);
       port.ensuredBranches.push(branch);
+      port.ensuredFrom.push(reader.baseBranch ?? null);
       return okAsync(existed ? ('exists' as const) : ('created' as const));
     },
     resolveRepo: async () => repo,
@@ -777,8 +781,11 @@ describe('factory watcher', () => {
       script: GithubScript,
       issues = three,
       factory: Parameters<typeof enableFactory>[0] = {},
+      /** Runs sent before the tick (a send with its own route). */
+      sendFirst?: (factoryId: string) => unknown,
     ) {
       const factoryId = await enableFactory({ maxConcurrent: 5, ...factory });
+      await sendFirst?.(factoryId);
       const poll = fakePoll();
       const launcher = fakeLauncher();
       const github = fakeGithub('acme/repo', issues, { mergeInto: { branch: 'dev' }, ...script });
@@ -816,6 +823,55 @@ describe('factory watcher', () => {
       expect(lanes).toMatchObject([
         { name: 'payments', branch: 'feature/payments', state: 'active', syncState: 'idle' },
       ]);
+    });
+
+    test('a send that names its own branch runs its issue there, and leaves the others alone (D13)', async () => {
+      const { runOf } = await tickWith({ labels: {} }, three, {}, (factoryId) =>
+        createFactoryRunsRepository().enqueue({
+          factoryId,
+          issueNumbers: [3],
+          flowName: 'issue-to-merge',
+          route: { baseBranch: 'release' },
+        }),
+      );
+
+      expect(runOf(3)).toMatchObject({ baseBranch: 'release', lane: null });
+      expect(runOf(1)).toMatchObject({ baseBranch: 'dev', lane: null });
+    });
+
+    test('the send that makes a lane gives it the branch it starts from and finishes into (D13)', async () => {
+      const { factoryId, github, runOf } = await tickWith(
+        { labels: { 1: ['feature:payments'], 2: ['feature:search'] } },
+        three,
+        {},
+        (id) =>
+          createFactoryRunsRepository().enqueue({
+            factoryId: id,
+            issueNumbers: [1],
+            flowName: 'issue-to-merge',
+            route: { lane: { name: 'payments', baseBranch: 'release', finishBranch: 'qa' } },
+          }),
+      );
+
+      // The run still works on the lane's branch; the lane was cut from `release`.
+      expect(runOf(1)).toMatchObject({ baseBranch: 'feature/payments', lane: 'payments' });
+      const cutFrom = Object.fromEntries(
+        github.ensuredBranches.map((branch, index) => [branch, github.ensuredFrom[index]]),
+      );
+      expect(cutFrom).toEqual({ 'feature/payments': 'release', 'feature/search': null });
+
+      const { createFactoryLanesRepository } =
+        await import('../../../services/factory/factory-lanes.js');
+      const lanes = (await createFactoryLanesRepository().list(factoryId))._unsafeUnwrap();
+      expect(
+        lanes.map(({ name, baseBranch, finishBranch }) => ({ name, baseBranch, finishBranch })),
+      ).toEqual(
+        expect.arrayContaining([
+          { name: 'payments', baseBranch: 'release', finishBranch: 'qa' },
+          // A lane made by a label alone follows the factory's settings.
+          { name: 'search', baseBranch: null, finishBranch: null },
+        ]),
+      );
     });
 
     test('an issue with the labels of two lanes is not admitted, and says which', async () => {
@@ -1073,6 +1129,16 @@ describe('factory watcher', () => {
         await poll.ticks[0]!();
         expect(github.merges).toBe(1);
         expect(syncState()).toEqual({ sync_state: 'idle', last_synced_base_sha: 'dev-2' });
+      });
+
+      test('a lane with its own base syncs with that branch, not with "merge into" (D13)', async () => {
+        const { poll, github } = await factoryWithLane({
+          laneSync: { heads: { dev: 'dev-2', release: 'rel-5', 'feature/a': 'a-1' } },
+        });
+        testDb.sqlite.run(`UPDATE factory_lanes SET base_branch = 'release'`);
+        await poll.ticks[0]!();
+        expect(github.syncCalls).toContain('merge rel-5 into factory/sync/a');
+        expect(github.syncCalls).not.toContain('merge dev-2 into factory/sync/a');
       });
 
       test("a conflicting sync starts an agent on the enabler's runtime, on the scratch branch", async () => {

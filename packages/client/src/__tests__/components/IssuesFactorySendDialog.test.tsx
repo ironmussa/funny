@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, mock, test, vi } from 'bun:test';
 
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, within, waitFor } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
 import { Children, isValidElement, type ReactElement, type ReactNode } from 'react';
 
@@ -192,7 +192,7 @@ describe('IssuesFactorySendDialog lanes', () => {
     fireEvent.change(screen.getByTestId('issues-factory-lane'), {
       target: { value: 'payments' },
     });
-    expect(screen.getByTestId('issues-factory-lane-hint')).toHaveTextContent('lane/payments');
+    expect(screen.getByTestId('issues-factory-summary')).toHaveTextContent('lane/payments');
     fireEvent.click(screen.getByTestId('issues-factory-send'));
 
     await waitFor(() =>
@@ -217,7 +217,7 @@ describe('IssuesFactorySendDialog lanes', () => {
       target: { value: 'Billing' },
     });
     expect(screen.getByTestId('issues-factory-send')).toBeEnabled();
-    expect(screen.getByTestId('issues-factory-lane-hint')).toHaveTextContent('lane:billing');
+    expect(screen.getByTestId('issues-factory-summary')).toHaveTextContent('lane:billing');
   });
 
   test('without a lane, shows the branch the pull requests merge into', () => {
@@ -247,6 +247,9 @@ describe('IssuesFactorySendDialog lanes', () => {
     renderDialog({}, vi.fn(), { baseBranch: 'master' });
     fireEvent.change(screen.getByTestId('issues-factory-lane'), {
       target: { value: '__new__' },
+    });
+    fireEvent.change(screen.getByTestId('issues-factory-lane-name'), {
+      target: { value: 'billing' },
     });
     expect(screen.getByTestId('issues-factory-route-finish')).toHaveTextContent(
       'Same as Starts from',
@@ -283,6 +286,42 @@ describe('IssuesFactorySendDialog lanes', () => {
       }),
     );
     expect(saveSettings).not.toHaveBeenCalled();
+  });
+
+  test('the summary says, with the chosen branches, what the send will do', () => {
+    renderDialog({}, vi.fn(), { baseBranch: 'master' });
+    const summary = () => screen.getByTestId('issues-factory-summary');
+    expect(summary()).toHaveTextContent('Its pull request goes into master.');
+
+    fireEvent.change(screen.getByTestId('issues-factory-lane'), {
+      target: { value: '__new__' },
+    });
+    // No summary of a lane that has no valid name yet.
+    expect(screen.queryByTestId('issues-factory-summary')).toBeNull();
+    fireEvent.change(screen.getByTestId('issues-factory-lane-name'), {
+      target: { value: 'billing' },
+    });
+    fireEvent.click(screen.getByTestId('issues-factory-route-finish-picker'));
+    expect(summary()).toHaveTextContent('The lane branch lane/billing is created from master');
+    expect(summary()).toHaveTextContent('from lane/billing into qa');
+    expect(summary()).not.toHaveTextContent('only to the issues you send now');
+    // Branches and the lane label show as chips, not as plain words in the sentence.
+    expect(within(summary()).getByTestId('issues-factory-summary-label')).toHaveTextContent(
+      'lane:billing',
+    );
+    expect(
+      within(summary()).getAllByTestId('issues-factory-summary-lane-branch')[0],
+    ).toHaveTextContent('lane/billing');
+    expect(within(summary()).getAllByTestId('issues-factory-summary-base')[0]).toHaveTextContent(
+      'master',
+    );
+    expect(within(summary()).getByTestId('issues-factory-summary-finish')).toHaveTextContent('qa');
+  });
+
+  test('the repository default stays a phrase in the summary, not a branch chip', () => {
+    renderDialog();
+    const summary = screen.getByTestId('issues-factory-summary');
+    expect(within(summary).queryByTestId('issues-factory-summary-base')).toBeNull();
   });
 
   test('warns about an issue already in another lane', () => {

@@ -1,5 +1,6 @@
 import type { EnrichedGitHubIssue } from '@funny/shared';
 import { Tag } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import { BranchBadge } from '@/components/BranchBadge';
 import { PRBadge } from '@/components/PRBadge';
@@ -20,24 +21,81 @@ export function IssueLabelBadges({
   issue,
   plain = false,
   className,
+  onLabelClick,
+  activeLabels,
 }: {
   issue: EnrichedGitHubIssue;
   plain?: boolean;
   className?: string;
+  /**
+   * When set, each label chip becomes a button: clicking it toggles that label
+   * as an issue filter. Without it the chips are plain, non-interactive tags.
+   */
+  onLabelClick?: (name: string) => void;
+  /** Names of the labels currently used as filters, shown pressed. */
+  activeLabels?: readonly string[];
 }) {
+  const { t } = useTranslation();
   return (
     <>
-      {issue.labels.map((label) => (
-        <LabelBadge
-          key={label.name}
-          color={label.color}
-          className={className}
-          data-testid={`issue-label-${issue.number}-${label.name}`}
-        >
-          {!plain && <Tag className="size-2.5 shrink-0" aria-hidden />}
-          {label.name}
-        </LabelBadge>
-      ))}
+      {issue.labels.map((label) => {
+        if (!onLabelClick) {
+          return (
+            <LabelBadge
+              key={label.name}
+              color={label.color}
+              className={className}
+              data-testid={`issue-label-${issue.number}-${label.name}`}
+            >
+              {!plain && <Tag className="size-2.5 shrink-0" aria-hidden />}
+              {label.name}
+            </LabelBadge>
+          );
+        }
+        const active = activeLabels?.includes(label.name) ?? false;
+        return (
+          <LabelBadge
+            key={label.name}
+            color={label.color}
+            className={className}
+            interactive
+            active={active}
+            role="button"
+            tabIndex={0}
+            aria-pressed={active}
+            title={
+              active
+                ? t(
+                    'review.issues.filter.removeLabelFilter',
+                    'Remove the “{{label}}” label filter',
+                    {
+                      label: label.name,
+                    },
+                  )
+                : t('review.issues.filter.filterByLabel', 'Filter by label “{{label}}”', {
+                    label: label.name,
+                  })
+            }
+            onClick={(e) => {
+              // The chip sits inside the row's clickable title line; keep its
+              // click from opening the issue.
+              e.stopPropagation();
+              onLabelClick(label.name);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                e.stopPropagation();
+                onLabelClick(label.name);
+              }
+            }}
+            data-testid={`issue-label-${issue.number}-${label.name}`}
+          >
+            {!plain && <Tag className="size-2.5 shrink-0" aria-hidden />}
+            {label.name}
+          </LabelBadge>
+        );
+      })}
     </>
   );
 }

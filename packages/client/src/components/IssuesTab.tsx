@@ -37,6 +37,7 @@ import { ToolbarCount } from '@/components/review-pane/ToolbarCount';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { TriCheckbox } from '@/components/ui/tri-checkbox';
 import { useIssueFilterOptions } from '@/data/issue-filters/hooks';
 import { useGitHubProjectId } from '@/hooks/use-github-project-id';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
@@ -79,6 +80,19 @@ export function IssuesTab({ visible }: IssuesTabProps) {
 function IssuesContent({ visible }: IssuesTabProps) {
   const { t } = useTranslation();
   const projectId = useGitHubProjectId();
+  if (!projectId) {
+    return (
+      <EmptyState
+        icon={CircleDot}
+        title={t('review.issues.noProject', 'Select a project to view issues')}
+      />
+    );
+  }
+  return <ProjectIssues projectId={projectId} visible={visible} />;
+}
+
+function ProjectIssues({ projectId, visible }: IssuesTabProps & { projectId: string }) {
+  const { t } = useTranslation();
   const startNewThreadFromIssue = useUIStore((s) => s.startNewThreadFromIssue);
   const [state, setState] = useState<IssueState>('open');
   // Filters belong to the project: switching projects starts without any.
@@ -87,6 +101,7 @@ function IssuesContent({ visible }: IssuesTabProps) {
   ]);
   const filterOptions = useIssueFilterOptions(projectId, !!visible);
   const [selectedIssue, setSelectedIssue] = useState<EnrichedGitHubIssue | null>(null);
+  const factory = useIssueFactory(projectId);
 
   const fetchPage = useMemo<FetchGitHubListPage<EnrichedGitHubIssue> | null>(() => {
     if (!projectId) return null;
@@ -108,10 +123,11 @@ function IssuesContent({ visible }: IssuesTabProps) {
     errorFallback: t('issues.error', 'Failed to load issues'),
   });
   const { repoInfo } = list;
+  const selection = useIssueSelection(list.items, factory, [projectId, state, filters]);
 
   const handleCreateThread = useCallback(
     (issue: EnrichedGitHubIssue) => {
-      if (!projectId || !repoInfo) return;
+      if (!repoInfo) return;
       startNewThreadFromIssue(projectId, {
         prompt: buildIssueThreadPrompt(issue, repoInfo),
         branchName: issue.suggestedBranchName,
@@ -121,14 +137,18 @@ function IssuesContent({ visible }: IssuesTabProps) {
     [projectId, repoInfo, startNewThreadFromIssue],
   );
 
-  if (!projectId) {
-    return (
-      <EmptyState
-        icon={CircleDot}
-        title={t('review.issues.noProject', 'Select a project to view issues')}
-      />
-    );
-  }
+  // Clicking a label chip on a row toggles that label in the Labels filter, the
+  // same value the filter bar's multi-select sets.
+  const toggleLabel = useCallback(
+    (name: string) =>
+      setFilters((current) => ({
+        ...current,
+        labels: current.labels.includes(name)
+          ? current.labels.filter((l) => l !== name)
+          : [...current.labels, name],
+      })),
+    [setFilters],
+  );
 
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-testid="issues-tab">
@@ -138,24 +158,49 @@ function IssuesContent({ visible }: IssuesTabProps) {
         repoInfo={repoInfo}
         count={list.items.length}
       />
-      <IssueFilterBar
-        value={filters}
-        onChange={setFilters}
-        options={filterOptions.options}
-        optionsLoading={filterOptions.loading}
-        state={state}
-        onStateChange={setState}
-      />
+      {/* While issues are selected, their actions take the filters' place. */}
+      {selection.selected.length > 0 ? (
+        <IssuesSelectionBar
+          projectId={projectId}
+          factory={factory}
+          selected={selection.selected}
+          sendable={selection.sendable}
+          labelsOf={(n) =>
+            list.items.find((issue) => issue.number === n)?.labels.map((label) => label.name) ?? []
+          }
+          onSent={selection.leave}
+          onDeleted={(deleted) => {
+            selection.leave(deleted);
+            if (deleted.length > 0) list.refresh();
+          }}
+          onClear={selection.clear}
+          leading={<IssuesSelectAll selection={selection} />}
+        />
+      ) : (
+        <IssueFilterBar
+          value={filters}
+          onChange={setFilters}
+          options={filterOptions.options}
+          optionsLoading={filterOptions.loading}
+          state={state}
+          onStateChange={setState}
+          leading={<IssuesSelectAll selection={selection} />}
+        />
+      )}
       <IssuesBody
         projectId={projectId}
+        factory={factory}
+        selected={selection.selected}
+        onToggle={selection.toggle}
         issues={list.items}
         loading={list.loading}
         error={list.error}
         state={state}
         filtered={hasActiveIssueFilters(filters)}
+        activeLabels={filters.labels}
+        onToggleLabel={toggleLabel}
         hasMore={list.hasMore}
         onLoadMore={list.loadMore}
-        onRefresh={list.refresh}
         onOpenIssue={setSelectedIssue}
       />
       {selectedIssue && (
@@ -206,26 +251,36 @@ function IssuesToolbar({
 
 function IssuesBody({
   projectId,
+  factory,
+  selected,
+  onToggle,
   issues,
   loading,
   error,
   state,
   filtered,
+  activeLabels,
+  onToggleLabel,
   hasMore,
   onLoadMore,
-  onRefresh,
   onOpenIssue,
 }: {
   projectId: string;
+  factory: IssueFactory;
+  selected: number[];
+  onToggle: (issueNumber: number) => void;
   issues: EnrichedGitHubIssue[];
   loading: boolean;
   error: string | null;
   state: IssueState;
   /** A filter is set: the empty state says no issue matches, not that there are none. */
   filtered: boolean;
+  /** Labels currently filtered on, so a row's active label chips show pressed. */
+  activeLabels: readonly string[];
+  /** Toggle a label in the Labels filter when its chip on a row is clicked. */
+  onToggleLabel: (name: string) => void;
   hasMore: boolean;
   onLoadMore: () => void;
-  onRefresh: () => void;
   onOpenIssue: (issue: EnrichedGitHubIssue) => void;
 }) {
   const { t } = useTranslation();
@@ -264,11 +319,15 @@ function IssuesBody({
   return (
     <IssuesList
       projectId={projectId}
+      factory={factory}
+      selected={selected}
+      onToggle={onToggle}
       issues={issues}
       loading={loading}
+      activeLabels={activeLabels}
+      onToggleLabel={onToggleLabel}
       hasMore={hasMore}
       onLoadMore={onLoadMore}
-      onRefresh={onRefresh}
       onOpenIssue={onOpenIssue}
     />
   );
@@ -277,30 +336,31 @@ function IssuesBody({
 /** The most issues one selection takes: what one send or one delete accepts. */
 const MAX_SELECTED = Math.min(MAX_ISSUES_PER_SEND, MAX_ISSUES_PER_DELETE);
 
+interface IssueSelection {
+  /** The selected issues that can still be selected. */
+  selected: number[];
+  /** The selected issues that can go to the factory. */
+  sendable: number[];
+  /** The listed issues a checkbox could select now. */
+  selectable: number[];
+  toggle: (issueNumber: number) => void;
+  /** Select every selectable issue (up to MAX_SELECTED), or none if all are selected. */
+  toggleAll: () => void;
+  /** Drop these issues from the selection (sent or deleted). */
+  leave: (gone: number[]) => void;
+  clear: () => void;
+}
+
 /**
- * The issues, plus their state in the caller's factory, and the selection
- * that is sent to it (change factory-manual-queue) or deleted.
+ * The selection that is sent to the factory (change factory-manual-queue) or
+ * deleted. It starts empty again when the project, the state or a filter changes.
  */
-function IssuesList({
-  projectId,
-  issues,
-  loading,
-  hasMore,
-  onLoadMore,
-  onRefresh,
-  onOpenIssue,
-}: {
-  projectId: string;
-  issues: EnrichedGitHubIssue[];
-  loading: boolean;
-  hasMore: boolean;
-  onLoadMore: () => void;
-  onRefresh: () => void;
-  onOpenIssue: (issue: EnrichedGitHubIssue) => void;
-}) {
-  const now = useMinuteTick();
-  const factory = useIssueFactory(projectId);
-  const [selected, setSelected] = useState<number[]>([]);
+function useIssueSelection(
+  issues: EnrichedGitHubIssue[],
+  factory: IssueFactory,
+  resetKeys: readonly unknown[],
+): IssueSelection {
+  const [selected, setSelected] = useResettableState<number[]>([], resetKeys);
   // One send or delete takes at most MAX_SELECTED issues: past that, a checkbox adds nothing.
   const toggle = useCallback(
     (n: number) =>
@@ -308,22 +368,85 @@ function IssuesList({
         if (current.includes(n)) return current.filter((x) => x !== n);
         return current.length < MAX_SELECTED ? [...current, n] : current;
       }),
-    [],
+    [setSelected],
+  );
+  const selectable = issues.flatMap((issue) =>
+    canSelectIssue(factory, issue) ? [issue.number] : [],
   );
   // A selected issue that can no longer be selected (it entered the factory,
   // or left the list) leaves the selection for good, so it does not come back
   // if its run is cancelled.
-  const selectable = selected.filter((n) => {
-    const issue = issues.find((i) => i.number === n);
-    return issue ? canSelectIssue(factory, issue) : false;
-  });
-  if (selectable.length !== selected.length) setSelected(selectable);
-  const sendable = selectable.filter((n) => {
+  const kept = selected.filter((n) => selectable.includes(n));
+  if (kept.length !== selected.length) setSelected(kept);
+  const sendable = kept.filter((n) => {
     const issue = issues.find((i) => i.number === n);
     return issue ? canSendIssue(factory, issue) : false;
   });
-  const leave = (gone: number[]) =>
-    setSelected((current) => current.filter((n) => !gone.includes(n)));
+  const allSelected = kept.length > 0 && kept.length >= Math.min(selectable.length, MAX_SELECTED);
+  return {
+    selected: kept,
+    sendable,
+    selectable,
+    toggle,
+    toggleAll: () => setSelected(allSelected ? [] : selectable.slice(0, MAX_SELECTED)),
+    leave: (gone) => setSelected((current) => current.filter((n) => !gone.includes(n))),
+    clear: () => setSelected([]),
+  };
+}
+
+/**
+ * The checkbox before the filters (or the selection's actions) that selects
+ * every issue of the list a checkbox could select, in the rows' checkbox column.
+ */
+function IssuesSelectAll({ selection }: { selection: IssueSelection }) {
+  const { t } = useTranslation();
+  if (selection.selectable.length === 0) return null;
+  const count = selection.selected.length;
+  const state =
+    count === 0
+      ? 'unchecked'
+      : count >= Math.min(selection.selectable.length, MAX_SELECTED)
+        ? 'checked'
+        : 'indeterminate';
+  return (
+    <span className="icon-base ml-1 grid shrink-0 place-items-center">
+      <TriCheckbox
+        state={state}
+        onToggle={selection.toggleAll}
+        aria-label={t('issues.selectAll', 'Select all issues')}
+        data-testid="issues-select-all"
+      />
+    </span>
+  );
+}
+
+/** The issues, plus their state in the caller's factory and their selection checkbox. */
+function IssuesList({
+  projectId,
+  factory,
+  selected,
+  onToggle,
+  issues,
+  loading,
+  activeLabels,
+  onToggleLabel,
+  hasMore,
+  onLoadMore,
+  onOpenIssue,
+}: {
+  projectId: string;
+  factory: IssueFactory;
+  selected: number[];
+  onToggle: (issueNumber: number) => void;
+  issues: EnrichedGitHubIssue[];
+  loading: boolean;
+  activeLabels: readonly string[];
+  onToggleLabel: (name: string) => void;
+  hasMore: boolean;
+  onLoadMore: () => void;
+  onOpenIssue: (issue: EnrichedGitHubIssue) => void;
+}) {
+  const now = useMinuteTick();
 
   return (
     <>
@@ -337,9 +460,11 @@ function IssuesList({
               issue={issue}
               now={now}
               factory={factory}
-              selected={selectable.includes(issue.number)}
-              onToggle={toggle}
+              selected={selected.includes(issue.number)}
+              onToggle={onToggle}
               onOpen={onOpenIssue}
+              activeLabels={activeLabels}
+              onToggleLabel={onToggleLabel}
             />
           ))}
         </div>
@@ -352,23 +477,6 @@ function IssuesList({
           testId="issues-load-more"
         />
       </ScrollArea>
-      {selectable.length > 0 && (
-        <IssuesSelectionBar
-          projectId={projectId}
-          factory={factory}
-          selected={selectable}
-          sendable={sendable}
-          labelsOf={(n) =>
-            issues.find((issue) => issue.number === n)?.labels.map((label) => label.name) ?? []
-          }
-          onSent={leave}
-          onDeleted={(deleted) => {
-            leave(deleted);
-            if (deleted.length > 0) onRefresh();
-          }}
-          onClear={() => setSelected([])}
-        />
-      )}
     </>
   );
 }
@@ -390,6 +498,8 @@ function IssueRow({
   selected,
   onToggle,
   onOpen,
+  activeLabels,
+  onToggleLabel,
 }: {
   projectId: string;
   issue: EnrichedGitHubIssue;
@@ -398,6 +508,8 @@ function IssueRow({
   selected: boolean;
   onToggle: (issueNumber: number) => void;
   onOpen: (issue: EnrichedGitHubIssue) => void;
+  activeLabels: readonly string[];
+  onToggleLabel: (name: string) => void;
 }) {
   const { t } = useTranslation();
   const factoryRun = factory.active ? factory.latestRun.get(issue.number) : undefined;
@@ -429,7 +541,13 @@ function IssueRow({
           </button>
           {issue.labels.length > 0 && (
             <span data-testid={`issue-tags-${issue.number}`}>
-              <IssueLabelBadges issue={issue} plain className="ml-1 align-middle" />
+              <IssueLabelBadges
+                issue={issue}
+                plain
+                className="ml-1 align-middle"
+                activeLabels={activeLabels}
+                onLabelClick={onToggleLabel}
+              />
             </span>
           )}
         </p>

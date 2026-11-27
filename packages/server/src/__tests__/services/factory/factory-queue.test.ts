@@ -60,6 +60,8 @@ interface Script {
   noRepo?: boolean;
   /** No GitHub App token can be minted. */
   noToken?: boolean;
+  /** The branches GitHub has (a send that names its own branches asks). */
+  branches?: string[];
 }
 
 /** The fake GitHub port, with the merges and opened issues the test reads back. */
@@ -80,6 +82,12 @@ function fakeGithub(script: Script = {}): FakeGithub {
       return okAsync({ number: 77, url: 'https://github.com/o/r/issues/77' });
     },
     resolveRepo: async () => (script.noRepo ? null : 'o/r'),
+    // SAFETY: a send reads only whether a branch exists.
+    laneBranches: () =>
+      ({
+        branchHead: (branch: string) =>
+          okAsync(script.branches?.includes(branch) ? `${branch}-head` : null),
+      }) as never,
     listReadyIssues: () => okAsync(script.labelled ?? []),
     getIssue: (_reader: unknown, number: number) => {
       if (script.noToken) {
@@ -334,6 +342,42 @@ describe('sending issues', () => {
         [15, 'requested', 'manual', 'issue-to-pr'],
       ]),
     );
+  });
+
+  test('a send keeps the branches it chose on its own runs only (D13)', async () => {
+    const { factoryId, queue } = await setUp({ script: { branches: ['release', 'qa'] } });
+
+    (
+      await queue.submit(factoryId, { issueNumbers: [12], flowName: 'issue-to-pr' })
+    )._unsafeUnwrap();
+    const sent = await queue.submit(factoryId, {
+      issueNumbers: [15],
+      flowName: 'issue-to-pr',
+      route: { lane: { name: 'pay', baseBranch: 'release', finishBranch: 'qa' } },
+    });
+
+    expect(sent._unsafeUnwrap().accepted).toEqual([15]);
+    const runs = await runsOf(factoryId);
+    expect(runs.find((r) => r.issueNumber === 15)!.requestedRoute).toEqual({
+      lane: { name: 'pay', baseBranch: 'release', finishBranch: 'qa' },
+    });
+    expect(runs.find((r) => r.issueNumber === 12)!.requestedRoute).toBeNull();
+  });
+
+  test('a send that names a branch GitHub does not have is refused, and queues nothing', async () => {
+    const { factoryId, queue } = await setUp({ script: { branches: ['release'] } });
+
+    const sent = await queue.submit(factoryId, {
+      issueNumbers: [12],
+      flowName: 'issue-to-pr',
+      route: { baseBranch: 'relase' },
+    });
+
+    expect(sent._unsafeUnwrapErr()).toMatchObject({
+      kind: 'invalid',
+      message: 'The branch relase does not exist on GitHub.',
+    });
+    expect(await runsOf(factoryId)).toEqual([]);
   });
 
   test('a queued run keeps its issue title, so the board can name it before it has a thread', async () => {

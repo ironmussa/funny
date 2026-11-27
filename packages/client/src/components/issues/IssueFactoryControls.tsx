@@ -5,17 +5,14 @@
  * start threads on the project selects issues; only one with a factory sends.
  */
 import { MAX_ISSUES_PER_SEND, implementingThreadOf } from '@funny/shared/contracts/factory';
-import type { FactoryLane, FactoryRunRoute } from '@funny/shared/contracts/factory';
 import type { DomainError } from '@funny/shared/errors';
 import type { TFunction } from 'i18next';
-import { Factory, Info, RotateCw, Send, X } from 'lucide-react';
+import { Factory, RotateCw, Send, X } from 'lucide-react';
 import { okAsync, type ResultAsync } from 'neverthrow';
 import { useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
-import { BranchBadge } from '@/components/BranchBadge';
-import { BranchPicker } from '@/components/SearchablePicker';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -58,6 +55,15 @@ import {
 import { getThreadRoute } from '@/lib/thread-variant';
 import { toastError } from '@/lib/toast-error';
 import { cn } from '@/lib/utils';
+
+import {
+  FieldHint,
+  FieldRow,
+  IssuesFactoryRoute,
+  SendSummary,
+  sendRouteOf,
+  type RouteChoice,
+} from './IssueFactorySendRoute';
 
 export interface IssueFactory {
   /** The caller may steer the project: select issues, delete them. */
@@ -340,194 +346,6 @@ function reportSend(t: TFunction, result: FactorySubmitResult): void {
   }
 }
 
-/**
- * The popup the selection bar's "Send to factory" opens: the issues that will
- * go, the flow to run them with, why the send is off and what the selection
- * waits on. It closes once the factory accepted the send.
- */
-const REPO_DEFAULT = '__repo_default__';
-const NO_BRANCHES: string[] = [];
-
-/** One row of the send dialog: a label in a fixed column, then its control. */
-function FieldRow({
-  label,
-  children,
-  testId,
-}: {
-  label: string;
-  children: ReactNode;
-  testId?: string;
-}) {
-  return (
-    <div className="flex min-w-0 items-center gap-3" data-testid={testId}>
-      <span className="text-muted-foreground w-20 shrink-0">{label}</span>
-      <div className="flex min-w-0 flex-1 items-center gap-2">{children}</div>
-    </div>
-  );
-}
-
-/** A muted line under a row, aligned with the controls. */
-function FieldHint({ children, testId }: { children: ReactNode; testId?: string }) {
-  return (
-    <p className="text-muted-foreground -mt-1 pl-[calc(5rem+0.75rem)]" data-testid={testId}>
-      {children}
-    </p>
-  );
-}
-
-/**
- * A branch chosen in the send dialog for the issues being sent: the branches
- * on origin first, then local ones, plus one "empty" item (the repository
- * default, or "Same as Starts from" for the finish branch).
- */
-function RouteBranchPicker({
-  projectId,
-  value,
-  emptyLabel,
-  onChange,
-  testId,
-}: {
-  projectId: string;
-  value: string;
-  emptyLabel: string;
-  onChange: (branch: string) => void;
-  testId: string;
-}) {
-  const { data } = useDataQuery(projectBranchesQuery(projectId));
-  const remote = data?.remoteBranches ?? NO_BRANCHES;
-  const branches = [...new Set([...remote, ...(data?.branches ?? NO_BRANCHES)])];
-  return (
-    <BranchPicker
-      branches={branches}
-      remoteBranches={remote}
-      defaultBranch={data?.defaultBranch}
-      selected={value}
-      onChange={(branch) => {
-        const next = branch === REPO_DEFAULT ? '' : branch;
-        if (next !== value) onChange(next);
-      }}
-      extraItems={[{ key: REPO_DEFAULT, label: emptyLabel, isSelected: !value }]}
-      placeholder={emptyLabel}
-      triggerClassName="flex h-6 min-w-0 max-w-[220px] items-center justify-between gap-2 rounded-md border border-input bg-background px-2 text-xs hover:bg-accent/50"
-      side="bottom"
-      align="start"
-      width="w-72"
-      compact
-      showCopy={false}
-      testId={testId}
-    />
-  );
-}
-
-/** The branches the dialog shows: '' is the repository default / "same as Starts from". */
-interface RouteChoice {
-  base: string;
-  finish: string;
-}
-
-/**
- * The route the send asks for (change factory-lanes, D13): only what differs
- * from the factory's settings, as real branch names, so an untouched dialog
- * sends nothing and the issues follow the settings. `defaultBranch` names the
- * repository default when the dialog chose it; unknown, that choice is left
- * to the factory.
- */
-export function sendRouteOf(
-  choice: RouteChoice,
-  settings: Pick<FactorySettings, 'baseBranch' | 'laneFinishBranch'>,
-  newLane: string | null,
-  defaultBranch: string | undefined,
-): FactoryRunRoute | undefined {
-  const base = choice.base || defaultBranch;
-  const baseBranch = choice.base !== settings.baseBranch ? base : undefined;
-  if (newLane === null) return baseBranch ? { baseBranch } : undefined;
-  const finishBranch =
-    choice.finish !== settings.laneFinishBranch ? choice.finish || base : undefined;
-  return baseBranch || finishBranch
-    ? { lane: { name: newLane, baseBranch, finishBranch } }
-    : undefined;
-}
-
-/** A branch a lane already has: shown, not chosen. */
-function FixedBranch({ branch, fallback }: { branch: string; fallback: string }) {
-  return branch ? <BranchBadge branch={branch} /> : <span>{fallback}</span>;
-}
-
-/**
- * Where the sent issues land (change factory-lanes): without a lane, each
- * pull request merges into "Merge into"; in a lane, into the lane's branch,
- * which starts from "Starts from" and goes to "Finish into" when the lane is
- * finished. The branches chosen here are for the issues being sent: a new
- * lane keeps them, and the factory's settings do not change. A lane that
- * exists shows the branches it was made with.
- */
-function IssuesFactoryRoute({
-  projectId,
-  settings,
-  lane,
-  inLane,
-  choice,
-  onChoice,
-}: {
-  projectId: string;
-  settings: FactorySettings;
-  /** The existing lane the issues go to; null for no lane or a new one. */
-  lane: FactoryLane | null;
-  inLane: boolean;
-  choice: RouteChoice;
-  onChoice: (choice: RouteChoice) => void;
-}) {
-  const { t } = useTranslation();
-  const repoDefault = t('settings.projectFactoryBaseBranchDefault', 'Repository default');
-  const sameAsStart = t('factory.routeSameAsStart', 'Same as Starts from');
-  const laneBase = lane ? (lane.baseBranch ?? settings.baseBranch) : '';
-  return (
-    <>
-      <FieldRow
-        label={
-          inLane
-            ? t('factory.routeStartsFrom', 'Starts from')
-            : t('settings.projectFactoryBaseBranch', 'Merge into')
-        }
-        testId="issues-factory-route-base"
-      >
-        {lane ? (
-          <FixedBranch branch={laneBase} fallback={repoDefault} />
-        ) : (
-          <RouteBranchPicker
-            projectId={projectId}
-            value={choice.base}
-            emptyLabel={repoDefault}
-            onChange={(base) => onChoice({ ...choice, base })}
-            testId="issues-factory-route-base-picker"
-          />
-        )}
-      </FieldRow>
-      {inLane && (
-        <FieldRow
-          label={t('settings.projectFactoryLaneFinishBranch', 'Finish into')}
-          testId="issues-factory-route-finish"
-        >
-          {lane ? (
-            <FixedBranch
-              branch={lane.finishBranch ?? (settings.laneFinishBranch || laneBase)}
-              fallback={sameAsStart}
-            />
-          ) : (
-            <RouteBranchPicker
-              projectId={projectId}
-              value={choice.finish}
-              emptyLabel={sameAsStart}
-              onChange={(finish) => onChoice({ ...choice, finish })}
-              testId="issues-factory-route-finish-picker"
-            />
-          )}
-        </FieldRow>
-      )}
-    </>
-  );
-}
-
 /** The lane select's value for "leave the issues' labels as they are". */
 const KEEP_LANE = '__keep__';
 /** The lane select's value for "a lane that does not exist yet". */
@@ -601,6 +419,11 @@ function FlowField({
   );
 }
 
+/**
+ * The popup the selection bar's "Send to factory" opens: the issues that will
+ * go, the flow to run them with, why the send is off and what the selection
+ * waits on. It closes once the factory accepted the send.
+ */
 export function IssuesFactorySendDialog({
   open,
   onOpenChange,
@@ -644,6 +467,17 @@ export function IssuesFactorySendDialog({
   });
   const { data: branchData } = useDataQuery(projectBranchesQuery(projectId));
   const existingLane = activeLanes.find((lane) => lane.name === laneChoice) ?? null;
+  const defaultBranch = branchData?.defaultBranch ?? undefined;
+  // The branches as names to read: an existing lane's own, else the ones chosen here.
+  const baseChoice = existingLane ? (existingLane.baseBranch ?? settings.baseBranch) : route.base;
+  const baseName =
+    baseChoice ||
+    defaultBranch ||
+    t('factory.routeRepoDefaultBranch', "the repository's default branch");
+  const finishChoice = existingLane
+    ? (existingLane.finishBranch ?? settings.laneFinishBranch)
+    : route.finish;
+  const finishName = finishChoice || baseName;
   const blockers = useFactoryBlockers(projectId, selected);
   const blocked = sendBlockedReason(t, settings);
 
@@ -688,9 +522,7 @@ export function IssuesFactorySendDialog({
           issues,
           flow,
           // A lane that exists keeps its branches: the send names none for it.
-          existingLane
-            ? undefined
-            : sendRouteOf(route, settings, laneName, branchData?.defaultBranch ?? undefined),
+          existingLane ? undefined : sendRouteOf(route, settings, laneName, defaultBranch),
         ),
       )
       .match(
@@ -777,22 +609,7 @@ export function IssuesFactorySendDialog({
                 )}
               </span>
             </FieldHint>
-          ) : laneLabel && laneName ? (
-            <FieldHint testId="issues-factory-lane-hint">
-              {t('factory.laneHint', 'Labels the issues {{label}} · works on {{branch}}', {
-                label: laneLabel,
-                branch: `${settings.laneBranchPrefix}${laneName}`,
-              })}
-            </FieldHint>
-          ) : (
-            laneChoice === KEEP_LANE && (
-              <FieldHint>
-                {t('factory.routeNoLaneNote', 'An issue with a {{prefix}}… label keeps its lane.', {
-                  prefix: settings.laneLabelPrefix,
-                })}
-              </FieldHint>
-            )
-          )}
+          ) : null}
           {otherLane.length > 0 && (
             <FieldHint testId="issues-factory-lane-conflict">
               <span className="text-status-warning">
@@ -811,13 +628,27 @@ export function IssuesFactorySendDialog({
             inLane={laneLabel !== null && laneName !== null}
             choice={route}
             onChoice={setRoute}
+            defaultBranch={defaultBranch}
           />
-          <p className="text-muted-foreground flex items-center gap-1.5 border-t pt-2">
-            <Info className="icon-xs shrink-0" aria-hidden />
-            {existingLane
-              ? t('factory.routeLaneFixedNote', 'A lane keeps the branches it was created with.')
-              : t('factory.routeSendOnlyNote', 'These branches apply to the issues you send now.')}
-          </p>
+          {!laneInvalid && (
+            <SendSummary
+              lane={
+                laneLabel && laneName
+                  ? {
+                      label: laneLabel,
+                      branch: existingLane?.branch ?? `${settings.laneBranchPrefix}${laneName}`,
+                      isNew: existingLane === null,
+                    }
+                  : null
+              }
+              base={baseName}
+              baseIsBranch={!!(baseChoice || defaultBranch)}
+              finish={finishName}
+              finishIsBranch={!!(finishChoice || baseChoice || defaultBranch)}
+              lanePrefix={settings.laneLabelPrefix}
+              fixed={existingLane !== null}
+            />
+          )}
           {blocked && (
             <p className="text-status-warning" data-testid="issues-factory-disabled-reason">
               {blocked}

@@ -414,6 +414,42 @@ describe('IssuesTab filters', () => {
     fireEvent.click(screen.getByTestId('issues-filter-clear'));
     await waitFor(() => expect(lastParams()).toMatchObject({ labels: [], types: [] }));
   });
+
+  test('clicking a label chip on a row filters by it, and clicking it again clears it', async () => {
+    apiMock.githubIssuesEnriched.mockReturnValue(
+      okAsync({
+        owner: 'acme',
+        repo: 'repo',
+        hasMore: false,
+        issues: [
+          {
+            number: 5,
+            title: 'Checkout fails',
+            body: '',
+            state: 'open',
+            html_url: 'https://github.com/acme/repo/issues/5',
+            labels: [{ name: 'ENV · PROD', color: '1d76db' }],
+            comments: 0,
+            created_at: '2026-01-01T00:00:00Z',
+          },
+        ],
+      }),
+    );
+    renderWithProviders(<IssuesTab visible />);
+    const lastParams = () => apiMock.githubIssuesEnriched.mock.calls.at(-1)?.[1];
+    const chip = await screen.findByTestId('issue-label-5-ENV · PROD');
+    // The chip is a button, not a plain tag, and starts unpressed.
+    expect(chip).toHaveAttribute('role', 'button');
+    expect(chip).toHaveAttribute('aria-pressed', 'false');
+
+    fireEvent.click(chip);
+    await waitFor(() => expect(lastParams()).toMatchObject({ labels: ['ENV · PROD'] }));
+    // The filter bar's Labels multi-select now holds it too.
+    expect(screen.getByTestId('issue-label-5-ENV · PROD')).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.click(screen.getByTestId('issue-label-5-ENV · PROD'));
+    await waitFor(() => expect(lastParams()).toMatchObject({ labels: [] }));
+  });
 });
 
 describe('IssuesTab and the issue factory', () => {
@@ -589,7 +625,7 @@ describe('IssuesTab and the issue factory', () => {
 
     fireEvent.click(await screen.findByTestId('issue-factory-send-blockers-2'));
 
-    expect(factory.send).toHaveBeenCalledWith('project-1', [1], 'issue-to-pr', undefined);
+    expect(factory.send).toHaveBeenCalledWith('project-1', [1], 'issue-to-pr');
   });
 
   test('a send takes at most 50 issues: past that, a checkbox adds nothing', async () => {
@@ -622,14 +658,55 @@ describe('IssuesTab and the issue factory', () => {
     expect(box(2)).toHaveClass('opacity-0');
   });
 
-  test('the selection bar, with its send-to-factory button, sits below the issues', async () => {
+  test('a selection replaces the filters above the issues with its actions', async () => {
     showIssues([issue(1)]);
-    fireEvent.click(await screen.findByTestId('issue-select-1'));
+    await screen.findByTestId('issue-item-1');
+    expect(screen.getByTestId('issues-filter-bar')).toBeInTheDocument();
 
+    fireEvent.click(screen.getByTestId('issue-select-1'));
+
+    expect(screen.queryByTestId('issues-filter-bar')).toBeNull();
     const bar = screen.getByTestId('issues-selection-bar');
     const row = screen.getByTestId('issue-item-1');
-    expect(bar.compareDocumentPosition(row) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
+    expect(bar.compareDocumentPosition(row) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(within(bar).getByTestId('issues-selection-send-factory')).toBeEnabled();
+
+    fireEvent.click(screen.getByTestId('issues-selection-clear'));
+    expect(screen.queryByTestId('issues-selection-bar')).toBeNull();
+    expect(screen.getByTestId('issues-filter-bar')).toBeInTheDocument();
+  });
+
+  test('the select-all checkbox selects every selectable issue, then none', async () => {
+    factory.runs = [factoryRun({ id: 'b', issueNumber: 2, state: 'waiting_ci' })];
+    showIssues([issue(1), issue(2), issue(3, 'closed')]);
+    await screen.findByTestId('issue-item-1');
+    const selectAll = () => screen.getByTestId('issues-select-all');
+    expect(selectAll()).toHaveAttribute('aria-checked', 'false');
+
+    fireEvent.click(selectAll());
+    // #2 is in the factory: it has no checkbox, so select-all leaves it out.
+    expect(screen.getByTestId('issues-selection-count')).toHaveTextContent(
+      'issues.selectedCount:2',
+    );
+    expect(screen.getByTestId('issue-select-1')).toBeChecked();
+    expect(screen.getByTestId('issue-select-3')).toBeChecked();
+    expect(selectAll()).toHaveAttribute('aria-checked', 'true');
+
+    fireEvent.click(screen.getByTestId('issue-select-3'));
+    expect(selectAll()).toHaveAttribute('aria-checked', 'mixed');
+
+    fireEvent.click(selectAll());
+    expect(selectAll()).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(selectAll());
+    expect(screen.queryByTestId('issues-selection-bar')).toBeNull();
+    expect(selectAll()).toHaveAttribute('aria-checked', 'false');
+  });
+
+  test('without steer, there is no select-all checkbox', async () => {
+    factory.canSteer = false;
+    showIssues([issue(1)]);
+    await screen.findByTestId('issue-item-1');
+    expect(screen.queryByTestId('issues-select-all')).toBeNull();
   });
 
   test('selected issues are deleted after a confirmation, and the list reloads', async () => {

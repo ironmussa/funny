@@ -59,6 +59,7 @@ import type {
   FactoryFlowValidation,
   FactoryQueueCiProposal,
   FactoryReadiness,
+  FactoryRunRoute,
   FactoryIssueBlockers,
   FactoryIssuelessFlow,
   FactoryLane,
@@ -552,7 +553,7 @@ export interface FactoryPort {
   submitIssues(
     userId: string,
     projectId: string,
-    input: { issueNumbers: number[]; flowName: string },
+    input: { issueNumbers: number[]; flowName: string; route?: FactoryRunRoute },
   ): PortResult<FactorySubmitResult>;
   /** The flows a send may pick: the built-ins, plus the repository's when it can be read. */
   flows(userId: string, projectId: string): PortResult<FactoryFlowOption[]>;

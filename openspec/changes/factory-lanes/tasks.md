@@ -88,3 +88,11 @@ Phase 2 is groups 9–10. Phase 3 is group 11. Group 12 closes each phase.
 
 - [x] 14.1 Change `DEFAULT_LANE_LABEL_PREFIX` / `DEFAULT_LANE_BRANCH_PREFIX` to `lane:` / `lane/`, and add a migration that writes `feature:` / `feature/` into existing `factory_settings` rows whose prefixes are null; verify a migration test that an existing factory keeps `feature:` and a new one gets `lane:`
 - [x] 14.2 Before making a lane, refuse a branch that an active lane of another factory of the same project uses (`lane-invalid`, naming the branch); keep adopting a branch no factory uses; verify watcher tests for both cases
+
+## 15. Branches chosen at the send (D13)
+
+- [x] 15.1 Add `factory_runs.requested_route` and `factory_lanes.base_branch` / `finish_branch` (migration 146, both dialects), the `route` of `submitFactoryIssuesInput` (`factoryRunRouteSchema`) and `baseBranch` / `finishBranch` on the lane contract; verify the typecheck
+- [x] 15.2 Refuse a send that names a branch GitHub does not have, and keep the route on the queued runs; verify queue tests for both
+- [x] 15.3 At admission, run an unlaned issue on the route's branch, and cut a new lane from the route's base and store its branches; verify watcher tests (a labelled-only lane keeps null branches)
+- [x] 15.4 Sync a lane with its own base, and finish it into its own finish branch, then "Finish into", then its base; verify a watcher test and port tests
+- [x] 15.5 In the send dialog, keep the chosen branches for the send (no settings save), send only what differs from the settings, and show an existing lane's branches without pickers; verify component tests

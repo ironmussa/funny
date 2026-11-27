@@ -253,6 +253,31 @@ still adopted.
 _Alternative:_ compare repositories instead of projects. Rejected for now: a factory resolves its
 repository from GitHub at each tick and stores none, and two projects on one repository are rare.
 
+### D13. A send may name its own branches
+
+"Merge into" and "Finish into" are one value per factory, so a person who wanted one batch of
+issues on another branch had to change the setting for every run and every lane. The send
+(`factory.submitIssues`) takes an optional `route`, kept on each queued run as JSON
+(`factory_runs.requested_route`) and read once, at admission:
+
+- `route.baseBranch`: an issue that names no lane runs on that branch instead of "Merge into"
+  (it becomes the run's frozen base, D2).
+- `route.lane` (`name`, `baseBranch`, `finishBranch`): when this run is the one that MAKES the
+  lane `name`, the lane's branch is cut from `baseBranch` and the two branches are stored on the
+  lane (`factory_lanes.base_branch`, `finish_branch`). The lane syncs with its own base (D4) and
+  "Finish lane" (D8) opens its pull request into the lane's `finish_branch`, else the factory's
+  "Finish into", else the lane's base, else "Merge into".
+
+A lane that exists keeps the branches it was made with: a later send cannot move it, since that
+would move the issues already in it. Null columns mean the factory's settings, so lanes made by a
+label alone, and every lane from before, behave as they did. The send is refused when a branch it
+names does not exist on GitHub, and a lane's branch may not be its own base or finish branch
+(`lane-invalid`). The settings and the factory's other runs are not touched.
+_Alternative:_ make the lane's row at the send, with its branches. Rejected: a lane's row means
+its branch exists (D1), and the branch is made at admission with the enabler's token, where every
+failure already has a wait reason.
+_Alternative:_ let a send change an existing lane's branches. Rejected for the reason above.
+
 ## Risks / Trade-offs
 
 - [A lane lives long and its final merge is large] → Hourly syncs keep it containing the base, so

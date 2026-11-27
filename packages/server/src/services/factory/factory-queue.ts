@@ -220,6 +220,17 @@ async function missingRouteBranch(
   return null;
 }
 
+/** The route a send may use: null when it names no branch, refused when one does not exist. */
+async function checkedRoute(
+  port: FactoryGithubPort,
+  reader: FactoryRepoReader,
+  asked: FactoryRunRoute | undefined,
+): Promise<Result<FactoryRunRoute | null, FactoryQueueError>> {
+  const route = usedRoute(asked);
+  const missing = await missingRouteBranch(port, reader, route);
+  return missing ? err({ kind: 'invalid', message: missing }) : ok(route);
+}
+
 export function createFactoryQueue(deps: FactoryQueueDeps = {}) {
   const runs = deps.runs ?? createFactoryRunsRepository();
   const batches = deps.batches ?? createFactoryBatchesRepository();
@@ -275,10 +286,8 @@ export function createFactoryQueue(deps: FactoryQueueDeps = {}) {
     const ready = await workingFactory(factoryId);
     if (ready.isErr()) return err(ready.error);
     const { port, reader } = ready.value;
-
-    const route = usedRoute(input.route);
-    const missing = await missingRouteBranch(port, reader, route);
-    if (missing) return err({ kind: 'invalid', message: missing });
+    const route = await checkedRoute(port, reader, input.route);
+    if (route.isErr()) return err(route.error);
 
     const flow = await loadFactoryFlow(input.flowName, flowReadsOf(port, reader));
     if (flow.isErr()) return err(flowRefusal(flow.error));
@@ -300,7 +309,7 @@ export function createFactoryQueue(deps: FactoryQueueDeps = {}) {
       issueNumbers: ordered,
       issueTitles: new Map(open.map((issue) => [issue.number, issue.title])),
       flowName: input.flowName,
-      route,
+      route: route.value,
     });
     if (queued.isErr()) return err({ kind: 'storage', message: queued.error.message });
     const accepted = queued.value.queued.flatMap((run) =>
@@ -437,8 +446,10 @@ export function createFactoryQueue(deps: FactoryQueueDeps = {}) {
   });
 
   return {
-    submit: (factoryId: string, input: { issueNumbers: number[]; flowName: string }) =>
-      new ResultAsync(submit(factoryId, input)),
+    submit: (
+      factoryId: string,
+      input: { issueNumbers: number[]; flowName: string; route?: FactoryRunRoute },
+    ) => new ResultAsync(submit(factoryId, input)),
 
     issuelessFlow: (factoryId: string | null, flowName: string) =>
       new ResultAsync(issuelessFlow(factoryId, flowName)),

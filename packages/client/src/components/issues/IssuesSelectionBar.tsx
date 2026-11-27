@@ -1,12 +1,12 @@
 import type { DeleteIssuesResult } from '@funny/shared/contracts/github-issues';
 /**
- * The bar under the issues while some are selected: how many, clear the
- * selection, send the ones that can go to the factory, and delete them all on
- * GitHub after a confirmation.
+ * The row that takes the filters' place above the issues while some are
+ * selected: how many, clear the selection, send the ones that can go to the
+ * factory, and delete them all on GitHub after a confirmation.
  */
 import type { TFunction } from 'i18next';
 import { Factory, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -46,6 +46,7 @@ export function IssuesSelectionBar({
   onSent,
   onDeleted,
   onClear,
+  leading,
 }: {
   projectId: string;
   factory: IssueFactory;
@@ -60,6 +61,8 @@ export function IssuesSelectionBar({
   /** The issues GitHub deleted (they leave the selection and the list). */
   onDeleted: (deleted: number[]) => void;
   onClear: () => void;
+  /** Shown before the count: the select-all checkbox. */
+  leading?: ReactNode;
 }) {
   const { t } = useTranslation();
   const [confirming, setConfirming] = useState(false);
@@ -94,10 +97,11 @@ export function IssuesSelectionBar({
 
   return (
     <div
-      className="border-sidebar-border bg-sidebar flex flex-col gap-1.5 border-t px-2 py-1.5 text-xs"
+      className="border-sidebar-border flex flex-col gap-1.5 border-b px-2 py-1.5 text-xs"
       data-testid="issues-selection-bar"
     >
-      <div className="flex items-center gap-1.5">
+      <div className="flex min-h-6 items-center gap-1.5">
+        {leading}
         <span className="text-muted-foreground" data-testid="issues-selection-count">
           {t('issues.selectedCount', { count: selected.length })}
         </span>
@@ -123,7 +127,7 @@ export function IssuesSelectionBar({
               </Button>
             </span>
           </TooltipTrigger>
-          {sendOff && <TooltipContent side="top">{sendOff}</TooltipContent>}
+          {sendOff && <TooltipContent side="bottom">{sendOff}</TooltipContent>}
         </Tooltip>
         <Button
           variant="destructive"

@@ -19,6 +19,8 @@ import { parseStoredJson } from '@funny/shared/json-validation';
 import { err, ok, type Result } from 'neverthrow';
 import type { z } from 'zod';
 
+import type { ThreadOutcome, WaitAfter } from './factory-thread-waits.js';
+
 /** The opening of a fenced block tagged `json` (three or more backticks), at a line start. */
 const JSON_FENCE_OPEN = /^[ \t]*(`{3,})[ \t]*json[ \t]*$/i;
 
@@ -110,6 +112,46 @@ export interface RoleResultPorts {
    * could not be sent or the agent did not finish.
    */
   askAgain(prompt: string): Promise<Result<string | null, string>>;
+}
+
+/** What asking a role again on its own thread needs. */
+export interface RoleFollowUpDeps {
+  signal: AbortSignal;
+  finalMessage(threadId: string): Promise<string | null>;
+  waitThread(threadId: string, signal: AbortSignal, after?: WaitAfter): Promise<ThreadOutcome>;
+  /** Absent: the role cannot be asked again, and an invalid result is final. */
+  followUp?: {
+    send(threadId: string, content: string): Promise<Result<void, string>>;
+    completedAt(threadId: string): Promise<string | null>;
+  };
+}
+
+/**
+ * The ports of a role's result on `threadId`: its final message, and the
+ * request to emit it again, sent as a follow-up on the same thread. `who`
+ * names the role in the errors ("the reviewer").
+ */
+export function roleResultPorts(
+  deps: RoleFollowUpDeps,
+  threadId: string,
+  who: string,
+): RoleResultPorts {
+  return {
+    finalMessage: () => deps.finalMessage(threadId),
+    askAgain: async (prompt) => {
+      const followUp = deps.followUp;
+      if (!followUp) return err(`${who} cannot be asked again`);
+      const completedAt = await followUp.completedAt(threadId);
+      const sentAt = new Date().toISOString();
+      const sent = await followUp.send(threadId, prompt);
+      if (sent.isErr()) return err(`the request could not be sent: ${sent.error}`);
+      const outcome = await deps.waitThread(threadId, deps.signal, { completedAt, sentAt });
+      if (outcome.status !== 'completed') {
+        return err(`${who} ended ${outcome.status} when asked again`);
+      }
+      return ok(await deps.finalMessage(threadId));
+    },
+  };
 }
 
 /**

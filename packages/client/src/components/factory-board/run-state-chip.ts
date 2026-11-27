@@ -44,6 +44,31 @@ export interface FactoryRunStateChip {
 }
 
 /**
+ * The chip of a run whose issue triage found nothing left to do for (already
+ * done, or nothing to change in the code). An issue the factory could not
+ * close waits for a person to close it: a warning.
+ */
+function closedByTriageChip(
+  t: TFunction,
+  run: Pick<FactoryRun, 'state' | 'triage'>,
+): FactoryRunStateChip | null {
+  const closed = run.state === 'done';
+  if (run.triage?.decision === 'already_done') {
+    return {
+      label: t('factory.state.alreadyDone', 'Already done'),
+      tone: closed ? 'success' : 'warning',
+    };
+  }
+  if (run.triage?.decision === 'not_actionable') {
+    return {
+      label: t('factory.state.notActionable', 'Nothing to change'),
+      tone: closed ? 'neutral' : 'warning',
+    };
+  }
+  return null;
+}
+
+/**
  * What the card's state chip says; a run the factory split, or whose work
  * existing issues track, says so instead of "Done".
  */
@@ -68,21 +93,8 @@ export function factoryRunStateChip(
       tone: 'info',
     };
   }
-  if (run.triage?.decision === 'already_done') {
-    // Not closed (the factory could not): a person closes the issue.
-    const closed = run.state === 'done';
-    return {
-      label: t('factory.state.alreadyDone', 'Already done'),
-      tone: closed ? 'success' : 'warning',
-    };
-  }
-  if (run.triage?.decision === 'not_actionable') {
-    // Not closed (the factory could not): a person closes the issue.
-    return {
-      label: t('factory.state.notActionable', 'Nothing to change'),
-      tone: run.state === 'done' ? 'neutral' : 'warning',
-    };
-  }
+  const closed = closedByTriageChip(t, run);
+  if (closed) return closed;
   if (run.state === 'needs_info' && run.triage?.decision === 'too_big') {
     return { label: t('factory.state.tooBig', 'Too big'), tone: 'warning' };
   }

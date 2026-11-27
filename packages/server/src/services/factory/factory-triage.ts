@@ -69,7 +69,7 @@ import {
   readOnlyRoleLaunch,
   releaseRoleWorkspace,
 } from './factory-review.js';
-import { READ_ONLY_SHELL_RULE, readRoleResult } from './factory-role-results.js';
+import { READ_ONLY_SHELL_RULE, readRoleResult, roleResultPorts } from './factory-role-results.js';
 import { HIGH_RISK_HOLD, type UpdateRunInput } from './factory-runs.js';
 import type { ThreadOutcome, WaitAfter } from './factory-thread-waits.js';
 
@@ -639,22 +639,10 @@ async function parkForSpec(
 
 /** The triage agent's validated answer, asking once more on its thread when it is invalid. */
 function resultOf(deps: FactoryTriageDeps, threadId: string) {
-  return readRoleResult(triageResultSchemaFor(deps.specStage ?? false), {
-    finalMessage: () => deps.finalMessage(threadId),
-    askAgain: async (prompt) => {
-      const followUp = deps.followUp;
-      if (!followUp) return err('the triage agent cannot be asked again');
-      const completedAt = await followUp.completedAt(threadId);
-      const sentAt = new Date().toISOString();
-      const sent = await followUp.send(threadId, prompt);
-      if (sent.isErr()) return err(`the request could not be sent: ${sent.error}`);
-      const outcome = await deps.waitThread(threadId, deps.signal, { completedAt, sentAt });
-      if (outcome.status !== 'completed') {
-        return err(`the triage agent ended ${outcome.status} when asked again`);
-      }
-      return ok(await deps.finalMessage(threadId));
-    },
-  });
+  return readRoleResult(
+    triageResultSchemaFor(deps.specStage ?? false),
+    roleResultPorts(deps, threadId, 'the triage agent'),
+  );
 }
 
 /**
@@ -688,6 +676,9 @@ function closedResult(decision: ClosingDecision, shown: readonly string[]): Acti
     metadata: { outcome: decision, decision },
   };
 }
+
+/** Triage that never ran: nothing is stored, so a later attempt triages again. */
+const noContract = (): FactoryTriage => ({ decision: 'none', at: new Date().toISOString() });
 
 export function createFactoryTriage(deps: FactoryTriageDeps) {
   const { scope } = deps;
@@ -949,6 +940,24 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
     return acted;
   }
 
+  // A run that already has its answer waits for its paths, or goes on. Null:
+  // the files it waited for changed under its contract, so triage runs again.
+  async function replay(decided: FactoryTriage): Promise<ActionResult | null> {
+    if (decided.decision === 'ready') await deps.record({ state: 'triaging' });
+    const settled = await exclusive(async () => {
+      const held = await heldForPaths(deps, decided);
+      if (held) return held;
+      if (await changedWhileHeld(deps, decided)) return null;
+      return proceed(await unheld(decided));
+    });
+    if (settled) return settled;
+    earlier = decided;
+    supersededThread = decided.threadId;
+    current = null;
+    await deps.count('triage_again_after_hold');
+    return null;
+  }
+
   return {
     /** What the run knows of its triage now. */
     current: (): FactoryTriage | null => current,
@@ -957,20 +966,8 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
     async triage(opts: TriageOpts): Promise<ActionResult> {
       // Already decided (a resumed run, or one back from a path hold): not triaged twice.
       if (current?.decision === 'ready' || current?.decision === 'none') {
-        const decided = current;
-        if (decided.decision === 'ready') await deps.record({ state: 'triaging' });
-        const settled = await exclusive(async () => {
-          const held = await heldForPaths(deps, decided);
-          if (held) return held;
-          if (await changedWhileHeld(deps, decided)) return null;
-          return proceed(await unheld(decided));
-        });
+        const settled = await replay(current);
         if (settled) return settled;
-        // The files it waited for changed under its contract: triage again, on a new thread.
-        earlier = decided;
-        supersededThread = decided.threadId;
-        current = null;
-        await deps.count('triage_again_after_hold');
       }
       const thread = await startThread(opts);
       if (thread.isErr()) {
@@ -982,9 +979,7 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
           runId: scope.runId,
           error: thread.error,
         });
-        return proceed(
-          earlier ? await unheld(earlier) : { decision: 'none', at: new Date().toISOString() },
-        );
+        return proceed(earlier ? await unheld(earlier) : noContract());
       }
       // A triage agent is running: the run is in flight and holds its slot.
       await deps.record({ state: 'triaging' });

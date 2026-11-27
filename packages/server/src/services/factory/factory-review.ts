@@ -56,7 +56,7 @@ import type {
 import type { IntegrationScope } from './factory-integrate.js';
 import { issueInputs, issueInstruction, type FactoryIssueText } from './factory-issue-text.js';
 import type { FactoryPullRequestRef } from './factory-pull-requests.js';
-import { READ_ONLY_SHELL_RULE, readRoleResult } from './factory-role-results.js';
+import { READ_ONLY_SHELL_RULE, readRoleResult, roleResultPorts } from './factory-role-results.js';
 import { withReviewVerdict, type UpdateRunInput } from './factory-runs.js';
 import { testWeakeningReport, type TestWeakeningFinding } from './factory-test-weakening.js';
 import type { ThreadOutcome, WaitAfter } from './factory-thread-waits.js';
@@ -569,22 +569,7 @@ export function createFactoryReviewer(deps: FactoryReviewerDeps) {
         path: ['checklist'],
         message: `must answer every validation item of the spec: ${validation.join(' / ')}`,
       });
-    return readRoleResult(forCommit, {
-      finalMessage: () => deps.finalMessage(threadId),
-      askAgain: async (prompt) => {
-        const followUp = deps.followUp;
-        if (!followUp) return err('the reviewer cannot be asked again');
-        const completedAt = await followUp.completedAt(threadId);
-        const sentAt = new Date().toISOString();
-        const sent = await followUp.send(threadId, prompt);
-        if (sent.isErr()) return err(`the request could not be sent: ${sent.error}`);
-        const outcome = await deps.waitThread(threadId, deps.signal, { completedAt, sentAt });
-        if (outcome.status !== 'completed') {
-          return err(`the reviewer ended ${outcome.status} when asked again`);
-        }
-        return ok(await deps.finalMessage(threadId));
-      },
-    });
+    return readRoleResult(forCommit, roleResultPorts(deps, threadId, 'the reviewer'));
   }
 
   /** Store the verdict on the run and put it on the pull request. */

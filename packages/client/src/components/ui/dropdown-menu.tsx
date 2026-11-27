@@ -135,6 +135,27 @@ const dropdownMenuItemVariants = cva(
   },
 );
 
+function getDropdownInsetClass(
+  inset?: boolean,
+  size?: 'default' | 'sm' | 'xs' | null,
+): string | false {
+  if (!inset) return false;
+  if (size === 'xs') return 'pl-6';
+  if (size === 'sm') return 'pl-7';
+  return 'pl-8';
+}
+
+function composeMenuItemClick(
+  onClick?: React.MouseEventHandler<HTMLDivElement>,
+  onSelect?: (event: Event) => void,
+): React.MouseEventHandler<HTMLDivElement> | undefined {
+  if (!onClick && !onSelect) return undefined;
+  return (event) => {
+    onClick?.(event);
+    onSelect?.(event.nativeEvent);
+  };
+}
+
 function DropdownMenuItem({
   className,
   inset,
@@ -159,18 +180,10 @@ function DropdownMenuItem({
     <MenuPrimitive.Item
       ref={ref}
       render={render ?? childElement}
-      onClick={
-        onClick || onSelect
-          ? (event) => {
-              onClick?.(event);
-              onSelect?.(event.nativeEvent);
-            }
-          : undefined
-      }
+      onClick={composeMenuItemClick(onClick, onSelect)}
       className={cn(
         dropdownMenuItemVariants({ size, variant }),
-        // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
-        inset && (size === 'xs' ? 'pl-6' : size === 'sm' ? 'pl-7' : 'pl-8'),
+        getDropdownInsetClass(inset, size),
         className,
       )}
       {...props}

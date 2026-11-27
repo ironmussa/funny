@@ -313,7 +313,9 @@ describe('PullRequestsTab', () => {
     expect(screen.getByText('Last commit by')).toBeInTheDocument();
     expect(screen.getByText('alice')).toBeInTheDocument();
     const mergeLine = screen.getByTestId('pr-merge-line-52');
-    expect(mergeLine).toHaveTextContent('argenisleon wants to merge 2 commits into');
+    await waitFor(() => {
+      expect(mergeLine).toHaveTextContent('argenisleon wants to merge 2 commits into');
+    });
     expect(mergeLine).toHaveTextContent('qa');
     expect(mergeLine).toHaveTextContent('from');
     expect(mergeLine).toHaveTextContent('other-branch');

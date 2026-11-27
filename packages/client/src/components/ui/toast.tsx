@@ -4,7 +4,7 @@ import type * as React from 'react';
 
 import { cn } from '@/lib/utils';
 
-export type ToastVariant = 'default' | 'success' | 'error' | 'warning' | 'info' | 'loading';
+type ToastVariant = 'default' | 'success' | 'error' | 'warning' | 'info' | 'loading';
 
 export interface ToastActionOptions {
   label: React.ReactNode;
@@ -187,4 +187,4 @@ function Toaster({
   );
 }
 
-export { toast, Toaster, toastManager };
+export { toast, Toaster };

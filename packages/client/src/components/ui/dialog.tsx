@@ -117,6 +117,27 @@ function bridgeAutoFocusHandler(handler?: (event: Event) => void) {
   };
 }
 
+function buildDialogContentClassName({
+  flush,
+  square,
+  compact,
+  instant,
+}: {
+  flush: boolean;
+  square: boolean | 'below-md';
+  compact: boolean;
+  instant: boolean;
+}): string {
+  return cn(
+    'fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-card p-6 shadow-xl duration-100 outline-hidden data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 rounded-lg',
+    flush && 'gap-0 p-0',
+    square === true && 'rounded-none',
+    square === 'below-md' && 'rounded-none md:rounded-lg',
+    compact && 'gap-3 p-4',
+    instant && 'duration-0 data-closed:animate-none data-open:animate-none',
+  );
+}
+
 function DialogContent({
   className,
   overlayClassName,
@@ -172,15 +193,7 @@ function DialogContent({
         aria-describedby={undefined}
         initialFocus={initialFocus ?? bridgeAutoFocusHandler(onOpenAutoFocus)}
         finalFocus={finalFocus ?? bridgeAutoFocusHandler(onCloseAutoFocus)}
-        className={cn(
-          'fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-card p-6 shadow-xl duration-100 outline-hidden data-open:animate-in data-closed:animate-out data-closed:fade-out-0 data-open:fade-in-0 data-closed:zoom-out-95 data-open:zoom-in-95 rounded-lg',
-          flush && 'gap-0 p-0',
-          square === true && 'rounded-none',
-          square === 'below-md' && 'rounded-none md:rounded-lg',
-          compact && 'gap-3 p-4',
-          instant && 'duration-0 data-closed:animate-none data-open:animate-none',
-          className,
-        )}
+        className={cn(buildDialogContentClassName({ flush, square, compact, instant }), className)}
         {...props}
       >
         {children}

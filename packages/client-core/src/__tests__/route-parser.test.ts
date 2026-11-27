@@ -39,5 +39,6 @@ describe('renderer-neutral route parser', () => {
     });
     expect(parseClientRoute('/factory')).toMatchObject({ factory: true, orgSlug: null });
     expect(parseClientRoute('/acme/factory')).toMatchObject({ factory: true, orgSlug: 'acme' });
+    expect(parseClientRoute('/kanban')).toMatchObject({ kanban: true, globalSearch: false });
   });
 });

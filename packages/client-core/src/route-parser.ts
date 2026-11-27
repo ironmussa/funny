@@ -16,6 +16,8 @@ export interface ParsedClientRoute {
   designsList: boolean;
   /** The factory view (`/factory`): the caller's factory runs across projects. */
   factory: boolean;
+  /** The full-screen kanban board (`/kanban`). */
+  kanban: boolean;
   scratchNew: boolean;
   externalClaudeSessionId: string | null;
 }
@@ -75,6 +77,7 @@ function blank(orgSlug: string | null): ParsedClientRoute {
     designId: null,
     designsList: false,
     factory: false,
+    kanban: false,
     scratchNew: false,
     externalClaudeSessionId: null,
   };
@@ -135,7 +138,8 @@ export function parseClientRoute(pathname: string): ParsedClientRoute {
   if (project) return { ...result, projectId: project.projectId ?? null };
   if (path === '/inbox') return { ...result, inbox: true };
   if (path === '/inbox/automations') return { ...result, inbox: true, inboxAutomations: true };
-  if (path === '/list' || path === '/kanban') return { ...result, globalSearch: true };
+  if (path === '/list') return { ...result, globalSearch: true };
+  if (path === '/kanban') return { ...result, kanban: true };
   const projectAnalytics = matchPath('/projects/:projectId/analytics', path);
   if (projectAnalytics) {
     return { ...result, projectId: projectAnalytics.projectId ?? null, analytics: true };

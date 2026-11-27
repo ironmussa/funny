@@ -257,6 +257,8 @@ describe('isAutomatedThread', () => {
   test("factory and automation threads are automated, a person's thread is not", () => {
     expect(isAutomatedThread(makeThread({ source: 'factory' }))).toBe(true);
     expect(isAutomatedThread(makeThread({ automationId: 'a1' }))).toBe(true);
+    // List rows of an automation run carry only `source` (no `automationId`).
+    expect(isAutomatedThread(makeThread({ source: 'automation' }))).toBe(true);
     expect(isAutomatedThread(makeThread({}))).toBe(false);
   });
 });

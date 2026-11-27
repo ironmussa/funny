@@ -167,5 +167,5 @@ export function useThreadFilterCounts(
 /** Who started a thread, as the origin filter names it. */
 function threadOrigin(thread: Thread): 'factory' | 'automation' | 'user' {
   if (isFactoryThread(thread)) return 'factory';
-  return thread.automationId ? 'automation' : 'user';
+  return thread.source === 'automation' || thread.automationId ? 'automation' : 'user';
 }

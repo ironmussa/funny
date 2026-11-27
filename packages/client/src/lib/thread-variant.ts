@@ -109,7 +109,9 @@ export function isFactoryThread(thread: { source?: string } | null | undefined):
 export function isAutomatedThread(
   thread: { source?: string; automationId?: string | null } | null | undefined,
 ): boolean {
-  return isFactoryThread(thread) || !!thread?.automationId;
+  // Automation runs carry `source: 'automation'` on the row; `automationId` is
+  // not a thread column, so list rows never have it.
+  return isFactoryThread(thread) || thread?.source === 'automation' || !!thread?.automationId;
 }
 
 // ── Capability predicates ────────────────────────────────────────

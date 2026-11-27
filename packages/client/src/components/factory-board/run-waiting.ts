@@ -40,6 +40,12 @@ function needsInfoText(t: TFunction, run: WaitingRun): string {
       'Triage found it already done; close the issue if you agree',
     );
   }
+  if (run.triage?.decision === 'not_actionable') {
+    return t(
+      'factoryBoard.waiting.notActionableOpen',
+      'Triage found nothing to change in the code; close the issue if you agree',
+    );
+  }
   return askedOnIssueText(t, run);
 }
 
@@ -72,6 +78,12 @@ function trackedByText(t: TFunction, run: WaitingRun): string | null {
 function doneText(t: TFunction, run: WaitingRun): string | null {
   if (run.triage?.decision === 'already_done') {
     return t('factoryBoard.waiting.alreadyDone', 'Already done: the factory closed the issue');
+  }
+  if (run.triage?.decision === 'not_actionable') {
+    return t(
+      'factoryBoard.waiting.notActionable',
+      'Nothing to change in the code: the factory closed the issue',
+    );
   }
   const parts = run.triage?.splitInto ?? [];
   if (parts.length === 0) return trackedByText(t, run);

@@ -107,6 +107,10 @@ function TriageItems({ triage }: { triage: FactoryTriage }) {
     needs_spec: t('factoryRunDetail.triage.needsSpec', 'Open product decisions'),
     too_big: t('factoryRunDetail.triage.tooBig', 'Proposed split'),
     already_done: t('factoryRunDetail.triage.alreadyDone', 'Already done: the evidence'),
+    not_actionable: t(
+      'factoryRunDetail.triage.notActionable',
+      'Nothing to change in the code: the evidence',
+    ),
   }[triage.decision];
   return (
     <>

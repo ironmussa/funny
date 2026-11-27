@@ -76,6 +76,13 @@ export function factoryRunStateChip(
       tone: closed ? 'success' : 'warning',
     };
   }
+  if (run.triage?.decision === 'not_actionable') {
+    // Not closed (the factory could not): a person closes the issue.
+    return {
+      label: t('factory.state.notActionable', 'Nothing to change'),
+      tone: run.state === 'done' ? 'neutral' : 'warning',
+    };
+  }
   if (run.state === 'needs_info' && run.triage?.decision === 'too_big') {
     return { label: t('factory.state.tooBig', 'Too big'), tone: 'warning' };
   }

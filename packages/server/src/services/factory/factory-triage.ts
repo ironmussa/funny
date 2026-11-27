@@ -30,11 +30,19 @@
  *   items), closes it as completed and ends the run `done`. When it cannot
  *   close the issue, the run parks in `needs_info` with the evidence posted,
  *   so a person closes it.
+ * - `not_actionable`: no change to the repository would fix what the issue
+ *   reports (a client's network, an outage of a service it does not
+ *   configure). Handled as `already_done`, with the issue closed as not
+ *   planned.
  * - No valid result after one request to emit it again: the run goes on
  *   without a contract (the reviewer then judges against the issue).
  * - A ready run whose likely paths overlap those of a run in progress leaves
  *   its slot and waits in the queue, keeping its contract (a soft hold: the
  *   paths are a prediction, and the merge lane tests every change anyway).
+ *   When it comes back and a run that changed those paths merged into its base
+ *   meanwhile, the contract was written for code that changed: triage runs
+ *   again on a new thread (a duplicate of the merged work is then
+ *   `already_done`). A contract that came from an approved spec is kept.
  *
  * One issue per triage, never a batch: issue text is untrusted, and one issue
  * must not steer another's contract.
@@ -88,10 +96,17 @@ export const SPLIT_MARKER = 'funny-factory-split-of:';
 /** The most of the parent's description a part issue carries. */
 const MAX_PARENT_BODY = 20_000;
 const MAX_PART_TITLE = 120;
+export const TRIAGE_NOT_ACTIONABLE_LINE =
+  'The issue factory found nothing to change in this repository for this issue, and closed it:';
+export const TRIAGE_NOT_ACTIONABLE_OPEN_LINE =
+  'The issue factory found nothing to change in this repository for this issue, but could not close it. Close it if you agree:';
 const TRIAGE_FOOTER =
   '_Edit the issue or comment here; the factory looks at it again when the issue changes._';
 const ALREADY_DONE_FOOTER =
   '_Reopen the issue and say what is still missing if this is wrong; the factory picks it up again when it carries its label._';
+
+const NOT_ACTIONABLE_FOOTER =
+  '_Reopen the issue and say what should change in the code if this is wrong; the factory picks it up again when it carries its label._';
 
 const WILDCARD = /[*?[{]/;
 
@@ -158,9 +173,34 @@ const COMMENT_FIRST_LINE = {
   too_big: TRIAGE_TOO_BIG_LINE,
   already_done: TRIAGE_ALREADY_DONE_LINE,
   already_done_open: TRIAGE_ALREADY_DONE_OPEN_LINE,
+  not_actionable: TRIAGE_NOT_ACTIONABLE_LINE,
+  not_actionable_open: TRIAGE_NOT_ACTIONABLE_OPEN_LINE,
 } as const;
 
+/** The footer of the comment on an issue the factory closed; the others ask for an edit. */
+const CLOSED_FOOTER: Partial<Record<keyof typeof COMMENT_FIRST_LINE, string>> = {
+  already_done: ALREADY_DONE_FOOTER,
+  not_actionable: NOT_ACTIONABLE_FOOTER,
+};
+
+/** The answers that close the issue: how GitHub records the close, and the metric. */
+const CLOSING = {
+  already_done: { reason: 'completed', error: 'The issue is already done' },
+  not_actionable: { reason: 'not_planned', error: 'Nothing to change for the issue' },
+} as const;
+type ClosingDecision = keyof typeof CLOSING;
+/** Why the factory closes an issue, as GitHub names it. */
+export type IssueCloseReason = (typeof CLOSING)[ClosingDecision]['reason'];
+
 type TriageCommentKind = keyof typeof COMMENT_FIRST_LINE;
+
+/** The comment of a run parked on its issue: an issue the factory meant to close says it could not. */
+const PARKED_COMMENT = {
+  needs_info: 'needs_info',
+  too_big: 'too_big',
+  already_done: 'already_done_open',
+  not_actionable: 'not_actionable_open',
+} as const satisfies Record<string, TriageCommentKind>;
 
 type TooBigAnswer = Extract<FactoryTriageResult, { decision: 'too_big' }>;
 type NeedsSpecAnswer = Extract<FactoryTriageResult, { decision: 'needs_spec' }>;
@@ -174,6 +214,7 @@ const PARKED_ERROR = {
   needs_info: 'The issue needs more information',
   too_big: 'The issue is too large for one change',
   already_done: 'The issue looks already done; a person closes it',
+  not_actionable: 'The issue looks like nothing to change; a person closes it',
 } as const;
 
 /** The issue comment: a fixed template around the sanitized items. */
@@ -184,7 +225,7 @@ export function triageComment(decision: TriageCommentKind, items: readonly strin
     publicItems(items)
       .map((item) => `> - ${item}`)
       .join('\n'),
-    decision === 'already_done' ? ALREADY_DONE_FOOTER : TRIAGE_FOOTER,
+    CLOSED_FOOTER[decision] ?? TRIAGE_FOOTER,
   ].join('\n\n');
 }
 
@@ -273,7 +314,7 @@ function coveredComment(existing: readonly number[]): string {
 }
 
 const RESULT_FORMAT = [
-  'One of these four, as a fenced json block:',
+  'One of these five, as a fenced json block:',
   '```json',
   '{ "decision": "ready", "contract": { "acceptanceCriteria": ["<what must be true when it is done>"], "likelyPaths": ["<glob of files the change will probably touch>"], "riskHints": ["<why it may be risky, if it is>"], "lintCleanup": false, "lintRules": [] } }',
   '```',
@@ -286,6 +327,9 @@ const RESULT_FORMAT = [
   '```json',
   '{ "decision": "already_done", "evidence": ["<what shows it is done: the commit or pull request, the check that passes now>"] }',
   '```',
+  '```json',
+  '{ "decision": "not_actionable", "evidence": ["<what shows no change to this repository would fix it>"] }',
+  '```',
 ].join('\n');
 
 /** The `needs_spec` answer, offered only while the factory's Spec stage is on. */
@@ -293,7 +337,7 @@ const NEEDS_SPEC_CHOICE =
   "- `needs_spec`: the issue is clear enough to work, but it leaves product decisions open that a wrong guess would waste: where an affordance lives, what it applies to, what happens at its edges, what a user sees when it fails. Not a technical choice the code answers (decide those and answer `ready`), and not a missing fact only the issue's author knows (that is `needs_info`). List the open decisions (at most ten), each with the answers you see, and in `findings` what you learned in the code (at most ten lines). Nothing is posted on the issue: the team settles them with a spec writer.";
 
 const RESULT_FORMAT_WITH_SPEC = [
-  RESULT_FORMAT.replace('One of these four', 'One of these five'),
+  RESULT_FORMAT.replace('One of these five', 'One of these six'),
   '```json',
   '{ "decision": "needs_spec", "decisions": [{ "question": "<an open product decision>", "options": ["<a possible answer>"] }], "findings": ["<what the code shows about it>"] }',
   '```',
@@ -308,6 +352,8 @@ function triagePrompt(input: {
   busyPaths: readonly string[];
   /** Whether `needs_spec` is offered (the factory's Spec stage). */
   specStage?: boolean;
+  /** A second triage: a change to the files this issue needs merged while its run waited. */
+  afterMerge?: boolean;
 }): string {
   const busy =
     input.busyPaths.length > 0
@@ -322,6 +368,11 @@ function triagePrompt(input: {
     `The issue is #${input.issueNumber} of ${input.repo}${input.issueUrl ? ` (${input.issueUrl})` : ''}.`,
     issueInstruction(input.issueNumber, input.issue),
     'Then read the code it is about in the checkout.',
+    ...(input.afterMerge
+      ? [
+          'This issue was triaged before, and waited for another change to the same files. That change merged, and the checkout has it. First check whether what the issue asks is now true of the code (`already_done`); if it is not, answer for the code as it is now.',
+        ]
+      : []),
     READ_ONLY_SHELL_RULE,
     // Seen in a real run: a contract without the changelog line the repository's
     // CI requires cost the implementer a CI round to find it out.
@@ -333,6 +384,7 @@ function triagePrompt(input: {
     '- `needs_info`: something the issue must say is missing or ambiguous, and a wrong guess would waste the work. Ask at most five short questions. Do not ask what the code already answers.',
     "- `too_big`: it is several independent changes. Propose the parts. A part an existing issue already covers (a sub-issue the issue lists, a part of an earlier split, an issue it names as already opened) is not a part: put that issue's number in `existing` and do not describe it in `parts`. When every part is an existing issue, `parts` is empty. Never write a part that only points at another issue.",
     '- `already_done`: what the issue asks is already true of the code in the checkout (it duplicates work already merged, or a fix already landed), so there is nothing to change. Run the check the issue names (its lint, test or command) in the checkout and see it pass: that output is the evidence, with the commit or pull request that did the work. Files, tests or commits that merely exist are not evidence, and neither is another issue being closed. The factory closes the issue on your answer: when you could not run the check, or it does not pass, it is not `already_done`.',
+    "- `not_actionable`: no change to this repository would fix what the issue reports. The failure is outside the code: a user's device or network dropped a request, or a service this repository neither contains nor configures was down or slow. The evidence is what in the issue and in the code shows it (the host that failed and that the repository does not own it; that the code already retries, times out and tells the user). It is not `not_actionable` when a change here would reasonably make it better: a request with no retry, timeout or message for the user where the repository's other requests have one is `ready`, and a report you cannot place is `needs_info`. The factory closes the issue on your answer.",
     ...(input.specStage ? [NEEDS_SPEC_CHOICE] : []),
     'Prefer `ready` when a reasonable decision can be made and stated.',
     ...(busy ? ['', busy] : []),
@@ -390,8 +442,11 @@ export interface FactoryTriageDeps {
   comment(body: string): Promise<Result<void, string>>;
   /** Take the factory's label off the issue, so it is not admitted again. */
   dropLabel?(): Promise<void>;
-  /** Close the run's issue as completed (`already_done`); absent: a person closes it. */
-  closeIssue?(): Promise<Result<void, string>>;
+  /**
+   * Close the run's issue: as completed (`already_done`) or as not planned
+   * (`not_actionable`). Absent: a person closes it.
+   */
+  closeIssue?(reason: IssueCloseReason): Promise<Result<void, string>>;
   /** Present when the factory opens a too-large issue's parts as issues (its `split` setting). */
   split?: FactorySplitDeps;
   /** When the issue last changed, by GitHub's clock (read after the comment); null when unreadable. */
@@ -400,8 +455,17 @@ export interface FactoryTriageDeps {
   issueText?(): Promise<FactoryIssueText | null>;
   /** The likely paths of the factory's other runs in progress, by issue. */
   busyPaths?(): Promise<BusyPaths[]>;
-  /** Leave the slot and wait in the queue behind `blockers` (a compare-and-set from `triaging`). */
-  hold?(blockers: number[]): Promise<boolean>;
+  /**
+   * Leave the slot and wait in the queue behind `blockers` (a compare-and-set
+   * from `triaging`), storing `triage` (the contract, marked as held) in the
+   * same write.
+   */
+  hold?(blockers: number[], triage: FactoryTriage): Promise<boolean>;
+  /**
+   * The paths changed by the factory's runs that merged into this run's base
+   * branch after `at`. Absent: a run back from a path hold keeps its contract.
+   */
+  mergedPathsSince?(at: string): Promise<string[]>;
   /**
    * Run `work` (record the contract, then check the paths) alone among the
    * factory's runs, so two triages that finish together cannot both miss the
@@ -531,7 +595,7 @@ async function heldForPaths(
   const busy = await deps.busyPaths();
   const blockers = overlappingIssues(paths, busy);
   if (blockers.length === 0) return null;
-  if (!(await deps.hold(blockers))) return null;
+  if (!(await deps.hold(blockers, { ...triage, heldForPaths: true }))) return null;
   await deps.count('triage_path_hold');
   const named = blockers.map((issue) => `#${issue}`).join(', ');
   return {
@@ -573,13 +637,67 @@ async function parkForSpec(
   };
 }
 
+/** The triage agent's validated answer, asking once more on its thread when it is invalid. */
+function resultOf(deps: FactoryTriageDeps, threadId: string) {
+  return readRoleResult(triageResultSchemaFor(deps.specStage ?? false), {
+    finalMessage: () => deps.finalMessage(threadId),
+    askAgain: async (prompt) => {
+      const followUp = deps.followUp;
+      if (!followUp) return err('the triage agent cannot be asked again');
+      const completedAt = await followUp.completedAt(threadId);
+      const sentAt = new Date().toISOString();
+      const sent = await followUp.send(threadId, prompt);
+      if (sent.isErr()) return err(`the request could not be sent: ${sent.error}`);
+      const outcome = await deps.waitThread(threadId, deps.signal, { completedAt, sentAt });
+      if (outcome.status !== 'completed') {
+        return err(`the triage agent ended ${outcome.status} when asked again`);
+      }
+      return ok(await deps.finalMessage(threadId));
+    },
+  });
+}
+
+/**
+ * Whether a run back from a path hold must be triaged again: a run that
+ * changed its likely paths merged into its base since its contract was
+ * written. An approved spec's contract is the team's and is kept.
+ */
+async function changedWhileHeld(deps: FactoryTriageDeps, triage: FactoryTriage): Promise<boolean> {
+  const paths = triage.contract?.likelyPaths ?? [];
+  if (!triage.heldForPaths || triage.fromSpec || paths.length === 0) return false;
+  const merged = (await deps.mergedPathsSince?.(triage.at)) ?? [];
+  return merged.some((theirs) => paths.some((mine) => globsOverlap(mine, theirs)));
+}
+
+/** Log a failed issue comment; the run goes on without it. */
+function warnIfFailed(scope: IssueRunScope, result: Result<void, string>, message: string): void {
+  if (result.isOk()) return;
+  log.warn(message, {
+    namespace: 'factory',
+    runId: scope.runId,
+    issue: scope.issueNumber,
+    error: result.error,
+  });
+}
+
+/** The flow stops: the issue was closed on triage's evidence. */
+function closedResult(decision: ClosingDecision, shown: readonly string[]): ActionResult {
+  return {
+    ok: false,
+    error: `${CLOSING[decision].error}: ${shown.join(' / ')}`,
+    metadata: { outcome: decision, decision },
+  };
+}
+
 export function createFactoryTriage(deps: FactoryTriageDeps) {
   const { scope } = deps;
   const exclusive = deps.exclusive ?? (<T>(work: () => Promise<T>) => work());
   // A superseded answer (the issue changed since) decides nothing: triage runs again.
   let current: FactoryTriage | null = deps.stored?.superseded ? null : deps.stored;
   /** The thread of the superseded answer: never adopted as this attempt's. */
-  const supersededThread = deps.stored?.superseded ? deps.stored.threadId : undefined;
+  let supersededThread = deps.stored?.superseded ? deps.stored.threadId : undefined;
+  /** The contract a second triage replaces (the run is back from a path hold); kept when it fails. */
+  let earlier: FactoryTriage | null = null;
   const titlePrefix = `[Factory triage] #${scope.issueNumber} `;
 
   /** The issue's text, read once per attempt (the prompt and the split both need it). */
@@ -597,30 +715,11 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
       issue,
       busyPaths,
       specStage: deps.specStage ?? false,
+      afterMerge: earlier !== null,
     });
     const title = `${titlePrefix}${scope.issueTitle}`;
     const body = readOnlyRoleLaunch({ scope, title, base, opts, issue, prompt });
     return launchedThread(await deps.launch(body));
-  }
-
-  /** The triage agent's validated answer, asking once more on its thread when it is invalid. */
-  function resultOf(threadId: string) {
-    return readRoleResult(triageResultSchemaFor(deps.specStage ?? false), {
-      finalMessage: () => deps.finalMessage(threadId),
-      askAgain: async (prompt) => {
-        const followUp = deps.followUp;
-        if (!followUp) return err('the triage agent cannot be asked again');
-        const completedAt = await followUp.completedAt(threadId);
-        const sentAt = new Date().toISOString();
-        const sent = await followUp.send(threadId, prompt);
-        if (sent.isErr()) return err(`the request could not be sent: ${sent.error}`);
-        const outcome = await deps.waitThread(threadId, deps.signal, { completedAt, sentAt });
-        if (outcome.status !== 'completed') {
-          return err(`the triage agent ended ${outcome.status} when asked again`);
-        }
-        return ok(await deps.finalMessage(threadId));
-      },
-    });
   }
 
   /** Remember what triage decided, on the run. */
@@ -631,7 +730,16 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
     return triage;
   }
 
-  /** Triage gave nothing usable: the run goes on without a contract. */
+  /** The contract of a run no longer held for its paths: the mark is cleared, once. */
+  async function unheld(triage: FactoryTriage): Promise<FactoryTriage> {
+    if (!triage.heldForPaths) return triage;
+    const { heldForPaths: _held, ...rest } = triage;
+    current = rest;
+    await deps.record({ triage: rest });
+    return rest;
+  }
+
+  /** Triage gave nothing usable: the run goes on without a contract, or with its earlier one. */
   async function degrade(threadId: string, why: string): Promise<ActionResult> {
     log.warn('Issue factory triage gave no contract', {
       namespace: 'factory',
@@ -639,29 +747,20 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
       threadId,
       reason: why,
     });
+    if (earlier) return proceed(await unheld(earlier));
     return proceed(await keep({ decision: 'none', at: new Date().toISOString(), threadId }));
-  }
-
-  /** Log a failed issue comment; the run goes on without it. */
-  function warnIfFailed(result: Result<void, string>, message: string): void {
-    if (result.isOk()) return;
-    log.warn(message, {
-      namespace: 'factory',
-      runId: scope.runId,
-      issue: scope.issueNumber,
-      error: result.error,
-    });
   }
 
   /** Ask on the issue and park the run there. Not ok: the flow stops here. */
   async function askOnIssue(
-    decision: 'needs_info' | 'too_big' | 'already_done',
+    decision: 'needs_info' | 'too_big' | ClosingDecision,
     items: readonly string[],
     threadId: string,
   ): Promise<ActionResult> {
     const shown = publicItems(items);
-    const kind = decision === 'already_done' ? 'already_done_open' : decision;
+    const kind = PARKED_COMMENT[decision];
     warnIfFailed(
+      scope,
       await deps.comment(triageComment(kind, items)),
       'Issue factory could not post the triage comment',
     );
@@ -732,33 +831,39 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
   }
 
   /**
-   * What the issue asks is already done: post the evidence, close the issue
-   * and end the run. An issue the factory cannot close is left to a person:
-   * the run parks on it with the evidence posted, like a question.
+   * Nothing is left to do for the issue (it is already done, or no change to
+   * the repository would fix it): post the evidence, close the issue and end
+   * the run. An issue the factory cannot close is left to a person: the run
+   * parks on it with the evidence posted, like a question.
    */
-  async function alreadyDone(evidence: readonly string[], threadId: string): Promise<ActionResult> {
-    const closed = deps.closeIssue ? await deps.closeIssue() : err('no way to close the issue');
+  async function closeOnEvidence(
+    decision: ClosingDecision,
+    evidence: readonly string[],
+    threadId: string,
+  ): Promise<ActionResult> {
+    const { reason } = CLOSING[decision];
+    const closed = deps.closeIssue
+      ? await deps.closeIssue(reason)
+      : err('no way to close the issue');
     if (closed.isErr()) {
-      log.warn('Issue factory could not close an issue triage found already done', {
+      log.warn('Issue factory could not close an issue triage found nothing to do for', {
         namespace: 'factory',
         runId: scope.runId,
+        decision,
         error: closed.error,
       });
-      return askOnIssue('already_done', evidence, threadId);
+      return askOnIssue(decision, evidence, threadId);
     }
     const shown = publicItems(evidence);
     warnIfFailed(
-      await deps.comment(triageComment('already_done', evidence)),
+      scope,
+      await deps.comment(triageComment(decision, evidence)),
       'Issue factory could not post the triage comment',
     );
-    current = { decision: 'already_done', at: new Date().toISOString(), threadId, items: shown };
+    current = { decision, at: new Date().toISOString(), threadId, items: shown };
     await deps.record({ state: 'done', failureReason: null, triage: current });
-    await deps.count('triage_already_done');
-    return {
-      ok: false,
-      error: `The issue is already done: ${shown.join(' / ')}`,
-      metadata: { outcome: 'already_done', decision: 'already_done' },
-    };
+    await deps.count(`triage_${decision}`);
+    return closedResult(decision, shown);
   }
 
   /** A too-large issue: open its parts when the factory splits, else ask on it. */
@@ -781,6 +886,7 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
     threadId: string,
   ): Promise<ActionResult> {
     warnIfFailed(
+      scope,
       await deps.comment(coveredComment(existing)),
       'Issue factory could not post the triage comment',
     );
@@ -812,7 +918,9 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
       return parkForSpec(deps, current, answer.decisions.length);
     }
     if (answer.decision === 'too_big') return tooBig(answer, threadId);
-    if (answer.decision === 'already_done') return alreadyDone(answer.evidence, threadId);
+    if (answer.decision === 'already_done' || answer.decision === 'not_actionable') {
+      return closeOnEvidence(answer.decision, answer.evidence, threadId);
+    }
     const ready: FactoryTriage = {
       decision: 'ready',
       at: new Date().toISOString(),
@@ -832,7 +940,7 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
     if (outcome.status !== 'completed') {
       return degrade(threadId, `its thread ended ${outcome.status}`);
     }
-    const result = await resultOf(threadId);
+    const result = await resultOf(deps, threadId);
     if (deps.signal.aborted) return STOPPED;
     if (result.isErr()) return degrade(threadId, result.error.reason);
     const acted = await actOn(result.value, threadId);
@@ -851,19 +959,32 @@ export function createFactoryTriage(deps: FactoryTriageDeps) {
       if (current?.decision === 'ready' || current?.decision === 'none') {
         const decided = current;
         if (decided.decision === 'ready') await deps.record({ state: 'triaging' });
-        return exclusive(async () => (await heldForPaths(deps, decided)) ?? proceed(decided));
+        const settled = await exclusive(async () => {
+          const held = await heldForPaths(deps, decided);
+          if (held) return held;
+          if (await changedWhileHeld(deps, decided)) return null;
+          return proceed(await unheld(decided));
+        });
+        if (settled) return settled;
+        // The files it waited for changed under its contract: triage again, on a new thread.
+        earlier = decided;
+        supersededThread = decided.threadId;
+        current = null;
+        await deps.count('triage_again_after_hold');
       }
       const thread = await startThread(opts);
       if (thread.isErr()) {
         // Nothing ran (the runner is unreachable, say): go on without a
         // contract this time, and remember nothing, so a later attempt of the
-        // run triages again.
+        // run triages again. A run back from a path hold keeps the contract it had.
         log.warn('Issue factory triage could not start', {
           namespace: 'factory',
           runId: scope.runId,
           error: thread.error,
         });
-        return proceed({ decision: 'none', at: new Date().toISOString() });
+        return proceed(
+          earlier ? await unheld(earlier) : { decision: 'none', at: new Date().toISOString() },
+        );
       }
       // A triage agent is running: the run is in flight and holds its slot.
       await deps.record({ state: 'triaging' });

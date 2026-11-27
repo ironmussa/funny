@@ -172,10 +172,14 @@ export interface FactoryGithubPort {
     issue: { title: string; body: string },
   ): ResultAsync<{ number: number; url: string }, GithubCallError>;
   /**
-   * Close an issue as completed, as the App with the token capped by
-   * `reader.ownerId`'s own access. Absent in fakes that never close one.
+   * Close an issue as completed (or as `reason`), as the App with the token
+   * capped by `reader.ownerId`'s own access. Absent in fakes that never close one.
    */
-  closeIssue?(reader: FactoryRepoReader, issueNumber: number): ResultAsync<void, GithubCallError>;
+  closeIssue?(
+    reader: FactoryRepoReader,
+    issueNumber: number,
+    reason?: 'completed' | 'not_planned',
+  ): ResultAsync<void, GithubCallError>;
   /**
    * Make `branch` from the head of the branch the factory merges into when it
    * does not exist (a lane's branch, change factory-lanes). Absent: the
@@ -346,7 +350,7 @@ export function createFactoryGithub(
     relabelIssue: (reader, issueNumber, labels) => reads(reader).relabelIssue(issueNumber, labels),
     commentOnIssue: (reader, issueNumber, body) => reads(reader).commentOnIssue(issueNumber, body),
     createIssue: (reader, issue) => reads(reader).createIssue(issue),
-    closeIssue: (reader, issueNumber) => reads(reader).closeIssue(issueNumber),
+    closeIssue: (reader, issueNumber, reason) => reads(reader).closeIssue(issueNumber, reason),
     ensureBranch: (reader, branch) => reads(reader).ensureBranch(branch),
     branchContains: (reader, branch, sha) => reads(reader).branchContains(branch, sha),
     mergeCommit: (reader, number) => reads(reader).mergeCommit(number),

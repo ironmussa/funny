@@ -68,8 +68,8 @@ export function createRunRoles(core: ActionCore, links: RoleLinks) {
       return posted.isOk() ? ok(undefined) : err(posted.error.message);
     },
     closeIssue: deps.github.closeIssue
-      ? async () => {
-          const closed = await deps.github.closeIssue!(reader, roleScope.issueNumber);
+      ? async (reason) => {
+          const closed = await deps.github.closeIssue!(reader, roleScope.issueNumber, reason);
           return closed.isOk() ? ok(undefined) : err(closed.error.message);
         }
       : undefined,
@@ -80,6 +80,7 @@ export function createRunRoles(core: ActionCore, links: RoleLinks) {
     issueUpdatedAt: deps.issueUpdatedAt,
     issueText: deps.issueText,
     hold: deps.holdForPaths,
+    mergedPathsSince: deps.mergedPathsSince,
     split: deps.split,
     dropLabel: deps.dropLabel,
     exclusive: deps.exclusive,

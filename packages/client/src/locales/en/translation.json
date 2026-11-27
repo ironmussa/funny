@@ -1953,6 +1953,7 @@
       "notStartedStopped": "Stopped before its first step: no agent ran, no branch or pull request",
       "tooBig": "Too big",
       "alreadyDone": "Already done",
+      "notActionable": "Nothing to change",
       "onHold": "On hold",
       "needsSpec": "Needs a spec"
     },
@@ -2335,6 +2336,8 @@
       "person": "Waiting for a person",
       "alreadyDone": "Already done: the factory closed the issue",
       "alreadyDoneOpen": "Triage found it already done; close the issue if you agree",
+      "notActionable": "Nothing to change in the code: the factory closed the issue",
+      "notActionableOpen": "Triage found nothing to change in the code; close the issue if you agree",
       "trackedBy": "Tracked by {{issues}}",
       "notPushed": "Committed in its checkout, but never pushed",
       "specProblem": "The spec writer gave no valid spec",
@@ -2406,6 +2409,7 @@
       "tooBig": "Proposed split",
       "none": "Triage gave no contract: the review judges against the issue.",
       "alreadyDone": "Already done: the evidence",
+      "notActionable": "Nothing to change in the code: the evidence",
       "needsSpec": "Open product decisions"
     },
     "timeline": {

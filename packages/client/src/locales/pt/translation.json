@@ -1912,6 +1912,7 @@
       "notStartedStopped": "Parada antes do primeiro passo: nenhum agente executou, sem branch nem pull request",
       "tooBig": "Grande demais",
       "alreadyDone": "Já feito",
+      "notActionable": "Nada a mudar",
       "onHold": "Em pausa",
       "needsSpec": "Precisa de uma especificação"
     },
@@ -2294,6 +2295,8 @@
       "person": "Esperando uma pessoa",
       "alreadyDone": "Já feito: a factory fechou o issue",
       "alreadyDoneOpen": "A triagem o achou já feito; feche o issue se concordar",
+      "notActionable": "Nada a mudar no código: a factory fechou o issue",
+      "notActionableOpen": "A triagem não achou nada a mudar no código; feche o issue se concordar",
       "trackedBy": "Acompanhado em {{issues}}",
       "notPushed": "Fez commit no checkout, mas nunca fez push",
       "specProblem": "O redator da especificação não deu uma especificação válida",
@@ -2365,6 +2368,7 @@
       "tooBig": "Divisão proposta",
       "none": "A triagem não deu contrato: a revisão julga contra a issue.",
       "alreadyDone": "Já feito: as evidências",
+      "notActionable": "Nada a mudar no código: as evidências",
       "needsSpec": "Decisões de produto em aberto"
     },
     "timeline": {

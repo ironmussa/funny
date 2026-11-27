@@ -951,10 +951,12 @@ describe('factory over tRPC', () => {
       },
     };
     await runs.updateInFlight(run.id, { state: 'triaging', triage });
-    expect((await runs.holdForPaths(run.id, [12]))._unsafeUnwrap()).toBe(true);
+    // The contract is stored marked as held in the same write as the move.
+    const held = { ...triage, heldForPaths: true };
+    expect((await runs.holdForPaths(run.id, [12], held))._unsafeUnwrap()).toBe(true);
     expect((await runs.get(run.id))._unsafeUnwrap()).toMatchObject({
       state: 'requested',
-      triage,
+      triage: held,
       waitReason: { kind: 'paths-overlap', blockers: [12] },
     });
     expect((await runs.countActive(run.factoryId))._unsafeUnwrap()).toBe(0);

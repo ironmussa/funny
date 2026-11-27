@@ -180,14 +180,18 @@ export function queueOperations(newId: () => string) {
 
     /**
      * `triaging → requested`: the run's likely paths overlap those of `blockers`
-     * (issues with a run in progress). It leaves its slot and keeps its contract.
+     * (issues with a run in progress). It leaves its slot and keeps its
+     * contract: `triage`, marked as held, is stored in the same write, so the
+     * run never waits without the mark that has it triaged again when the
+     * files changed meanwhile.
      */
-    holdForPaths: (runId: string, blockers: number[]) =>
+    holdForPaths: (runId: string, blockers: number[], triage?: FactoryTriage) =>
       moveRun(runId, 'hold', {
         admittedAt: null,
         currentStep: null,
         launchStartedAt: null,
         waitReason: JSON.stringify({ kind: 'paths-overlap', blockers }),
+        ...(triage && { triage: JSON.stringify(triage) }),
       }),
 
     /**

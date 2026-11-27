@@ -11,7 +11,7 @@
  */
 
 import type { ConcurrencyGate } from '@funny/pipelines';
-import { lintCleanupSource } from '@funny/shared/contracts/factory';
+import { contractOf, lintCleanupSource } from '@funny/shared/contracts/factory';
 import { err, ok, type Result } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
@@ -380,6 +380,21 @@ function approvalDepsOf(
   };
 }
 
+/**
+ * Whether `other` merged into the base branch of `run` at `at` or later. `at`
+ * is when a triage answered, from a checkout taken before: a merge of that
+ * same instant is not in it.
+ */
+function mergedInto(run: FactoryRunView, other: FactoryRunView, at: string): boolean {
+  if (other.id === run.id || other.state !== 'merged' || !other.completedAt) return false;
+  if ((other.baseBranch ?? null) !== (run.baseBranch ?? null)) return false;
+  return Date.parse(other.completedAt) >= Date.parse(at);
+}
+
+/** The paths a merged run changed: its pull request's files, else its contract's likely paths. */
+const changedPathsOf = (run: FactoryRunView): string[] =>
+  run.risk?.paths ?? contractOf(run)?.likelyPaths ?? [];
+
 /** Triage's view of the other runs' paths, and its hold of the run behind them. */
 function triageDepsOf(
   deps: FactoryFlowRunsDeps,
@@ -392,6 +407,7 @@ function triageDepsOf(
   | 'findTriageThread'
   | 'busyPaths'
   | 'holdForPaths'
+  | 'mergedPathsSince'
   | 'exclusive'
   | 'specStage'
   | 'startSpec'
@@ -427,8 +443,13 @@ function triageDepsOf(
         hold,
       );
     },
-    holdForPaths: async (blockers) => {
-      const held = await deps.runs.holdForPaths(job.run.id, blockers);
+    mergedPathsSince: async (at) => {
+      const runs = await deps.runs.list(job.factory.id);
+      if (runs.isErr()) return [];
+      return runs.value.flatMap((run) => (mergedInto(job.run, run, at) ? changedPathsOf(run) : []));
+    },
+    holdForPaths: async (blockers, triage) => {
+      const held = await deps.runs.holdForPaths(job.run.id, blockers, triage);
       if (held.isErr() || !held.value) return false;
       trace.held = true;
       return true;

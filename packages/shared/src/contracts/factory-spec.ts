@@ -189,6 +189,14 @@ export const factoryTriageResultSchema = z.discriminatedUnion('decision', [
    */
   z.object({ decision: z.literal('already_done'), evidence: triageItems }),
   /**
+   * No change to this repository would fix what the issue reports (a failure
+   * outside the code: a client's network, an outage of a service the
+   * repository does not configure): the factory says so on the issue, closes
+   * it as not planned and ends the run `done`. `evidence`: what in the issue
+   * and the code shows it.
+   */
+  z.object({ decision: z.literal('not_actionable'), evidence: triageItems }),
+  /**
    * The issue is workable but leaves product decisions open that a wrong
    * guess would waste (openspec factory-spec-stage). Only valid while the
    * factory's Spec stage is on (`triageResultSchemaFor`). Nothing is posted on
@@ -215,14 +223,22 @@ export function triageResultSchemaFor(specStage: boolean) {
  * twice, and the run went on without a contract.
  */
 export const factoryTriageSchema = z.object({
-  decision: z.enum(['ready', 'needs_info', 'needs_spec', 'too_big', 'already_done', 'none']),
+  decision: z.enum([
+    'ready',
+    'needs_info',
+    'needs_spec',
+    'too_big',
+    'already_done',
+    'not_actionable',
+    'none',
+  ]),
   /** When triage answered; an issue changed after it is triaged again. */
   at: z.string(),
   /** The triage agent's thread. */
   threadId: z.string().optional(),
   /** The contract, for `ready`. */
   contract: factoryContractSchema.optional(),
-  /** What was asked on the issue (`needs_info`), the proposed split (`too_big`), or the evidence (`already_done`). */
+  /** What was asked on the issue (`needs_info`), the proposed split (`too_big`), or the evidence (`already_done`, `not_actionable`). */
   items: z.array(z.string()).optional(),
   /**
    * The issue changed since (or a member retried): this answer is kept to show
@@ -251,6 +267,13 @@ export const factoryTriageSchema = z.object({
    * contract is the spec's. Replayed and never superseded by an issue edit.
    */
   fromSpec: z.boolean().optional(),
+  /**
+   * A `ready` answer whose run left its slot to wait for runs working on the
+   * same files. When the run comes back and one of them merged meanwhile, the
+   * contract was written for code that changed: triage runs again. Cleared
+   * once that was decided.
+   */
+  heldForPaths: z.boolean().optional(),
 });
 export type FactoryTriage = z.infer<typeof factoryTriageSchema>;
 

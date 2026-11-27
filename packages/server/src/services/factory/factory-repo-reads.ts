@@ -231,12 +231,15 @@ export function createFactoryRepoReads(
         .map(() => undefined);
     },
 
-    /** Close an issue as completed, as the App. */
-    closeIssue(issueNumber: number): ResultAsync<void, GithubCallError> {
+    /** Close an issue as completed, or as not planned, as the App. */
+    closeIssue(
+      issueNumber: number,
+      reason: 'completed' | 'not_planned' = 'completed',
+    ): ResultAsync<void, GithubCallError> {
       return github
         .json(repo, 'PATCH', `/repos/${repo}/issues/${issueNumber}`, {
           state: 'closed',
-          state_reason: 'completed',
+          state_reason: reason,
         })
         .map(() => undefined);
     },

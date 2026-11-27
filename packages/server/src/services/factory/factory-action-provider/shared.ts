@@ -252,8 +252,10 @@ export interface FactoryActionProviderDeps {
   issueUpdatedAt?(): Promise<string | null>;
   /** The run's issue as text, for the read-only roles (they have no network); null when unreadable. */
   issueText?(): Promise<FactoryIssueText | null>;
-  /** Leave the slot and wait in the queue behind `blockers` (from `triaging` only). */
-  holdForPaths?(blockers: number[]): Promise<boolean>;
+  /** Leave the slot and wait in the queue behind `blockers` (from `triaging` only), storing `triage`. */
+  holdForPaths?(blockers: number[], triage: FactoryTriage): Promise<boolean>;
+  /** The paths changed by the factory's runs merged into this run's base branch after `at`. */
+  mergedPathsSince?(at: string): Promise<string[]>;
   /** Open a too-large issue's parts as issues (the factory's `split` setting); absent: comment the split. */
   split?: FactorySplitDeps;
   /** Run `work` alone among the factory's runs (triage's contract and path check). */

@@ -22,6 +22,8 @@ import {
   SPLIT_MARKER,
   TRIAGE_ALREADY_DONE_LINE,
   TRIAGE_COVERED_LINE,
+  TRIAGE_NOT_ACTIONABLE_LINE,
+  TRIAGE_NOT_ACTIONABLE_OPEN_LINE,
   TRIAGE_ALREADY_DONE_OPEN_LINE,
   TRIAGE_QUESTIONS_LINE,
   TRIAGE_SPLIT_LINE,
@@ -58,6 +60,8 @@ interface Script {
   says: Array<string | null>;
   stored?: FactoryTriage | null;
   busy?: Array<{ issue: number; paths: string[] }>;
+  /** Paths changed by runs merged into the run's base since its contract was written. */
+  merged?: string[];
   /** Whether the hold takes (the run was still triaging). */
   holds?: boolean;
   launchFails?: boolean;
@@ -80,6 +84,10 @@ function triaging(script: Script) {
   const recorded: UpdateRunInput[] = [];
   const comments: string[] = [];
   const closedIssues: number[] = [];
+  const closeReasons: Array<string | undefined> = [];
+  /** The contract stored with each hold. */
+  const heldTriages: FactoryTriage[] = [];
+  const mergedAsked: string[] = [];
   const labelsDropped: true[] = [];
   const held: number[][] = [];
   const opened: Array<{ title: string; body: string }> = [];
@@ -142,9 +150,14 @@ function triaging(script: Script) {
       labelsDropped.push(true);
     },
     busyPaths: async () => script.busy ?? [],
-    holdForPaths: async (blockers) => {
+    holdForPaths: async (blockers, triage) => {
       held.push(blockers);
+      heldTriages.push(triage);
       return script.holds ?? true;
+    },
+    mergedPathsSince: async (at) => {
+      mergedAsked.push(at);
+      return script.merged ?? [];
     },
     issueUpdatedAt: async () => '2026-11-22T10:00:05.000Z',
     issueText: async () =>
@@ -163,11 +176,12 @@ function triaging(script: Script) {
       },
       findPullRequest: () => okAsync(null),
       ...(script.close !== 'absent' && {
-        closeIssue: (_reader, issue) => {
+        closeIssue: (_reader, issue, reason) => {
           if (script.close === 'fails') {
             return errAsync({ kind: 'github-error' as const, message: 'GitHub answered 403' });
           }
           closedIssues.push(issue);
+          closeReasons.push(reason);
           return okAsync(undefined);
         },
       }),
@@ -213,6 +227,9 @@ function triaging(script: Script) {
     roleThreads,
     notedBeforeAnswer,
     closedIssues,
+    closeReasons,
+    heldTriages,
+    mergedAsked,
     labelsDropped,
     specsStarted,
   };
@@ -562,6 +579,68 @@ describe('the triage step', () => {
     }
   });
 
+  describe('not_actionable', () => {
+    const NOT_ACTIONABLE = json({
+      decision: 'not_actionable',
+      evidence: [
+        'The request never got a response: the failure is in the client network',
+        'src/api.ts already retries three times and shows an error',
+      ],
+    });
+
+    test('the prompt offers it, and says what is still a change to make', async () => {
+      const { provider, bodies } = triaging({ says: [READY] });
+      await provider.triage!({});
+      const prompt = String(bodies[0]?.prompt);
+      expect(prompt).toContain('"decision": "not_actionable"');
+      expect(prompt).toContain('One of these five');
+      expect(prompt).toContain('It is not `not_actionable` when a change here would');
+    });
+
+    // A report of a failure outside the code (a client's network, an outage)
+    // used to get an invented fix or a question nobody would answer.
+    test('the evidence is posted, the issue closed as not planned, and the run ends done', async () => {
+      const { provider, comments, recorded, closedIssues, closeReasons } = triaging({
+        says: [NOT_ACTIONABLE],
+      });
+      const result = await provider.triage!({});
+      expect(result).toMatchObject({ ok: false, metadata: { outcome: 'not_actionable' } });
+      expect(closedIssues).toEqual([7]);
+      expect(closeReasons).toEqual(['not_planned']);
+      expect(comments).toHaveLength(1);
+      expect(comments[0]).toContain(TRIAGE_NOT_ACTIONABLE_LINE);
+      expect(comments[0]).toContain('> - src/api.ts already retries three times');
+      expect(comments[0]).toContain('Reopen the issue');
+      expect(recorded).toContainEqual({
+        state: 'done',
+        failureReason: null,
+        triage: expect.objectContaining({ decision: 'not_actionable', threadId: 'tri-1' }),
+      });
+    });
+
+    test('work already merged is still closed as completed', async () => {
+      const { provider, closeReasons } = triaging({
+        says: [json({ decision: 'already_done', evidence: ['PR 505 did it'] })],
+      });
+      await provider.triage!({});
+      expect(closeReasons).toEqual(['completed']);
+    });
+
+    test('an issue it cannot close waits for a person, saying so', async () => {
+      const { provider, comments, recorded } = triaging({ says: [NOT_ACTIONABLE], close: 'fails' });
+      const result = await provider.triage!({});
+      expect(result).toMatchObject({ ok: false, metadata: { outcome: 'needs_info' } });
+      expect(comments[0]).toContain(TRIAGE_NOT_ACTIONABLE_OPEN_LINE);
+      expect(comments[0]).not.toContain(TRIAGE_NOT_ACTIONABLE_LINE);
+      expect(recorded).toContainEqual(
+        expect.objectContaining({
+          state: 'needs_info',
+          triage: expect.objectContaining({ decision: 'not_actionable' }),
+        }),
+      );
+    });
+  });
+
   test('too_big: the proposed split is posted, and the run waits the same way', async () => {
     const { provider, comments, recorded } = triaging({
       says: [json({ decision: 'too_big', parts: ['The schema', 'The screen'] })],
@@ -839,6 +918,109 @@ describe('runs with overlapping paths do not work at the same time', () => {
     expect((await provider.triage!({})).ok).toBe(false);
     expect(bodies).toEqual([]);
     expect(held).toEqual([[12]]);
+  });
+
+  describe('a run back from a hold (its paths are free again)', () => {
+    const HELD: FactoryTriage = {
+      decision: 'ready',
+      at: '2026-11-22T09:00:00Z',
+      threadId: 'tri-0',
+      contract: CONTRACT,
+      heldForPaths: true,
+    };
+
+    test('the hold stores the contract marked as held, in the same write', async () => {
+      const { provider, heldTriages } = triaging({
+        says: [READY],
+        busy: [{ issue: 12, paths: ['src/sum.ts'] }],
+      });
+      await provider.triage!({});
+      expect(heldTriages).toEqual([
+        expect.objectContaining({ decision: 'ready', contract: CONTRACT, heldForPaths: true }),
+      ]);
+    });
+
+    // Two issues for the same bug: the second waited for the first, then was
+    // implemented again from a contract written before the first one merged.
+    test('a run that changed its files merged meanwhile: it is triaged again, on a new thread', async () => {
+      const { provider, bodies, mergedAsked, closedIssues, recorded } = triaging({
+        says: [json({ decision: 'already_done', evidence: ['PR 12 fixed sum() for negatives'] })],
+        stored: HELD,
+        merged: ['src/sum.ts', 'src/sum.test.ts'],
+        // The earlier triage thread is never adopted as this attempt's.
+        found: 'tri-0',
+      });
+      const result = await provider.triage!({});
+      expect(mergedAsked).toEqual(['2026-11-22T09:00:00Z']);
+      expect(bodies).toHaveLength(1);
+      expect(String(bodies[0]?.prompt)).toContain('That change merged, and the checkout has it');
+      expect(result).toMatchObject({ ok: false, metadata: { outcome: 'already_done' } });
+      expect(closedIssues).toEqual([7]);
+      expect(recorded).toContainEqual(
+        expect.objectContaining({
+          state: 'done',
+          triage: expect.objectContaining({ decision: 'already_done', threadId: 'tri-1' }),
+        }),
+      );
+    });
+
+    test('the second triage writes a new contract, without the mark', async () => {
+      const { provider, stored } = triaging({ says: [READY], stored: HELD, merged: ['src/**'] });
+      expect(await provider.triage!({})).toMatchObject({ ok: true, output: 'ready' });
+      expect(stored()).toMatchObject({ decision: 'ready', threadId: 'tri-1' });
+      expect(stored()).not.toHaveProperty('heldForPaths');
+    });
+
+    test('nothing merged on its files: it goes on with its contract, and the mark is cleared', async () => {
+      const { provider, bodies, stored } = triaging({
+        says: [],
+        stored: HELD,
+        merged: ['packages/client/src/App.tsx'],
+      });
+      expect(await provider.triage!({})).toMatchObject({ ok: true, output: 'ready' });
+      expect(bodies).toEqual([]);
+      expect(stored()).toMatchObject({ decision: 'ready', threadId: 'tri-0', contract: CONTRACT });
+      expect(stored()).not.toHaveProperty('heldForPaths');
+    });
+
+    test('a contract never held is not checked against merges (a resumed run)', async () => {
+      const { provider, bodies, mergedAsked } = triaging({
+        says: [],
+        stored: { decision: 'ready', at: '2026-11-22T09:00:00Z', contract: CONTRACT },
+        merged: ['src/sum.ts'],
+      });
+      expect((await provider.triage!({})).ok).toBe(true);
+      expect(bodies).toEqual([]);
+      expect(mergedAsked).toEqual([]);
+    });
+
+    test("an approved spec's contract is kept, whatever merged", async () => {
+      const { provider, bodies } = triaging({
+        says: [],
+        stored: { ...HELD, fromSpec: true },
+        merged: ['src/sum.ts'],
+      });
+      expect((await provider.triage!({})).ok).toBe(true);
+      expect(bodies).toEqual([]);
+    });
+
+    const failing: Array<[string, Script]> = [
+      ['cannot start', { says: [], launchFails: true }],
+      ['gives no valid answer', { says: ['prose', 'prose'] }],
+    ];
+    for (const [name, script] of failing) {
+      test(`a second triage that ${name} leaves the run its earlier contract`, async () => {
+        const { provider, stored } = triaging({ ...script, stored: HELD, merged: ['src/sum.ts'] });
+        const result = await provider.triage!({});
+        expect(result).toMatchObject({ ok: true, output: 'ready' });
+        expect(stored()).toMatchObject({
+          decision: 'ready',
+          threadId: 'tri-0',
+          contract: CONTRACT,
+        });
+        expect(stored()).not.toHaveProperty('heldForPaths');
+      });
+    }
   });
 
   test('a hold that does not take (the run already moved on) lets the run go on', async () => {

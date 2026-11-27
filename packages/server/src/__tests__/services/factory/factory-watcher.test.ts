@@ -1762,6 +1762,37 @@ describe('factory watcher', () => {
       expect(triages().n).toBe(2);
     });
 
+    // Two issues for one bug: the second used to be implemented again, from a
+    // contract written before the first one merged.
+    test('the first merges while the second waits: the second is triaged again, and closed as done', async () => {
+      let answer = readyFor(['src/db/migrate.ts']);
+      const { factoryId, poll, launcher, github } = await watching({}, () => answer, issues);
+      await poll.ticks[0]!();
+      expect((await runOf(factoryId, 2)).triage).toMatchObject({
+        decision: 'ready',
+        heldForPaths: true,
+      });
+
+      const first = await runOf(factoryId, 1);
+      await createFactoryRunsRepository().updateInFlight(first.id, { state: 'merged' });
+      answer = json({ decision: 'already_done', evidence: ['The fix of issue 1 covers it'] });
+      await poll.ticks[0]!();
+
+      for (let i = 0; i < 400 && github.closedIssues.length === 0; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+      }
+      const second = await runOf(factoryId, 2);
+      expect(second.state).toBe('done');
+      expect(second.triage).toMatchObject({ decision: 'already_done' });
+      expect(github.closedIssues).toEqual([2]);
+      // No implementer for the duplicate, and a third triage thread (its second).
+      expect(implementing(launcher)).toEqual(['[Factory] #1 a']);
+      const triages = testDb.sqlite
+        .query("SELECT COUNT(*) AS n FROM threads WHERE title LIKE '[Factory triage]%'")
+        .get() as { n: number };
+      expect(triages.n).toBe(3);
+    });
+
     test('issues that touch different files work at once', async () => {
       const { poll, launcher } = await watching(
         {},

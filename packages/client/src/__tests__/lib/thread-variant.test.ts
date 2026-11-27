@@ -19,6 +19,7 @@ import {
   canViewGitShare,
   getSidebarBucket,
   getThreadRoute,
+  isAutomatedThread,
   isScratch,
   showsInSidebar,
 } from '@/lib/thread-variant';
@@ -249,5 +250,13 @@ describe('showsInSidebar', () => {
       showsInSidebar(makeThread({ status: 'idle', stage: 'backlog', parentThreadId: 't0' })),
     ).toBe(true);
     expect(showsInSidebar(makeThread({ status: 'completed', archived: true }))).toBe(false);
+  });
+});
+
+describe('isAutomatedThread', () => {
+  test("factory and automation threads are automated, a person's thread is not", () => {
+    expect(isAutomatedThread(makeThread({ source: 'factory' }))).toBe(true);
+    expect(isAutomatedThread(makeThread({ automationId: 'a1' }))).toBe(true);
+    expect(isAutomatedThread(makeThread({}))).toBe(false);
   });
 });

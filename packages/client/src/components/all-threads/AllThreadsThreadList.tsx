@@ -193,7 +193,7 @@ export function AllThreadsThreadList({
         testId="all-threads-thread-list-scroll"
         scrollRef={scrollRef}
         className={className}
-        padded
+        framed={false}
       >
         <div
           className="relative h-[var(--all-threads-list-height)] w-full"

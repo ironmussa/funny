@@ -16,7 +16,6 @@ import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { FilterDropdown } from '@/components/all-threads/FilterDropdown';
-import { ViewThreadsButton } from '@/components/all-threads/ViewThreadsButton';
 import { useFactoryViewParams } from '@/components/factory-board/factory-view-params';
 import { FactoryAnalytics } from '@/components/factory-board/FactoryAnalytics';
 import { FactoryBoard } from '@/components/factory-board/FactoryBoard';
@@ -454,11 +453,6 @@ function FactoryQueueToolbar(props: ToolbarProps) {
         onClear={props.onClearFilters}
       />
       <div className="ml-auto flex items-center gap-1">
-        <ViewThreadsButton
-          origin="factory"
-          projectId={projectFilter.size === 1 ? [...projectFilter][0] : null}
-          testId="factory-view-threads"
-        />
         <FactoryQueueActions runs={props.runs} projectFilter={projectFilter} />
         {props.layout === 'board' && <FactoryBoardColumnsMenu />}
         <FactoryLayoutToggle layout={props.layout} onChange={props.onLayoutChange} />

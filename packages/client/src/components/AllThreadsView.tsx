@@ -18,6 +18,8 @@ import { useAllThreadsBack } from '@/components/all-threads/use-all-threads-back
 import { useAllThreadsFilters } from '@/components/all-threads/use-all-threads-filters';
 import { useEscapeToLastThread } from '@/components/all-threads/use-escape-to-last-thread';
 import { useLoadMoreServerThreads } from '@/components/all-threads/use-load-more-server-threads';
+import { useAllAutomations } from '@/data/automations/hooks';
+import { loadAllAutomations } from '@/data/automations/loaders';
 import { useGitStatusMaps } from '@/data/git-status/hooks';
 import { useProjects } from '@/data/projects/hooks';
 import { useLoadedThreads, useProjectListTotals } from '@/data/threads/hooks';
@@ -61,7 +63,7 @@ export function AllThreadsView() {
       : 'list';
   const filters = useAllThreadsFilters(searchParams, setSearchParams, viewMode);
   const { projectFilter, search, caseSensitive, statusFilter, gitFilter, modeFilter } = filters;
-  const { typeFilter, originFilter, showArchived, sortField, sortDir } = filters;
+  const { typeFilter, originFilter, automationFilter, showArchived, sortField, sortDir } = filters;
 
   const buildSearchParams = (overrides?: SearchParamOverrides) =>
     buildAllThreadsSearchParams(searchParams, { projectFilter, search, caseSensitive }, overrides);
@@ -145,6 +147,7 @@ export function AllThreadsView() {
         modeFilter,
         typeFilter,
         originFilter,
+        automationFilter,
         statusByBranch,
         threadToBranchKey,
         projectFilter,
@@ -162,6 +165,7 @@ export function AllThreadsView() {
       modeFilter,
       typeFilter,
       originFilter,
+      automationFilter,
       statusByBranch,
       threadToBranchKey,
       projectFilter,
@@ -179,6 +183,7 @@ export function AllThreadsView() {
     filters.setModeFilter(new Set());
     filters.setTypeFilter(new Set());
     filters.setOriginFilter(new Set());
+    filters.setAutomationFilter(new Set());
     filters.setShowArchived(false);
     if (projectFilter) {
       filters.setProjectFilter(null);
@@ -208,13 +213,27 @@ export function AllThreadsView() {
     modeFilter.size > 0 ||
     typeFilter.size > 0 ||
     originFilter.size > 0 ||
+    automationFilter.size > 0 ||
     showArchived ||
     !!projectFilter;
 
-  const { typeCounts, originCounts, statusCounts, gitCounts } = useThreadFilterCounts(
-    allThreads,
-    statusByBranch,
-    threadToBranchKey,
+  const { typeCounts, originCounts, automationCounts, statusCounts, gitCounts } =
+    useThreadFilterCounts(allThreads, statusByBranch, threadToBranchKey);
+
+  // Names for the automation filter. The rows come from the automations
+  // collection, which only the settings screen loads otherwise.
+  const automations = useAllAutomations();
+  useEffect(() => {
+    void loadAllAutomations();
+  }, []);
+  const automationOptions = useMemo(
+    () =>
+      automations.flatMap((a) =>
+        (automationCounts[a.id] || 0) > 0 || automationFilter.has(a.id)
+          ? [{ value: a.id, label: a.name, detail: projectNameById[a.projectId] }]
+          : [],
+      ),
+    [automations, automationCounts, automationFilter, projectNameById],
   );
 
   if (!allThreadsProjectId) return null;
@@ -263,6 +282,10 @@ export function AllThreadsView() {
         originFilter={originFilter}
         onOriginToggle={filters.handleOriginToggle}
         originCounts={originCounts}
+        automationOptions={automationOptions}
+        automationFilter={automationFilter}
+        onAutomationToggle={filters.handleAutomationToggle}
+        automationCounts={automationCounts}
         statusCounts={statusCounts}
         gitCounts={gitCounts}
         threadStatuses={THREAD_STATUSES}

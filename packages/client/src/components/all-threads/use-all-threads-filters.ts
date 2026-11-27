@@ -31,6 +31,7 @@ export function useAllThreadsFilters(
   );
   const list = useListFilterState(searchParams);
   const { setStatusFilter, setGitFilter, setModeFilter, setTypeFilter, setOriginFilter } = list;
+  const { setAutomationFilter } = list;
   const { setShowArchived, setSortField, setSortDir } = list;
 
   // Sync URL query params → local state when URL changes (e.g. browser back/forward).
@@ -52,6 +53,7 @@ export function useAllThreadsFilters(
     setModeFilter(keepIfSame(filters.mode));
     setTypeFilter(keepIfSame(filters.type));
     setOriginFilter(keepIfSame(filters.origin));
+    setAutomationFilter(keepIfSame(filters.automation));
     setShowArchived(filters.showArchived);
     setSortField(filters.sortField);
     setSortDir(filters.sortDir);
@@ -63,6 +65,7 @@ export function useAllThreadsFilters(
     mode: list.modeFilter,
     type: list.typeFilter,
     origin: list.originFilter,
+    automation: list.automationFilter,
     showArchived: list.showArchived,
     sortField: list.sortField,
     sortDir: list.sortDir,
@@ -82,6 +85,13 @@ export function useAllThreadsFilters(
     [setOriginFilter],
   );
 
+  const handleAutomationToggle = useCallback(
+    (value: string) => {
+      setAutomationFilter(toggle(value));
+    },
+    [setAutomationFilter],
+  );
+
   return {
     projectFilter,
     setProjectFilter,
@@ -94,11 +104,12 @@ export function useAllThreadsFilters(
     ...list,
     handleTypeToggle,
     handleOriginToggle,
+    handleAutomationToggle,
   };
 }
 
 /**
- * The list filters (status, git, mode, type, origin, archived, sort). Every
+ * The list filters (status, git, mode, type, origin, automation, archived, sort). Every
  * one lives in the URL too (`list-filter-params.ts`), so opening a thread and
  * coming back (header back button, browser back) restores them.
  */
@@ -109,6 +120,7 @@ function useListFilterState(searchParams: URLSearchParams) {
   const [modeFilter, setModeFilter] = useState<Set<string>>(initialFilters.mode);
   const [typeFilter, setTypeFilter] = useState<Set<string>>(initialFilters.type);
   const [originFilter, setOriginFilter] = useState<Set<string>>(initialFilters.origin);
+  const [automationFilter, setAutomationFilter] = useState<Set<string>>(initialFilters.automation);
   const [showArchived, setShowArchived] = useState(initialFilters.showArchived);
   const [sortField, setSortField] = useState<SortField>(initialFilters.sortField);
   const [sortDir, setSortDir] = useState<SortDir>(initialFilters.sortDir);
@@ -123,6 +135,8 @@ function useListFilterState(searchParams: URLSearchParams) {
     setTypeFilter,
     originFilter,
     setOriginFilter,
+    automationFilter,
+    setAutomationFilter,
     showArchived,
     setShowArchived,
     sortField,
@@ -146,7 +160,7 @@ function useFiltersToUrl(
   useEffect(() => {
     searchParamsRef.current = searchParams;
   }, [searchParams]);
-  const { status, git, mode, type, origin, showArchived, sortField, sortDir } = filters;
+  const { status, git, mode, type, origin, automation, showArchived, sortField, sortDir } = filters;
   useEffect(() => {
     const next = filtersUrlUpdate(searchParamsRef.current, viewMode, {
       status,
@@ -154,6 +168,7 @@ function useFiltersToUrl(
       mode,
       type,
       origin,
+      automation,
       showArchived,
       sortField,
       sortDir,
@@ -166,6 +181,7 @@ function useFiltersToUrl(
     mode,
     type,
     origin,
+    automation,
     showArchived,
     sortField,
     sortDir,

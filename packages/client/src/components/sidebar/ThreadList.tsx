@@ -12,13 +12,12 @@ import { useSidebarActiveThreadId } from '@/hooks/use-sidebar-active-thread-id';
 import { useSidebarGitStatuses } from '@/hooks/use-sidebar-git-statuses';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { timeAgo } from '@/lib/thread-utils';
-import { isFactoryThread, isScratch } from '@/lib/thread-variant';
+import { isAutomatedThread, isScratch } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 import { resolveThreadBranch } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import { goToThread } from '@/navigation/go-to-thread';
 import { buildThreadPath } from '@/navigation/thread-paths';
-import { useSidebarFilterStore } from '@/stores/sidebar-filter-store';
 
 import { ThreadItem } from './ThreadItem';
 import { ViewAllButton } from './ViewAllButton';
@@ -50,15 +49,13 @@ export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: 
   // Highlight follows the URL (or the focused grid cell while on /grid).
   const activeThreadId = useSidebarActiveThreadId();
   const projects = useProjects();
-  const hideFactoryThreads = useSidebarFilterStore((s) => s.hideFactoryThreads);
 
   const { threads, totalCount } = useMemo(() => {
     const projectMap = new Map(
       projects.map((p) => [p.id, { name: p.name, path: p.path, color: p.color }]),
     );
-    const activity = selectActivityThreads(
-      hideFactoryThreads ? loadedThreads.filter((th) => !isFactoryThread(th)) : loadedThreads,
-    );
+    // Factory and automation threads have their own views (queue, inbox).
+    const activity = selectActivityThreads(loadedThreads.filter((th) => !isAutomatedThread(th)));
     const enriched: EnrichedThread[] = activity.threads.map((thread) => {
       if (isScratch(thread)) {
         return {
@@ -76,7 +73,7 @@ export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: 
       };
     });
     return { threads: enriched, totalCount: activity.totalCount };
-  }, [loadedThreads, projects, _t, hideFactoryThreads]);
+  }, [loadedThreads, projects, _t]);
 
   const gitStatusByThread = useSidebarGitStatuses(threads);
 
@@ -161,17 +158,7 @@ export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: 
           />
         ))}
         {totalCount > 5 && (
-          <ViewAllButton
-            onClick={() =>
-              navigate(
-                buildPath(
-                  hideFactoryThreads
-                    ? '/list?sort=updated&origin=user,automation'
-                    : '/list?sort=updated',
-                ),
-              )
-            }
-          />
+          <ViewAllButton onClick={() => navigate(buildPath('/list?sort=updated&origin=user'))} />
         )}
       </div>
     </>

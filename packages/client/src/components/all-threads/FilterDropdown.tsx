@@ -1,5 +1,5 @@
 import { Check, ChevronDown } from 'lucide-react';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef, useState, type ReactNode } from 'react';
 
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -7,8 +7,8 @@ import { cn } from '@/lib/utils';
 
 interface Props {
   label: string;
-  /** `detail` is a second, muted line under the option's label. */
-  options: { value: string; label: string; detail?: string }[];
+  /** `detail` is a second, muted line under the option's label; `icon` sits before the label. */
+  options: FilterOption[];
   selected: Set<string>;
   onToggle: (value: string) => void;
   counts?: Record<string, number>;
@@ -21,6 +21,7 @@ interface FilterOption {
   value: string;
   label: string;
   detail?: string;
+  icon?: ReactNode;
 }
 
 function resolveTriggerLabel(
@@ -86,6 +87,7 @@ function FilterOptionRow({
       >
         {isActive && <Check className="icon-2xs" />}
       </span>
+      {opt.icon}
       <span className="flex min-w-0 flex-1 flex-col">
         <span>{opt.label}</span>
         {opt.detail && (

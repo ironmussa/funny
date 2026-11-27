@@ -12,6 +12,8 @@ export interface ListFilters {
   mode: Set<string>;
   type: Set<string>;
   origin: Set<string>;
+  /** Ids of the automations whose runs to show (`?automation=a1,a2`). */
+  automation: Set<string>;
   showArchived: boolean;
   sortField: SortField;
   sortDir: SortDir;
@@ -45,6 +47,7 @@ export function parseListFilters(params: URLSearchParams): ListFilters {
     mode: parseList(params.get('mode')),
     type: parseType(params),
     origin: parseOrigin(params.get('origin')),
+    automation: parseList(params.get('automation')),
     showArchived: params.get('archived') === '1',
     sortField: sort === 'created' ? 'created' : 'updated',
     sortDir: dir === 'asc' ? 'asc' : 'desc',
@@ -66,6 +69,7 @@ export function writeListFilters(current: URLSearchParams, filters: ListFilters)
   setList(params, 'git', filters.git);
   setList(params, 'mode', filters.mode);
   setList(params, 'origin', filters.origin);
+  setList(params, 'automation', filters.automation);
   // Only scratch: keep the short `?scratch=1` form the sidebar links with.
   const scratchOnly = filters.type.size === 1 && filters.type.has('scratch');
   if (scratchOnly) params.set('scratch', '1');

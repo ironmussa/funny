@@ -8,7 +8,6 @@ import { isFactoryThread, isScratch } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 
 import { settlePreSendState } from '../optimistic-run-state';
-import { useSidebarFilterStore } from '../sidebar-filter-store';
 import { useThreadActiveToolStore } from '../thread-active-tool-store';
 import {
   invalidateThreadData,
@@ -264,19 +263,15 @@ const ERROR_REASON_MESSAGES = new Map<string, string>(
 );
 
 /**
- * A user who hides factory threads from the sidebar does not want to hear
- * each time one of their steps completes either. Failures still show.
+ * Factory threads are not in the sidebar (they live in the factory queue), so
+ * the completion of each step is not toasted either. Failures still show.
  */
 function isQuietFactoryCompletion(
   resultStatus: ThreadStatus,
   row: Thread | undefined,
   loaded: Thread | undefined,
 ): boolean {
-  return (
-    resultStatus === 'completed' &&
-    useSidebarFilterStore.getState().hideFactoryThreads &&
-    isFactoryThread(row ?? loaded)
-  );
+  return resultStatus === 'completed' && isFactoryThread(row ?? loaded);
 }
 
 /** The title and project a result toast names and links to. */

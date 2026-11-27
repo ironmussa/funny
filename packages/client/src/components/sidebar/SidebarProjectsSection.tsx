@@ -1,5 +1,5 @@
 import type { Project, Thread } from '@funny/shared';
-import { ChevronRight, Factory, FolderPlus } from 'lucide-react';
+import { ChevronRight, FolderPlus } from 'lucide-react';
 import { type RefObject, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -10,10 +10,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useExternalClaudeSessionsSync } from '@/hooks/use-external-claude-sessions';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
-import { isFactoryThread, showsInSidebar } from '@/lib/thread-variant';
+import { isAutomatedThread, showsInSidebar } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
-import { useSidebarFilterStore } from '@/stores/sidebar-filter-store';
 
 import { ProjectItem } from './ProjectItem';
 
@@ -45,34 +44,6 @@ interface Props extends ProjectItemHandlers {
   scrollRef: RefObject<HTMLDivElement | null>;
 }
 
-/** The header's toggle that hides the threads the issue factory started from the sidebar. */
-function FactoryThreadsToggle() {
-  const { t } = useTranslation();
-  const hideFactoryThreads = useSidebarFilterStore((s) => s.hideFactoryThreads);
-  const toggleHideFactoryThreads = useSidebarFilterStore((s) => s.toggleHideFactoryThreads);
-  const label = hideFactoryThreads
-    ? t('sidebar.showFactoryThreads', 'Show factory threads')
-    : t('sidebar.hideFactoryThreads', 'Hide factory threads');
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          variant={hideFactoryThreads ? 'pressed-primary' : 'muted'}
-          data-testid="sidebar-toggle-factory-threads"
-          size="icon"
-          aria-pressed={hideFactoryThreads}
-          aria-label={label}
-          className="size-5"
-          onClick={toggleHideFactoryThreads}
-        >
-          <Factory className="icon-sm" />
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent side="right">{label}</TooltipContent>
-    </Tooltip>
-  );
-}
-
 /**
  * Projects header (with "add project" button) + scrollable projects list +
  * closed-project groups. Extracted from Sidebar.tsx so it doesn't need to import
@@ -94,7 +65,6 @@ export function SidebarProjectsSection({
   // project — mounted once here, not per ProjectItem.
   useExternalClaudeSessionsSync();
   const [closedExpanded, setClosedExpanded] = useState(false);
-  const hideFactoryThreads = useSidebarFilterStore((s) => s.hideFactoryThreads);
 
   const { onCloseProject, onReopenProject, ...sharedHandlers } = handlers;
 
@@ -113,11 +83,11 @@ export function SidebarProjectsSection({
     for (const project of activeProjects) {
       const src = threadsByProject[project.id];
       result[project.id] = (Array.isArray(src) ? src : []).filter(
-        (thread) => showsInSidebar(thread) && !(hideFactoryThreads && isFactoryThread(thread)),
+        (thread) => showsInSidebar(thread) && !isAutomatedThread(thread),
       );
     }
     return result;
-  }, [threadsByProject, activeProjects, hideFactoryThreads]);
+  }, [threadsByProject, activeProjects]);
 
   const threadsLoadedByProject = useMemo(() => {
     const result: Record<string, boolean> = {};
@@ -139,7 +109,6 @@ export function SidebarProjectsSection({
           {t('sidebar.projects')}
         </button>
         <div className="flex items-center gap-0.5">
-          <FactoryThreadsToggle />
           <Tooltip>
             <TooltipTrigger asChild>
               <Button

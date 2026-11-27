@@ -53,6 +53,11 @@ interface Props {
   originFilter: Set<string>;
   onOriginToggle: (value: string) => void;
   originCounts: Record<string, number>;
+  /** The automations the filter offers (the ones with a run in the list, plus any selected). */
+  automationOptions: { value: string; label: string; detail?: string }[];
+  automationFilter: Set<string>;
+  onAutomationToggle: (value: string) => void;
+  automationCounts: Record<string, number>;
   statusCounts: Record<string, number>;
   gitCounts: Record<string, number>;
   threadStatuses: ThreadStatus[];
@@ -111,6 +116,10 @@ export function AllThreadsToolbar(props: Props) {
     originFilter,
     onOriginToggle,
     originCounts,
+    automationOptions,
+    automationFilter,
+    onAutomationToggle,
+    automationCounts,
     statusCounts,
     gitCounts,
     threadStatuses,
@@ -228,6 +237,22 @@ export function AllThreadsToolbar(props: Props) {
         onToggle={onOriginToggle}
         counts={originCounts}
       />
+
+      {(automationOptions.length > 0 || automationFilter.size > 0) && (
+        <FilterDropdown
+          testId="all-threads-automation-filter"
+          label={t('allThreads.filterAutomation', { defaultValue: 'Automation' })}
+          options={automationOptions}
+          selected={automationFilter}
+          onToggle={onAutomationToggle}
+          counts={automationCounts}
+          search={{
+            placeholder: t('allThreads.searchAutomations', {
+              defaultValue: 'Search automations…',
+            }),
+          }}
+        />
+      )}
 
       <div className="bg-border h-4 w-px" />
 

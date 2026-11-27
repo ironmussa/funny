@@ -63,7 +63,6 @@ const {
   handleWSStageChanged,
 } = await import('@/stores/thread-ws-handlers');
 import { toast } from '@/components/ui/toast';
-import { useSidebarFilterStore } from '@/stores/sidebar-filter-store';
 
 const THREAD_ID = 'thread-edge';
 
@@ -392,7 +391,7 @@ describe('thread-ws-handlers — error, context, and refresh edge cases', () => 
     );
   });
 
-  test('handleWSResult skips the completion toast of a factory thread while they are hidden', () => {
+  test('handleWSResult skips the completion toast of a factory thread', () => {
     const thread = buildThreadWithMessages({
       id: THREAD_ID,
       projectId: 'p1',
@@ -406,18 +405,9 @@ describe('thread-ws-handlers — error, context, and refresh edge cases', () => 
       activeThread: thread,
     });
     const { get, set } = makeGetSet(state);
-    useSidebarFilterStore.setState({ hideFactoryThreads: true });
 
-    try {
-      handleWSResult(get, set, THREAD_ID, { status: 'completed', cost: 0, duration: 1 });
-      expect(mocked(toast.success)).not.toHaveBeenCalled();
-
-      useSidebarFilterStore.setState({ hideFactoryThreads: false });
-      handleWSResult(get, set, THREAD_ID, { status: 'completed', cost: 0, duration: 1 });
-      expect(mocked(toast.success)).toHaveBeenCalledTimes(1);
-    } finally {
-      useSidebarFilterStore.setState({ hideFactoryThreads: true });
-    }
+    handleWSResult(get, set, THREAD_ID, { status: 'completed', cost: 0, duration: 1 });
+    expect(mocked(toast.success)).not.toHaveBeenCalled();
   });
 
   test('handleWSResult shows failed toast with known error reason', () => {

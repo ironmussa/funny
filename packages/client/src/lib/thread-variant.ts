@@ -101,6 +101,17 @@ export function isFactoryThread(thread: { source?: string } | null | undefined):
   return thread?.source === 'factory';
 }
 
+/**
+ * True for a thread no person started: the issue factory's, or an
+ * automation's run. The sidebar leaves them out; they live in the factory
+ * queue and the automation inbox, and the search view's origin filter.
+ */
+export function isAutomatedThread(
+  thread: { source?: string; automationId?: string | null } | null | undefined,
+): boolean {
+  return isFactoryThread(thread) || !!thread?.automationId;
+}
+
 // ── Capability predicates ────────────────────────────────────────
 
 /**

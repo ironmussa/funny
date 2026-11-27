@@ -15,6 +15,7 @@ interface ThreadFilterInput {
   modeFilter: Set<string>;
   typeFilter: Set<string>;
   originFilter: Set<string>;
+  automationFilter: Set<string>;
   statusByBranch: GitStatusMaps['statusByBranch'];
   threadToBranchKey: GitStatusMaps['threadToBranchKey'];
   projectFilter: string | null;
@@ -34,6 +35,7 @@ export function filterAndSortThreads({
   modeFilter,
   typeFilter,
   originFilter,
+  automationFilter,
   statusByBranch,
   threadToBranchKey,
   projectFilter,
@@ -91,6 +93,11 @@ export function filterAndSortThreads({
     result = result.filter((t) => originFilter.has(threadOrigin(t)));
   }
 
+  // Automation filter (runs of the chosen automations)
+  if (automationFilter.size > 0) {
+    result = result.filter((t) => !!t.automationId && automationFilter.has(t.automationId));
+  }
+
   // Sort by selected field and direction
   result = result.toSorted((a, b) => {
     const dateA = sortField === 'updated' ? (a.completedAt ?? a.createdAt) : a.createdAt;
@@ -102,7 +109,7 @@ export function filterAndSortThreads({
   return result;
 }
 
-/** Counts per type, status and git state for the filter dropdowns. */
+/** Counts per type, origin, automation, status and git state for the filter dropdowns. */
 export function useThreadFilterCounts(
   allThreads: Thread[],
   statusByBranch: GitStatusMaps['statusByBranch'],
@@ -121,6 +128,15 @@ export function useThreadFilterCounts(
   const originCounts = useMemo(() => {
     const counts = { factory: 0, automation: 0, user: 0 };
     for (const t of allThreads) counts[threadOrigin(t)]++;
+    return counts;
+  }, [allThreads]);
+
+  // Runs per automation, for the automation filter
+  const automationCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const t of allThreads) {
+      if (t.automationId) counts[t.automationId] = (counts[t.automationId] || 0) + 1;
+    }
     return counts;
   }, [allThreads]);
 
@@ -145,7 +161,7 @@ export function useThreadFilterCounts(
     return counts;
   }, [allThreads, statusByBranch, threadToBranchKey]);
 
-  return { typeCounts, originCounts, statusCounts, gitCounts };
+  return { typeCounts, originCounts, automationCounts, statusCounts, gitCounts };
 }
 
 /** Who started a thread, as the origin filter names it. */

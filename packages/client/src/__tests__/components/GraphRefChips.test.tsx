@@ -75,6 +75,44 @@ describe('GraphRefChips', () => {
     );
   });
 
+  test("each ref's trailing content (its PR) sits on that ref's own line", () => {
+    const refs: FoldedRef[] = [
+      { kind: 'remote', name: 'origin/feat/a', isCurrent: false, pullRequest: pr('OPEN') },
+      { kind: 'remote', name: 'origin/feat/b', isCurrent: false },
+      {
+        kind: 'remote',
+        name: 'origin/feat/c',
+        isCurrent: false,
+        pullRequest: { number: 142, url: 'https://github.com/o/r/pull/142', state: 'OPEN' },
+      },
+    ];
+    renderWithProviders(
+      <GraphRefChips
+        refs={refs}
+        branchSummaryByName={new Map()}
+        actionInProgress={null}
+        color="#a5b4fc"
+        searchQuery=""
+        trailing={(ref) =>
+          ref.pullRequest ? <span data-testid={`pr-${ref.pullRequest.number}`} /> : null
+        }
+        onPushBranch={vi.fn()}
+        onPullCurrentBranch={vi.fn()}
+      />,
+    );
+    const lineOf = (testId: string) => screen.getByTestId(testId).parentElement;
+    expect(lineOf('pr-141')).toBe(lineOf('graph-ref-chip-remote:origin/feat/a'));
+    expect(lineOf('pr-142')).toBe(lineOf('graph-ref-chip-remote:origin/feat/c'));
+    // Every line is exactly one chip tall, which the row's node arithmetic relies on.
+    const lines = screen.getByTestId('graph-ref-chips').children;
+    expect(lines).toHaveLength(3);
+    for (const line of lines) {
+      expect((line as HTMLElement).style.getPropertyValue('--graph-ref-chip-height')).toBe(
+        `${GRAPH_REF_CHIP_HEIGHT_PX}px`,
+      );
+    }
+  });
+
   test('points an arrow at the branch the open thread works on', () => {
     renderWithProviders(
       <GraphRefChips

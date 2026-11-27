@@ -1,4 +1,3 @@
-import type { WheelEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { LANE_WIDTH } from '@/components/commit-graph/GraphGutter';
@@ -21,7 +20,6 @@ export function GraphWipRow({
   gutterWidth,
   graphViewportWidth = gutterWidth,
   graphScrollLeft = 0,
-  onGraphGutterWheel,
   rowHeight,
 }: {
   status: NonNullable<ReturnType<typeof useWorkingTreeStatus>['status']>;
@@ -30,7 +28,6 @@ export function GraphWipRow({
   gutterWidth: number;
   graphViewportWidth?: number;
   graphScrollLeft?: number;
-  onGraphGutterWheel?: (event: WheelEvent<HTMLDivElement>) => void;
   rowHeight: number;
 }) {
   const { t } = useTranslation();
@@ -51,7 +48,7 @@ export function GraphWipRow({
       <div
         style={{ '--graph-wip-viewport-width': `${graphViewportWidth}px` }}
         className="w-[var(--graph-wip-viewport-width)] shrink-0 self-stretch overflow-hidden"
-        onWheel={onGraphGutterWheel}
+        data-graph-gutter=""
       >
         <div
           className="w-[var(--graph-wip-gutter-width)] [transform:translateX(var(--graph-wip-scroll-left))]"

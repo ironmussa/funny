@@ -1,4 +1,4 @@
-import { useMemo, useState, type KeyboardEvent, type WheelEvent } from 'react';
+import { useMemo, useState, type KeyboardEvent } from 'react';
 
 import { CommitActionsMenu } from '@/components/commit-graph/CommitActionsMenu';
 import {
@@ -34,6 +34,7 @@ import { githubCommitUrlForRemoteCommit } from '@/lib/github-url';
 import { graphLanePastel } from '@/lib/graph-colors';
 import {
   foldGraphRefs,
+  type FoldedRef,
   type GraphBranchSummary,
   type GraphNodeParentLabel,
   pinThreadBranchFirst,
@@ -49,7 +50,6 @@ export interface GraphCommitRowProps {
   gutterWidth: number;
   graphViewportWidth: number;
   graphScrollLeft: number;
-  onGraphGutterWheel: (event: WheelEvent<HTMLDivElement>) => void;
   selected: boolean;
   avatarUrl: string | undefined;
   committerAvatarUrl: string | undefined;
@@ -139,6 +139,11 @@ export function isFromInsideRow(e: { currentTarget: Element; target: EventTarget
   return e.target instanceof Node && e.currentTarget.contains(e.target);
 }
 
+/** One pull request's identity among a row's refs. */
+function pullRequestKey(pr: NonNullable<FoldedRef['pullRequest']>): string {
+  return pr.url || String(pr.number);
+}
+
 /**
  * The refs on one commit row, folded and ordered for its chips, plus what its
  * actions menu offers: PR links, pushable branches, merge targets, thread bases.
@@ -154,15 +159,14 @@ function useCommitRowRefs(
     () => pinThreadBranchFirst(foldGraphRefs(entry.refs, entry.headBranch), threadBranch),
     [entry.refs, entry.headBranch, threadBranch],
   );
-  const pullRequestLinks = useMemo(() => {
-    const seen = new Set<string>();
-    return foldedRefs.flatMap((r) => {
-      if (!r.pullRequest) return [];
-      const key = r.pullRequest.url || String(r.pullRequest.number);
-      if (seen.has(key)) return [];
-      seen.add(key);
-      return [r.pullRequest];
-    });
+  // The ref whose line shows each pull request: the first that carries it.
+  const prOwner = useMemo(() => {
+    const owners = new Map<string, FoldedRef>();
+    for (const ref of foldedRefs) {
+      const key = ref.pullRequest && pullRequestKey(ref.pullRequest);
+      if (key && !owners.has(key)) owners.set(key, ref);
+    }
+    return owners;
   }, [foldedRefs]);
   // Local-only branch tips on this commit — `local` folded refs with no synced
   // remote (i.e. the ones rendered with the `Monitor` glyph). These are exactly
@@ -194,7 +198,7 @@ function useCommitRowRefs(
   const isStashTip = useMemo(() => foldedRefs.some((ref) => isStashRef(ref.name)), [foldedRefs]);
   return {
     foldedRefs,
-    pullRequestLinks,
+    prOwner,
     pushableBranches,
     targetBranches,
     threadBranches,
@@ -271,7 +275,6 @@ export function GraphCommitRow({
     gutterWidth,
     graphViewportWidth,
     graphScrollLeft,
-    onGraphGutterWheel,
     selected,
     avatarUrl,
     committerAvatarUrl,
@@ -327,14 +330,8 @@ export function GraphCommitRow({
   // `Monitor` (lives only on this machine), a lone remote-tracking branch shows
   // `Cloud`, a tag shows `Tag`.
   const lanePastel = graphLanePastel(graphRow?.nodeColor ?? 0);
-  const {
-    foldedRefs,
-    pullRequestLinks,
-    pushableBranches,
-    targetBranches,
-    threadBranches,
-    isStashTip,
-  } = useCommitRowRefs(entry, threadBranch, branchSummaryByName);
+  const { foldedRefs, prOwner, pushableBranches, targetBranches, threadBranches, isStashTip } =
+    useCommitRowRefs(entry, threadBranch, branchSummaryByName);
 
   const githubUrl = githubCommitUrlForRemoteCommit(githubBrowseBaseUrl, entry.hash, unpushed);
   const commitTime = useMemo(
@@ -404,7 +401,6 @@ export function GraphCommitRow({
             gutterWidth={gutterWidth}
             graphViewportWidth={graphViewportWidth}
             graphScrollLeft={graphScrollLeft}
-            onGraphGutterWheel={onGraphGutterWheel}
             rowHeight={rowHeight}
             nodeYFrac={nodeYFrac}
             avatarUrl={cachedAvatarUrl}
@@ -423,7 +419,7 @@ export function GraphCommitRow({
           {foldedRefs.length > 0 && (
             <GraphCommitRefsLine
               foldedRefs={foldedRefs}
-              pullRequestLinks={pullRequestLinks}
+              prOwner={prOwner}
               prProjectId={prProjectId}
               branchSummaryByName={branchSummaryByName}
               githubBrowseBaseUrl={githubBrowseBaseUrl}
@@ -500,7 +496,6 @@ interface GraphCommitNodeProps extends Pick<
   | 'gutterWidth'
   | 'graphViewportWidth'
   | 'graphScrollLeft'
-  | 'onGraphGutterWheel'
   | 'rowHeight'
   | 'avatarUrl'
   | 'committerAvatarUrl'
@@ -523,7 +518,6 @@ function GraphCommitNode({
   gutterWidth,
   graphViewportWidth,
   graphScrollLeft,
-  onGraphGutterWheel,
   rowHeight,
   nodeYFrac,
   avatarUrl,
@@ -546,7 +540,8 @@ function GraphCommitNode({
     <div
       style={{ '--graph-viewport-width': `${graphViewportWidth}px` }}
       className="w-[var(--graph-viewport-width)] shrink-0 self-stretch overflow-hidden"
-      onWheel={onGraphGutterWheel}
+      // A wheel over the gutter scrolls the lanes (useGraphHorizontalScroll).
+      data-graph-gutter=""
     >
       <div
         style={{
@@ -608,7 +603,7 @@ interface GraphCommitRefsLineProps extends Pick<
   | 'onPullCurrentBranch'
 > {
   foldedRefs: CommitRowRefs['foldedRefs'];
-  pullRequestLinks: CommitRowRefs['pullRequestLinks'];
+  prOwner: CommitRowRefs['prOwner'];
   /** The graph's project: its PR chips open funny's PR view. */
   prProjectId?: string;
   /** Height of one chip line. */
@@ -618,7 +613,7 @@ interface GraphCommitRefsLineProps extends Pick<
 /** The branch/tag chips and PR badges on their own line above the commit title. */
 function GraphCommitRefsLine({
   foldedRefs,
-  pullRequestLinks,
+  prOwner,
   prProjectId,
   branchSummaryByName,
   githubBrowseBaseUrl,
@@ -654,23 +649,30 @@ function GraphCommitRefsLine({
         color={color}
         searchQuery={searchQuery}
         threadBranch={threadBranch}
+        trailing={(gitRef) => {
+          // Each pull request sits on the line of its branch, once: a folded
+          // pair or two refs of one PR show it on the first.
+          const pr = gitRef.pullRequest;
+          if (!pr || prOwner.get(pullRequestKey(pr)) !== gitRef) return null;
+          return (
+            <PRBadge
+              prNumber={pr.number}
+              prState={pr.state}
+              prUrl={pr.url}
+              projectId={prProjectId}
+              // The same plain chip as the sidebar's thread rows (`ThreadItemTitleRow`).
+              variant="plain"
+              // Compact: the chip's own text size, so it fits the chip's line.
+              size="compact"
+              showExternalIcon={false}
+              className="shrink-0"
+              data-testid={`graph-pr-badge-${pr.number}`}
+            />
+          );
+        }}
         onPushBranch={onPushBranch}
         onPullCurrentBranch={onPullCurrentBranch}
       />
-      {pullRequestLinks.map((pr) => (
-        <PRBadge
-          key={pr.url}
-          prNumber={pr.number}
-          prState={pr.state}
-          prUrl={pr.url}
-          projectId={prProjectId}
-          // The same plain chip as the sidebar's thread rows (`ThreadItemTitleRow`).
-          variant="plain"
-          showExternalIcon={false}
-          className="ml-1"
-          data-testid={`graph-pr-badge-${pr.number}`}
-        />
-      ))}
     </div>
   );
 }

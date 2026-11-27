@@ -13,6 +13,7 @@ import {
   Tag,
   Upload,
 } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
@@ -534,7 +535,7 @@ function GraphRefChip({
       // A merged PR is told by its badge and tooltip, not by fading the chip:
       // opacity would also fade the name and let the row show through.
       className={cn(
-        'inline-flex h-[var(--graph-ref-chip-height)] max-w-full min-w-0 shrink-0 items-center gap-0.5 rounded-full bg-[color:var(--graph-ref-chip-bg)] px-1 py-px text-[color:var(--graph-ref-chip-fg)] transition-[filter] hover:brightness-90',
+        'inline-flex h-[var(--graph-ref-chip-height)] max-w-full min-w-0 shrink items-center gap-0.5 rounded-full bg-[color:var(--graph-ref-chip-bg)] px-1 py-px text-[color:var(--graph-ref-chip-fg)] transition-[filter] hover:brightness-90',
         // The thread's chip is outlined in a darker shade of its own color. The
         // ring is inset: the refs line clips at the chip's exact height, so an
         // outer ring would be cut at the top and bottom.
@@ -605,6 +606,7 @@ export function GraphRefChips({
   color,
   searchQuery,
   threadBranch = null,
+  trailing,
   onPushBranch,
   onPullCurrentBranch,
 }: {
@@ -616,6 +618,8 @@ export function GraphRefChips({
   searchQuery: string;
   /** Branch the open thread works on; its chip gets an arrow marker. */
   threadBranch?: string | null;
+  /** Shown after a ref's chip, on its line (its pull request badge). */
+  trailing?: (gitRef: FoldedRef) => ReactNode;
   onPushBranch: (branch: string) => void;
   onPullCurrentBranch: (branch: string) => void;
 }) {
@@ -626,7 +630,7 @@ export function GraphRefChips({
 
   return (
     <div
-      className="inline-flex min-w-0 shrink flex-col items-start gap-[var(--graph-ref-chips-gap)]"
+      className="inline-flex max-w-full min-w-0 shrink-0 flex-col items-start gap-[var(--graph-ref-chips-gap)]"
       style={{ '--graph-ref-chips-gap': `${GRAPH_REF_CHIP_GAP_PX}px` }}
       data-testid="graph-ref-chips"
     >
@@ -635,37 +639,39 @@ export function GraphRefChips({
         const summary = branchName ? branchSummaryByName.get(branchName) : undefined;
         const isThreadBranch = isThreadBranchRef(gitRef, threadBranch);
 
-        const chip = (
-          <GraphRefChip
-            key={`${gitRef.kind}:${gitRef.name}`}
-            gitRef={gitRef}
-            summary={summary}
-            githubBrowseBaseUrl={githubBrowseBaseUrl}
-            actionInProgress={actionInProgress}
-            color={color}
-            textColor={textColor}
-            hasSearchQuery={hasSearchQuery}
-            searchQuery={searchQuery}
-            isThreadBranch={isThreadBranch}
-            onPushBranch={onPushBranch}
-            onPullCurrentBranch={onPullCurrentBranch}
-          />
-        );
-        if (!isThreadBranch) return chip;
-        // The marker hangs in the gap LEFT of the chip (absolute), so marking the
-        // thread's branch never shifts its chip out of line with the others.
+        const after = trailing?.(gitRef);
+        // One line per ref, exactly one chip tall: the commit row places its
+        // node at the first chip's center with px arithmetic.
         return (
           <div
             key={`${gitRef.kind}:${gitRef.name}`}
-            className="relative flex max-w-full min-w-0 items-center"
+            className="relative flex h-[var(--graph-ref-chip-height)] max-w-full min-w-0 items-center gap-1"
+            style={{ '--graph-ref-chip-height': `${GRAPH_REF_CHIP_HEIGHT_PX}px` }}
           >
-            <span
-              className="absolute top-1/2 right-full mr-[var(--thread-branch-marker-gap)] inline-flex -translate-y-1/2"
-              style={{ '--thread-branch-marker-gap': `${THREAD_BRANCH_MARKER_GAP_PX}px` }}
-            >
-              <ThreadBranchMarker branch={gitRef.name} color={color} />
-            </span>
-            {chip}
+            {/* The marker hangs in the gap LEFT of the chip (absolute), so
+                marking the thread's branch never shifts its chip out of line. */}
+            {isThreadBranch && (
+              <span
+                className="absolute top-1/2 right-full mr-[var(--thread-branch-marker-gap)] inline-flex -translate-y-1/2"
+                style={{ '--thread-branch-marker-gap': `${THREAD_BRANCH_MARKER_GAP_PX}px` }}
+              >
+                <ThreadBranchMarker branch={gitRef.name} color={color} />
+              </span>
+            )}
+            <GraphRefChip
+              gitRef={gitRef}
+              summary={summary}
+              githubBrowseBaseUrl={githubBrowseBaseUrl}
+              actionInProgress={actionInProgress}
+              color={color}
+              textColor={textColor}
+              hasSearchQuery={hasSearchQuery}
+              searchQuery={searchQuery}
+              isThreadBranch={isThreadBranch}
+              onPushBranch={onPushBranch}
+              onPullCurrentBranch={onPullCurrentBranch}
+            />
+            {after}
           </div>
         );
       })}

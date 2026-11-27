@@ -123,7 +123,6 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
     graphMaxScrollLeft,
     clampedGraphScrollLeft,
     updateGraphScrollLeft,
-    handleGraphGutterWheel,
   } = useGraphHorizontalScroll(rootRef, gutterWidth);
 
   // Working-tree status drives the WIP "Uncommitted changes" node above the list
@@ -197,7 +196,6 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
     gutterWidth,
     graphViewportWidth,
     graphScrollLeft: clampedGraphScrollLeft,
-    onGraphGutterWheel: handleGraphGutterWheel,
     githubBrowseBaseUrl,
     effectiveThreadId,
     projectModeId,
@@ -271,7 +269,6 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
           gutterWidth={gutterWidth}
           graphViewportWidth={graphViewportWidth}
           graphScrollLeft={clampedGraphScrollLeft}
-          onGraphGutterWheel={handleGraphGutterWheel}
           rowHeight={baseRowH}
         />
       )}

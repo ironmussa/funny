@@ -27,12 +27,22 @@ import { SidebarThreadsSection } from './sidebar/SidebarThreadsSection';
 import { SidebarTopBar } from './sidebar/SidebarTopBar';
 
 export function AppSidebar({ singleProjectId }: { singleProjectId?: string | null } = {}) {
-  // Keep this wrapper's hook count stable (only `useSidebar`) so the collapse
-  // toggle can early-return without violating the Rules of Hooks. All other
-  // hooks live in `AppSidebarBody`, which only mounts in the expanded state.
+  // Keep `AppSidebarBody` mounted while collapsed (hidden via `display: none`)
+  // so expanding the sidebar does not remount every project, thread row, and
+  // drag-and-drop listener on the animation frame.
   const { state: sidebarState } = useSidebar();
-  if (sidebarState === 'collapsed') return <CollapsedSidebarRail />;
-  return <AppSidebarBody singleProjectId={singleProjectId} />;
+  const isCollapsed = sidebarState === 'collapsed';
+  return (
+    <>
+      {isCollapsed && <CollapsedSidebarRail />}
+      <div
+        className={cn(isCollapsed ? 'hidden' : 'contents')}
+        aria-hidden={isCollapsed || undefined}
+      >
+        <AppSidebarBody singleProjectId={singleProjectId} />
+      </div>
+    </>
+  );
 }
 
 function AppSidebarBody({ singleProjectId }: { singleProjectId?: string | null }) {

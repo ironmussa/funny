@@ -146,20 +146,45 @@ export function useListScrollMargin(
   return listScrollMargin;
 }
 
+const CONTAINER_WIDTH_RESIZE_DEBOUNCE_MS = 120;
+
 export function useContainerWidth(itemContainerRef: RefObject<HTMLElement | null>) {
   const [containerWidth, setContainerWidth] = useState(0);
 
   useLayoutEffect(() => {
     const el = itemContainerRef.current;
     if (!el) return;
-    setContainerWidth(el.clientWidth);
+    let lastWidth = Math.round(el.clientWidth);
+    setContainerWidth(lastWidth);
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
     const ro = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        setContainerWidth(entry.contentRect.width);
+      const entry = entries[entries.length - 1];
+      if (!entry) return;
+      const nextWidth = Math.round(entry.contentRect.width);
+      if (nextWidth === lastWidth) return;
+      if (debounceTimer !== null) {
+        clearTimeout(debounceTimer);
+        debounceTimer = null;
       }
+      // Apply the first non-zero measurement immediately (e.g. after mounting
+      // hidden), then debounce subsequent resizes so animated pane toggles and
+      // sash drags do not invalidate pretext/height caches on every frame.
+      if (lastWidth === 0 && nextWidth > 0) {
+        lastWidth = nextWidth;
+        setContainerWidth(nextWidth);
+        return;
+      }
+      debounceTimer = setTimeout(() => {
+        debounceTimer = null;
+        lastWidth = nextWidth;
+        setContainerWidth(nextWidth);
+      }, CONTAINER_WIDTH_RESIZE_DEBOUNCE_MS);
     });
     ro.observe(el);
-    return () => ro.disconnect();
+    return () => {
+      if (debounceTimer !== null) clearTimeout(debounceTimer);
+      ro.disconnect();
+    };
   }, [itemContainerRef]);
 
   return containerWidth;

@@ -126,6 +126,8 @@ export function useViewportScrollListeners({
   }, [onScrollRef, onUserInput, scrollViewportRef]);
 }
 
+const VIEWPORT_RESIZE_SETTLE_MS = 120;
+
 /**
  * A grid/sidebar/pane resize changes every live-column viewport at once. TanStack
  * observes the new rect, but variable-height rows may still be using the range
@@ -150,8 +152,12 @@ export function useViewportResizeRecovery({
     const viewport = scrollViewportRef.current;
     if (!viewport) return;
 
-    let measureRafId: number | null = null;
+    let settleTimer: ReturnType<typeof setTimeout> | null = null;
     let restoreRafId: number | null = null;
+    let pendingRecovery: {
+      wasBottomPinned: boolean;
+      anchor: ReturnType<MemoizedMessageListHandle['captureVisibleAnchor']>;
+    } | null = null;
     let width = viewport.clientWidth;
     let height = viewport.clientHeight;
     const observer = new ResizeObserver(() => {
@@ -162,31 +168,42 @@ export function useViewportResizeRecovery({
       if (width === nextWidth && height === nextHeight) return;
       width = nextWidth;
       height = nextHeight;
-      const wasBottomPinned = !userHasScrolledUpRef.current;
-      const anchor = wasBottomPinned
-        ? null
-        : (messageListRef.current?.captureVisibleAnchor() ?? null);
 
-      if (measureRafId !== null) cancelAnimationFrame(measureRafId);
-      if (restoreRafId !== null) cancelAnimationFrame(restoreRafId);
-      measureRafId = requestAnimationFrame(() => {
-        measureRafId = null;
+      // Capture the anchor once at the start of a resize burst (e.g. a 200ms
+      // pane animation or sash drag) instead of reading DOM rects every frame.
+      if (pendingRecovery === null) {
+        const wasBottomPinned = !userHasScrolledUpRef.current;
+        pendingRecovery = {
+          wasBottomPinned,
+          anchor: wasBottomPinned ? null : (messageListRef.current?.captureVisibleAnchor() ?? null),
+        };
+      }
+
+      if (settleTimer !== null) clearTimeout(settleTimer);
+      if (restoreRafId !== null) {
+        cancelAnimationFrame(restoreRafId);
+        restoreRafId = null;
+      }
+      settleTimer = setTimeout(() => {
+        settleTimer = null;
+        const recovery = pendingRecovery;
+        pendingRecovery = null;
         messageListRef.current?.remeasure?.();
         restoreRafId = requestAnimationFrame(() => {
           restoreRafId = null;
-          if (wasBottomPinned && !userHasScrolledUpRef.current) {
+          if (recovery?.wasBottomPinned && !userHasScrolledUpRef.current) {
             pinViewportToBottom(viewport);
-          } else if (anchor) {
-            messageListRef.current?.restoreScrollAnchor(anchor);
+          } else if (recovery?.anchor) {
+            messageListRef.current?.restoreScrollAnchor(recovery.anchor);
           }
           updateStickyMetrics(viewport);
         });
-      });
+      }, VIEWPORT_RESIZE_SETTLE_MS);
     });
     observer.observe(viewport);
 
     return () => {
-      if (measureRafId !== null) cancelAnimationFrame(measureRafId);
+      if (settleTimer !== null) clearTimeout(settleTimer);
       if (restoreRafId !== null) cancelAnimationFrame(restoreRafId);
       observer.disconnect();
     };

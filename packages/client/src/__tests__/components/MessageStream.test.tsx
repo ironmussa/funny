@@ -339,6 +339,84 @@ describe('MessageStream sticky bottom', () => {
     expect(memoizedMessageListLifecycle.remeasureCalls).toBe(1);
   });
 
+  test('coalesces rapid viewport resizes during pane animation into a single remeasure', () => {
+    const observers: Array<{
+      targets: Set<Element>;
+      trigger: () => void;
+    }> = [];
+
+    stubGlobal(
+      'ResizeObserver',
+      class TestResizeObserver {
+        private readonly callback: ResizeObserverCallback;
+        readonly targets = new Set<Element>();
+
+        constructor(callback: ResizeObserverCallback) {
+          this.callback = callback;
+          observers.push({ targets: this.targets, trigger: () => this.callback([], this) });
+        }
+
+        observe(target: Element) {
+          this.targets.add(target);
+        }
+        unobserve(target: Element) {
+          this.targets.delete(target);
+        }
+        disconnect() {
+          this.targets.clear();
+        }
+      },
+    );
+
+    const { container } = render(
+      <MessageStream
+        threadId="t1"
+        status="idle"
+        messages={makeMessages('done')}
+        onSend={() => {}}
+      />,
+    );
+    const viewport = expectInstance(container.firstElementChild, HTMLDivElement);
+    const viewportObserver = observers.find((observer) => observer.targets.has(viewport));
+    expect(viewportObserver).toBeDefined();
+
+    let currentWidth = 800;
+    Object.defineProperty(viewport, 'clientWidth', {
+      configurable: true,
+      get: () => currentWidth,
+    });
+    setScrollMetrics(viewport, {
+      scrollHeight: () => 1000,
+      clientHeight: () => 300,
+    });
+    viewport.scrollTop = 700;
+
+    act(() => {
+      viewportObserver?.trigger();
+      vi.runOnlyPendingTimers();
+      vi.runOnlyPendingTimers();
+    });
+    memoizedMessageListLifecycle.remeasureCalls = 0;
+
+    // Simulate a 200ms pane animation resizing the viewport across multiple frames.
+    act(() => {
+      for (const nextWidth of [760, 720, 680, 640, 600]) {
+        currentWidth = nextWidth;
+        viewportObserver?.trigger();
+        vi.advanceTimersByTime(16);
+      }
+    });
+    expect(memoizedMessageListLifecycle.remeasureCalls).toBe(0);
+
+    // Once the animation settles, remeasure runs once and restores the bottom pin.
+    act(() => {
+      vi.runOnlyPendingTimers();
+      vi.runOnlyPendingTimers();
+    });
+    expect(memoizedMessageListLifecycle.remeasureCalls).toBe(1);
+    expect(viewport.scrollTop).toBe(1000);
+  });
+
   test('continues with the canonical lastUserMessage effort', () => {
     const onSend = vi.fn();
     const messages = [

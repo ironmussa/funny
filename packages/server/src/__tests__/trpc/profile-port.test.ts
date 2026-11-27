@@ -104,6 +104,23 @@ describe('profile router: utility model and thread recap', () => {
     expect(profile.gitName).toBe('Alice');
   });
 
+  test('the recap absence defaults to 5 minutes, saves, and refuses values out of range', async () => {
+    expect((await caller().profile.get()).threadRecapMinAbsenceMinutes).toBe(5);
+
+    await caller().profile.update({ threadRecapMinAbsenceMinutes: 30 });
+    expect((await caller().profile.get()).threadRecapMinAbsenceMinutes).toBe(30);
+
+    await caller().profile.update({ threadRecapMinAbsenceMinutes: 15 });
+    expect((await caller().profile.get()).threadRecapMinAbsenceMinutes).toBe(15);
+
+    for (const bad of [0, 1441, 2.5]) {
+      await expect(
+        caller().profile.update({ threadRecapMinAbsenceMinutes: bad }),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    }
+    expect((await caller().profile.get()).threadRecapMinAbsenceMinutes).toBe(15);
+  });
+
   test('an invalid utility model is refused with 400 and the stored value is kept', async () => {
     await caller().profile.update({ utilityModel: { provider: 'anthropic', model: 'claude' } });
 

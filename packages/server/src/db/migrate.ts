@@ -2685,6 +2685,19 @@ const migrations: Migration[] = [
       await ctx().addColumn('automations', 'effort', 'TEXT');
     },
   },
+  {
+    // Change thread-recap: how long (minutes) the user must be away from a
+    // thread before a recap is offered. Existing users keep the old 5 minutes.
+    name: '144_user_profiles_thread_recap_min_absence',
+    async up() {
+      await ctx().addColumn(
+        'user_profiles',
+        'thread_recap_min_absence_minutes',
+        'INTEGER NOT NULL',
+        '5',
+      );
+    },
+  },
 ];
 
 /**

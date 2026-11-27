@@ -337,6 +337,8 @@ export const userProfiles = sqliteTable('user_profiles', {
   utilityModel: text('utility_model'),
   /** 1 = show a recap when the user comes back to a thread (thread-recap). */
   threadRecapEnabled: integer('thread_recap_enabled').notNull().default(1),
+  /** Minutes away from a thread before a recap is offered (thread-recap). */
+  threadRecapMinAbsenceMinutes: integer('thread_recap_min_absence_minutes').notNull().default(5),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 });

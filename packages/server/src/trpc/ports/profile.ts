@@ -4,6 +4,7 @@
  */
 
 import { failure, type ProfilePort } from '@funny/api';
+import { DEFAULT_THREAD_RECAP_MIN_ABSENCE_MINUTES } from '@funny/shared/contracts/profile';
 import { err, ok } from 'neverthrow';
 
 import * as ps from '../../services/profile-service.js';
@@ -26,6 +27,7 @@ const defaultProfile = (userId: string) => ({
   runnerInviteToken: null,
   utilityModel: null,
   threadRecapEnabled: true,
+  threadRecapMinAbsenceMinutes: DEFAULT_THREAD_RECAP_MIN_ABSENCE_MINUTES,
 });
 
 export const profilePort: ProfilePort = {

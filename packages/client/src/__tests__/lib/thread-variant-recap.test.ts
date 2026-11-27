@@ -29,6 +29,13 @@ describe('shouldOfferRecap (openspec thread-recap)', () => {
     expect(shouldOfferRecap(minutesAgo(5), minutesAgo(1), NOW, CREATED)).toBe(true);
   });
 
+  test('a configured absence replaces the 5-minute default', () => {
+    const thirty = 30 * 60_000;
+    expect(shouldOfferRecap(minutesAgo(20), minutesAgo(1), NOW, CREATED, thirty)).toBe(false);
+    expect(shouldOfferRecap(minutesAgo(30), minutesAgo(1), NOW, CREATED, thirty)).toBe(true);
+    expect(shouldOfferRecap(minutesAgo(2), minutesAgo(1), NOW, CREATED, 60_000)).toBe(true);
+  });
+
   test('no activity or unparseable times offer nothing', () => {
     expect(shouldOfferRecap(minutesAgo(20), null, NOW, CREATED)).toBe(false);
     expect(shouldOfferRecap('garbage', minutesAgo(1), NOW, null)).toBe(false);

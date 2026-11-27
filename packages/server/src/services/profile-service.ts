@@ -8,7 +8,10 @@
  */
 
 import type { UserProfile } from '@funny/shared';
-import { UtilityModelSetting } from '@funny/shared/contracts/profile';
+import {
+  DEFAULT_THREAD_RECAP_MIN_ABSENCE_MINUTES,
+  UtilityModelSetting,
+} from '@funny/shared/contracts/profile';
 import { parseStoredJson } from '@funny/shared/json-validation';
 import { and, eq, isNull } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
@@ -158,6 +161,8 @@ export async function getProfile(userId: string): Promise<UserProfile | null> {
     runnerInviteToken: r.runnerInviteToken ?? null,
     utilityModel: parseUtilityModel(r.utilityModel),
     threadRecapEnabled: r.threadRecapEnabled !== 0,
+    threadRecapMinAbsenceMinutes:
+      r.threadRecapMinAbsenceMinutes ?? DEFAULT_THREAD_RECAP_MIN_ABSENCE_MINUTES,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
   };
@@ -180,6 +185,7 @@ export async function upsertProfile(
     theme?: string;
     utilityModel?: UtilityModelSetting | null;
     threadRecapEnabled?: boolean;
+    threadRecapMinAbsenceMinutes?: number;
   },
 ): Promise<UserProfile> {
   // Handle provider keys (new generic + legacy fields)
@@ -215,6 +221,8 @@ export async function upsertProfile(
       set.utilityModel = serializeUtilityModel(updates.utilityModel);
     if (updates.threadRecapEnabled !== undefined)
       set.threadRecapEnabled = updates.threadRecapEnabled ? 1 : 0;
+    if (updates.threadRecapMinAbsenceMinutes !== undefined)
+      set.threadRecapMinAbsenceMinutes = updates.threadRecapMinAbsenceMinutes;
 
     await db.update(userProfiles).set(set).where(eq(userProfiles.userId, userId));
   } else {
@@ -232,6 +240,8 @@ export async function upsertProfile(
       theme: updates.theme ?? null,
       utilityModel: serializeUtilityModel(updates.utilityModel ?? null),
       threadRecapEnabled: updates.threadRecapEnabled === false ? 0 : 1,
+      threadRecapMinAbsenceMinutes:
+        updates.threadRecapMinAbsenceMinutes ?? DEFAULT_THREAD_RECAP_MIN_ABSENCE_MINUTES,
       createdAt: now,
       updatedAt: now,
     });

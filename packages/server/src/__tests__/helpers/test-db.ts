@@ -240,6 +240,7 @@ export function createTestDb() {
       theme TEXT,
       utility_model TEXT,
       thread_recap_enabled INTEGER NOT NULL DEFAULT 1,
+      thread_recap_min_absence_minutes INTEGER NOT NULL DEFAULT 5,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     )

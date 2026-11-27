@@ -1,4 +1,7 @@
-import type { ProfileResponse } from '@funny/shared/contracts/profile';
+import {
+  DEFAULT_THREAD_RECAP_MIN_ABSENCE_MINUTES,
+  type ProfileResponse,
+} from '@funny/shared/contracts/profile';
 
 import { canShowRecap, shouldOfferRecap } from '@/lib/thread-variant';
 
@@ -45,18 +48,32 @@ export interface RecapOffer {
 
 /**
  * The recap an open offers, or null: recaps on in the profile, a viewer who
- * may see one, and activity after an absence.
+ * may see one, and activity after an absence of at least the profile's
+ * `threadRecapMinAbsenceMinutes`.
  */
 export function recapOffer(
   thread: RecapThread,
   currentUserId: string | null | undefined,
   opened: RecapOpen | undefined,
-  profile: Pick<ProfileResponse, 'threadRecapEnabled'> | undefined,
+  profile:
+    | (Pick<ProfileResponse, 'threadRecapEnabled'> &
+        Partial<Pick<ProfileResponse, 'threadRecapMinAbsenceMinutes'>>)
+    | undefined,
 ): RecapOffer | null {
   if (profile?.threadRecapEnabled !== true || !opened?.newestMessageId) return null;
   if (!canShowRecap(thread, currentUserId)) return null;
   const readFrom = opened.createdAt ?? thread.createdAt;
-  if (!shouldOfferRecap(opened.readAt, opened.newestActivityAt, opened.openedAt, readFrom)) {
+  const minAbsenceMs =
+    (profile.threadRecapMinAbsenceMinutes ?? DEFAULT_THREAD_RECAP_MIN_ABSENCE_MINUTES) * 60_000;
+  if (
+    !shouldOfferRecap(
+      opened.readAt,
+      opened.newestActivityAt,
+      opened.openedAt,
+      readFrom,
+      minAbsenceMs,
+    )
+  ) {
     return null;
   }
   return {

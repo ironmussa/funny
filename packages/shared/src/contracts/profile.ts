@@ -56,6 +56,12 @@ export function resolveUtilityModel(setting: UtilityModelSetting | null): Utilit
   return setting ?? { ...DEFAULT_UTILITY_MODEL };
 }
 
+/** Default absence (minutes) before a thread recap is offered (thread-recap). */
+export const DEFAULT_THREAD_RECAP_MIN_ABSENCE_MINUTES = 5;
+
+/** Accepted range for `threadRecapMinAbsenceMinutes`: one minute to one day. */
+export const THREAD_RECAP_MIN_ABSENCE_LIMITS = { min: 1, max: 1440 } as const;
+
 export const updateProfileBody = z.object({
   gitName: z.string().optional(),
   gitEmail: z.string().optional(),
@@ -71,6 +77,12 @@ export const updateProfileBody = z.object({
   theme: z.string().optional(),
   utilityModel: UtilityModelSetting.nullable().optional(),
   threadRecapEnabled: z.boolean().optional(),
+  threadRecapMinAbsenceMinutes: z
+    .number()
+    .int()
+    .min(THREAD_RECAP_MIN_ABSENCE_LIMITS.min)
+    .max(THREAD_RECAP_MIN_ABSENCE_LIMITS.max)
+    .optional(),
 }) satisfies z.ZodType<UpdateProfileRequest>;
 
 /**

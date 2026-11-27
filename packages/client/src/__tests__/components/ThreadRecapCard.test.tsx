@@ -63,6 +63,7 @@ function seedProfile() {
     runnerInviteToken: null,
     utilityModel: null,
     threadRecapEnabled: true,
+    threadRecapMinAbsenceMinutes: 5,
   } as UserProfile);
 }
 

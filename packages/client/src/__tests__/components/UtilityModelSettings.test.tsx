@@ -41,6 +41,7 @@ function profile(overrides: Partial<UserProfile> = {}): UserProfile {
     runnerInviteToken: null,
     utilityModel: null,
     threadRecapEnabled: true,
+    threadRecapMinAbsenceMinutes: 5,
     createdAt: '2026-11-09T00:00:00.000Z',
     updatedAt: '2026-11-09T00:00:00.000Z',
     ...overrides,
@@ -68,6 +69,19 @@ describe('UtilityModelSettings', () => {
     await waitFor(() => expect(updateProfile).toHaveBeenCalledWith({ threadRecapEnabled: false }));
     await waitFor(() => expect(toggle).toHaveAttribute('aria-checked', 'false'));
     expect(cached()?.threadRecapEnabled).toBe(false);
+  });
+
+  test('the recap absence shows the saved minutes and is disabled with recaps off', () => {
+    writeProfile(profile({ threadRecapMinAbsenceMinutes: 30 }));
+    const { unmount } = render(<UtilityModelSettings />);
+    const absence = screen.getByTestId('settings-thread-recap-absence');
+    expect(absence).toHaveTextContent('30');
+    expect(absence).not.toHaveAttribute('data-disabled');
+    unmount();
+
+    writeProfile(profile({ threadRecapEnabled: false, threadRecapMinAbsenceMinutes: 30 }));
+    render(<UtilityModelSettings />);
+    expect(screen.getByTestId('settings-thread-recap-absence')).toHaveAttribute('data-disabled');
   });
 
   test('saving a model persists utilityModel', async () => {

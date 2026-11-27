@@ -117,6 +117,15 @@ const ENTRIES = [
     keywords: ['recap', 'summary', 'resumen', 'resumo', 'away', 'catch up'],
   },
   {
+    id: 'models.thread-recap-absence',
+    scope: 'preferences',
+    page: 'models',
+    kind: 'row',
+    title: 'settings.threadRecapAbsence',
+    description: 'settings.threadRecapAbsenceDesc',
+    keywords: ['recap', 'summary', 'resumen', 'resumo', 'away', 'minutes', 'minutos', 'delay'],
+  },
+  {
     id: 'models.utility-model-provider',
     scope: 'preferences',
     page: 'models',

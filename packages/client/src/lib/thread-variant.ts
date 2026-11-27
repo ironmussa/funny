@@ -281,8 +281,11 @@ export function canShowRecap(
   return thread.userId === currentUserId && !runsInSandbox(thread);
 }
 
-/** How long the owner must have been away before a recap is offered. */
-const RECAP_MIN_ABSENCE_MS = 5 * 60_000;
+/**
+ * How long the owner must have been away before a recap is offered, when the
+ * profile does not say (`threadRecapMinAbsenceMinutes`).
+ */
+const DEFAULT_RECAP_MIN_ABSENCE_MS = 5 * 60_000;
 
 function timeOf(iso: string | null | undefined): number | null {
   if (!iso) return null;
@@ -292,19 +295,21 @@ function timeOf(iso: string | null | undefined): number | null {
 
 /**
  * Whether the thread has activity the owner has not seen after an absence of
- * at least `RECAP_MIN_ABSENCE_MS`. A thread never read counts as read at its
- * creation time. `now` is passed in so the rule stays pure.
+ * at least `minAbsenceMs` (the profile's `threadRecapMinAbsenceMinutes`). A
+ * thread never read counts as read at its creation time. `now` is passed in so
+ * the rule stays pure.
  */
 export function shouldOfferRecap(
   readAt: string | null | undefined,
   newestActivityAt: string | null | undefined,
   now: number,
   createdAt: string | null | undefined,
+  minAbsenceMs: number = DEFAULT_RECAP_MIN_ABSENCE_MS,
 ): boolean {
   const read = timeOf(readAt) ?? timeOf(createdAt);
   const newest = timeOf(newestActivityAt);
   if (read === null || newest === null) return false;
-  return newest > read && now - read >= RECAP_MIN_ABSENCE_MS;
+  return newest > read && now - read >= minAbsenceMs;
 }
 
 // ── Routing ──────────────────────────────────────────────────────

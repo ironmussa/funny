@@ -58,6 +58,7 @@ function seedProfile(overrides: Partial<UserProfile> = {}) {
     runnerInviteToken: null,
     utilityModel: null,
     threadRecapEnabled: true,
+    threadRecapMinAbsenceMinutes: 5,
     ...overrides,
   } as UserProfile);
 }
@@ -126,6 +127,25 @@ describe('useThreadRecap', () => {
     await new Promise((r) => setTimeout(r, 20));
     expect(result.current).toEqual({ state: 'hidden' });
     expect(generate).not.toHaveBeenCalled();
+  });
+
+  test('the profile absence decides whether an open asks for a recap', async () => {
+    // Read 20 minutes ago: not enough for a 30-minute absence.
+    seedProfile({ threadRecapMinAbsenceMinutes: 30 });
+    generate.mockReturnValue(okAsync({ recap: 'x', newestMessageId: 'm9' }));
+    const short = renderHook(() => useThreadRecap(thread, 'user-1', opened(), notDismissed));
+    await new Promise((r) => setTimeout(r, 20));
+    expect(short.result.current).toEqual({ state: 'hidden' });
+    expect(generate).not.toHaveBeenCalled();
+    short.unmount();
+
+    // Read 2 minutes ago: enough for a 1-minute absence.
+    seedProfile({ threadRecapMinAbsenceMinutes: 1 });
+    const long = renderHook(() =>
+      useThreadRecap(thread, 'user-1', opened({ readAt: minutesAgo(2) }), notDismissed),
+    );
+    await waitFor(() => expect(long.result.current.state).toBe('ready'));
+    expect(generate).toHaveBeenCalledTimes(1);
   });
 
   test('no request before the profile is known', async () => {

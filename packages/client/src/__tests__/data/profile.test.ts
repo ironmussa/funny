@@ -41,6 +41,7 @@ function makeProfile(overrides: Partial<UserProfile> = {}): UserProfile {
     runnerInviteToken: null,
     utilityModel: null,
     threadRecapEnabled: true,
+    threadRecapMinAbsenceMinutes: 5,
     createdAt: '2026-11-09T00:00:00.000Z',
     updatedAt: '2026-11-09T00:00:00.000Z',
     ...overrides,

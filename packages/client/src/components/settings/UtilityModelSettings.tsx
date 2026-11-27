@@ -1,4 +1,5 @@
 import {
+  DEFAULT_THREAD_RECAP_MIN_ABSENCE_MINUTES,
   resolveUtilityModel,
   UTILITY_MODEL_PROVIDERS,
   UtilityModelSetting,
@@ -22,6 +23,9 @@ import { updateProfile } from '@/data/profile/actions';
 import { useProfile } from '@/data/profile/hooks';
 
 type Provider = (typeof UTILITY_MODEL_PROVIDERS)[number];
+
+/** The absences (minutes) offered before a recap shows; the saved value is kept if it is another. */
+const RECAP_ABSENCE_CHOICES: readonly number[] = [1, 5, 15, 30, 60, 120, 240];
 
 /** The provider that cannot run without a base URL (`UtilityModelSetting`). */
 function needsBaseUrl(provider: Provider): boolean {
@@ -66,9 +70,48 @@ export function UtilityModelSettings() {
             data-testid="settings-thread-recap-toggle"
           />
         </SettingRow>
+        <RecapAbsenceSetting
+          minutes={profile.threadRecapMinAbsenceMinutes ?? DEFAULT_THREAD_RECAP_MIN_ABSENCE_MINUTES}
+          disabled={!profile.threadRecapEnabled}
+        />
         <UtilityModelForm key={JSON.stringify(setting)} setting={setting} />
       </div>
     </>
+  );
+}
+
+function RecapAbsenceSetting({ minutes, disabled }: { minutes: number; disabled: boolean }) {
+  const { t } = useTranslation();
+  const choices = RECAP_ABSENCE_CHOICES.includes(minutes)
+    ? [...RECAP_ABSENCE_CHOICES]
+    : [...RECAP_ABSENCE_CHOICES, minutes].sort((a, b) => a - b);
+  return (
+    <SettingRow
+      settingId="models.thread-recap-absence"
+      title={t('settings.threadRecapAbsence')}
+      description={t('settings.threadRecapAbsenceDesc')}
+    >
+      <Select
+        value={String(minutes)}
+        disabled={disabled}
+        onValueChange={(v) => void saveProfile({ threadRecapMinAbsenceMinutes: Number(v) }, t)}
+      >
+        <SelectTrigger className="w-[180px]" data-testid="settings-thread-recap-absence">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {choices.map((m) => (
+            <SelectItem
+              key={m}
+              value={String(m)}
+              data-testid={`settings-thread-recap-absence-${m}`}
+            >
+              {t('settings.threadRecapAbsenceMinutes', { count: m })}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </SettingRow>
   );
 }
 

@@ -95,6 +95,8 @@ export interface UserProfile {
   utilityModel: UtilityModelSetting | null;
   /** Whether a recap card is shown when the user comes back to a thread. */
   threadRecapEnabled: boolean;
+  /** Minutes the user must be away from a thread before a recap is offered. */
+  threadRecapMinAbsenceMinutes: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -119,4 +121,5 @@ export interface UpdateProfileRequest {
   /** null clears the setting back to the default utility model. */
   utilityModel?: UtilityModelSetting | null;
   threadRecapEnabled?: boolean;
+  threadRecapMinAbsenceMinutes?: number;
 }

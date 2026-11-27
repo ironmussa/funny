@@ -83,18 +83,21 @@ const RESULT_STYLE = {
   completed: {
     Icon: CheckCircle2,
     card: '',
+    icon: 'text-muted-foreground',
     text: 'text-muted-foreground',
   },
   stopped: {
     Icon: XCircle,
-    card: 'border-status-interrupted/20 bg-status-interrupted/5',
-    text: 'text-status-interrupted/80',
+    card: 'border-border bg-secondary',
+    icon: 'text-status-interrupted',
+    text: 'text-foreground',
   },
-  // An error reads red, the color of the failed thread's dot in the sidebar.
+  // An error reads red on its icon, matching the failed thread's dot in the sidebar.
   failed: {
     Icon: AlertTriangle,
-    card: 'border-status-error/20 bg-status-error/5',
-    text: 'text-status-error/80',
+    card: 'border-border bg-secondary',
+    icon: 'text-status-error',
+    text: 'text-foreground',
   },
 };
 
@@ -145,11 +148,17 @@ export function AgentResultCard({
         <Icon
           className={cn(
             'icon-base shrink-0',
+            // oxlint-disable-next-line shadcn/require-static-classes -- style.icon comes from a static RESULT_STYLE map
+            style.icon,
+          )}
+        />
+        <span
+          className={cn(
+            'font-medium',
             // oxlint-disable-next-line shadcn/require-static-classes -- style.text comes from a static RESULT_STYLE map
             style.text,
           )}
-        />
-        <span className={cn('font-medium', style.text)}>
+        >
           {hasTime ? (
             <Trans i18nKey={RESULT_LABEL_AT[status]} components={{ time }} />
           ) : (
@@ -176,10 +185,7 @@ export function AgentResultCard({
         </div>
       </div>
       {!isSuccess && error && (
-        <pre
-          // oxlint-disable-next-line shadcn/require-static-classes -- style.text comes from a static RESULT_STYLE map
-          className={cn('text-2xs overflow-x-auto pl-7 font-mono whitespace-pre-wrap', style.text)}
-        >
+        <pre className="text-2xs text-foreground/80 overflow-x-auto pl-7 font-mono whitespace-pre-wrap">
           {error}
         </pre>
       )}
@@ -194,12 +200,10 @@ export function AgentInterruptedCard({
   const { t } = useTranslation();
 
   return (
-    <div className="border-status-interrupted/20 bg-status-interrupted/5 flex items-center gap-3 rounded-lg border px-3 py-2 text-xs">
-      <AlertTriangle className="icon-base text-status-interrupted/80 shrink-0" />
+    <div className="border-border bg-secondary flex items-center gap-3 rounded-lg border px-3 py-2 text-xs">
+      <AlertTriangle className="icon-base text-status-interrupted shrink-0" />
       <div>
-        <span className="text-status-interrupted/80 font-medium">
-          {t('thread.taskInterrupted')}
-        </span>
+        <span className="text-foreground font-medium">{t('thread.taskInterrupted')}</span>
         <p className="text-muted-foreground mt-0.5">{t('thread.serverRestarted')}</p>
       </div>
       <div className="text-muted-foreground ml-auto flex items-center gap-3">
@@ -225,10 +229,10 @@ export function AgentStoppedCard({
   const { t } = useTranslation();
 
   return (
-    <div className="border-status-interrupted/20 bg-status-interrupted/5 flex items-center gap-3 rounded-lg border px-3 py-2 text-xs">
-      <XCircle className="icon-base text-status-interrupted/80 shrink-0" />
+    <div className="border-border bg-secondary flex items-center gap-3 rounded-lg border px-3 py-2 text-xs">
+      <XCircle className="icon-base text-status-interrupted shrink-0" />
       <div>
-        <span className="text-status-interrupted/80 font-medium">{t('thread.taskStopped')}</span>
+        <span className="text-foreground font-medium">{t('thread.taskStopped')}</span>
         <p className="text-muted-foreground mt-0.5">{t('thread.manuallyStopped')}</p>
       </div>
       <div className="text-muted-foreground ml-auto flex items-center gap-3">

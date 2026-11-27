@@ -8,7 +8,6 @@ import { useTranslation } from 'react-i18next';
 
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { timeAgo } from '@/lib/thread-utils';
-import { cn } from '@/lib/utils';
 import type { CompactionEvent } from '@/stores/thread-store';
 
 export function CompactionEventCard({ event }: { event: CompactionEvent }) {
@@ -17,14 +16,9 @@ export function CompactionEventCard({ event }: { event: CompactionEvent }) {
   const tokenK = Math.round(event.preTokens / 1000);
 
   return (
-    <div
-      className={cn(
-        'rounded-lg border px-3 py-2 text-xs flex items-center gap-2',
-        'border-status-warning/20 bg-status-warning/5',
-      )}
-    >
+    <div className="border-border bg-secondary flex items-center gap-2 rounded-lg border px-3 py-2 text-xs">
       <Minimize2 className="icon-sm text-status-warning shrink-0" />
-      <span className="text-status-warning shrink-0 font-medium">Context compacted</span>
+      <span className="text-foreground shrink-0 font-medium">Context compacted</span>
       <span className="text-muted-foreground">
         {tokenK}K tokens → summarized ({event.trigger})
       </span>

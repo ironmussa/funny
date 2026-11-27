@@ -35,9 +35,9 @@ export function WaitingActions({ onSend }: { onSend: (text: string) => void }) {
   };
 
   return (
-    <div className="border-status-warning/20 bg-status-warning/5 space-y-2.5 rounded-lg border p-3">
-      <div className="text-status-warning/80 flex items-center gap-2 text-xs">
-        <Clock className="icon-sm" />
+    <div className="border-border bg-secondary space-y-2.5 rounded-lg border p-3">
+      <div className="text-foreground flex items-center gap-2 text-xs font-medium">
+        <Clock className="icon-sm text-status-warning shrink-0" />
         {t('thread.waitingForResponse')}
       </div>
 
@@ -108,10 +108,10 @@ export function ProviderErrorCard({ onSend }: { onSend: (text: string) => void }
   return (
     <div
       data-testid="provider-error-card"
-      className="border-status-error/20 bg-status-error/5 space-y-2.5 rounded-lg border p-3"
+      className="border-border bg-secondary space-y-2.5 rounded-lg border p-3"
     >
-      <div className="text-status-error/80 flex items-center gap-2 text-xs">
-        <AlertTriangle className="icon-sm" />
+      <div className="text-foreground flex items-center gap-2 text-xs font-medium">
+        <AlertTriangle className="icon-sm text-status-error shrink-0" />
         {t('thread.providerErrorWaiting', 'The provider returned an error. Retry when ready.')}
       </div>
 
@@ -141,10 +141,10 @@ export function CodexSdkApprovalUnavailableCard() {
   return (
     <div
       data-testid="codex-sdk-approval-unavailable"
-      className="border-status-warning/20 bg-status-warning/5 space-y-2 rounded-lg border p-3"
+      className="border-border bg-secondary space-y-2 rounded-lg border p-3"
     >
-      <div className="text-status-warning/80 flex items-center gap-2 text-xs">
-        <AlertTriangle className="icon-sm" />
+      <div className="text-foreground flex items-center gap-2 text-xs font-medium">
+        <AlertTriangle className="icon-sm text-status-warning shrink-0" />
         {t(
           'thread.codexSdkApprovalUnavailableTitle',
           'Codex needs an approval that this runner cannot answer interactively.',
@@ -170,10 +170,10 @@ export function PermissionContinuationLostCard() {
   return (
     <div
       data-testid="permission-continuation-lost"
-      className="border-status-warning/20 bg-status-warning/5 space-y-2 rounded-lg border p-3"
+      className="border-border bg-secondary space-y-2 rounded-lg border p-3"
     >
-      <div className="text-status-warning/80 flex items-center gap-2 text-xs">
-        <AlertTriangle className="icon-sm" />
+      <div className="text-foreground flex items-center gap-2 text-xs font-medium">
+        <AlertTriangle className="icon-sm text-status-warning shrink-0" />
         {t('thread.permissionContinuationLostTitle', 'The approval request could not be resumed.')}
       </div>
       <p className="text-muted-foreground text-xs">
@@ -268,9 +268,9 @@ export function PermissionApprovalCard({
   };
 
   return (
-    <div className="border-status-warning/20 bg-status-warning/5 space-y-2.5 rounded-lg border p-3">
-      <div className="text-status-warning/80 flex items-center gap-2 text-xs">
-        <ShieldQuestion className="icon-sm" />
+    <div className="border-border bg-secondary space-y-2.5 rounded-lg border p-3">
+      <div className="text-foreground flex items-center gap-2 text-xs font-medium">
+        <ShieldQuestion className="icon-sm text-status-warning shrink-0" />
         {t('thread.permissionRequired')}
       </div>
       <p className="text-foreground text-xs">{t('thread.permissionMessage', { tool: toolName })}</p>

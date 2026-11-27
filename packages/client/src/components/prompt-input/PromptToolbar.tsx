@@ -55,35 +55,40 @@ export function PromptToolbar(props: PromptToolbarProps) {
   const { loading, running } = props;
   return (
     <div className="px-2 py-2.5">
-      <div className="no-scrollbar flex min-h-[48px] flex-wrap items-center gap-1 px-px md:h-9 md:min-h-0 md:flex-nowrap md:overflow-x-auto">
-        <ModelSelect
-          value={props.unifiedModel}
-          effort={props.effort}
-          onChange={props.onUnifiedModelChange}
-          onEffortChange={props.onEffortChange}
-          groups={props.modelGroups}
-          projectId={props.projectId}
-        />
-        {props.showTemplates && (
-          <TemplateSelect
-            value={props.selectedTemplateId}
-            onChange={props.onTemplateChange}
-            templates={props.templates}
-          />
-        )}
-        {props.showAgentProfile && (
-          <AgentProfileIndicator
+      <div className="flex min-h-[48px] flex-wrap items-center gap-1 px-px md:h-9 md:min-h-0 md:flex-nowrap">
+        <div
+          data-testid="prompt-toolbar-selectors"
+          className="no-scrollbar contents md:flex md:h-full md:min-w-0 md:flex-1 md:flex-nowrap md:items-center md:gap-1 md:overflow-x-auto md:px-px"
+        >
+          <ModelSelect
+            value={props.unifiedModel}
+            effort={props.effort}
+            onChange={props.onUnifiedModelChange}
+            onEffortChange={props.onEffortChange}
+            groups={props.modelGroups}
             projectId={props.projectId}
-            provider={parseUnifiedModel(props.unifiedModel).provider}
           />
-        )}
-        <ModeSelect value={props.mode} onChange={props.onModeChange} modes={props.modes} />
-        {props.showBacklog && (
-          <BacklogToggle
-            sendToBacklog={props.sendToBacklog}
-            onSendToBacklogChange={props.onSendToBacklogChange}
-          />
-        )}
+          {props.showTemplates && (
+            <TemplateSelect
+              value={props.selectedTemplateId}
+              onChange={props.onTemplateChange}
+              templates={props.templates}
+            />
+          )}
+          {props.showAgentProfile && (
+            <AgentProfileIndicator
+              projectId={props.projectId}
+              provider={parseUnifiedModel(props.unifiedModel).provider}
+            />
+          )}
+          <ModeSelect value={props.mode} onChange={props.onModeChange} modes={props.modes} />
+          {props.showBacklog && (
+            <BacklogToggle
+              sendToBacklog={props.sendToBacklog}
+              onSendToBacklogChange={props.onSendToBacklogChange}
+            />
+          )}
+        </div>
         {/* Attachment + dictation + send — always visible, pushed right */}
         <div className="ml-auto flex shrink-0 items-center gap-1">
           <Button

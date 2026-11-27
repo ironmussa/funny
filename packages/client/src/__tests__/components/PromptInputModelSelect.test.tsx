@@ -2,6 +2,7 @@ import { describe, expect, test, vi, mock } from 'bun:test';
 
 import { act, fireEvent, screen } from '@testing-library/react';
 
+import { PromptToolbar } from '@/components/prompt-input/PromptToolbar';
 import { ModelSelect } from '@/components/PromptInputUI';
 
 import { renderWithProviders } from '../helpers/render';
@@ -32,9 +33,56 @@ describe('ModelSelect', () => {
       />,
     );
 
-    expect(screen.getByTestId('prompt-model-select')).toHaveTextContent(
-      /Codex\s*·\s*GPT-5\.5\s*·\s*High/,
+    const trigger = screen.getByTestId('prompt-model-select');
+    expect(trigger).toHaveTextContent(/Codex\s*·\s*GPT-5\.5\s*·\s*High/);
+    expect(trigger).toHaveClass('shrink-0', 'whitespace-nowrap');
+    expect(screen.getByText('· High')).toHaveClass('shrink-0');
+  });
+
+  test('keeps toolbar selectors scrollable independently of the pinned action buttons', () => {
+    renderWithProviders(
+      <PromptToolbar
+        unifiedModel="claude:opus"
+        effort="medium"
+        onUnifiedModelChange={vi.fn()}
+        onEffortChange={vi.fn()}
+        modelGroups={[
+          {
+            provider: 'claude',
+            providerLabel: 'Claude',
+            models: [{ value: 'claude:opus', label: 'Opus 4.7' }],
+          },
+        ]}
+        showTemplates={false}
+        templates={[]}
+        onTemplateChange={vi.fn()}
+        mode="autoEdit"
+        onModeChange={vi.fn()}
+        modes={[{ value: 'autoEdit', label: 'Auto Edit' }]}
+        showAgentProfile={false}
+        showBacklog={true}
+        sendToBacklog={false}
+        onAttach={vi.fn()}
+        hasDictation={false}
+        isRecording={false}
+        isTranscribing={false}
+        loading={false}
+        running={false}
+        editorEmpty={true}
+        isQueueMode={false}
+        onSend={vi.fn()}
+      />,
     );
+
+    const selectors = screen.getByTestId('prompt-toolbar-selectors');
+    expect(selectors).toHaveClass('md:min-w-0', 'md:flex-1', 'md:overflow-x-auto');
+    expect(selectors).toContainElement(screen.getByTestId('prompt-model-select'));
+    expect(selectors).toContainElement(screen.getByTestId('prompt-mode-select'));
+    expect(selectors).toContainElement(screen.getByTestId('prompt-backlog-toggle'));
+    expect(screen.getByTestId('prompt-mode-select')).toHaveClass('shrink-0', 'whitespace-nowrap');
+    // Action buttons sit outside the horizontal scroll container so they stay visible.
+    expect(selectors).not.toContainElement(screen.getByTestId('prompt-attach'));
+    expect(selectors).not.toContainElement(screen.getByTestId('prompt-send'));
   });
 });
 

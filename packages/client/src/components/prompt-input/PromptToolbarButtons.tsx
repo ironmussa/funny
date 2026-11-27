@@ -20,7 +20,7 @@ export function BacklogToggle({ sendToBacklog, onSendToBacklogChange }: BacklogT
           onClick={() => onSendToBacklogChange?.(!sendToBacklog)}
           tabIndex={-1}
           className={cn(
-            'flex shrink-0 items-center gap-1 rounded px-2 py-1 text-xs transition-colors',
+            'flex shrink-0 items-center gap-1 rounded px-2 py-1 text-xs whitespace-nowrap transition-colors',
             sendToBacklog
               ? 'bg-primary/10 text-primary'
               : 'text-muted-foreground hover:text-foreground hover:bg-muted',

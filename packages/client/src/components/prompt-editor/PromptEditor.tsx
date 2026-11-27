@@ -10,6 +10,7 @@ import { forwardRef, useEffect, useLayoutEffect, useRef } from 'react';
 
 import { cn } from '@/lib/utils';
 
+import { canAutofocusEditor } from './autofocus';
 import {
   handlePromptDrop,
   handlePromptKeyDown,
@@ -62,7 +63,13 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(
     // ── TipTap editor ──
     const editor = useEditor({
       immediatelyRender: true,
-      autofocus: 'end',
+      // Not `autofocus: 'end'`: that steals focus on every editor creation,
+      // e.g. a grid column remounting its follow-up when its thread finishes
+      // while the user types in another cell. See `canAutofocusEditor`.
+      autofocus: false,
+      onCreate: ({ editor: ed }) => {
+        if (canAutofocusEditor(ed.view.dom)) ed.commands.focus('end');
+      },
       extensions: [
         Document,
         Paragraph,

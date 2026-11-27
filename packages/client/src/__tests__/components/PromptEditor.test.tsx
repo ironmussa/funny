@@ -93,6 +93,29 @@ describe('PromptEditor', () => {
     }
   });
 
+  test('takes focus when it mounts and nothing else is being typed in', async () => {
+    render(<PromptEditor placeholder="Next prompt" />);
+    const editor = screen.getByTestId('prompt-editor');
+    await waitFor(() => expect(document.activeElement).toBe(editor));
+  });
+
+  test('does not steal focus from another prompt being typed in when it mounts', async () => {
+    // Regression: in the grid, a column remounts its follow-up editor when its
+    // thread finishes; its autofocus moved the caret out of the prompt the user
+    // was typing in, so the rest of the text landed in the other thread.
+    const first = render(<PromptEditor placeholder="Typing here" />);
+    const typing = first.getByTestId('prompt-editor');
+    await waitFor(() => expect(document.activeElement).toBe(typing));
+
+    const second = render(<PromptEditor placeholder="Finished thread" />);
+    const [, remounted] = second.getAllByTestId('prompt-editor');
+    // Let TipTap's deferred create (and its focus) run.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 20)));
+
+    expect(remounted).toBeDefined();
+    expect(document.activeElement).toBe(typing);
+  });
+
   test('shows the placeholder while disabled', () => {
     // Regression: the read-only prompt dock in the thread preparation view
     // rendered empty because TipTap hides placeholders on non-editable editors.

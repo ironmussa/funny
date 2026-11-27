@@ -1005,6 +1005,12 @@ mark.md-search-match[data-active='true'] {
     --destructive: 0 72% 60%;
     --destructive-foreground: 0 0% 98%;
 
+    /* Darker highlights than Monochrome Dark: hover, menu highlight and the
+       selected row stay a quiet step above the near-black surfaces. */
+    --accent: 0 0% 7%;
+    --sidebar-accent: 0 0% 6%;
+    --sidebar-selected: 0 0% 10%;
+
     /* Status colors are the pastels of the chip palette (`PALETTE` in
        components/ui/project-chip.tsx), so icons match the chips; success, error
        and interrupted are the sidebar's thread dots instead, so a passed / failed check

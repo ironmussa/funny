@@ -1,4 +1,4 @@
-import { CheckCircle2, XCircle, Clock, AlertTriangle, Play } from 'lucide-react';
+import { CheckCircle2, Hand, Clock, AlertTriangle, Play } from 'lucide-react';
 import { Trans, useTranslation } from 'react-i18next';
 
 import { cn } from '@/lib/utils';
@@ -87,7 +87,7 @@ const RESULT_STYLE = {
     text: 'text-muted-foreground',
   },
   stopped: {
-    Icon: XCircle,
+    Icon: Hand,
     card: 'border-border bg-secondary',
     icon: 'text-status-interrupted',
     text: 'text-foreground',
@@ -230,7 +230,7 @@ export function AgentStoppedCard({
 
   return (
     <div className="border-border bg-secondary flex items-center gap-3 rounded-lg border px-3 py-2 text-xs">
-      <XCircle className="icon-base text-status-interrupted shrink-0" />
+      <Hand className="icon-base text-status-interrupted shrink-0" />
       <div>
         <span className="text-foreground font-medium">{t('thread.taskStopped')}</span>
         <p className="text-muted-foreground mt-0.5">{t('thread.manuallyStopped')}</p>

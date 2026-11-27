@@ -86,11 +86,12 @@ proof-ready, and run each rule in a checkout of the setup's base commit that hol
 agent's other changes, after the file's setup command. A rule SHALL be accepted only when all of
 these hold: its passing canary exits successfully and the output names it; its failing canary fails
 by an assertion (not a timeout, a setup failure or a file that cannot load) and the output names it;
-and an existing test file of the repository that the rule matches, not marked as needing
-infrastructure, exits successfully. A rule that matches no such existing file SHALL be rejected.
-Rejected rules SHALL be removed from the file and listed with their output. The canaries SHALL NOT
-be part of the commit. Verification SHALL have a time limit, and running out of it SHALL fail the
-setup.
+an existing test file of the repository that the rule matches, not marked as needing infrastructure,
+exits successfully; and passing two files at once (the passing canary and that existing test file)
+exits successfully and the output names both. A rule that matches no such existing file SHALL be
+rejected. Rejected rules SHALL be removed from the file and listed with their output. The canaries
+SHALL NOT be part of the commit. Verification SHALL have a time limit, and running out of it SHALL
+fail the setup.
 
 #### Scenario: A rule that runs the canary
 
@@ -108,6 +109,12 @@ setup.
 
 - **WHEN** a rule's command runs the whole suite and its output never names the canary
 - **THEN** the rule is rejected
+
+#### Scenario: A command that fails with more than one file
+
+- **WHEN** a rule's command accepts one file (such as `ng test --include {{files}}`) and fails or
+  drops the second file when given two files at once
+- **THEN** the rule is rejected and the proposal shows that output
 
 #### Scenario: Canaries pass and the repository's tests do not load
 
@@ -131,7 +138,9 @@ setup.
 The setup SHALL end with a proposal showing the file, the detected stack, each rule's verification
 and what stays uncovered (packages without tests, excluded specs). The file SHALL be committed and
 pushed only when the member who started the setup confirms it, for the exact file shown. The system
-SHALL commit only the flow file and SHALL push it to the repository's default branch without force,
+SHALL commit only the flow file and, when the flow starts from the built-in one, unchanged copies of
+the built-in prompt files it names (a repository flow reads its prompt files from the repository),
+and SHALL push them to the repository's default branch without force,
 with the member's own credentials; when the remote branch moved it SHALL put the commit on top of it
 once if that applies cleanly. The agent SHALL NOT commit or push. The member SHALL be able to
 discard a proposal. When a setup ends committed or discarded, its worktree and branch SHALL be
@@ -140,7 +149,7 @@ removed.
 #### Scenario: Confirming the proposal
 
 - **WHEN** the member confirms the proposal and the default branch accepts the push
-- **THEN** one commit that adds only `.funny/workflows/issue-to-merge.yaml` is on the default
+- **THEN** one commit that adds only `.funny/workflows/issue-to-merge.yaml` and its prompt files is on the default
   branch, the factory's flow is ready, and enabling is allowed
 
 #### Scenario: The file changed after it was shown
@@ -176,7 +185,7 @@ once the file is there, and end as discarded when the pull request is closed wit
 #### Scenario: Opening the pull request
 
 - **WHEN** the member chooses to open the pull request
-- **THEN** a pull request to `main` with only the flow file is open in the member's name, and the
+- **THEN** a pull request to `main` with only that commit is open in the member's name, and the
   settings link to it
 
 #### Scenario: The pull request merges

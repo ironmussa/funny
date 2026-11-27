@@ -112,7 +112,7 @@ sequenceDiagram
   R-->>S: verdict per rule, pruned file
   S->>UI: proposal card
   UI->>S: confirmFlowSetup(setupId, fileSha)
-  S->>R: commit only the flow file, push HEAD:<default>
+  S->>R: commit only the setup's files, push HEAD:<default>
   alt pushed
     R-->>S: sha
   else rejected by a branch rule
@@ -135,6 +135,10 @@ sequenceDiagram
   database clients). The server asks for them once the worktree exists and sends them inside the
   first message, in a fenced block: they are funny's own output, not issue text, and `roleInputs`
   is a read-only-thread mechanism.
+- **The setup's files.** The flow file, plus, when the flow starts from the built-in one, the
+  built-in prompt files it names with `prompt_file`: a repository flow reads its prompt files from
+  the repository, so a copy without them does not load. The server writes those prompt files; the
+  agent does not edit them. The proposal shows them and they are committed with the flow.
 - **Agent output.** The flow file: the repository's own `.funny/workflows/<flow>.yaml` when it
   exists (the setup is offered only when it parses), else the built-in flow, with only
   `regression_proof` (`rules`, `setup_command`, `support_globs`) changed. Per rule, a passing and a
@@ -149,7 +153,10 @@ sequenceDiagram
   2. the failing canary exits non-zero, the output names it, and `inconclusiveBaseFailure` is null;
   3. an existing test file of the repository that the rule matches, not flagged as needing
      infrastructure, exits 0 (up to three candidates are tried). A rule that matches no such file
-     is rejected: nothing shows it can load real tests.
+     is rejected: nothing shows it can load real tests;
+  4. passing two files at once (the passing canary and that existing test file) through
+     `fillCommand` exits 0 and the output names both: this catches commands whose flag only takes
+     one argument (such as `ng test --include {{files}}`) or silently drops extra files.
 
   Rejected rules are removed from the file and listed with their output. No rule left: the setup
   fails with the outputs. The job has its own time budget (30 minutes: a cold install plus the
@@ -183,7 +190,7 @@ sequenceDiagram
   One setup that is not ended per member, project and flow.
 
 - **Confirm.** `confirmFlowSetup(setupId, fileSha)`: only the setup's own user, with `steer`. The
-  runner commits ONLY the flow file on the setup branch (the shown bytes, checked by sha) and pushes
+  runner commits ONLY the setup's files on the setup branch (the shown bytes, checked by sha) and pushes
   `HEAD:refs/heads/<default>` without force; when the remote moved it rebases that one commit once.
   The push uses the member's own git credentials, as their commits do. A rejection by a branch rule
   ends in `push_rejected` with GitHub's message.

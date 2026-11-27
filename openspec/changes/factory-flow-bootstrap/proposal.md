@@ -60,7 +60,7 @@ from the repository's default branch on GitHub, never from a runner's checkout (
   sink, pull request fallback), `trpc/ports/factory.ts`.
 - **Runtime:** the stack detector; rule verification in a temporary clean worktree, reusing
   `fillCommand`, `matchesGlob`, `inconclusiveBaseFailure` and the proof job pattern of
-  `services/regression-proof.ts`; commit + push of one file with the owner's credentials.
+  `services/regression-proof.ts`; commit + push of the setup's files with the owner's credentials.
 - **Workflows:** `isProofReady` and the flow schema are unchanged; a generated flow is validated by
   the same parser.
 - **API:** `@funny/api` `factory` group gains `startFlowSetup`, `flowSetup`, `confirmFlowSetup`,

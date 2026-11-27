@@ -124,6 +124,15 @@ const accounts = (app: Hono<ServerEnv>) => query(app, 'accounts');
 const start = (app: Hono<ServerEnv>, body: unknown = { target: 'org', org: 'acme' }) =>
   mutate(app, 'startManifest', body);
 const disconnect = (app: Hono<ServerEnv>) => mutate(app, 'disconnect');
+const connectExisting = (app: Hono<ServerEnv>, body: unknown) =>
+  mutate(app, 'connectExisting', body);
+/** GitHub's `GET /app` for App 77, owned by the `goliiive` organization. */
+const existingApp = (path: string, auth: string | null) =>
+  path === '/app' && auth?.startsWith('Bearer ')
+    ? new Response(
+        JSON.stringify({ id: 77, slug: 'funny-localhost-1', owner: { login: 'goliiive' } }),
+      )
+    : undefined;
 const callback = (app: Hono<ServerEnv>, state: string, code = 'abc') =>
   app.request(`http://server/api/settings/github-app/callback?code=${code}&state=${state}`);
 
@@ -135,6 +144,7 @@ describe('GitHub App settings', () => {
     expect((await start(user)).status).toBe(403);
     expect((await accounts(user)).status).toBe(403);
     expect((await disconnect(user)).status).toBe(403);
+    expect((await connectExisting(user, { appId: '77', privateKey })).status).toBe(403);
   });
 
   test('not connected', async () => {
@@ -362,5 +372,61 @@ describe('GitHub App settings', () => {
     const res = await callback(admin, state);
     expect(res.headers.get('location')).toBe(`${ORIGIN}/preferences/github-app?githubApp=error`);
     expect(data.has('github_app')).toBe(false);
+  });
+
+  test('an existing App is checked with GitHub, stored with its key encrypted, and shown', async () => {
+    const { admin, data } = setup({ github: existingApp });
+    const res = await connectExisting(admin, { appId: '77', privateKey });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      configured: true,
+      source: 'database',
+      appId: '77',
+      slug: 'funny-localhost-1',
+      owner: 'goliiive',
+      installUrl: 'https://github.com/apps/funny-localhost-1/installations/new',
+    });
+    expect(JSON.stringify(res.body)).not.toContain('PRIVATE KEY');
+    expect(JSON.stringify([...data.values()])).not.toContain('PRIVATE KEY');
+    expect((await status(admin)).body).toMatchObject({ appId: '77', slug: 'funny-localhost-1' });
+  });
+
+  test('an existing App key pasted as one line with \\n escapes is accepted', async () => {
+    const { admin } = setup({ github: existingApp });
+    const oneLine = privateKey.trim().replace(/\n/g, '\\n');
+    expect((await connectExisting(admin, { appId: '77', privateKey: oneLine })).status).toBe(200);
+  });
+
+  test('an existing App GitHub refuses, of another ID, or with a non-PEM key stores nothing', async () => {
+    const refused = setup({ github: () => new Response('{}', { status: 401 }) });
+    expect((await connectExisting(refused.admin, { appId: '77', privateKey })).status).toBe(400);
+    expect(refused.data.size).toBe(0);
+
+    const other = setup({ github: existingApp });
+    expect((await connectExisting(other.admin, { appId: '78', privateKey })).status).toBe(400);
+    expect(other.data.size).toBe(0);
+
+    const notPem = setup({ github: existingApp });
+    const res = await connectExisting(notPem.admin, { appId: '77', privateKey: 'not a key' });
+    expect(res.status).toBe(400);
+    expect(notPem.data.size).toBe(0);
+
+    const badId = setup({ github: existingApp });
+    expect((await connectExisting(badId.admin, { appId: 'abc', privateKey })).status).toBe(400);
+  });
+
+  test('an existing App cannot be checked while GitHub is down: 502, nothing stored', async () => {
+    const { admin, data } = setup({ github: () => new Response('{}', { status: 503 }) });
+    expect((await connectExisting(admin, { appId: '77', privateKey })).status).toBe(502);
+    expect(data.size).toBe(0);
+  });
+
+  test('an existing App cannot replace one configured through server variables', async () => {
+    const { admin, data } = setup({
+      env: { GITHUB_APP_ID: '5690396', GITHUB_APP_PRIVATE_KEY: privateKey },
+      github: existingApp,
+    });
+    expect((await connectExisting(admin, { appId: '77', privateKey })).status).toBe(409);
+    expect(data.size).toBe(0);
   });
 });

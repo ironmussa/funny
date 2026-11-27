@@ -1,4 +1,7 @@
-import { startGithubAppManifestBody } from '@funny/shared/contracts/github-app';
+import {
+  connectExistingGithubAppBody,
+  startGithubAppManifestBody,
+} from '@funny/shared/contracts/github-app';
 
 import { unwrap } from '../failure.js';
 import { adminProcedure, router } from '../trpc.js';
@@ -13,6 +16,11 @@ export const githubAppRouter = router({
     .input(startGithubAppManifestBody)
     .mutation(async ({ ctx, input }) =>
       unwrap(await ctx.ports.githubApp.startManifest(ctx.userId, input)),
+    ),
+  connectExisting: adminProcedure
+    .input(connectExistingGithubAppBody)
+    .mutation(async ({ ctx, input }) =>
+      unwrap(await ctx.ports.githubApp.connectExisting(ctx.userId, input)),
     ),
   disconnect: adminProcedure.mutation(async ({ ctx }) =>
     unwrap(await ctx.ports.githubApp.disconnect()),

@@ -1,4 +1,7 @@
-import type { StartGithubAppManifestBody } from '@funny/shared/contracts/github-app';
+import type {
+  ConnectExistingGithubAppBody,
+  StartGithubAppManifestBody,
+} from '@funny/shared/contracts/github-app';
 
 import { trpc, trpcCall } from './_trpc';
 
@@ -12,5 +15,7 @@ export const githubAppApi = {
   getGithubAppAccounts: () => trpcCall(() => procedures.accounts.query()),
   startGithubAppManifest: (data: StartGithubAppManifestBody) =>
     trpcCall(() => procedures.startManifest.mutate(data)),
+  connectExistingGithubApp: (data: ConnectExistingGithubAppBody) =>
+    trpcCall(() => procedures.connectExisting.mutate(data)),
   disconnectGithubApp: () => trpcCall(() => procedures.disconnect.mutate()),
 };

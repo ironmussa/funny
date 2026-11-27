@@ -8,7 +8,8 @@
  * server: its private key mints tokens for every repository it is installed
  * on, so it never leaves this server. It comes from the environment
  * (`GITHUB_APP_ID` + `GITHUB_APP_PRIVATE_KEY`, which win) or from the App
- * manifest flow, stored in `instance_settings` with the key encrypted.
+ * manifest flow (or an existing App the admin connected with its ID and key),
+ * stored in `instance_settings` with the key encrypted.
  */
 
 import { errorMessage } from '@funny/shared/errors';
@@ -57,11 +58,11 @@ const storedAppSchema = z.object({
 });
 
 /** Platforms that store one-line variables keep the PEM's newlines as `\n`. */
-function normalizePem(raw: string): string {
+export function normalizePem(raw: string): string {
   return raw.includes('\\n') ? raw.replace(/\\n/g, '\n') : raw;
 }
 
-function looksLikePem(value: string): boolean {
+export function looksLikePem(value: string): boolean {
   return /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]+-----END [A-Z ]*PRIVATE KEY-----/.test(value);
 }
 
@@ -113,7 +114,7 @@ export function loadGithubAppConfig(
   return ResultAsync.fromPromise(fromDatabase(store), errorMessage);
 }
 
-/** Store the App the manifest flow created; the private key is encrypted at rest. */
+/** Store the App the manifest flow created or the admin connected; the key is encrypted at rest. */
 export function saveGithubApp(
   store: SettingsStore,
   app: StoredGithubApp,

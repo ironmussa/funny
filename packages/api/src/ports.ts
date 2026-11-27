@@ -77,6 +77,7 @@ import type {
   SaveFactorySettingsInput,
 } from '@funny/shared/contracts/factory';
 import type {
+  ConnectExistingGithubAppBody,
   GithubAppAccounts,
   GithubAppManifestStart,
   GithubAppStatus,
@@ -359,6 +360,13 @@ export interface GithubAppPort {
     userId: string,
     data: StartGithubAppManifestBody,
   ): PortResult<GithubAppManifestStart>;
+  /**
+   * Connect an App that already exists, checked with GitHub as that App
+   * (`GET /app`). 409 when the App comes from server variables, 400 when the
+   * key is not a PEM key or GitHub refuses the ID and key, 502 when GitHub
+   * cannot be asked.
+   */
+  connectExisting(userId: string, data: ConnectExistingGithubAppBody): PortResult<GithubAppStatus>;
   disconnect(): PortResult<Ok>;
 }
 

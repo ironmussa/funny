@@ -101,6 +101,14 @@ Setup, once per deployment:
    private key is stored encrypted; nobody copies it.
 2. _Install on repositories_ → **Only select repositories**.
 
+An App that already exists (created by hand, or by another funny, e.g. one
+already installed on the organization you need) is connected from the same
+screen: _Use an existing App_, then its **App ID** and a **private key**
+generated in the App's settings (paste the `.pem` or pick the file). The server
+asks GitHub as that App (`GET /app`) before storing anything: a key of another
+App or a wrong ID is refused, and the slug and owner come from GitHub. The key
+is stored encrypted like a created App's.
+
 Alternatively create the App by hand on GitHub (**Settings > Developer settings >
 GitHub Apps > New GitHub App**, webhook unchecked, installable only on your account)
 and set `GITHUB_APP_ID` and `GITHUB_APP_PRIVATE_KEY` (PEM; one-line `\n` escapes

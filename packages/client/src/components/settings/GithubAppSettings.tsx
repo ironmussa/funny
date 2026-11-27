@@ -14,6 +14,8 @@ import {
 import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/ui/loading-state';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Separator } from '@/components/ui/separator';
+import { Textarea } from '@/components/ui/textarea';
 import { toast } from '@/components/ui/toast';
 import { api } from '@/lib/api';
 import type { GithubAppAccount, GithubAppStatus } from '@/lib/api/github-app';
@@ -66,7 +68,9 @@ function useGithubAppState() {
  * admin connects it with GitHub's manifest flow: funny posts a pre-filled App
  * to GitHub, GitHub creates it and sends the admin on to install it, then back
  * here. With a GitHub token in their profile the admin picks the account from
- * a list instead of typing an organization name.
+ * a list instead of typing an organization name. An App that already exists
+ * (created by hand or by another funny) is connected with its ID and a private
+ * key instead; the server checks them with GitHub before storing them.
  */
 export function GithubAppSettings() {
   const { status, accounts, hasToken, reload } = useGithubAppState();
@@ -129,6 +133,7 @@ export function GithubAppSettings() {
           onChoice={setChoice}
           onOrg={setOrg}
           onConnect={connect}
+          onConnected={reload}
         />
       )}
 
@@ -268,6 +273,7 @@ function ConnectForm({
   onChoice,
   onOrg,
   onConnect,
+  onConnected,
 }: {
   error?: string;
   accounts: GithubAppAccount[];
@@ -278,6 +284,7 @@ function ConnectForm({
   onChoice: (choice: Choice) => void;
   onOrg: (org: string) => void;
   onConnect: () => void;
+  onConnected: () => void;
 }) {
   return (
     <div
@@ -319,6 +326,109 @@ function ConnectForm({
           Save a GitHub token in Settings &gt; Profile to pick your organizations from this list.
         </p>
       )}
+      <Separator />
+      <ExistingAppForm onConnected={onConnected} />
+    </div>
+  );
+}
+
+/**
+ * Connect an App that already exists on GitHub with its App ID and a private
+ * key generated in its settings (pasted, or read from the downloaded .pem).
+ * The key goes to the server only, which checks it with GitHub and stores it
+ * encrypted; it is never shown again.
+ */
+function ExistingAppForm({ onConnected }: { onConnected: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [appId, setAppId] = useState('');
+  const [privateKey, setPrivateKey] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const readKeyFile = async (file: File | undefined) => {
+    if (file) setPrivateKey(await file.text());
+  };
+
+  const submit = async () => {
+    setBusy(true);
+    const result = await api.connectExistingGithubApp({ appId: appId.trim(), privateKey });
+    setBusy(false);
+    if (result.isErr()) {
+      toast.error(result.error.message || 'Could not connect the GitHub App');
+      return;
+    }
+    setPrivateKey('');
+    toast.success('GitHub App connected.');
+    onConnected();
+  };
+
+  if (!open) {
+    return (
+      <div className="flex items-center gap-2">
+        <span className="text-muted-foreground text-xs">Already have a GitHub App?</span>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => setOpen(true)}
+          data-testid="github-app-existing-open"
+        >
+          Use an existing App
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2" data-testid="github-app-existing-form">
+      <p className="text-muted-foreground text-xs">
+        On GitHub, open the App’s settings: the App ID is on its General page, and “Generate a
+        private key” under Private keys downloads a .pem file. funny checks them with GitHub and
+        keeps the key encrypted on the server.
+      </p>
+      <Input
+        className="w-56"
+        inputMode="numeric"
+        placeholder="App ID, e.g. 123456"
+        value={appId}
+        onChange={(e) => setAppId(e.target.value)}
+        data-testid="github-app-existing-app-id"
+      />
+      <Textarea
+        size="xs"
+        mono
+        rows={6}
+        placeholder="-----BEGIN RSA PRIVATE KEY-----"
+        value={privateKey}
+        onChange={(e) => setPrivateKey(e.target.value)}
+        spellCheck={false}
+        autoComplete="off"
+        data-testid="github-app-existing-private-key"
+      />
+      <Input
+        type="file"
+        accept=".pem"
+        className="w-72"
+        onChange={(e) => void readKeyFile(e.target.files?.[0])}
+        data-testid="github-app-existing-key-file"
+      />
+      <div className="flex gap-2">
+        <Button
+          size="sm"
+          onClick={submit}
+          disabled={busy || !/^\d+$/.test(appId.trim()) || !privateKey.trim()}
+          data-testid="github-app-existing-connect"
+        >
+          Connect App
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => setOpen(false)}
+          disabled={busy}
+          data-testid="github-app-existing-cancel"
+        >
+          Cancel
+        </Button>
+      </div>
     </div>
   );
 }

@@ -12,21 +12,29 @@
  * single-use, expires in ten minutes and belongs to the admin who started the
  * flow.
  *
+ * An App that already exists (created by hand, or by another funny) is
+ * connected with its ID and a private key instead: the server asks GitHub as
+ * that App (`GET /app`) before storing anything, so a key of another App or a
+ * mistyped ID is refused, and the slug and owner come from GitHub.
+ *
  * Built per request: the flow returns the admin to the request's origin.
  */
 
 import { randomBytes } from 'node:crypto';
 
-import { failure, type GithubAppPort } from '@funny/api';
+import { failure, type ApiFailure, type GithubAppPort } from '@funny/api';
 import { signAppJwt } from '@funny/core/github-app';
 import type { GithubAppAccount, GithubAppStatus } from '@funny/shared/contracts/github-app';
-import { err, ok } from 'neverthrow';
+import { err, ok, type Result } from 'neverthrow';
 import { z } from 'zod';
 
 import { log } from '../../lib/logger.js';
 import {
   deleteGithubApp,
   loadGithubAppConfig,
+  looksLikePem,
+  normalizePem,
+  saveGithubApp,
   sqlSettingsStore,
   type SettingsStore,
 } from '../../services/github-app/app-config.js';
@@ -165,6 +173,61 @@ async function appPermissionGaps(
   }
 }
 
+/** `GET /app` as the App: who it is. */
+const githubAppIdentitySchema = z.object({
+  id: z.number(),
+  slug: z.string().min(1),
+  owner: z.object({ login: z.string().min(1) }),
+});
+
+type AppIdentity =
+  | { kind: 'ok'; slug: string; owner: string }
+  | { kind: 'refused'; message: string }
+  | { kind: 'unreachable' };
+
+/**
+ * Ask GitHub who the App with this ID and key is. GitHub answers 401 when the
+ * key does not belong to the ID (or the App was deleted): refused, never stored.
+ */
+async function appIdentity(
+  doFetch: typeof fetch,
+  api: string,
+  appId: string,
+  privateKey: string,
+): Promise<AppIdentity> {
+  const jwt = signAppJwt(appId, privateKey);
+  if (jwt.isErr()) return { kind: 'refused', message: 'The private key cannot sign a token' };
+  try {
+    const res = await doFetch(`${api}/app`, {
+      headers: {
+        accept: 'application/vnd.github+json',
+        authorization: `Bearer ${jwt.value}`,
+        'user-agent': 'funny',
+      },
+    });
+    if (res.status === 401 || res.status === 404) {
+      return {
+        kind: 'refused',
+        message:
+          'GitHub refused this App ID and private key: check that the key belongs to the App',
+      };
+    }
+    if (!res.ok) throw new Error(`GitHub answered ${res.status} for /app`);
+    const body = githubAppIdentitySchema.safeParse(await res.json());
+    if (!body.success) throw new Error('GitHub answered an unexpected /app body');
+    if (String(body.data.id) !== appId) {
+      return { kind: 'refused', message: 'The private key belongs to another App' };
+    }
+    return { kind: 'ok', slug: body.data.slug, owner: body.data.owner.login };
+  } catch (error) {
+    log.warn('Could not check the GitHub App with GitHub', {
+      namespace: 'github-app',
+      error: String(error),
+    });
+    return { kind: 'unreachable' };
+  }
+}
+
 /**
  * The admin's personal account plus the organizations they administer (only
  * an org admin can create an App there), read with their own token. Empty
@@ -221,31 +284,33 @@ export function createGithubAppPort(
   const now = deps.now ?? Date.now;
   const githubToken = deps.githubToken ?? ((userId) => getProviderKey(userId, 'github'));
 
+  async function status(): Promise<Result<GithubAppStatus, ApiFailure>> {
+    const config = await loadGithubAppConfig(deps.env, deps.store);
+    if (config.isErr()) {
+      return ok({ configured: false, source: 'environment' as const, error: config.error });
+    }
+    const app = config.value;
+    if (!app) return ok({ configured: false, source: 'none' as const });
+    const gaps = await appPermissionGaps(doFetch, api, app);
+    const status: GithubAppStatus = {
+      configured: true,
+      source: app.source,
+      appId: app.appId,
+      slug: app.slug,
+      owner: app.owner,
+      installUrl: app.slug ? `https://github.com/apps/${app.slug}/installations/new` : null,
+      settingsUrl: app.slug ? `https://github.com/settings/apps/${app.slug}` : null,
+    };
+    // Absent when GitHub could not be asked: the screen then says nothing.
+    if (gaps) {
+      status.missingPermissions = gaps.missingPermissions;
+      status.pendingInstallations = gaps.pendingInstallations;
+    }
+    return ok(status);
+  }
+
   return {
-    async status() {
-      const config = await loadGithubAppConfig(deps.env, deps.store);
-      if (config.isErr()) {
-        return ok({ configured: false, source: 'environment' as const, error: config.error });
-      }
-      const app = config.value;
-      if (!app) return ok({ configured: false, source: 'none' as const });
-      const gaps = await appPermissionGaps(doFetch, api, app);
-      const status: GithubAppStatus = {
-        configured: true,
-        source: app.source,
-        appId: app.appId,
-        slug: app.slug,
-        owner: app.owner,
-        installUrl: app.slug ? `https://github.com/apps/${app.slug}/installations/new` : null,
-        settingsUrl: app.slug ? `https://github.com/settings/apps/${app.slug}` : null,
-      };
-      // Absent when GitHub could not be asked: the screen then says nothing.
-      if (gaps) {
-        status.missingPermissions = gaps.missingPermissions;
-        status.pendingInstallations = gaps.pendingInstallations;
-      }
-      return ok(status);
-    },
+    status,
 
     async accounts(userId) {
       const token = await githubToken(userId);
@@ -284,6 +349,37 @@ export function createGithubAppPort(
         default_events: [],
       };
       return ok({ action, manifest: JSON.stringify(manifest), state });
+    },
+
+    async connectExisting(userId, { appId, privateKey: rawKey }) {
+      const existing = await loadGithubAppConfig(deps.env, deps.store);
+      if (existing.isOk() && existing.value?.source === 'environment') {
+        return err(failure(409, 'The GitHub App is configured through server variables'));
+      }
+      const privateKey = normalizePem(rawKey).trim();
+      if (!looksLikePem(privateKey)) {
+        return err(failure(400, 'The private key is not a PEM private key'));
+      }
+      const identity = await appIdentity(doFetch, api, appId, privateKey);
+      if (identity.kind === 'refused') return err(failure(400, identity.message));
+      if (identity.kind === 'unreachable') {
+        return err(failure(502, 'GitHub could not be asked about the App. Try again.'));
+      }
+      const stored = await saveGithubApp(deps.store, {
+        appId,
+        slug: identity.slug,
+        owner: identity.owner,
+        privateKey,
+      });
+      if (stored.isErr()) return err(failure(500, stored.error));
+      log.info('Existing GitHub App connected', {
+        namespace: 'github-app',
+        userId,
+        appId,
+        slug: identity.slug,
+        owner: identity.owner,
+      });
+      return status();
     },
 
     async disconnect() {

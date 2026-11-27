@@ -1,12 +1,13 @@
 import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { okAsync } from 'neverthrow';
+import { errAsync, okAsync } from 'neverthrow';
 
 const mocks = (() => ({
   getGithubAppStatus: vi.fn(),
   getGithubAppAccounts: vi.fn(),
   startGithubAppManifest: vi.fn(),
+  connectExistingGithubApp: vi.fn(),
   disconnectGithubApp: vi.fn(),
 }))();
 
@@ -97,6 +98,60 @@ describe('GithubAppSettings', () => {
       expect(mocks.startGithubAppManifest).toHaveBeenCalledWith({ target: 'org', org: 'initech' }),
     );
     submit.mockRestore();
+  });
+
+  test('an existing App is connected with its ID and key, then the screen shows it', async () => {
+    mocks.getGithubAppStatus.mockReturnValueOnce(okAsync({ configured: false, source: 'none' }));
+    mocks.getGithubAppAccounts.mockReturnValue(okAsync({ hasToken: false, accounts: [] }));
+    mocks.connectExistingGithubApp.mockReturnValue(
+      okAsync({ configured: true, source: 'database', appId: '77', slug: 'funny-localhost-1' }),
+    );
+    mocks.getGithubAppStatus.mockReturnValue(
+      okAsync({ configured: true, source: 'database', appId: '77', slug: 'funny-localhost-1' }),
+    );
+    render(<GithubAppSettings />);
+
+    fireEvent.click(await screen.findByTestId('github-app-existing-open'));
+    const connect = screen.getByTestId('github-app-existing-connect');
+    expect(connect).toBeDisabled();
+    fireEvent.change(screen.getByTestId('github-app-existing-app-id'), {
+      target: { value: ' 77 ' },
+    });
+    fireEvent.change(screen.getByTestId('github-app-existing-private-key'), {
+      target: { value: '-----BEGIN RSA PRIVATE KEY-----x-----END RSA PRIVATE KEY-----' },
+    });
+    expect(connect).toBeEnabled();
+    fireEvent.click(connect);
+
+    await waitFor(() =>
+      expect(mocks.connectExistingGithubApp).toHaveBeenCalledWith({
+        appId: '77',
+        privateKey: '-----BEGIN RSA PRIVATE KEY-----x-----END RSA PRIVATE KEY-----',
+      }),
+    );
+    expect(await screen.findByTestId('github-app-connected')).toHaveTextContent(
+      'funny-localhost-1',
+    );
+  });
+
+  test('an existing App the server refuses keeps the form open', async () => {
+    mocks.getGithubAppStatus.mockReturnValue(okAsync({ configured: false, source: 'none' }));
+    mocks.getGithubAppAccounts.mockReturnValue(okAsync({ hasToken: false, accounts: [] }));
+    mocks.connectExistingGithubApp.mockReturnValue(
+      errAsync({ type: 'BAD_REQUEST', message: 'The private key belongs to another App' }),
+    );
+    render(<GithubAppSettings />);
+
+    fireEvent.click(await screen.findByTestId('github-app-existing-open'));
+    fireEvent.change(screen.getByTestId('github-app-existing-app-id'), { target: { value: '78' } });
+    fireEvent.change(screen.getByTestId('github-app-existing-private-key'), {
+      target: { value: 'key' },
+    });
+    fireEvent.click(screen.getByTestId('github-app-existing-connect'));
+
+    await waitFor(() => expect(mocks.connectExistingGithubApp).toHaveBeenCalled());
+    expect(screen.getByTestId('github-app-existing-form')).toBeInTheDocument();
+    expect(screen.queryByTestId('github-app-connected')).toBeNull();
   });
 
   test('not connected without a GitHub token: suggests saving one', async () => {

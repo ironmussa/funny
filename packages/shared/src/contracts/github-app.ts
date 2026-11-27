@@ -22,6 +22,23 @@ export const startGithubAppManifestBody = z
 
 export type StartGithubAppManifestBody = z.output<typeof startGithubAppManifestBody>;
 
+/**
+ * Connect an App that already exists on GitHub: its numeric ID and a private
+ * key generated in its settings (PEM; one-line `\n` escapes accepted). The
+ * server checks with GitHub that they belong together before storing them.
+ */
+export const connectExistingGithubAppBody = z
+  .object({
+    appId: z
+      .string()
+      .trim()
+      .regex(/^\d{1,12}$/, 'The App ID is a number'),
+    privateKey: z.string().min(1).max(16_000),
+  })
+  .strict();
+
+export type ConnectExistingGithubAppBody = z.output<typeof connectExistingGithubAppBody>;
+
 export interface GithubAppStatus {
   configured: boolean;
   source: 'environment' | 'database' | 'none';

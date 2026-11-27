@@ -1,0 +1,41 @@
+# Tasks
+
+## 1. The factory's configuration is sensitive (D3)
+
+- [ ] 1.1 Add `.funny/**` and `.funny.json` to `DEFAULT_SENSITIVE_PATHS` in `server/services/factory/factory-risk.ts`; verify with `factory-risk` tests: a 5-line edit of `.funny/workflows/issue-to-merge.yaml`, of `.funny/workflows/prompts/implement.md` and of `.funny.json` is `high`, also when the factory sets its own sensitive paths.
+- [ ] 1.2 Update `openwiki/architecture/issue-factory.md` (risk section) with the new default sensitive paths; verify `bun run lint` passes.
+
+## 2. The enable gate (D1)
+
+- [ ] 2.1 Make `FactoryFlowValidation` (`@funny/shared/contracts/factory.ts`) carry `proofReady` on its `ok: true` branch, filled by `validateFlow` in `factory-queue-flows.ts` from the loaded flow; verify with a `validateFlow` test for a flow with rules, without rules, with the opt-out and without a `merge` step.
+- [ ] 2.2 In the settings service, when a save turns a factory on (row off or absent), call `validateFlow` for its configured flow and refuse per the D1 table (`409 flow-not-ready` with kind `proof-not-configured` or `invalid` and its problems; `503 flow-not-checked` when the repository cannot be read); skip the check for saves of an already enabled factory; verify with `factory-settings` tests for the five scenarios of "A factory is enabled only with a flow that can merge", and the admission tests passing unchanged.
+- [ ] 2.3 Client: disable the enable switch with the reason from the flow's validation (existing query, invalidated on save), show the save's refusal, and render "Generate configuration" (`data-testid="factory-generate-config"`) when the flow validates and is not proof-ready, for a factory that is off or on; index the row in `settings-index.ts`; verify with component tests for not-ready, invalid, not-checked and enabled-but-blocked.
+
+## 3. Stack detection and rule verification on the runner (D4)
+
+- [ ] 3.1 Add `detectTestStack(checkout)` in `@funny/core` returning `Result`: package manager by lockfile, workspaces and Nx projects with a `test` target, test runner per package (jest, vitest, bun test), test file patterns, files that look like they need infrastructure, and "no runner recognized" for anything else; verify with fixture-directory tests for Nx + pnpm + Jest (the goliiive shape), bun workspaces + bun test, vitest, and a Python repository answering "not recognized".
+- [ ] 3.2 Add the pure check that a generated flow file differs from its starting file only in `regression_proof` (compare the parsed documents) in `@funny/workflows`; verify with tests for an accepted file, a removed step, a changed prompt and a changed `merge` option.
+- [ ] 3.3 Add the verification job in the runtime next to `services/regression-proof.ts`, reusing its temporary worktree, `fillCommand`, `matchesGlob`, `inconclusiveBaseFailure` and job polling: a clean worktree at the base commit, only the canaries copied in, `setup_command`, then per rule the passing canary, the failing canary and up to three existing matched test files not flagged as infrastructure; return per-rule verdicts with bounded output and the pruned file; one 30-minute budget; abortable; verify with tests using a fake executor for accepted, inconclusive canary, command ignoring the files, existing tests that do not load, no existing file matched, none surviving and timeout, and one git test showing an edit in the agent's worktree is not in the verification checkout.
+- [ ] 3.4 Add the runtime commit-and-push of one file (commit only that path on the setup branch, check the file's sha, push `HEAD:refs/heads/<default>` without force, rebase once when the remote moved, tell a branch-rule rejection from other failures with GitHub's message), and the push of the setup branch plus pull request creation with the member's token through `@funny/core` `git/github.ts`; all through `gitWrite`; verify with git tests against a local bare remote (success, moved remote, conflict, rejected by a hook) and a pull request test with a fake `gh`.
+- [ ] 3.5 Expose 3.1, 3.3 and 3.4 as runner routes for the setup's thread (detect, start / poll / cancel verification, commit, open pull request), refusing a thread whose role is not `factory-setup`; verify with route tests including the wrong-role refusal.
+
+## 4. The setup service (D4)
+
+- [ ] 4.1 Add the `factory_flow_setups` table (`db/migrate.ts`, both schemas, repository in `@funny/shared`) and its state machine as one transition table with compare-and-set writes; document it in `docs/architecture/state-machines.md`; verify with repository tests for each legal transition, a refused illegal one, and the one-open-setup-per-member-project-flow rule.
+- [ ] 4.2 Server `startFlowSetup`: `steer` check, refuse when the flow does not load or is proof-ready, return the open setup when there is one, create the `factory-setup` worktree thread idle on the member's runner (`startThreadOnRunner` + `withRunnerFor`) from `origin/<default>`, ask the runner for the facts, send the first message with the setup prompt, the facts and the starting flow file; verify with tests for the start, offline runner (no other runner used), second start, and a flow that does not parse.
+- [ ] 4.3 Write the setup prompt as a built-in prompt file (change only `regression_proof` of the starting file, use the facts, write a passing and a failing canary per rule where the package's runner finds them, leave infrastructure specs out, list what is left out, never commit or push); verify with a snapshot test of the rendered prompt.
+- [ ] 4.4 When the setup thread reaches a terminal status: on completed, check the file (3.2, parser, `isProofReady`), start the verification job, poll it and store the proposal (`proposed`) or the failure; on stopped / failed / deleted, `failed`; verify with service tests for each path.
+- [ ] 4.5 `confirmFlowSetup(setupId, fileSha, variant: 'rules' | 'opt-out')`, `openFlowSetupPullRequest(setupId)` and `discardFlowSetup(setupId)`: only the setup's own user, through the certified runner sink, moving the row per the state machine, recording a background activity for each push and pull request, and removing the worktree and branch through `workspace-cleanup.ts` on `committed` / `discarded` (worktree only on `pr_open`); verify with tests for confirm, changed file, other user refused, rejected push then pull request, opt-out, discard and the cleanup calls.
+- [ ] 4.6 Reconcile on server start and on the factory's timer: `verifying` without a runner job becomes `failed`; `committing` and `pr_open` are settled by reading the default branch (and the pull request's state); verify with tests for each case.
+- [ ] 4.7 `@funny/api` `factory` procedures (`startFlowSetup`, `flowSetup`, `confirmFlowSetup`, `openFlowSetupPullRequest`, `discardFlowSetup`) with `projectProcedure('steer')`, contracts in `@funny/shared/contracts/factory.ts`, port in `trpc/ports/factory.ts`; verify with port tests and `bun run typecheck`.
+
+## 5. Setup UI (D5)
+
+- [ ] 5.1 Proposal card in the factory settings, reading through `data/factory/`: in progress (link to the thread), verifying, proposed (file diff, facts, each rule's three runs with output, uncovered list, "Commit and push to `<default>`", "Merge without regression proof", "Discard"), failed (outputs, opt-out), push rejected (GitHub's reason, "Open a pull request"), pull request open (link); each control with a `data-testid`, strings in the i18n catalogs; verify with component tests for each state.
+- [ ] 5.2 Realtime: setup state changes reach the settings through the existing factory events and invalidate the setup and the flow's validation; verify with a data-layer test applying the event.
+
+## 6. Integration and docs
+
+- [ ] 6.1 Server integration test with the fake runner on a repository without a flow file: enable is refused, generate, verify, confirm, enable succeeds, a queued issue is admitted; and the rejected-push path ending in a pull request with the factory still off.
+- [ ] 6.2 Update CLAUDE.md (factory section) and `openwiki/architecture/issue-factory.md` with the enable gate and the setup.
+- [ ] 6.3 Run `bun run lint`, `bun run typecheck` and `openspec validate factory-flow-bootstrap --strict`; all pass.

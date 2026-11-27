@@ -389,6 +389,44 @@ interface AdmissionBase {
 
 const lanes = createFactoryLanesRepository();
 
+/**
+ * Why `branch` cannot be a lane of `factory` (D12: never adopt the branch
+ * another member's factory runs a lane on), or null when it is free.
+ */
+async function laneBranchTaken(
+  factory: WatchedFactory,
+  branch: string,
+): Promise<FactoryWaitReason | null> {
+  const taken = await lanes.branchOfAnotherFactory(factory.id, factory.projectId, branch);
+  if (taken.isErr()) return laneUnusable(taken.error.message);
+  if (!taken.value) return null;
+  return laneUnusable(
+    `the branch ${branch} is a lane of another member's factory on this project; change this factory's lane prefixes or the lane's name`,
+  );
+}
+
+/** Make a lane's branch, cut from `baseBranch` (null: the factory's own); whether it was created. */
+async function makeLaneBranch(
+  reader: FactoryRepoReader,
+  branch: string,
+  baseBranch: string | null,
+): Promise<{ created: boolean } | { wait: FactoryWaitReason }> {
+  if (!deps!.github.ensureBranch) {
+    return { wait: laneUnusable('this factory cannot make branches') };
+  }
+  const made = await deps!.github.ensureBranch({ ...reader, baseBranch }, branch);
+  if (made.isErr()) {
+    return { wait: laneUnusable(`the branch ${branch} could not be made: ${made.error.message}`) };
+  }
+  return { created: made.value === 'created' };
+}
+
+/** The branches a send chose for its lane (D13); null for the ones it left to the factory. */
+const askedBranches = (asked: NonNullable<FactoryRunRoute['lane']> | undefined) => ({
+  baseBranch: asked?.baseBranch ?? null,
+  finishBranch: asked?.finishBranch ?? null,
+});
+
 /** Create the branch and row for a lane not yet known to `factory`. */
 async function ensureLaneForChoice(
   factory: WatchedFactory,
@@ -398,35 +436,15 @@ async function ensureLaneForChoice(
   /** The branches the run's send chose for this lane (D13), or undefined: the factory's. */
   asked: NonNullable<FactoryRunRoute['lane']> | undefined,
 ): Promise<AdmissionBase | { wait: FactoryWaitReason }> {
-  // D12: never adopt the branch another member's factory runs a lane on.
-  const taken = await lanes.branchOfAnotherFactory(factory.id, factory.projectId, choice.branch);
-  if (taken.isErr()) return { wait: laneUnusable(taken.error.message) };
-  if (taken.value) {
-    return {
-      wait: laneUnusable(
-        `the branch ${choice.branch} is a lane of another member's factory on this project; change this factory's lane prefixes or the lane's name`,
-      ),
-    };
-  }
+  const taken = await laneBranchTaken(factory, choice.branch);
+  if (taken) return { wait: taken };
 
   // The first issue of the lane: its branch first, so a lane's row means a branch exists.
-  if (!deps!.github.ensureBranch)
-    return { wait: laneUnusable('this factory cannot make branches') };
   // Cut from the branch the send chose; a reader without one cuts from the factory's own.
-  const made = await deps!.github.ensureBranch(
-    { ...reader, baseBranch: asked?.baseBranch ?? null },
-    choice.branch,
-  );
-  if (made.isErr()) {
-    return {
-      wait: laneUnusable(`the branch ${choice.branch} could not be made: ${made.error.message}`),
-    };
-  }
-  const lane = await lanes.ensure(factory.id, {
-    ...choice,
-    baseBranch: asked?.baseBranch ?? null,
-    finishBranch: asked?.finishBranch ?? null,
-  });
+  const branches = askedBranches(asked);
+  const made = await makeLaneBranch(reader, choice.branch, branches.baseBranch);
+  if ('wait' in made) return made;
+  const lane = await lanes.ensure(factory.id, { ...choice, ...branches });
   if (lane.isErr()) return { wait: laneUnusable(lane.error.message) };
   const workflows = await readWorkflowFiles(deps!.github, reader);
   const ciWarning = laneCiWarning(workflows, lane.value.branch);
@@ -436,7 +454,7 @@ async function ensureLaneForChoice(
     factoryId: factory.id,
     lane: lane.value.name,
     branch: lane.value.branch,
-    branchCreated: made.value === 'created',
+    branchCreated: made.created,
     ciWarning: ciWarning ?? undefined,
     issue: issue.number,
   });

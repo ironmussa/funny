@@ -1,11 +1,10 @@
 import type { Automation, AutomationRun } from '@funny/shared';
-import { Pencil, Trash2, Play, Pause, History, Loader2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 import { getScheduleLabel } from './automation-form';
+import { AutomationRowActions } from './AutomationRowActions';
 
 interface AutomationRunHistoryProps {
   runs: AutomationRun[];
@@ -132,93 +131,15 @@ export function AutomationRow({
       <div className="settings-item-card group flex items-center justify-between gap-3">
         <AutomationSummary a={a} />
 
-        <div
-          className={cn(
-            'flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100',
-            triggering && 'opacity-100',
-          )}
-        >
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost-success-soft"
-                size="icon-sm"
-                aria-label="Run now"
-                aria-busy={triggering}
-                disabled={triggering}
-                data-testid={`automation-run-${a.id}`}
-                onClick={() => onTrigger(a)}
-              >
-                {triggering ? (
-                  <Loader2 className="icon-sm animate-spin" />
-                ) : (
-                  <Play className="icon-sm" />
-                )}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{triggering ? 'Starting…' : 'Run Now'}</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="muted"
-                size="icon-sm"
-                aria-label={a.enabled ? 'Pause' : 'Enable'}
-                data-testid={`automation-toggle-${a.id}`}
-                onClick={() => onToggleEnabled(a)}
-              >
-                {a.enabled ? <Pause className="icon-sm" /> : <Play className="icon-sm" />}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{a.enabled ? 'Pause' : 'Enable'}</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="muted"
-                size="icon-sm"
-                aria-label="Run history"
-                data-testid={`automation-history-${a.id}`}
-                onClick={() => onViewRuns(a.id)}
-              >
-                <History className="icon-sm" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Run History</TooltipContent>
-          </Tooltip>
-          {a.source !== 'config' && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="muted"
-                  size="icon-sm"
-                  aria-label="Edit"
-                  data-testid={`automation-edit-${a.id}`}
-                  onClick={() => onEdit(a)}
-                >
-                  <Pencil className="icon-sm" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Edit</TooltipContent>
-            </Tooltip>
-          )}
-          {a.source !== 'config' && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="muted-destructive"
-                  size="icon-sm"
-                  aria-label="Delete"
-                  data-testid={`automation-delete-${a.id}`}
-                  onClick={() => onDelete(a)}
-                >
-                  <Trash2 className="icon-sm" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Delete</TooltipContent>
-            </Tooltip>
-          )}
-        </div>
+        <AutomationRowActions
+          a={a}
+          triggering={triggering}
+          onTrigger={onTrigger}
+          onToggleEnabled={onToggleEnabled}
+          onViewRuns={onViewRuns}
+          onEdit={onEdit}
+          onDelete={onDelete}
+        />
       </div>
 
       {/* Inline run history */}

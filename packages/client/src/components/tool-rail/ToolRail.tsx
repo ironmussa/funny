@@ -259,6 +259,23 @@ function pathBehindGrid(): string {
 }
 
 /**
+ * Leave the grid or the inbox for the left view just chosen. The board and the
+ * queue open alone, with no thread beside them (opening a thread from them
+ * brings the thread back, App.tsx), so they land on the home page. The thread
+ * list and the inbox column go back to the thread that was open before. The
+ * grid's flag and the URL change in the same click (see PageButton).
+ */
+function leaveOtherViewsFor(
+  nextMode: LeftPanelMode,
+  open: { grid: boolean; inbox: boolean },
+  navigate: (path: string) => void,
+) {
+  if (open.grid) useUIStore.getState().setLiveColumnsOpen(false);
+  if (nextMode === 'kanban' || nextMode === 'factory') navigate(buildPath('/'));
+  else if (open.grid || open.inbox) navigate(buildPath(pathBehindGrid()));
+}
+
+/**
  * Shows one view in the left sidebar: the thread list, the kanban board or
  * the factory queue. Pressing the active board or queue goes back to the
  * thread list. The board and the queue open alone, filling the window with no
@@ -293,19 +310,7 @@ function LeftViewButton({
         const closing = active && view.mode !== 'threads';
         const nextMode = closing ? 'threads' : view.mode;
         setLeftPanelMode(nextMode);
-        if (nextMode === 'kanban' || nextMode === 'factory') {
-          // The board and the queue open alone, with no thread beside them;
-          // opening a thread from them brings the thread back (App.tsx).
-          if (gridOpen) useUIStore.getState().setLiveColumnsOpen(false);
-          navigate(buildPath('/'));
-        } else if (gridOpen) {
-          // Flag and URL in one click, as when the grid opens (see PageButton).
-          useUIStore.getState().setLiveColumnsOpen(false);
-          navigate(buildPath(pathBehindGrid()));
-        } else if (inboxOpen) {
-          // The inbox takes the sidebar's place: leave it for the chosen view.
-          navigate(buildPath(pathBehindGrid()));
-        }
+        leaveOtherViewsFor(nextMode, { grid: gridOpen, inbox: inboxOpen }, navigate);
         if (!closing) onShowSidebar?.();
       }}
       label={label}

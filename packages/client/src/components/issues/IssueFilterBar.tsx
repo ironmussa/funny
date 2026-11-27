@@ -69,27 +69,36 @@ const TYPE_DOT_CLASS = new Map([
   ['PINK', 'bg-status-violet'],
 ]);
 
+/** What the filters offer before the repository's options load. */
+const NO_FILTER_OPTIONS: IssueFilterOptions = {
+  labels: [],
+  users: [],
+  milestones: [],
+  types: [],
+  projects: [],
+};
+
 function useOptions(options: IssueFilterOptions | null) {
-  const labels: MultiSelectOption[] = (options?.labels ?? []).map((l) => ({
+  const source = options ?? NO_FILTER_OPTIONS;
+  const labels: MultiSelectOption[] = source.labels.map((l) => ({
     value: l.name,
     label: l.name,
     color: l.color,
   }));
-  const users: MultiSelectOption[] = (options?.users ?? []).map((u) => ({
+  const users: MultiSelectOption[] = source.users.map((u) => ({
     value: u.login,
     label: u.login,
     avatarUrl: u.avatar_url,
   }));
-  const projects: MultiSelectOption[] = (options?.projects ?? []).map((p) => ({
+  const projects: MultiSelectOption[] = source.projects.map((p) => ({
     value: `${p.owner}/${p.number}`,
     label: p.title,
   }));
-  const milestones: MultiSelectOption[] = (options?.milestones ?? []).map((m) => ({
+  const milestones: MultiSelectOption[] = source.milestones.map((m) => ({
     value: m.title,
     label: m.title,
   }));
-  const types = options?.types ?? [];
-  return { labels, users, projects, milestones, types };
+  return { labels, users, projects, milestones, types: source.types };
 }
 
 interface IssueFilterBarProps {

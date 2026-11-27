@@ -231,6 +231,25 @@ async function checkedRoute(
   return missing ? err({ kind: 'invalid', message: missing }) : ok(route);
 }
 
+/** The issues of a send that may be queued, and the ones refused with why; each number once. */
+async function sendableIssues(
+  port: Pick<FactoryGithubPort, 'getIssue'>,
+  reader: FactoryRepoReader,
+  numbers: readonly number[],
+): Promise<
+  Result<{ open: FactoryIssueDetail[]; refused: FactorySubmitResult['refused'] }, FactoryQueueError>
+> {
+  const refused: FactorySubmitResult['refused'] = [];
+  const open: FactoryIssueDetail[] = [];
+  for (const number of new Set(numbers)) {
+    const checked = sendable(number, await port.getIssue(reader, number));
+    if (checked.isErr()) return err(checked.error);
+    if ('refusal' in checked.value) refused.push(checked.value.refusal);
+    else open.push(checked.value.issue);
+  }
+  return ok({ open, refused });
+}
+
 export function createFactoryQueue(deps: FactoryQueueDeps = {}) {
   const runs = deps.runs ?? createFactoryRunsRepository();
   const batches = deps.batches ?? createFactoryBatchesRepository();
@@ -292,14 +311,9 @@ export function createFactoryQueue(deps: FactoryQueueDeps = {}) {
     const flow = await loadFactoryFlow(input.flowName, flowReadsOf(port, reader));
     if (flow.isErr()) return err(flowRefusal(flow.error));
 
-    const refused: FactorySubmitResult['refused'] = [];
-    const open: FactoryIssueDetail[] = [];
-    for (const number of [...new Set(input.issueNumbers)]) {
-      const checked = sendable(number, await port.getIssue(reader, number));
-      if (checked.isErr()) return err(checked.error);
-      if ('refusal' in checked.value) refused.push(checked.value.refusal);
-      else open.push(checked.value.issue);
-    }
+    const issues = await sendableIssues(port, reader, input.issueNumbers);
+    if (issues.isErr()) return err(issues.error);
+    const { open, refused } = issues.value;
 
     const ordered = oldestFirst(open);
     if (ordered.length === 0) return ok({ accepted: [], refused });

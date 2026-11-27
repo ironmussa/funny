@@ -1,6 +1,7 @@
 import type { EnrichedGitHubIssue } from '@funny/shared';
 import { MAX_ISSUES_PER_SEND } from '@funny/shared/contracts/factory';
 import { MAX_ISSUES_PER_DELETE } from '@funny/shared/contracts/github-issues';
+import type { TFunction } from 'i18next';
 import { CircleCheck, CircleDot, MessageSquare } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -249,6 +250,24 @@ function IssuesToolbar({
   );
 }
 
+/** The empty list's title: no issue matches the filters, or there are none in this state. */
+function emptyIssuesTitle(t: TFunction, filtered: boolean, state: IssueState): string {
+  if (filtered) return t('review.issues.noMatchingIssues', 'No issues match these filters');
+  return state === 'open'
+    ? t('review.issues.noOpenIssues', 'No open issues')
+    : t('review.issues.noClosedIssues', 'No closed issues');
+}
+
+function IssuesError({ error }: { error: string }) {
+  const { t } = useTranslation();
+  return (
+    <div className="text-muted-foreground flex flex-1 flex-col items-center justify-center px-4 py-12 text-center text-sm">
+      <p>{t('issues.error', 'Failed to load issues')}</p>
+      <p className="mt-1 text-xs">{error}</p>
+    </div>
+  );
+}
+
 function IssuesBody({
   projectId,
   factory,
@@ -295,26 +314,10 @@ function IssuesBody({
     );
   }
   if (error) {
-    return (
-      <div className="text-muted-foreground flex flex-1 flex-col items-center justify-center px-4 py-12 text-center text-sm">
-        <p>{t('issues.error', 'Failed to load issues')}</p>
-        <p className="mt-1 text-xs">{error}</p>
-      </div>
-    );
+    return <IssuesError error={error} />;
   }
   if (issues.length === 0) {
-    return (
-      <EmptyState
-        icon={CircleDot}
-        title={
-          filtered
-            ? t('review.issues.noMatchingIssues', 'No issues match these filters')
-            : state === 'open'
-              ? t('review.issues.noOpenIssues', 'No open issues')
-              : t('review.issues.noClosedIssues', 'No closed issues')
-        }
-      />
-    );
+    return <EmptyState icon={CircleDot} title={emptyIssuesTitle(t, filtered, state)} />;
   }
   return (
     <IssuesList

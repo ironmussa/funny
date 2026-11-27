@@ -37,6 +37,85 @@ function reportDelete(t: TFunction, result: DeleteIssuesResult): void {
   }
 }
 
+/** Why "Send to factory" is off, or null: no factory yet, or nothing open to send. */
+function sendOffReason(t: TFunction, factory: IssueFactory, sendable: number[]): string | null {
+  if (!factory.settings) {
+    return t('factory.notConfigured', 'Set up the issue factory in the project settings first.');
+  }
+  return sendable.length === 0
+    ? t('factory.nothingToSend', 'Only open issues can go to the factory.')
+    : null;
+}
+
+/** Deleting the selection on GitHub, behind its confirmation. */
+function useDeleteSelection(
+  projectId: string,
+  selected: number[],
+  onDeleted: (deleted: number[]) => void,
+) {
+  const { t } = useTranslation();
+  const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const done = () => {
+    setDeleting(false);
+    setConfirming(false);
+  };
+  const remove = () => {
+    setDeleting(true);
+    void api.githubDeleteIssues(projectId, selected).match(
+      (result) => {
+        done();
+        if (result.failed.length > 0) {
+          log.warn('some issues were not deleted', { projectId, failed: result.failed.length });
+        }
+        reportDelete(t, result);
+        onDeleted(result.deleted);
+      },
+      (error) => {
+        done();
+        toastError(error, 'issues');
+      },
+    );
+  };
+  return { confirming, setConfirming, deleting, remove };
+}
+
+/** "Send to factory", with how many of the selection can go and why it is off. */
+function SendToFactoryButton({
+  sendOff,
+  sendableCount,
+  selectedCount,
+  onSend,
+}: {
+  sendOff: string | null;
+  sendableCount: number;
+  selectedCount: number;
+  onSend: () => void;
+}) {
+  const { t } = useTranslation();
+  const partial = sendableCount > 0 && sendableCount < selectedCount;
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        {/* A disabled button gets no pointer events: the span keeps the tooltip. */}
+        <span>
+          <Button
+            size="xs"
+            onClick={onSend}
+            disabled={sendOff !== null}
+            data-testid="issues-selection-send-factory"
+          >
+            <Factory className="icon-xs" />
+            {t('factory.send', 'Send to factory')}
+            {partial ? ` (${sendableCount})` : ''}
+          </Button>
+        </span>
+      </TooltipTrigger>
+      {sendOff && <TooltipContent side="bottom">{sendOff}</TooltipContent>}
+    </Tooltip>
+  );
+}
+
 export function IssuesSelectionBar({
   projectId,
   factory,
@@ -65,35 +144,13 @@ export function IssuesSelectionBar({
   leading?: ReactNode;
 }) {
   const { t } = useTranslation();
-  const [confirming, setConfirming] = useState(false);
-  const [deleting, setDeleting] = useState(false);
+  const { confirming, setConfirming, deleting, remove } = useDeleteSelection(
+    projectId,
+    selected,
+    onDeleted,
+  );
   const [sending, setSending] = useState(false);
-  // Why "Send to factory" is off, or null: no factory yet, or nothing open to send.
-  const sendOff = !factory.settings
-    ? t('factory.notConfigured', 'Set up the issue factory in the project settings first.')
-    : sendable.length === 0
-      ? t('factory.nothingToSend', 'Only open issues can go to the factory.')
-      : null;
-
-  const remove = () => {
-    setDeleting(true);
-    void api.githubDeleteIssues(projectId, selected).match(
-      (result) => {
-        setDeleting(false);
-        setConfirming(false);
-        if (result.failed.length > 0) {
-          log.warn('some issues were not deleted', { projectId, failed: result.failed.length });
-        }
-        reportDelete(t, result);
-        onDeleted(result.deleted);
-      },
-      (error) => {
-        setDeleting(false);
-        setConfirming(false);
-        toastError(error, 'issues');
-      },
-    );
-  };
+  const sendOff = sendOffReason(t, factory, sendable);
 
   return (
     <div
@@ -109,26 +166,12 @@ export function IssuesSelectionBar({
           {t('issues.clearSelection')}
         </Button>
         <div className="min-w-0 flex-1" />
-        <Tooltip>
-          <TooltipTrigger asChild>
-            {/* A disabled button gets no pointer events: the span keeps the tooltip. */}
-            <span>
-              <Button
-                size="xs"
-                onClick={() => setSending(true)}
-                disabled={sendOff !== null}
-                data-testid="issues-selection-send-factory"
-              >
-                <Factory className="icon-xs" />
-                {t('factory.send', 'Send to factory')}
-                {sendable.length > 0 && sendable.length < selected.length
-                  ? ` (${sendable.length})`
-                  : ''}
-              </Button>
-            </span>
-          </TooltipTrigger>
-          {sendOff && <TooltipContent side="bottom">{sendOff}</TooltipContent>}
-        </Tooltip>
+        <SendToFactoryButton
+          sendOff={sendOff}
+          sendableCount={sendable.length}
+          selectedCount={selected.length}
+          onSend={() => setSending(true)}
+        />
         <Button
           variant="destructive"
           size="xs"

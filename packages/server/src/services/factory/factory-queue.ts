@@ -26,6 +26,7 @@ import type {
   FactoryQueueCiProposal,
   FactoryQueueClearResult,
   FactoryReadiness,
+  FactoryRunRoute,
   FactorySubmitResult,
   FactoryTrigger,
 } from '@funny/shared/contracts/factory';
@@ -189,6 +190,36 @@ async function saveTrigger(
   return ok(saved.value);
 }
 
+/** The route a send asked for, or null when it names no branch (the factory's settings). */
+function usedRoute(route: FactoryRunRoute | undefined): FactoryRunRoute | null {
+  if (!route) return null;
+  const lane =
+    route.lane && (route.lane.baseBranch || route.lane.finishBranch) ? route.lane : undefined;
+  return route.baseBranch || lane ? { baseBranch: route.baseBranch, lane } : null;
+}
+
+/**
+ * Why a send's route cannot be used, or null: every branch it names must exist
+ * on GitHub now (change factory-lanes, D13), so a mistyped branch is refused
+ * at the send, not found by a run that cannot start.
+ */
+async function missingRouteBranch(
+  port: FactoryGithubPort,
+  reader: FactoryRepoReader,
+  route: FactoryRunRoute | null,
+): Promise<string | null> {
+  if (!route) return null;
+  const named = [route.baseBranch, route.lane?.baseBranch, route.lane?.finishBranch];
+  const branches = [...new Set(named.filter((name): name is string => Boolean(name)))];
+  if (!port.laneBranches) return NOT_RUNNING_HERE;
+  for (const branch of branches) {
+    const head = await port.laneBranches(reader).branchHead(branch);
+    if (head.isErr()) return `GitHub could not be read: ${head.error.message}`;
+    if (!head.value) return `The branch ${branch} does not exist on GitHub.`;
+  }
+  return null;
+}
+
 export function createFactoryQueue(deps: FactoryQueueDeps = {}) {
   const runs = deps.runs ?? createFactoryRunsRepository();
   const batches = deps.batches ?? createFactoryBatchesRepository();
@@ -239,11 +270,15 @@ export function createFactoryQueue(deps: FactoryQueueDeps = {}) {
 
   async function submit(
     factoryId: string,
-    input: { issueNumbers: number[]; flowName: string },
+    input: { issueNumbers: number[]; flowName: string; route?: FactoryRunRoute },
   ): Promise<Result<FactorySubmitResult, FactoryQueueError>> {
     const ready = await workingFactory(factoryId);
     if (ready.isErr()) return err(ready.error);
     const { port, reader } = ready.value;
+
+    const route = usedRoute(input.route);
+    const missing = await missingRouteBranch(port, reader, route);
+    if (missing) return err({ kind: 'invalid', message: missing });
 
     const flow = await loadFactoryFlow(input.flowName, flowReadsOf(port, reader));
     if (flow.isErr()) return err(flowRefusal(flow.error));
@@ -265,6 +300,7 @@ export function createFactoryQueue(deps: FactoryQueueDeps = {}) {
       issueNumbers: ordered,
       issueTitles: new Map(open.map((issue) => [issue.number, issue.title])),
       flowName: input.flowName,
+      route,
     });
     if (queued.isErr()) return err({ kind: 'storage', message: queued.error.message });
     const accepted = queued.value.queued.flatMap((run) =>

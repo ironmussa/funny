@@ -62,6 +62,8 @@ export const factorySettings = sqliteTable(
     laneLabelPrefix: text('lane_label_prefix'),
     /** What a lane's branch starts with; null: `lane/` (`feature/` before migration 141). */
     laneBranchPrefix: text('lane_branch_prefix'),
+    /** The branch a lane's finish pull request merges into ("Finish into"); null: the "merge into" branch. */
+    laneFinishBranch: text('lane_finish_branch'),
     /** JSON object of the factory's per-step overrides (`FactoryStepOverrides`), or null. */
     stepOverrides: text('step_overrides'),
     createdAt: text('created_at').notNull(),
@@ -159,6 +161,11 @@ export const factoryRuns = sqliteTable('factory_runs', {
   lane: text('lane'),
   /** The commit the run's merge made on its base branch; null until it merges. */
   mergeSha: text('merge_sha'),
+  /**
+   * JSON `FactoryRunRoute`: the branches the sender chose for this run instead
+   * of the factory's settings (change factory-lanes, D13); null: the settings.
+   */
+  requestedRoute: text('requested_route'),
 });
 
 /**
@@ -179,6 +186,10 @@ export const factoryLanes = sqliteTable(
     /** The lane's name, lower-cased: the label without its prefix. */
     name: text('name').notNull(),
     branch: text('branch').notNull(),
+    /** The branch it was cut from and syncs with; null: the factory's "merge into" branch. */
+    baseBranch: text('base_branch'),
+    /** The branch its finish pull request merges into; null: the factory's "Finish into". */
+    finishBranch: text('finish_branch'),
     /** `active` → `finished` (its final pull request merged). */
     state: text('state').notNull().default('active'),
     /** Why the repository's workflows may not run for this branch, or null. */

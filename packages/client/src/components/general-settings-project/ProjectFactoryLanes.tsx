@@ -320,6 +320,7 @@ export function ProjectFactoryLanes({
   label,
   laneLabelPrefix,
   laneBranchPrefix,
+  laneFinishBranch,
   rowKey,
   onSave,
 }: {
@@ -327,8 +328,14 @@ export function ProjectFactoryLanes({
   label: string;
   laneLabelPrefix: string;
   laneBranchPrefix: string;
+  laneFinishBranch: string;
   rowKey: string;
-  onSave: (input: Pick<SaveFactorySettingsInput, 'laneLabelPrefix' | 'laneBranchPrefix'>) => void;
+  onSave: (
+    input: Pick<
+      SaveFactorySettingsInput,
+      'laneLabelPrefix' | 'laneBranchPrefix' | 'laneFinishBranch'
+    >,
+  ) => void;
 }) {
   const { t } = useTranslation();
   const lanes = useFactoryLanes(projectId);
@@ -376,6 +383,28 @@ export function ProjectFactoryLanes({
           onBlur={(e) => {
             const next = e.target.value.trim();
             if (next && next !== laneBranchPrefix) onSave({ laneBranchPrefix: next });
+          }}
+        />
+      </ProjectSettingRow>
+
+      <ProjectSettingRow
+        settingId="factory.laneFinishBranch"
+        title={t('settings.projectFactoryLaneFinishBranch', 'Finish into')}
+        description={t(
+          'settings.projectFactoryLaneFinishBranchDesc',
+          'Branch the Finish lane pull request merges into. Lanes still start from and sync with Merge into. Empty: Merge into',
+        )}
+      >
+        <Input
+          key={`lane-finish-branch-${rowKey}`}
+          defaultValue={laneFinishBranch}
+          placeholder={t('settings.projectFactoryLaneFinishBranchPlaceholder', 'Merge into')}
+          className="w-[220px]"
+          data-testid="settings-factory-lane-finish-branch"
+          onBlur={(e) => {
+            // Empty is a value here: it goes back to Merge into.
+            const next = e.target.value.trim();
+            if (next !== laneFinishBranch) onSave({ laneFinishBranch: next });
           }}
         />
       </ProjectSettingRow>

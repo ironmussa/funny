@@ -9,6 +9,7 @@
  */
 import {
   type FactoryRunHold,
+  type FactoryRunRoute,
   type FactoryTriage,
   type FactoryWaitReason,
 } from '@funny/shared/contracts/factory';
@@ -54,6 +55,8 @@ export function queueOperations(newId: () => string) {
       flowName: string;
       /** `label`: an issue the watcher found by its label (automatic mode); default `manual`. */
       source?: 'manual' | 'label';
+      /** The branches the sender chose for these issues, instead of the factory's settings. */
+      route?: FactoryRunRoute | null;
     }): ResultAsync<{ queued: FactoryRunView[]; duplicates: number[] }, FactoryRunsError> {
       return ResultAsync.fromPromise(
         (async () => {
@@ -70,6 +73,7 @@ export function queueOperations(newId: () => string) {
               source: input.source ?? 'manual',
               flowName: input.flowName,
               queueOrder: first + index,
+              requestedRoute: input.route ? JSON.stringify(input.route) : null,
             }),
           );
           const written = await db

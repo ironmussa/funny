@@ -494,7 +494,34 @@
       "loading": "Carregando issues…",
       "noProject": "Selecione um projeto para ver issues",
       "noOpenIssues": "Nenhuma issue aberta",
-      "noClosedIssues": "Nenhuma issue fechada"
+      "noClosedIssues": "Nenhuma issue fechada",
+      "noMatchingIssues": "Nenhuma issue corresponde a estes filtros",
+      "filter": {
+        "author": "Autor",
+        "labels": "Etiquetas",
+        "projects": "Projetos",
+        "milestones": "Marcos",
+        "assignees": "Responsáveis",
+        "types": "Tipos",
+        "searchUsers": "Buscar usuários…",
+        "noUsers": "Nenhum usuário",
+        "searchLabels": "Buscar etiquetas…",
+        "noLabels": "Nenhuma etiqueta",
+        "searchProjects": "Buscar projetos…",
+        "noProjects": "Nenhum projeto",
+        "searchMilestones": "Buscar marcos…",
+        "noMilestones": "Nenhum marco",
+        "searchTypes": "Buscar tipos…",
+        "noTypes": "Nenhum tipo",
+        "clear": "Limpar"
+      },
+      "sort": {
+        "newest": "Mais recentes",
+        "oldest": "Mais antigas",
+        "recentlyUpdated": "Atualizadas recentemente",
+        "leastRecentlyUpdated": "Atualizadas há mais tempo",
+        "mostCommented": "Mais comentadas"
+      }
     },
     "progress": {
       "description": "Progresso da operação git",
@@ -817,6 +844,9 @@
     "projectFactoryLaneLabelPrefixDesc": "Uma issue precisa tanto da etiqueta da fábrica ({{label}}) quanto de uma etiqueta {{prefix}}<nome> para rodar em uma faixa. Fixo enquanto houver faixas",
     "projectFactoryLaneBranchPrefix": "Prefixo de branch de faixa",
     "projectFactoryLaneBranchPrefixDesc": "Prefixo para as branches de faixa criadas a partir de Mesclar em ({{prefix}}<nome>). Fixo enquanto houver faixas",
+    "projectFactoryLaneFinishBranch": "Finalizar em",
+    "projectFactoryLaneFinishBranchDesc": "Branch em que o pull request de Finalizar faixa é mesclado. As faixas continuam nascendo de Mesclar em e sincronizando com ela. Vazio: Mesclar em",
+    "projectFactoryLaneFinishBranchPlaceholder": "Mesclar em",
     "projectFactoryLanes": "Faixas",
     "projectFactoryLanesDesc": "Branches de funcionalidade em paralelo criadas a partir de Mesclar em. Uma issue precisa da etiqueta da fábrica ({{label}}) e de uma etiqueta {{prefix}}<nome> para entrar em uma faixa",
     "projectFactoryLaneStateActive": "Ativa",
@@ -1624,7 +1654,11 @@
       "assigned": "atribuiu a",
       "unassigned": "removeu a atribuição de",
       "commitReferenced": "adicionou um commit que referencia esta issue"
-    }
+    },
+    "openedBy": "{{author}} abriu há {{time}}",
+    "opened": "aberta há {{time}}",
+    "commentCount_one": "{{count}} comentário",
+    "commentCount_other": "{{count}} comentários"
   },
   "users": {
     "title": "Usuários",
@@ -2132,6 +2166,7 @@
       "factory-disabled": "Factory desativada",
       "repo-published": "Repositório publicado",
       "issue-deleted": "Issue excluída",
+      "issue-labeled": "Issue etiquetada",
       "file-reverted": "Arquivo revertido",
       "changes-discarded": "Alterações descartadas",
       "commits-reset": "Reset",

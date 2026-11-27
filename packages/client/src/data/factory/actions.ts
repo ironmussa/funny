@@ -1,6 +1,7 @@
 import type {
   FactoryApprovalRequest,
   FactoryReplacedPrClose,
+  FactoryRunRoute,
 } from '@funny/shared/contracts/factory';
 import type { DomainError } from '@funny/shared/errors';
 import type { ResultAsync } from 'neverthrow';
@@ -239,9 +240,11 @@ export function sendIssuesToFactory(
   projectId: string,
   issueNumbers: number[],
   flowName: string,
+  /** The branches chosen for these issues alone; absent: the factory's settings. */
+  route?: FactoryRunRoute,
   layer: DataLayer = getDataLayer(),
 ): ResultAsync<FactorySubmitResult, DomainError> {
-  return factoryApi.submitIssues({ projectId, issueNumbers, flowName }).map((result) => {
+  return factoryApi.submitIssues({ projectId, issueNumbers, flowName, route }).map((result) => {
     refreshFactoryRuns(projectId, layer);
     return result;
   });

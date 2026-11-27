@@ -2698,6 +2698,27 @@ const migrations: Migration[] = [
       );
     },
   },
+  {
+    // Change factory-lanes: the branch a lane's finish pull request merges
+    // into ("Finish into"); null: the factory's "merge into" branch. Lets a
+    // lane start from (and sync with) one branch and land on another.
+    name: '145_factory_lane_finish_branch',
+    async up() {
+      await ctx().addColumn('factory_settings', 'lane_finish_branch', 'TEXT');
+    },
+  },
+  {
+    // Change factory-lanes, D13: a send may name its own branches. A run keeps
+    // what its sender asked for (`requested_route`, JSON) until it is admitted;
+    // a lane keeps the branch it starts from and the one it is finished into.
+    // Null everywhere: the factory's settings, as before.
+    name: '146_factory_send_route',
+    async up() {
+      await ctx().addColumn('factory_runs', 'requested_route', 'TEXT');
+      await ctx().addColumn('factory_lanes', 'base_branch', 'TEXT');
+      await ctx().addColumn('factory_lanes', 'finish_branch', 'TEXT');
+    },
+  },
 ];
 
 /**

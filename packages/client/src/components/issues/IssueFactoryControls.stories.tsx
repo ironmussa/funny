@@ -3,7 +3,10 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { MemoryRouter } from 'react-router-dom';
 import { expect, within } from 'storybook/test';
 
-import { IssueFactoryStatus, IssuesFactoryBar } from '@/components/issues/IssueFactoryControls';
+import {
+  IssueFactoryStatus,
+  IssuesFactorySendDialog,
+} from '@/components/issues/IssueFactoryControls';
 import type { FactoryRun, FactorySettings } from '@/lib/api/factory';
 
 /**
@@ -75,6 +78,7 @@ const settings = (over: Partial<FactorySettings> = {}): FactorySettings => ({
   baseBranch: '',
   laneLabelPrefix: 'feature:',
   laneBranchPrefix: 'feature/',
+  laneFinishBranch: '',
   blockedReason: null,
   updatedAt: '2026-11-16T00:00:00.000Z',
   ...over,
@@ -118,33 +122,31 @@ function StatusGallery() {
   );
 }
 
-const meta: Meta<typeof IssuesFactoryBar> = {
+const meta: Meta<typeof IssuesFactorySendDialog> = {
   title: 'Issues/IssueFactoryControls',
-  component: IssuesFactoryBar,
+  component: IssuesFactorySendDialog,
   parameters: { layout: 'padded' },
   tags: ['autodocs'],
   args: {
+    open: true,
+    onOpenChange: () => {},
     projectId: 'project-1',
     settings: settings(),
     selected: [12, 15],
     onSent: () => {},
   },
-  decorators: [
-    (Story) => (
-      <div className="bg-sidebar w-[420px] rounded-md border">
-        <Story />
-      </div>
-    ),
-  ],
 };
+
+/** The dialog renders in a portal, outside the story's canvas. */
+const portal = (canvasElement: HTMLElement) => within(canvasElement.ownerDocument.body);
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
 /** Two issues selected on a running factory: ready to send. */
-export const SendBar: Story = {
+export const SendDialog: Story = {
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
+    const canvas = portal(canvasElement);
     await expect(canvas.getByTestId('issues-factory-send')).toBeEnabled();
     await expect(canvas.getByTestId('issues-factory-flow')).toHaveTextContent('issue-to-merge');
   },
@@ -154,7 +156,7 @@ export const SendBar: Story = {
 export const Paused: Story = {
   args: { settings: settings({ enabled: false }) },
   play: async ({ canvasElement }) => {
-    const canvas = within(canvasElement);
+    const canvas = portal(canvasElement);
     await expect(canvas.getByTestId('issues-factory-send')).toBeDisabled();
     await expect(canvas.getByTestId('issues-factory-disabled-reason')).toBeVisible();
   },
@@ -169,7 +171,7 @@ export const CannotWork: Story = {
     }),
   },
   play: async ({ canvasElement }) => {
-    await expect(within(canvasElement).getByTestId('issues-factory-send')).toBeDisabled();
+    await expect(portal(canvasElement).getByTestId('issues-factory-send')).toBeDisabled();
   },
 };
 

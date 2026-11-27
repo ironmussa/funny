@@ -5,8 +5,11 @@
  * @domain layer: application
  *
  * Finishing a lane (openspec factory-lanes, D8): the factory opens the pull
- * request that merges the lane's branch into the branch the factory merges
- * into, and stops there. A person reviews and merges it: it carries a whole
+ * request that merges the lane's branch into the factory's "Finish into"
+ * branch (the branch the factory merges into when that is empty), and stops
+ * there. A lane still starts from and syncs with "merge into": with "merge
+ * into" `master` and "Finish into" `qa`, fixes cut from production land on QA
+ * together. A person reviews and merges it: it carries a whole
  * feature, including what an agent wrote to settle a sync. It is not a factory
  * run, so nothing classes its risk, approves it or merges it.
  *
@@ -15,7 +18,7 @@
  * issues to the factory's own branch and it is not synced any more.
  */
 import { and, asc, eq } from 'drizzle-orm';
-import { errAsync, okAsync, ResultAsync } from 'neverthrow';
+import { errAsync, ok, okAsync, ResultAsync } from 'neverthrow';
 
 import { db } from '../../db/index.js';
 import { factoryRuns } from '../../db/schema.js';
@@ -24,6 +27,7 @@ import type { ServerActivities } from '../activities/server-activities.js';
 import type { FactoryGithubPort, FactoryRepoReader } from './factory-github.js';
 import type { FactoryLanesRepository, FactoryLaneView } from './factory-lanes.js';
 import {
+  factoryLaneFinishBranchOf,
   openRunsOfLane,
   ownLane,
   requestLaneSync,
@@ -127,7 +131,11 @@ export function createLaneFinish(deps: FinishLaneDeps) {
       return { error: "The project's repository could not be reached now. Try again." };
     }
     const reader: FactoryRepoReader = { repo, ownerId: userId, projectId };
-    const base = await deps.github.defaultBranch(reader);
+    // The lane's own branches first (D13), then the factory's settings: "Finish
+    // into", else the branch the lane started from.
+    const finishInto =
+      lane.finishBranch ?? (await factoryLaneFinishBranchOf(userId, projectId)) ?? lane.baseBranch;
+    const base = finishInto ? ok(finishInto) : await deps.github.defaultBranch(reader);
     if (base.isErr()) return { error: `GitHub could not be read: ${base.error.message}` };
     const opened = await deps.github.laneBranches(reader).openPullRequest({
       head: lane.branch,

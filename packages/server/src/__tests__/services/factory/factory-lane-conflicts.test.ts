@@ -28,6 +28,8 @@ function lane(name: string, over: Partial<FactoryLaneView> = {}): FactoryLaneVie
     id: `lane-${name}`,
     factoryId: 'f1',
     name,
+    baseBranch: null,
+    finishBranch: null,
     branch: `feature/${name}`,
     state: 'active',
     ciWarning: null,

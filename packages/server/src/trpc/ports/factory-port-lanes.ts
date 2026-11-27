@@ -51,6 +51,8 @@ function toLaneContract(
     name: lane.name,
     label: `${labelPrefix}${lane.name}`,
     branch: lane.branch,
+    baseBranch: lane.baseBranch,
+    finishBranch: lane.finishBranch,
     state: lane.state,
     openRuns,
     ciWarning: lane.ciWarning,

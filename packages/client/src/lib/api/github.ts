@@ -73,10 +73,34 @@ export const githubApi = {
 
   githubIssuesEnriched: (
     projectId: string,
-    params?: { state?: string; page?: number; per_page?: number; cursor?: string },
+    params?: {
+      state?: string;
+      page?: number;
+      per_page?: number;
+      cursor?: string;
+      sort?: string;
+      labels?: string[];
+      authors?: string[];
+      assignees?: string[];
+      milestones?: string[];
+      types?: string[];
+      /** `owner/number` of each project. */
+      projects?: string[];
+    },
     signal?: AbortSignal,
   ) => {
     const p = githubListQuery(projectId, params);
+    for (const key of [
+      'labels',
+      'authors',
+      'assignees',
+      'milestones',
+      'types',
+      'projects',
+    ] as const) {
+      const values = params?.[key];
+      if (values?.length) p.set(key, values.join(','));
+    }
     return request<{
       issues: import('@funny/shared').EnrichedGitHubIssue[];
       hasMore: boolean;
@@ -144,6 +168,13 @@ export const githubApi = {
       { signal },
     ),
 
+  /** Labels, users, milestones, issue types and projects for the Issues filter dropdowns. */
+  githubIssueFilterOptions: (projectId: string, signal?: AbortSignal) =>
+    request<import('@funny/shared').IssueFilterOptions>(
+      `/github/issue-filter-options?${new URLSearchParams({ projectId })}`,
+      { signal },
+    ),
+
   githubCommitAuthors: (
     projectId: string,
     params?: { sha?: string; page?: number; per_page?: number },
@@ -202,6 +233,13 @@ export const githubApi = {
     request<import('@funny/shared/contracts/github-issues').DeleteIssuesResult>(
       `/github/issues-delete`,
       { method: 'POST', body: JSON.stringify({ projectId, issueNumbers }) },
+    ),
+
+  /** Adds labels to the issues (GitHub makes a label the repository lacks). */
+  githubAddIssueLabels: (projectId: string, issueNumbers: number[], labels: string[]) =>
+    request<import('@funny/shared/contracts/github-issues').AddIssueLabelsResult>(
+      `/github/issues-labels`,
+      { method: 'POST', body: JSON.stringify({ projectId, issueNumbers, labels }) },
     ),
 
   githubIssue: (projectId: string, issueNumber: number) =>

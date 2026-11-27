@@ -1,12 +1,13 @@
 import type { EnrichedGitHubIssue } from '@funny/shared';
 import { MAX_ISSUES_PER_SEND } from '@funny/shared/contracts/factory';
 import { MAX_ISSUES_PER_DELETE } from '@funny/shared/contracts/github-issues';
-import { CircleCheck, CircleDot, ExternalLink, MessageSquare, Plus } from 'lucide-react';
+import { CircleCheck, CircleDot, MessageSquare } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { GitHubProjectGate } from '@/components/GitHubProjectGate';
 import { IssueLabelBadges, IssueLinkBadges } from '@/components/IssueBadges';
+import { IssueChip } from '@/components/IssueChip';
 import { IssueDetailDialog } from '@/components/IssueDetailDialog';
 import {
   canSelectIssue,
@@ -17,6 +18,13 @@ import {
   useIssueFactory,
   type IssueFactory,
 } from '@/components/issues/IssueFactoryControls';
+import {
+  EMPTY_ISSUE_FILTERS,
+  hasActiveIssueFilters,
+  IssueFilterBar,
+  type IssueFilterState,
+  type IssueState,
+} from '@/components/issues/IssueFilterBar';
 import { IssuesSelectionBar } from '@/components/issues/IssuesSelectionBar';
 import { LoadMoreSentinel } from '@/components/LoadMoreSentinel';
 import {
@@ -26,30 +34,22 @@ import {
   TabToolbarSpacer,
 } from '@/components/review-pane/TabToolbar';
 import { ToolbarCount } from '@/components/review-pane/ToolbarCount';
-import { Button } from '@/components/ui/button';
-import { ButtonGroup } from '@/components/ui/button-group';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useIssueFilterOptions } from '@/data/issue-filters/hooks';
 import { useGitHubProjectId } from '@/hooks/use-github-project-id';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { usePagedGitHubList, type FetchGitHubListPage } from '@/hooks/use-paged-github-list';
+import { useResettableState } from '@/hooks/use-resettable-state';
 import { api } from '@/lib/api';
 import { buildIssueThreadPrompt } from '@/lib/build-issue-thread-prompt';
 import { createClientLogger } from '@/lib/client-logger';
-import {
-  listRowActionClassName,
-  listRowClassName,
-  listRowTitleClassName,
-} from '@/lib/list-row-styles';
+import { listRowClassName, listRowTitleClassName } from '@/lib/list-row-styles';
 import { cn } from '@/lib/utils';
 import { useUIStore } from '@/stores/ui-store';
 
 const log = createClientLogger('issues-tab');
-
-type IssueState = 'open' | 'closed';
 
 function timeAgo(dateStr: string, now: number): string {
   const seconds = Math.floor((now - new Date(dateStr).getTime()) / 1000);
@@ -81,13 +81,18 @@ function IssuesContent({ visible }: IssuesTabProps) {
   const projectId = useGitHubProjectId();
   const startNewThreadFromIssue = useUIStore((s) => s.startNewThreadFromIssue);
   const [state, setState] = useState<IssueState>('open');
+  // Filters belong to the project: switching projects starts without any.
+  const [filters, setFilters] = useResettableState<IssueFilterState>(EMPTY_ISSUE_FILTERS, [
+    projectId,
+  ]);
+  const filterOptions = useIssueFilterOptions(projectId, !!visible);
   const [selectedIssue, setSelectedIssue] = useState<EnrichedGitHubIssue | null>(null);
 
   const fetchPage = useMemo<FetchGitHubListPage<EnrichedGitHubIssue> | null>(() => {
     if (!projectId) return null;
     return (page, signal, cursor) =>
       api
-        .githubIssuesEnriched(projectId, { state, page, per_page: 30, cursor }, signal)
+        .githubIssuesEnriched(projectId, { state, page, per_page: 30, cursor, ...filters }, signal)
         .map((data) => ({ ...data, items: data.issues }))
         .mapErr((error) => {
           if (!signal.aborted) {
@@ -95,7 +100,7 @@ function IssuesContent({ visible }: IssuesTabProps) {
           }
           return error;
         });
-  }, [projectId, state]);
+  }, [projectId, state, filters]);
 
   const list = usePagedGitHubList({
     visible,
@@ -130,10 +135,16 @@ function IssuesContent({ visible }: IssuesTabProps) {
       <IssuesToolbar
         loading={list.loading}
         onRefresh={list.refresh}
-        state={state}
-        onStateChange={setState}
         repoInfo={repoInfo}
         count={list.items.length}
+      />
+      <IssueFilterBar
+        value={filters}
+        onChange={setFilters}
+        options={filterOptions.options}
+        optionsLoading={filterOptions.loading}
+        state={state}
+        onStateChange={setState}
       />
       <IssuesBody
         projectId={projectId}
@@ -141,10 +152,10 @@ function IssuesContent({ visible }: IssuesTabProps) {
         loading={list.loading}
         error={list.error}
         state={state}
+        filtered={hasActiveIssueFilters(filters)}
         hasMore={list.hasMore}
         onLoadMore={list.loadMore}
         onRefresh={list.refresh}
-        onCreateThread={handleCreateThread}
         onOpenIssue={setSelectedIssue}
       />
       {selectedIssue && (
@@ -165,21 +176,15 @@ function IssuesContent({ visible }: IssuesTabProps) {
 function IssuesToolbar({
   loading,
   onRefresh,
-  state,
-  onStateChange,
   repoInfo,
   count,
 }: {
   loading: boolean;
   onRefresh: () => void;
-  state: IssueState;
-  onStateChange: (state: IssueState) => void;
   repoInfo: { owner: string; repo: string } | null;
   count: number;
 }) {
   const { t } = useTranslation();
-  const stateLabel = (s: IssueState): string =>
-    s === 'open' ? t('issues.open', 'Open') : t('issues.closed', 'Closed');
 
   return (
     <TabToolbar data-testid="issues-toolbar">
@@ -193,25 +198,6 @@ function IssuesToolbar({
         />
       )}
 
-      <Select
-        value={state}
-        onValueChange={(v) => {
-          if (v === 'open' || v === 'closed') onStateChange(v);
-        }}
-      >
-        <SelectTrigger size="xs" className="w-auto" data-testid="issues-state-trigger">
-          <CircleDot className="icon-xs opacity-70" />
-          <span>{stateLabel(state)}</span>
-        </SelectTrigger>
-        <SelectContent>
-          {(['open', 'closed'] satisfies IssueState[]).map((s) => (
-            <SelectItem key={s} value={s} textSize="xs" data-testid={`issues-filter-${s}`}>
-              {stateLabel(s)}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
       <TabToolbarSpacer />
       <ToolbarCount label={t('review.toolbarCount.issues', { count })} testId="issues-count" />
     </TabToolbar>
@@ -224,10 +210,10 @@ function IssuesBody({
   loading,
   error,
   state,
+  filtered,
   hasMore,
   onLoadMore,
   onRefresh,
-  onCreateThread,
   onOpenIssue,
 }: {
   projectId: string;
@@ -235,10 +221,11 @@ function IssuesBody({
   loading: boolean;
   error: string | null;
   state: IssueState;
+  /** A filter is set: the empty state says no issue matches, not that there are none. */
+  filtered: boolean;
   hasMore: boolean;
   onLoadMore: () => void;
   onRefresh: () => void;
-  onCreateThread: (issue: EnrichedGitHubIssue) => void;
   onOpenIssue: (issue: EnrichedGitHubIssue) => void;
 }) {
   const { t } = useTranslation();
@@ -265,9 +252,11 @@ function IssuesBody({
       <EmptyState
         icon={CircleDot}
         title={
-          state === 'open'
-            ? t('review.issues.noOpenIssues', 'No open issues')
-            : t('review.issues.noClosedIssues', 'No closed issues')
+          filtered
+            ? t('review.issues.noMatchingIssues', 'No issues match these filters')
+            : state === 'open'
+              ? t('review.issues.noOpenIssues', 'No open issues')
+              : t('review.issues.noClosedIssues', 'No closed issues')
         }
       />
     );
@@ -280,7 +269,6 @@ function IssuesBody({
       hasMore={hasMore}
       onLoadMore={onLoadMore}
       onRefresh={onRefresh}
-      onCreateThread={onCreateThread}
       onOpenIssue={onOpenIssue}
     />
   );
@@ -300,7 +288,6 @@ function IssuesList({
   hasMore,
   onLoadMore,
   onRefresh,
-  onCreateThread,
   onOpenIssue,
 }: {
   projectId: string;
@@ -309,7 +296,6 @@ function IssuesList({
   hasMore: boolean;
   onLoadMore: () => void;
   onRefresh: () => void;
-  onCreateThread: (issue: EnrichedGitHubIssue) => void;
   onOpenIssue: (issue: EnrichedGitHubIssue) => void;
 }) {
   const now = useMinuteTick();
@@ -353,7 +339,6 @@ function IssuesList({
               factory={factory}
               selected={selectable.includes(issue.number)}
               onToggle={toggle}
-              onCreateThread={onCreateThread}
               onOpen={onOpenIssue}
             />
           ))}
@@ -373,6 +358,9 @@ function IssuesList({
           factory={factory}
           selected={selectable}
           sendable={sendable}
+          labelsOf={(n) =>
+            issues.find((issue) => issue.number === n)?.labels.map((label) => label.name) ?? []
+          }
           onSent={leave}
           onDeleted={(deleted) => {
             leave(deleted);
@@ -401,7 +389,6 @@ function IssueRow({
   factory,
   selected,
   onToggle,
-  onCreateThread,
   onOpen,
 }: {
   projectId: string;
@@ -410,7 +397,6 @@ function IssueRow({
   factory: IssueFactory;
   selected: boolean;
   onToggle: (issueNumber: number) => void;
-  onCreateThread: (issue: EnrichedGitHubIssue) => void;
   onOpen: (issue: EnrichedGitHubIssue) => void;
 }) {
   const { t } = useTranslation();
@@ -427,40 +413,61 @@ function IssueRow({
       ) : (
         <IssueStateIcon state={issue.state} className="icon-base mt-0.5 shrink-0" />
       )}
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <button
-          type="button"
-          onClick={() => onOpen(issue)}
-          className={cn(
-            listRowTitleClassName,
-            'hover:text-primary line-clamp-2 cursor-pointer text-left transition-colors',
-          )}
-          data-testid={`issue-title-${issue.number}`}
-        >
-          {issue.title}
-        </button>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-muted-foreground text-xs">#{issue.number}</span>
-          <span className="text-muted-foreground text-xs">{timeAgo(issue.created_at, now)}</span>
-          {issue.user && <span className="text-muted-foreground text-xs">{issue.user.login}</span>}
-          {issue.comments > 0 && (
-            <span className="text-muted-foreground flex items-center gap-0.5 text-xs">
-              <MessageSquare className="icon-xs" />
-              {issue.comments}
+      <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        {/* As on GitHub: the title, its labels right after it on the same line… */}
+        <p className="min-w-0 leading-5">
+          <button
+            type="button"
+            onClick={() => onOpen(issue)}
+            className={cn(
+              listRowTitleClassName,
+              'hover:text-primary inline cursor-pointer text-left break-words transition-colors',
+            )}
+            data-testid={`issue-title-${issue.number}`}
+          >
+            {issue.title}
+          </button>
+          {issue.labels.length > 0 && (
+            <span data-testid={`issue-tags-${issue.number}`}>
+              <IssueLabelBadges issue={issue} plain className="ml-1 align-middle" />
             </span>
           )}
-        </div>
-        {/* The linked branch and pull request on one line… */}
+        </p>
+        {/* …then the number (the thread list's chip), who opened it and when. */}
         <div
-          className="flex flex-wrap items-center gap-1.5 empty:hidden"
+          className="text-muted-foreground flex flex-wrap items-center gap-1.5 text-xs"
+          data-testid={`issue-meta-${issue.number}`}
+        >
+          <IssueChip
+            projectId={projectId}
+            number={issue.number}
+            closed={issue.state !== 'open'}
+            githubUrl={issue.html_url}
+            showStateIcon={false}
+            data-testid={`issue-number-${issue.number}`}
+          />
+          <span>
+            {issue.user
+              ? t('issues.openedBy', '{{author}} opened {{time}} ago', {
+                  author: issue.user.login,
+                  time: timeAgo(issue.created_at, now),
+                })
+              : t('issues.opened', 'opened {{time}} ago', {
+                  time: timeAgo(issue.created_at, now),
+                })}
+          </span>
+        </div>
+        {/* funny's own: the linked branch and pull request… */}
+        <div
+          className="mt-1 flex flex-wrap items-center gap-1.5 empty:hidden"
           data-testid={`issue-links-${issue.number}`}
         >
           <IssueLinkBadges issue={issue} projectId={projectId} />
         </div>
-        {/* …the issue's state in the factory on its own line… */}
+        {/* …and the issue's state in the factory. */}
         {factoryRun && (
           <div
-            className="flex items-center gap-1.5"
+            className="mt-1 flex items-center gap-1.5"
             data-testid={`issue-factory-line-${issue.number}`}
           >
             <IssueFactoryStatus
@@ -470,65 +477,20 @@ function IssueRow({
             />
           </div>
         )}
-        {/* …and the GitHub labels on another. */}
-        <div
-          className="flex flex-wrap items-center gap-1.5 empty:hidden"
-          data-testid={`issue-tags-${issue.number}`}
-        >
-          <IssueLabelBadges issue={issue} />
-        </div>
-        {issue.body ? (
-          <p
-            className="text-muted-foreground mt-1 line-clamp-3 text-xs whitespace-pre-wrap"
-            data-testid={`issue-body-${issue.number}`}
-          >
-            {issue.body}
-          </p>
-        ) : null}
       </div>
 
-      <ButtonGroup data-testid={`issue-actions-${issue.number}`}>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              // oxlint-disable-next-line shadcn/require-static-classes -- listRowActionClassName is a static constant from list-row-styles
-              className={listRowActionClassName}
-              data-testid={`issue-open-github-${issue.number}`}
-              render={
-                <a
-                  href={issue.html_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label={t('issues.viewOnGithub', 'View on GitHub')}
-                />
-              }
-            >
-              <ExternalLink className="icon-sm" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top">{t('issues.viewOnGithub', 'View on GitHub')}</TooltipContent>
-        </Tooltip>
-        {!issue.linkedBranch && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                aria-label={t('issues.createThread', 'Create thread')}
-                // oxlint-disable-next-line shadcn/require-static-classes -- listRowActionClassName is a static constant from list-row-styles
-                className={listRowActionClassName}
-                onClick={() => onCreateThread(issue)}
-                data-testid={`issue-create-thread-${issue.number}`}
-              >
-                <Plus className="icon-sm" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top">{t('issues.createThread', 'Create thread')}</TooltipContent>
-          </Tooltip>
-        )}
-      </ButtonGroup>
+      {issue.comments > 0 && (
+        <button
+          type="button"
+          onClick={() => onOpen(issue)}
+          className="text-muted-foreground hover:text-primary flex shrink-0 cursor-pointer items-center gap-1 pt-0.5 text-xs transition-colors"
+          aria-label={t('issues.commentCount', '{{count}} comments', { count: issue.comments })}
+          data-testid={`issue-comments-${issue.number}`}
+        >
+          <MessageSquare className="icon-sm" />
+          {issue.comments}
+        </button>
+      )}
     </div>
   );
 }

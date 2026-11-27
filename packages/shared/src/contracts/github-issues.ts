@@ -11,3 +11,15 @@ export interface DeleteIssuesResult {
   deleted: number[];
   failed: Array<{ issueNumber: number; message: string }>;
 }
+
+/** The most issues one add-labels request takes (GitHub is written one issue at a time). */
+export const MAX_ISSUES_PER_LABEL = 50;
+
+/** The most labels one add-labels request puts on each issue. */
+export const MAX_LABELS_PER_ADD = 5;
+
+/** What `POST /api/github/issues-labels` answers. */
+export interface AddIssueLabelsResult {
+  labeled: number[];
+  failed: Array<{ issueNumber: number; message: string }>;
+}

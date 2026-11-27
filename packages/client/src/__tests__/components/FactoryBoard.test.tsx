@@ -293,12 +293,17 @@ describe('FactoryBoard', () => {
     const mergedFooter = within(mergedCard).getByTestId('factory-board-card-r1-footer');
     const linkedIssue = within(mergedFooter).getByTestId('factory-board-issue-r1');
     expect(linkedIssue.textContent).toBe('#556');
-    // The ticket color sets the issue apart from the PR; the icon says a merged run closed it.
-    expect(linkedIssue).toHaveClass('text-status-info');
-    expect(within(mergedFooter).getByTestId('factory-board-issue-r1-icon-closed')).toBeTruthy();
+    // Muted, the issue reads apart from the PR and the unpushed commits; the icon,
+    // in the state color, says a merged run closed it.
+    expect(linkedIssue).toHaveClass('text-muted-foreground');
+    expect(within(mergedFooter).getByTestId('factory-board-issue-r1-icon-closed')).toHaveClass(
+      'text-status-violet',
+    );
     const openIssue = screen.getByTestId('factory-board-issue-r2');
-    expect(openIssue).toHaveClass('text-status-info');
-    expect(screen.getByTestId('factory-board-issue-r2-icon-open')).toBeTruthy();
+    expect(openIssue).toHaveClass('text-muted-foreground');
+    expect(screen.getByTestId('factory-board-issue-r2-icon-open')).toHaveClass(
+      'text-status-success',
+    );
     expect(
       within(mergedFooter).getByTestId('factory-board-issue-r1-external').getAttribute('href'),
     ).toBe('https://github.com/o/r/issues/556');

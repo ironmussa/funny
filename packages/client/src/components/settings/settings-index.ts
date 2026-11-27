@@ -722,6 +722,15 @@ const ENTRIES = [
     keywords: ['lane', 'feature', 'branch', 'prefix', 'parallel'],
   },
   {
+    id: 'factory.laneFinishBranch',
+    scope: 'project',
+    page: 'factory',
+    kind: 'row',
+    title: 'settings.projectFactoryLaneFinishBranch',
+    description: 'settings.projectFactoryLaneFinishBranchDesc',
+    keywords: ['lane', 'finish', 'target', 'branch', 'qa', 'staging', 'merge'],
+  },
+  {
     id: 'factory.lanes',
     scope: 'project',
     page: 'factory',

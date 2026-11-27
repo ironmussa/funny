@@ -121,8 +121,11 @@ export interface LaneSyncDeps {
   /** The branch operations, as the factory's enabler. */
   branches: FactoryLaneBranches;
   pullRequests: Pick<FactoryPullRequests, 'ciState' | 'pullHead' | 'merge'>;
-  /** The branch the factory merges into (never a run's base: the reader carries none). */
-  baseBranch: () => Promise<string | null>;
+  /**
+   * The branch the lane syncs with: its own base (D13), else the branch the
+   * factory merges into (never a run's base: the reader carries none).
+   */
+  baseBranch: (lane: FactoryLaneView) => Promise<string | null>;
   /** The lane's merge group, taken for the one merge call. */
   mergeTurn: {
     holders(group: string): Promise<string[]>;
@@ -264,7 +267,7 @@ function createLaneSyncAgent({ deps, now, move, failed, contains }: LaneSyncAgen
     sha: string,
     turnStatus: string,
   ): Promise<void> {
-    const from = (await deps.baseBranch()) ?? 'the base branch';
+    const from = (await deps.baseBranch(lane)) ?? 'the base branch';
     const scratch = laneSyncBranch(lane);
     const pushed = await contains(scratch, sha);
     if (pushed === null) return;
@@ -389,9 +392,9 @@ export function createLaneSync(deps: LaneSyncDeps, target: LaneSyncTarget) {
     projectId: target.reader.projectId,
   });
 
-  /** The head of the branch the factory merges into, with its name; null when unreadable now. */
-  async function baseHead(): Promise<{ branch: string; sha: string } | null> {
-    const base = await deps.baseBranch();
+  /** The head of the branch the lane syncs with, with its name; null when unreadable now. */
+  async function baseHead(lane: FactoryLaneView): Promise<{ branch: string; sha: string } | null> {
+    const base = await deps.baseBranch(lane);
     if (!base) return null;
     const sha = await deps.branches.branchHead(base);
     return sha.isOk() && sha.value ? { branch: base, sha: sha.value } : null;
@@ -411,7 +414,7 @@ export function createLaneSync(deps: LaneSyncDeps, target: LaneSyncTarget) {
   });
 
   async function whenIdle(lane: FactoryLaneView): Promise<void> {
-    const base = await baseHead();
+    const base = await baseHead(lane);
     if (!base || base.sha === lane.lastSyncedBaseSha) return;
     const has = await contains(lane.branch, base.sha);
     if (has === null) return;
@@ -507,7 +510,7 @@ export function createLaneSync(deps: LaneSyncDeps, target: LaneSyncTarget) {
     if (ci.isErr()) return;
     if (ci.value.kind === 'failing') {
       // Failing checks are code: the agent's, like a conflict.
-      const from = (await deps.baseBranch()) ?? 'the base branch';
+      const from = (await deps.baseBranch(lane)) ?? 'the base branch';
       const failing = ci.value.checks
         .map((check) => `- ${check.name}${check.excerpt ? `\n${check.excerpt}` : ''}`)
         .join('\n');
@@ -565,7 +568,7 @@ export function createLaneSync(deps: LaneSyncDeps, target: LaneSyncTarget) {
   }
 
   async function whenNeedsHuman(lane: FactoryLaneView): Promise<void> {
-    const base = await baseHead();
+    const base = await baseHead(lane);
     if (!base) return;
     if (await contains(lane.branch, base.sha)) {
       await move(lane, 'settle', {

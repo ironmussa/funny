@@ -5,14 +5,18 @@ import type { DeleteIssuesResult } from '@funny/shared/contracts/github-issues';
  * GitHub after a confirmation.
  */
 import type { TFunction } from 'i18next';
-import { Trash2 } from 'lucide-react';
+import { Factory, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
-import { IssuesFactoryBar, type IssueFactory } from '@/components/issues/IssueFactoryControls';
+import {
+  IssuesFactorySendDialog,
+  type IssueFactory,
+} from '@/components/issues/IssueFactoryControls';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/toast';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import { toastError } from '@/lib/toast-error';
@@ -38,6 +42,7 @@ export function IssuesSelectionBar({
   factory,
   selected,
   sendable,
+  labelsOf,
   onSent,
   onDeleted,
   onClear,
@@ -48,6 +53,8 @@ export function IssuesSelectionBar({
   selected: number[];
   /** The selected issues that can go to the factory. */
   sendable: number[];
+  /** The GitHub labels an issue of the list carries now. */
+  labelsOf: (issueNumber: number) => string[];
   /** The issues the factory accepted (they leave the selection). */
   onSent: (accepted: number[]) => void;
   /** The issues GitHub deleted (they leave the selection and the list). */
@@ -57,6 +64,13 @@ export function IssuesSelectionBar({
   const { t } = useTranslation();
   const [confirming, setConfirming] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [sending, setSending] = useState(false);
+  // Why "Send to factory" is off, or null: no factory yet, or nothing open to send.
+  const sendOff = !factory.settings
+    ? t('factory.notConfigured', 'Set up the issue factory in the project settings first.')
+    : sendable.length === 0
+      ? t('factory.nothingToSend', 'Only open issues can go to the factory.')
+      : null;
 
   const remove = () => {
     setDeleting(true);
@@ -83,14 +97,6 @@ export function IssuesSelectionBar({
       className="border-sidebar-border bg-sidebar flex flex-col gap-1.5 border-t px-2 py-1.5 text-xs"
       data-testid="issues-selection-bar"
     >
-      {factory.settings && sendable.length > 0 && (
-        <IssuesFactoryBar
-          projectId={projectId}
-          settings={factory.settings}
-          selected={sendable}
-          onSent={onSent}
-        />
-      )}
       <div className="flex items-center gap-1.5">
         <span className="text-muted-foreground" data-testid="issues-selection-count">
           {t('issues.selectedCount', { count: selected.length })}
@@ -99,6 +105,26 @@ export function IssuesSelectionBar({
           {t('issues.clearSelection')}
         </Button>
         <div className="min-w-0 flex-1" />
+        <Tooltip>
+          <TooltipTrigger asChild>
+            {/* A disabled button gets no pointer events: the span keeps the tooltip. */}
+            <span>
+              <Button
+                size="xs"
+                onClick={() => setSending(true)}
+                disabled={sendOff !== null}
+                data-testid="issues-selection-send-factory"
+              >
+                <Factory className="icon-xs" />
+                {t('factory.send', 'Send to factory')}
+                {sendable.length > 0 && sendable.length < selected.length
+                  ? ` (${sendable.length})`
+                  : ''}
+              </Button>
+            </span>
+          </TooltipTrigger>
+          {sendOff && <TooltipContent side="top">{sendOff}</TooltipContent>}
+        </Tooltip>
         <Button
           variant="destructive"
           size="xs"
@@ -110,6 +136,17 @@ export function IssuesSelectionBar({
           {t('issues.delete')}
         </Button>
       </div>
+      {factory.settings && sendable.length > 0 && (
+        <IssuesFactorySendDialog
+          open={sending}
+          onOpenChange={setSending}
+          projectId={projectId}
+          settings={factory.settings}
+          selected={sendable}
+          labelsOf={labelsOf}
+          onSent={onSent}
+        />
+      )}
       <ConfirmDialog
         open={confirming}
         onOpenChange={setConfirming}

@@ -112,6 +112,23 @@ export type PRSortKey =
   | 'least-recently-updated'
   | 'most-commented';
 
+/**
+ * Options used to populate the Issues filter UI, as on GitHub's issue list:
+ * the repo's labels, assignable users (author and assignee pickers), open
+ * milestones, issue types and the projects linked to the repository. Types and
+ * projects need a token (projects also the `read:project` scope); without one
+ * they come back empty.
+ */
+export interface IssueFilterOptions {
+  labels: Array<{ name: string; color: string }>;
+  users: GitHubUserRef[];
+  milestones: Array<{ title: string }>;
+  /** `color` is GitHub's issue type color name (`RED`, `BLUE`, …). */
+  types: Array<{ name: string; color: string }>;
+  /** `owner/number` is what the `project:` search qualifier takes. */
+  projects: Array<{ owner: string; number: number; title: string }>;
+}
+
 // ─── PR Detail (rich data for PR Summary Card) ───────────
 
 export type CICheckConclusion =

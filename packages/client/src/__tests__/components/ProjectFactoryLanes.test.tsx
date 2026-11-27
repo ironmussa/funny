@@ -62,6 +62,8 @@ import { ProjectFactoryLanes } from '@/components/general-settings-project/Proje
 
 const lane = (over: Partial<FactoryLane> = {}): FactoryLane => ({
   id: 'lane-1',
+  baseBranch: null,
+  finishBranch: null,
   name: 'billing',
   label: 'feature:billing',
   branch: 'feature/billing',
@@ -112,6 +114,7 @@ describe('ProjectFactoryLanes', () => {
         label="ready-for-agent"
         laneLabelPrefix="feature:"
         laneBranchPrefix="feature/"
+        laneFinishBranch=""
         rowKey="k1"
         onSave={onSave}
       />,
@@ -131,6 +134,47 @@ describe('ProjectFactoryLanes', () => {
 
     fireEvent.blur(branchInput, { target: { value: 'epic/' } });
     expect(onSave).toHaveBeenCalledWith({ laneBranchPrefix: 'epic/' });
+  });
+
+  test('Finish into stays editable while lanes exist', () => {
+    mocks.lanes = [lane({})];
+    const onSave = vi.fn();
+    render(
+      <ProjectFactoryLanes
+        projectId="p1"
+        label="ready-for-agent"
+        laneLabelPrefix="feature:"
+        laneBranchPrefix="feature/"
+        laneFinishBranch=""
+        rowKey="k1"
+        onSave={onSave}
+      />,
+    );
+
+    const finishInput = screen.getByTestId('settings-factory-lane-finish-branch');
+    expect(finishInput).not.toBeDisabled();
+    fireEvent.blur(finishInput, { target: { value: ' qa ' } });
+    expect(onSave).toHaveBeenCalledWith({ laneFinishBranch: 'qa' });
+  });
+
+  test('clearing Finish into saves an empty branch', () => {
+    const onSave = vi.fn();
+    render(
+      <ProjectFactoryLanes
+        projectId="p1"
+        label="ready-for-agent"
+        laneLabelPrefix="feature:"
+        laneBranchPrefix="feature/"
+        laneFinishBranch="qa"
+        rowKey="k1"
+        onSave={onSave}
+      />,
+    );
+
+    fireEvent.blur(screen.getByTestId('settings-factory-lane-finish-branch'), {
+      target: { value: '' },
+    });
+    expect(onSave).toHaveBeenCalledWith({ laneFinishBranch: '' });
   });
 
   test('renders lane metadata, sync state/PR/error, CI warning, finish PR link and disables prefixes', () => {
@@ -153,6 +197,7 @@ describe('ProjectFactoryLanes', () => {
         label="ready-for-agent"
         laneLabelPrefix="feature:"
         laneBranchPrefix="feature/"
+        laneFinishBranch=""
         rowKey="k1"
         onSave={vi.fn()}
       />,
@@ -218,6 +263,7 @@ describe('ProjectFactoryLanes', () => {
         label="ready-for-agent"
         laneLabelPrefix="feature:"
         laneBranchPrefix="feature/"
+        laneFinishBranch=""
         rowKey="k1"
         onSave={vi.fn()}
       />,
@@ -240,6 +286,7 @@ describe('ProjectFactoryLanes', () => {
         label="ready-for-agent"
         laneLabelPrefix="feature:"
         laneBranchPrefix="feature/"
+        laneFinishBranch=""
         rowKey="k1"
         onSave={vi.fn()}
       />,

@@ -177,6 +177,7 @@ const configOf = (row: Row): FactoryConfig => ({
   baseBranch: row.baseBranch ?? '',
   laneLabelPrefix: row.laneLabelPrefix ?? DEFAULT_LANE_LABEL_PREFIX,
   laneBranchPrefix: row.laneBranchPrefix ?? DEFAULT_LANE_BRANCH_PREFIX,
+  laneFinishBranch: row.laneFinishBranch ?? '',
 });
 
 const toView = (row: Row): FactorySettingsView => ({
@@ -199,6 +200,10 @@ const SAVE_RULES: readonly SaveRule[] = [
   ({ baseBranch }) =>
     baseBranch !== undefined && !factoryBaseBranchSchema.safeParse(baseBranch).success
       ? 'baseBranch is not a valid branch name'
+      : null,
+  ({ laneFinishBranch }) =>
+    laneFinishBranch !== undefined && !factoryBaseBranchSchema.safeParse(laneFinishBranch).success
+      ? 'laneFinishBranch is not a valid branch name'
       : null,
   ({ laneLabelPrefix }) =>
     laneLabelPrefix !== undefined &&
@@ -313,6 +318,7 @@ const DEFAULTS: FactoryConfig = {
   baseBranch: '',
   laneLabelPrefix: DEFAULT_LANE_LABEL_PREFIX,
   laneBranchPrefix: DEFAULT_LANE_BRANCH_PREFIX,
+  laneFinishBranch: '',
 };
 
 /** The configured fields a save stores: the ones it carries, else `base`'s. */
@@ -341,6 +347,7 @@ function mergeConfig(input: SaveFactorySettingsInput, base: FactoryConfig): Fact
     baseBranch: pick('baseBranch').trim(),
     laneLabelPrefix: pick('laneLabelPrefix').trim(),
     laneBranchPrefix: pick('laneBranchPrefix').trim(),
+    laneFinishBranch: pick('laneFinishBranch').trim(),
   };
 }
 
@@ -381,6 +388,7 @@ function buildRow(
     baseBranch: config.baseBranch || null,
     laneLabelPrefix: config.laneLabelPrefix,
     laneBranchPrefix: config.laneBranchPrefix,
+    laneFinishBranch: config.laneFinishBranch || null,
     // A save is a new configuration: the watcher re-reports what still blocks it.
     blockedReason: null,
     createdAt: now,
@@ -496,6 +504,7 @@ const COLUMNS_OF: Record<keyof FactoryConfig, readonly (keyof Row)[]> = {
   baseBranch: ['baseBranch'],
   laneLabelPrefix: ['laneLabelPrefix'],
   laneBranchPrefix: ['laneBranchPrefix'],
+  laneFinishBranch: ['laneFinishBranch'],
 };
 
 /** What a save writes over a stored row: the toggle, the bookkeeping and the fields it carries. */
@@ -807,6 +816,21 @@ export async function factoryBaseBranchOf(
     .from(factorySettings)
     .where(byOwner(userId, projectId));
   return row?.baseBranch || null;
+}
+
+/**
+ * The branch "Finish lane" merges a lane into ("Finish into"), or null for the
+ * factory's "merge into" branch. Server-internal, read for the factory's owner.
+ */
+export async function factoryLaneFinishBranchOf(
+  userId: string,
+  projectId: string,
+): Promise<string | null> {
+  const [row] = await db
+    .select({ laneFinishBranch: factorySettings.laneFinishBranch })
+    .from(factorySettings)
+    .where(byOwner(userId, projectId));
+  return row?.laneFinishBranch || null;
 }
 
 /**

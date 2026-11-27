@@ -53,6 +53,7 @@ type FactoryForm = Pick<
   | 'baseBranch'
   | 'laneLabelPrefix'
   | 'laneBranchPrefix'
+  | 'laneFinishBranch'
 >;
 
 /** The server's defaults: what the form shows before the first save. */
@@ -79,6 +80,7 @@ const DEFAULT_FORM: FactoryForm = {
   baseBranch: '',
   laneLabelPrefix: 'feature:',
   laneBranchPrefix: 'feature/',
+  laneFinishBranch: '',
 };
 
 /** What the form shows: the saved settings, or the defaults before the first save. */
@@ -89,6 +91,7 @@ function formValues(settings: FactorySettings | null | undefined): FactoryForm {
   const { maxLowRiskLines, sizeIgnoredPaths, tooBig, approvalAdjustMaxLines } = settings;
   const { holdPathsAwaitingApproval, baseBranch, sizeGateEnabled } = settings;
   const { laneLabelPrefix, laneBranchPrefix, specStage, commitSpecPath } = settings;
+  const { laneFinishBranch } = settings;
   return {
     enabled,
     mode,
@@ -112,6 +115,7 @@ function formValues(settings: FactorySettings | null | undefined): FactoryForm {
     baseBranch,
     laneLabelPrefix,
     laneBranchPrefix,
+    laneFinishBranch,
   };
 }
 
@@ -343,6 +347,7 @@ function ProjectFactorySettingRows({ projectId }: { projectId: string }) {
           label={label}
           laneLabelPrefix={form.laneLabelPrefix}
           laneBranchPrefix={form.laneBranchPrefix}
+          laneFinishBranch={form.laneFinishBranch}
           rowKey={rowKey}
           onSave={(input) => void save({ enabled, ...input })}
         />

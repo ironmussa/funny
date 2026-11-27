@@ -11,17 +11,30 @@ function toPRBadgeState(state: string): 'OPEN' | 'MERGED' | 'CLOSED' {
   return 'OPEN';
 }
 
-/** The issue's GitHub labels, each with a tag icon so they read apart from funny's own chips. */
-export function IssueLabelBadges({ issue }: { issue: EnrichedGitHubIssue }) {
+/**
+ * The issue's GitHub labels. Where they sit among funny's own chips they carry
+ * a tag icon to read apart; next to the title, as on GitHub, they go without
+ * (`plain`).
+ */
+export function IssueLabelBadges({
+  issue,
+  plain = false,
+  className,
+}: {
+  issue: EnrichedGitHubIssue;
+  plain?: boolean;
+  className?: string;
+}) {
   return (
     <>
       {issue.labels.map((label) => (
         <LabelBadge
           key={label.name}
           color={label.color}
+          className={className}
           data-testid={`issue-label-${issue.number}-${label.name}`}
         >
-          <Tag className="size-2.5 shrink-0" aria-hidden />
+          {!plain && <Tag className="size-2.5 shrink-0" aria-hidden />}
           {label.name}
         </LabelBadge>
       ))}

@@ -356,6 +356,8 @@ export const saveFactorySettingsInput = z
     laneLabelPrefix: factoryLaneLabelPrefixSchema.optional(),
     /** What a lane's branch starts with (`lane/`); fixed while the factory has lanes. */
     laneBranchPrefix: factoryLaneBranchPrefixSchema.optional(),
+    /** The branch "Finish lane" merges a lane into; empty: the "merge into" branch. */
+    laneFinishBranch: factoryBaseBranchSchema.optional(),
   })
   .strict();
 
@@ -413,6 +415,12 @@ export interface FactorySettings {
    */
   laneLabelPrefix: string;
   laneBranchPrefix: string;
+  /**
+   * The branch a lane's finish pull request merges into ("Finish into");
+   * empty: the "merge into" branch. A lane still starts from and syncs with
+   * "merge into", so a lane can start from `master` and land on `qa`.
+   */
+  laneFinishBranch: string;
   /** Why the factory cannot make progress now (e.g. its runner is offline), or null. */
   blockedReason: string | null;
   /**
@@ -838,12 +846,45 @@ export const MAX_ISSUES_PER_SEND = 50;
 
 const issueNumber = z.number().int().positive();
 
+/** A branch a send names: a real name (the settings' empty "repository default" is not one). */
+const factorySendBranchSchema = factoryBaseBranchSchema.refine(
+  (name) => name !== '',
+  'A branch name is required',
+);
+
+/**
+ * Where the issues of one send run, when the sender chose other branches than
+ * the factory's settings (change factory-lanes, D13). It belongs to those
+ * issues' runs only: the factory's settings and its other runs do not change.
+ */
+export const factoryRunRouteSchema = z
+  .object({
+    /** For an issue that names no lane: the branch its run starts from and merges into. */
+    baseBranch: factorySendBranchSchema.optional(),
+    /**
+     * For an issue of the lane `name`, when this send's run is the one that
+     * makes the lane: the branch the lane starts from and syncs with, and the
+     * one "Finish lane" merges it into. A lane that exists keeps its own.
+     */
+    lane: z
+      .object({
+        name: z.string().trim().toLowerCase().min(1).max(128),
+        baseBranch: factorySendBranchSchema.optional(),
+        finishBranch: factorySendBranchSchema.optional(),
+      })
+      .strict()
+      .optional(),
+  })
+  .strict();
+export type FactoryRunRoute = z.infer<typeof factoryRunRouteSchema>;
+
 /** Send chosen issues of the project's repository to the caller's own factory. */
 export const submitFactoryIssuesInput = z
   .object({
     projectId,
     issueNumbers: z.array(issueNumber).min(1).max(MAX_ISSUES_PER_SEND),
     flowName,
+    route: factoryRunRouteSchema.optional(),
   })
   .strict();
 
@@ -1315,6 +1356,10 @@ export interface FactoryLane {
   /** The label an issue carries to select this lane (`<laneLabelPrefix><name>`). */
   label: string;
   branch: string;
+  /** The branch the lane starts from and syncs with; null: the factory's "merge into" branch. */
+  baseBranch: string | null;
+  /** The branch "Finish lane" merges it into; null: the factory's "Finish into" setting. */
+  finishBranch: string | null;
   state: FactoryLaneState;
   /** Runs admitted to this lane that have not ended (`#12` or `run-xxxx`). */
   openRuns: string[];

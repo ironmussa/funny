@@ -90,6 +90,7 @@ export type ActivityEffectType =
   | 'factory-disabled'
   | 'repo-published'
   | 'issue-deleted'
+  | 'issue-labeled'
   | 'file-reverted'
   | 'changes-discarded'
   | 'commits-reset'

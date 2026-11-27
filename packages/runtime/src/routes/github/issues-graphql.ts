@@ -20,11 +20,12 @@ import type { GitHubIssue } from '@funny/shared';
 
 import { isNumber } from '../../lib/value-guards.js';
 import { githubGraphQL } from './helpers.js';
+import { EMPTY_ISSUE_FILTERS, type IssueFilters, issueFilterTerms } from './issue-filters.js';
 import type { LinkablePR } from './issue-links.js';
 
 const ISSUES_WITH_LINKS_QUERY = `
   query IssuesWithLinks($q: String!, $first: Int!, $after: String, $owner: String!, $repo: String!) {
-    search(query: $q, type: ISSUE, first: $first, after: $after) {
+    search(query: $q, type: ISSUE_ADVANCED, first: $first, after: $after) {
       pageInfo { hasNextPage endCursor }
       nodes {
         ... on Issue {
@@ -90,14 +91,19 @@ export interface IssuesWithLinks {
   nextCursor: string | null;
 }
 
-/** GitHub search syntax for one repository's issues, newest first. */
+/**
+ * GitHub advanced search syntax for one repository's issues, with the panel's
+ * filters and sort (newest first without any).
+ */
 export function issueSearchQuery(
   owner: string,
   repo: string,
   state: 'open' | 'closed' | 'all',
+  filters: IssueFilters = EMPTY_ISSUE_FILTERS,
 ): string {
-  const stateQualifier = state === 'all' ? '' : ` state:${state}`;
-  return `repo:${owner}/${repo} is:issue${stateQualifier} sort:created-desc`;
+  const terms = [`repo:${owner}/${repo}`, 'is:issue'];
+  if (state !== 'all') terms.push(`state:${state}`);
+  return [...terms, ...issueFilterTerms(filters)].join(' ');
 }
 
 function toLinkablePR(pr: PRNode, closes: number[]): LinkablePR {
@@ -157,12 +163,13 @@ export async function fetchIssuesWithLinks(
     perPage: number;
     cursor: string | null;
     token: string;
+    filters?: IssueFilters;
   },
 ): Promise<IssuesWithLinks> {
   const data = await githubGraphQL<IssuesWithLinksData>(
     ISSUES_WITH_LINKS_QUERY,
     {
-      q: issueSearchQuery(owner, repo, opts.state),
+      q: issueSearchQuery(owner, repo, opts.state, opts.filters),
       first: opts.perPage,
       after: opts.cursor,
       owner,

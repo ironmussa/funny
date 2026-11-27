@@ -374,6 +374,7 @@ export function createTestDb() {
       base_branch TEXT,
       lane_label_prefix TEXT,
       lane_branch_prefix TEXT,
+      lane_finish_branch TEXT,
       size_ignored_paths TEXT,
       stage_limits TEXT,
       batch_size INTEGER,

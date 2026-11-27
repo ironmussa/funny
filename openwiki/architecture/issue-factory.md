@@ -714,10 +714,16 @@ A factory can work on several long-lived feature branches in parallel (openspec 
   the merged run).
 - **Finishing a lane**: `factory.lanes.finish` (Settings > project > Factory > **Finish lane**)
   refuses while any run of the lane is in flight, starts a sync if the lane is behind, and opens a
-  pull request from the lane branch into **Merge into** listing the lane's merged issues with a note
+  pull request from the lane branch into **Finish into** (`factory_settings.lane_finish_branch`,
+  migration 145; empty: **Merge into**) listing the lane's merged issues with a note
   that a person merges it (`finish_pr_number`, `factory.finish_lane` activity). When the watcher
   sees that pull request merged, it marks the lane `finished` (compare-and-set from `active`),
   stops its syncs, and routes any later issue naming that lane to **Merge into**.
+- **Finish into**: a lane still starts from and syncs with **Merge into**; only its final pull
+  request targets **Finish into**. With **Merge into** `master` and **Finish into** `qa`, fixes cut
+  from production collect on the lane and land on QA together. It is not fixed while lanes exist,
+  and a lane's branch may not be it (`lane-invalid`). Issues without a lane label still merge into
+  **Merge into**.
 
 ## Security boundaries
 

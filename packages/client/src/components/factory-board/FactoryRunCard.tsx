@@ -9,8 +9,6 @@ import type { GitStatusInfo } from '@funny/shared';
 import { approvalGapFor, implementingThreadOf } from '@funny/shared/contracts/factory';
 import {
   Check,
-  CircleCheck,
-  CircleDot,
   Folder,
   GitPullRequestClosed,
   MoreVertical,
@@ -21,12 +19,11 @@ import {
   Split,
   Square,
 } from 'lucide-react';
-import { memo, type ReactNode, type SyntheticEvent, useState } from 'react';
+import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { BOARD_CARD_TITLE_CLASS, BoardCard } from '@/components/board/BoardCard';
-import { GIT_STAT_CHIP_CLASS, GIT_STAT_ICON_CLASS } from '@/components/git/GitStatChip';
-import { GitHubExternalLink } from '@/components/GitHubExternalLink';
+import { IssueChip } from '@/components/IssueChip';
 import { KanbanCard } from '@/components/kanban/KanbanCard';
 import { PRBadge } from '@/components/PRBadge';
 import {
@@ -36,7 +33,6 @@ import {
   pullRequestNumber,
   useFactoryRunActions,
 } from '@/components/thread/FactoryRunControls';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -44,7 +40,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { usePendingApprovalRequestOfRun } from '@/data/factory/hooks';
 import { useGitStatusForThread } from '@/data/git-status/hooks';
 import { useProjectGitHubRepoUrl } from '@/data/projects/hooks';
@@ -53,8 +48,6 @@ import { factoryRunCardTitle, isFactoryRunAwaitingMergeApproval } from '@/lib/fa
 import type { PRState } from '@/lib/git-icons';
 import { useThreadById } from '@/lib/thread-selectors';
 import { timeAgo } from '@/lib/thread-utils';
-import { cn } from '@/lib/utils';
-import { openGitHubItem } from '@/stores/github-item-viewer-store';
 
 import { factoryRunActivityAt } from './board-columns';
 import { FactoryBoardChip } from './FactoryBoardChip';
@@ -87,9 +80,6 @@ function FactoryRunProject({ name }: { name: string | undefined }) {
  * The issue's state as the run implies it: a merged run's pull request closes
  * its issue; any other run leaves it open.
  */
-/** The ticket color of an issue chip, apart from every PR state color. */
-const ISSUE_CHIP_COLOR_CLASS = 'text-status-info';
-
 function factoryRunIssueClosed(run: Pick<FactoryQueueRun, 'state'>): boolean {
   return run.state === 'merged';
 }
@@ -112,71 +102,24 @@ export function factoryRunIssueUrl(
 
 /**
  * The run's issue number on the card footer, beside the PR; nothing for runs
- * without an issue. Always the ticket color (blue), so it reads apart from the PR
- * chip beside it, whose color is the PR's state; the icon says open or closed.
- * A click opens funny's issue view; the arrow beside it, GitHub.
+ * without an issue.
  */
 function FactoryRunIssueChip({
   run,
 }: {
   run: Pick<FactoryQueueRun, 'id' | 'issueNumber' | 'prUrl' | 'projectId' | 'state'>;
 }) {
-  const { t } = useTranslation();
   // Without a pull request yet, the issue's address comes from the project's remote.
   const repoUrl = useProjectGitHubRepoUrl(run.prUrl ? null : run.projectId);
   if (run.issueNumber === null) return null;
-  const issueNumber = run.issueNumber;
-  const label = t('factoryView.issueTitle', 'Issue #{{number}}', { number: issueNumber });
-  const githubUrl = factoryRunIssueUrl(run.prUrl, repoUrl, issueNumber);
-  const closed = factoryRunIssueClosed(run);
-  const StateIcon = closed ? CircleCheck : CircleDot;
-  const colorClass = ISSUE_CHIP_COLOR_CLASS;
-  const openInFunny = (event: SyntheticEvent) => {
-    event.preventDefault();
-    event.stopPropagation();
-    openGitHubItem({
-      kind: 'issue',
-      projectId: run.projectId,
-      number: issueNumber,
-      url: githubUrl,
-    });
-  };
-
   return (
-    <Badge variant="subtle" size="stat-group" weight="normal" corners="square">
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <button
-            type="button"
-            onClick={openInFunny}
-            onKeyDown={(event) => event.stopPropagation()}
-            className={cn(
-              GIT_STAT_CHIP_CLASS,
-              colorClass,
-              'focus-visible:ring-ring rounded-sm hover:underline focus-visible:ring-1 focus-visible:outline-none',
-            )}
-            data-testid={`factory-board-issue-${run.id}`}
-            aria-label={label}
-          >
-            <StateIcon
-              className={GIT_STAT_ICON_CLASS}
-              aria-hidden="true"
-              data-testid={`factory-board-issue-${run.id}-icon-${closed ? 'closed' : 'open'}`}
-            />
-            <span className="font-mono">#{issueNumber}</span>
-          </button>
-        </TooltipTrigger>
-        <TooltipContent side="top">{label}</TooltipContent>
-      </Tooltip>
-      {githubUrl && (
-        <GitHubExternalLink
-          url={githubUrl}
-          iconClassName={GIT_STAT_ICON_CLASS}
-          className={colorClass}
-          data-testid={`factory-board-issue-${run.id}-external`}
-        />
-      )}
-    </Badge>
+    <IssueChip
+      projectId={run.projectId}
+      number={run.issueNumber}
+      closed={factoryRunIssueClosed(run)}
+      githubUrl={factoryRunIssueUrl(run.prUrl, repoUrl, run.issueNumber)}
+      data-testid={`factory-board-issue-${run.id}`}
+    />
   );
 }
 

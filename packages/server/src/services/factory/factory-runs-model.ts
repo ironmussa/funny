@@ -7,6 +7,7 @@ import {
   factoryRunHoldSchema,
   factoryRiskSchema,
   factoryRoleThreadSchema,
+  factoryRunRouteSchema,
   factoryRunSpecSchema,
   factoryStackedOnSchema,
   factoryStepOptionsRecordSchema,
@@ -20,6 +21,7 @@ import {
   type FactoryReviewVerdict,
   type FactoryRisk,
   type FactoryRoleThread,
+  type FactoryRunRoute,
   type FactoryRunSpec,
   type FactoryRunMetrics,
   type FactoryStackedOn,
@@ -390,6 +392,8 @@ export interface FactoryRunView {
   lane: string | null;
   /** The commit its merge made on its base branch, or null. */
   mergeSha: string | null;
+  /** The branches its sender chose instead of the factory's settings, or null. */
+  requestedRoute: FactoryRunRoute | null;
   prUrl: string | null;
   state: FactoryRunState;
   currentStep: string | null;
@@ -494,6 +498,7 @@ const plainFieldsOf = (row: Row) => ({
   baseBranch: row.baseBranch ?? null,
   lane: row.lane ?? null,
   mergeSha: row.mergeSha ?? null,
+  requestedRoute: parseRoute(row.requestedRoute ?? null),
   prUrl: row.prUrl,
   // SAFETY: factory_runs.state is written only in this module, always from a FactoryRunState value.
   state: row.state as FactoryRunState,
@@ -595,6 +600,13 @@ function parseRoleThreads(raw: string | null): FactoryRoleThread[] {
 }
 
 const INPUTS_SCHEMA = z.record(z.string(), z.string());
+
+/** The route a send asked for; one that no longer parses reads as none (the factory's settings). */
+function parseRoute(raw: string | null): FactoryRunRoute | null {
+  if (!raw) return null;
+  const parsed = parseStoredJson(factoryRunRouteSchema, raw, 'factory_runs.requested_route');
+  return parsed.ok ? parsed.value : null;
+}
 
 /** Stored input values (a run's, a trigger's); a value that no longer parses reads as none. */
 export function parseStoredInputs(raw: string | null, column: string): Record<string, string> {
@@ -814,6 +826,7 @@ export function newRunRow(
     baseBranch: null,
     lane: null,
     mergeSha: null,
+    requestedRoute: null,
     ...given,
   };
 }

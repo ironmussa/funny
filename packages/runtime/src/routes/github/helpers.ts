@@ -177,14 +177,29 @@ export async function githubGraphQL<T = any>(
 export async function fetchRepoIssues(
   owner: string,
   repo: string,
-  opts: { state: string; page: number; perPage: number; token: string | null },
+  opts: {
+    state: string;
+    page: number;
+    perPage: number;
+    token: string | null;
+    /**
+     * A full advanced-search query (the Issues panel's filters) and its sort.
+     * It replaces the `repo + type:issue + state` query built here.
+     */
+    search?: { query: string; sort: string; order: string };
+  },
 ): Promise<{ issues: GitHubIssue[]; hasMore: boolean } | null> {
-  const { state, page, perPage, token } = opts;
+  const { state, page, perPage, token, search } = opts;
   // `state` accepts open|closed|all — only constrain the query when it is a
   // concrete state, mirroring the GitHub Search qualifier syntax.
   const stateQualifier = state === 'open' || state === 'closed' ? ` state:${state}` : '';
-  const q = encodeURIComponent(`repo:${owner}/${repo} type:issue${stateQualifier}`);
-  const apiPath = `/search/issues?q=${q}&sort=created&order=desc&page=${page}&per_page=${perPage}`;
+  const q = encodeURIComponent(
+    search?.query ?? `repo:${owner}/${repo} type:issue${stateQualifier}`,
+  );
+  const sortParams = search
+    ? `sort=${search.sort}&order=${search.order}&advanced_search=true`
+    : 'sort=created&order=desc';
+  const apiPath = `/search/issues?q=${q}&${sortParams}&page=${page}&per_page=${perPage}`;
 
   const res = token
     ? await githubApiFetch(apiPath, token)

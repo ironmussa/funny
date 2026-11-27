@@ -88,6 +88,7 @@ export const WithIncident: Story = {
       baseBranch: '',
       laneLabelPrefix: 'feature:',
       laneBranchPrefix: 'feature/',
+      laneFinishBranch: '',
       blockedReason: null,
       updatedAt: ago(1),
       incident: {

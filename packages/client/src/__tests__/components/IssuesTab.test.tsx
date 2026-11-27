@@ -29,6 +29,7 @@ const apiMock = (() => ({
   githubIssuesEnriched: vi.fn(),
   githubIssueTimeline: vi.fn(),
   githubDeleteIssues: vi.fn(),
+  githubAddIssueLabels: vi.fn(),
 }))();
 const logError = (() => vi.fn())();
 mock.module('@/lib/client-logger', () => ({
@@ -68,14 +69,37 @@ mock.module('@/data/factory/hooks', () => ({
     { name: 'issue-to-pr', source: 'built-in' },
   ],
   useFactoryBlockers: () => factory.blockers,
+  useFactoryLanes: () => [
+    {
+      id: 'l1',
+      name: 'payments',
+      label: 'lane:payments',
+      branch: 'lane/payments',
+      state: 'active',
+    },
+    { id: 'l2', name: 'old', label: 'lane:old', branch: 'lane/old', state: 'finished' },
+  ],
 }));
+const saveSettings = vi.fn((..._args: unknown[]) => okAsync(null));
 mock.module('@/data/factory/actions', () => ({
+  saveFactorySettings: (...args: unknown[]) => saveSettings(...args),
   sendIssuesToFactory: (...args: unknown[]) => factory.send(...args),
   approveFactoryMerge: () => okAsync(null),
   setFactoryRunLintCleanup: () => ({ orTee: () => undefined }),
   markFactoryRunDone: () => ({ orTee: () => undefined }),
   controlFactoryRun: (...args: unknown[]) => factory.control(...args),
   retryFactorySettings: (...args: unknown[]) => factory.retry(...args),
+}));
+// What the filter dropdowns offer; the request itself is the runner's.
+const filterOptions = {
+  labels: [{ name: 'ENV · PROD', color: '1d76db' }],
+  users: [{ login: 'octo', avatar_url: '' }],
+  milestones: [],
+  types: [{ name: 'Bug', color: 'RED' }],
+  projects: [],
+};
+mock.module('@/data/issue-filters/hooks', () => ({
+  useIssueFilterOptions: () => ({ options: filterOptions, loading: false }),
 }));
 const actualProjectHooks = { ...(await import('@/data/projects/hooks')) };
 mock.module('@/data/projects/hooks', () => ({
@@ -175,7 +199,7 @@ describe('IssuesTab remote checks', () => {
     );
     const view = renderWithProviders(<IssuesTab visible />);
     expect(await screen.findByTestId('issue-item-1')).toHaveTextContent('Fix connection');
-    const githubLink = screen.getByTestId('issue-open-github-1');
+    const githubLink = screen.getByTestId('issue-number-1-external');
     expect(githubLink).toHaveAttribute('href', 'https://github.com/acme/repo/issues/1');
     expect(githubLink).toHaveAttribute('target', '_blank');
     await waitFor(() => expect(apiMock.githubIssuesEnriched).toHaveBeenCalled());
@@ -242,7 +266,7 @@ describe('IssuesTab remote checks', () => {
     // pre-push runs many test files in parallel.
   }, 15_000);
 
-  test('puts the linked branch and PR on one line and the GitHub labels, tagged, on another', async () => {
+  test('lays the row out as on GitHub: labels after the title, then number, author and age; the funny chips below', async () => {
     apiMock.projectGetRemoteUrl.mockReturnValue(
       okAsync({ remoteUrl: 'https://github.com/acme/repo' }),
     );
@@ -279,8 +303,26 @@ describe('IssuesTab remote checks', () => {
     expect(links).toHaveTextContent('#33');
     expect(within(links).queryByTestId('issue-label-8-ready-for-agent')).toBeNull();
     const label = within(tags).getByTestId('issue-label-8-ready-for-agent');
-    expect(label.querySelector('svg')).not.toBeNull();
+    // Next to the title, a label goes without the tag icon, as on GitHub.
+    expect(label.querySelector('svg')).toBeNull();
     expect(within(tags).queryByTestId('issue-linked-branch-8')).toBeNull();
+    expect(screen.getByTestId('issue-title-8').parentElement).toContainElement(tags);
+    const meta = screen.getByTestId('issue-meta-8');
+    expect(meta).toHaveTextContent(/^#8octo opened \S+ ago$/);
+    // The number sits in the factory board's issue chip: monospace and muted.
+    const number = within(meta).getByTestId('issue-number-8');
+    expect(number).toHaveTextContent('#8');
+    expect(number.querySelector('.font-mono')).not.toBeNull();
+    expect(number).toHaveClass('text-muted-foreground');
+    // The row's leading icon already shows the state: the chip repeats no icon.
+    expect(number.querySelector('svg')).toBeNull();
+    // The chip carries the only link to GitHub on the row.
+    expect(within(meta).getByTestId('issue-number-8-external')).toHaveAttribute(
+      'href',
+      'https://github.com/acme/repo/issues/8',
+    );
+    // No comments: no counter.
+    expect(screen.queryByTestId('issue-comments-8')).toBeNull();
   });
 });
 
@@ -317,8 +359,9 @@ const factorySettings = (over: Partial<FactorySettings> = {}): FactorySettings =
   commitSpecPath: '',
   holdPathsAwaitingApproval: false,
   baseBranch: '',
-  laneLabelPrefix: 'feature:',
-  laneBranchPrefix: 'feature/',
+  laneLabelPrefix: 'lane:',
+  laneBranchPrefix: 'lane/',
+  laneFinishBranch: '',
   blockedReason: null,
   updatedAt: '2026-11-16T00:00:00.000Z',
   ...over,
@@ -335,6 +378,43 @@ const factoryRun = (over: Partial<FactoryRun>): FactoryRun =>
     source: 'manual',
     ...over,
   });
+
+describe('IssuesTab filters', () => {
+  beforeEach(() => {
+    // The dropdowns' command list scrolls the active option into view; happy-dom has no scrolling.
+    Element.prototype.scrollIntoView ??= () => {};
+    vi.clearAllMocks();
+    useProjectStore.setState({ selectedProjectId: 'project-1' });
+    apiMock.projectGetRemoteUrl.mockReturnValue(
+      okAsync({ remoteUrl: 'https://github.com/acme/repo' }),
+    );
+    apiMock.githubIssuesEnriched.mockReturnValue(
+      okAsync({ owner: 'acme', repo: 'repo', hasMore: false, issues: [] }),
+    );
+  });
+
+  test('a picked label and type reload the list with them; Clear drops them', async () => {
+    renderWithProviders(<IssuesTab visible />);
+    await waitFor(() => expect(apiMock.githubIssuesEnriched).toHaveBeenCalled());
+    const lastParams = () => apiMock.githubIssuesEnriched.mock.calls.at(-1)?.[1];
+    expect(lastParams()).toMatchObject({ state: 'open', labels: [], types: [] });
+
+    fireEvent.click(screen.getByTestId('issues-filter-labels'));
+    fireEvent.click(await screen.findByTestId('issues-filter-labels-option-ENV · PROD'));
+    await waitFor(() => expect(lastParams()).toMatchObject({ labels: ['ENV · PROD'] }));
+    // A filter that matches nothing says so, not that the repository has no issues.
+    expect(await screen.findByText('No issues match these filters')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('issues-filter-types'));
+    fireEvent.click(await screen.findByTestId('issues-filter-types-option-Bug'));
+    await waitFor(() =>
+      expect(lastParams()).toMatchObject({ labels: ['ENV · PROD'], types: ['Bug'] }),
+    );
+
+    fireEvent.click(screen.getByTestId('issues-filter-clear'));
+    await waitFor(() => expect(lastParams()).toMatchObject({ labels: [], types: [] }));
+  });
+});
 
 describe('IssuesTab and the issue factory', () => {
   beforeEach(() => {
@@ -374,7 +454,14 @@ describe('IssuesTab and the issue factory', () => {
     showIssues([issue(1)]);
     fireEvent.click(await screen.findByTestId('issue-select-1'));
     expect(screen.getByTestId('issues-selection-delete')).toBeEnabled();
-    expect(screen.queryByTestId('issues-factory-bar')).toBeNull();
+    expect(screen.getByTestId('issues-selection-send-factory')).toBeDisabled();
+    expect(screen.queryByTestId('issues-factory-dialog')).toBeNull();
+  });
+
+  test('a selection of only closed issues cannot be sent', async () => {
+    showIssues([issue(1, 'closed')]);
+    fireEvent.click(await screen.findByTestId('issue-select-1'));
+    expect(screen.getByTestId('issues-selection-send-factory')).toBeDisabled();
   });
 
   test('when the factory settings fail to load, the tab says so and retries on demand', async () => {
@@ -400,18 +487,32 @@ describe('IssuesTab and the issue factory', () => {
     fireEvent.click(screen.getByTestId('issue-select-1'));
     fireEvent.click(screen.getByTestId('issue-select-3'));
 
+    fireEvent.click(screen.getByTestId('issues-selection-send-factory'));
     expect(screen.getByTestId('issues-factory-flow')).toHaveTextContent('issue-to-merge');
     fireEvent.click(screen.getByTestId('issues-factory-send'));
 
-    expect(factory.send).toHaveBeenCalledWith('project-1', [2, 1], 'issue-to-merge');
+    await waitFor(() =>
+      expect(factory.send).toHaveBeenCalledWith('project-1', [2, 1], 'issue-to-merge', undefined),
+    );
     // Settle the send inside act(): outside it, React's not-wrapped-in-act
     // path under bun stalls for tens of seconds re-reading react's jsx runtime.
     await act(async () => {});
-    // The sent issues leave the selection; the closed one stays, for a delete.
-    await waitFor(() => expect(screen.queryByTestId('issues-factory-bar')).toBeNull());
+    // The dialog closes; the sent issues leave the selection, the closed one stays, for a delete.
+    await waitFor(() => expect(screen.queryByTestId('issues-factory-dialog')).toBeNull());
     expect(screen.getByTestId('issues-selection-count')).toHaveTextContent(
       'issues.selectedCount:1',
     );
+  });
+
+  test('without a lane, the issues are sent as their labels say', async () => {
+    showIssues([issue(1)]);
+    fireEvent.click(await screen.findByTestId('issue-select-1'));
+    fireEvent.click(screen.getByTestId('issues-selection-send-factory'));
+    fireEvent.click(screen.getByTestId('issues-factory-send'));
+    await waitFor(() =>
+      expect(factory.send).toHaveBeenCalledWith('project-1', [1], 'issue-to-merge', undefined),
+    );
+    expect(apiMock.githubAddIssueLabels).not.toHaveBeenCalled();
   });
 
   test('an issue in the factory shows its state instead of a checkbox', async () => {
@@ -428,9 +529,8 @@ describe('IssuesTab and the issue factory', () => {
       within(screen.getByTestId('issue-factory-line-1')).getByTestId('issue-factory-status-1'),
     ).toBe(status);
     expect(status.querySelector('svg')).not.toBeNull();
-    expect(
-      within(screen.getByTestId('issue-tags-1')).queryByTestId('issue-factory-status-1'),
-    ).toBeNull();
+    // …not on the title line, where the GitHub labels are.
+    expect(screen.getByTestId('issue-title-1').parentElement).not.toContainElement(status);
     expect(screen.queryByTestId('issue-select-1')).toBeNull();
     expect(screen.getByTestId('issue-factory-thread-1')).toHaveAttribute(
       'href',
@@ -446,6 +546,7 @@ describe('IssuesTab and the issue factory', () => {
     factory.settings = factorySettings({ enabled: false });
     showIssues([issue(1)]);
     fireEvent.click(await screen.findByTestId('issue-select-1'));
+    fireEvent.click(screen.getByTestId('issues-selection-send-factory'));
 
     expect(screen.getByTestId('issues-factory-send')).toBeDisabled();
     expect(screen.getByTestId('issues-factory-disabled-reason')).toHaveTextContent('paused');
@@ -455,6 +556,7 @@ describe('IssuesTab and the issue factory', () => {
     factory.settings = factorySettings({ blockedReason: 'Waiting for your runner' });
     showIssues([issue(1)]);
     fireEvent.click(await screen.findByTestId('issue-select-1'));
+    fireEvent.click(screen.getByTestId('issues-selection-send-factory'));
 
     expect(screen.getByTestId('issues-factory-send')).toBeDisabled();
     expect(screen.getByTestId('issues-factory-disabled-reason')).toHaveTextContent(
@@ -466,6 +568,7 @@ describe('IssuesTab and the issue factory', () => {
     factory.blockers = [{ issue: 2, blockers: [{ issue: 1, inFactory: false }] }];
     showIssues([issue(1), issue(2)]);
     fireEvent.click(await screen.findByTestId('issue-select-2'));
+    fireEvent.click(screen.getByTestId('issues-selection-send-factory'));
 
     expect(screen.getByTestId('issues-factory-warning')).toHaveTextContent('#1');
     expect(screen.getByTestId('issues-factory-send')).toBeEnabled();
@@ -486,7 +589,7 @@ describe('IssuesTab and the issue factory', () => {
 
     fireEvent.click(await screen.findByTestId('issue-factory-send-blockers-2'));
 
-    expect(factory.send).toHaveBeenCalledWith('project-1', [1], 'issue-to-pr');
+    expect(factory.send).toHaveBeenCalledWith('project-1', [1], 'issue-to-pr', undefined);
   });
 
   test('a send takes at most 50 issues: past that, a checkbox adds nothing', async () => {
@@ -495,8 +598,10 @@ describe('IssuesTab and the issue factory', () => {
     for (let n = 1; n <= 51; n++) fireEvent.click(screen.getByTestId(`issue-select-${n}`));
 
     expect(screen.getByTestId('issue-select-51')).not.toBeChecked();
+    fireEvent.click(screen.getByTestId('issues-selection-send-factory'));
     expect(screen.getByTestId('issues-factory-limit')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('issues-factory-send'));
+    await waitFor(() => expect(factory.send).toHaveBeenCalled());
     expect(factory.send.mock.calls[0][1]).toHaveLength(50);
     // 51 rows and 51 clicks: slow when the whole suite runs in parallel.
   }, 20_000);
@@ -517,14 +622,14 @@ describe('IssuesTab and the issue factory', () => {
     expect(box(2)).toHaveClass('opacity-0');
   });
 
-  test('the selection bar, with the factory controls, sits below the issues', async () => {
+  test('the selection bar, with its send-to-factory button, sits below the issues', async () => {
     showIssues([issue(1)]);
     fireEvent.click(await screen.findByTestId('issue-select-1'));
 
     const bar = screen.getByTestId('issues-selection-bar');
     const row = screen.getByTestId('issue-item-1');
     expect(bar.compareDocumentPosition(row) & Node.DOCUMENT_POSITION_PRECEDING).toBeTruthy();
-    expect(within(bar).getByTestId('issues-factory-bar')).toBeInTheDocument();
+    expect(within(bar).getByTestId('issues-selection-send-factory')).toBeEnabled();
   });
 
   test('selected issues are deleted after a confirmation, and the list reloads', async () => {

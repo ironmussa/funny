@@ -502,7 +502,34 @@
       "loading": "Loading issues…",
       "noProject": "Select a project to view issues",
       "noOpenIssues": "No open issues",
-      "noClosedIssues": "No closed issues"
+      "noClosedIssues": "No closed issues",
+      "noMatchingIssues": "No issues match these filters",
+      "filter": {
+        "author": "Author",
+        "labels": "Labels",
+        "projects": "Projects",
+        "milestones": "Milestones",
+        "assignees": "Assignees",
+        "types": "Types",
+        "searchUsers": "Search users…",
+        "noUsers": "No users",
+        "searchLabels": "Search labels…",
+        "noLabels": "No labels",
+        "searchProjects": "Search projects…",
+        "noProjects": "No projects",
+        "searchMilestones": "Search milestones…",
+        "noMilestones": "No milestones",
+        "searchTypes": "Search types…",
+        "noTypes": "No types",
+        "clear": "Clear"
+      },
+      "sort": {
+        "newest": "Newest",
+        "oldest": "Oldest",
+        "recentlyUpdated": "Recently updated",
+        "leastRecentlyUpdated": "Least recently updated",
+        "mostCommented": "Most commented"
+      }
     },
     "progress": {
       "description": "Git operation progress",
@@ -829,6 +856,9 @@
     "projectFactoryLaneLabelPrefixDesc": "An issue needs both the factory label ({{label}}) and a {{prefix}}<name> label to run in a lane. Fixed while lanes exist",
     "projectFactoryLaneBranchPrefix": "Lane branch prefix",
     "projectFactoryLaneBranchPrefixDesc": "Prefix for lane branches created from Merge into ({{prefix}}<name>). Fixed while lanes exist",
+    "projectFactoryLaneFinishBranch": "Finish into",
+    "projectFactoryLaneFinishBranchDesc": "Branch the Finish lane pull request merges into. Lanes still start from and sync with Merge into. Empty: Merge into",
+    "projectFactoryLaneFinishBranchPlaceholder": "Merge into",
     "projectFactoryLanes": "Lanes",
     "projectFactoryLanesDesc": "Parallel feature branches created from Merge into. An issue needs the factory label ({{label}}) and a {{prefix}}<name> label to join a lane",
     "projectFactoryLaneStateActive": "Active",
@@ -1665,7 +1695,11 @@
       "assigned": "assigned",
       "unassigned": "unassigned",
       "commitReferenced": "added a commit that referenced this issue"
-    }
+    },
+    "openedBy": "{{author}} opened {{time}} ago",
+    "opened": "opened {{time}} ago",
+    "commentCount_one": "{{count}} comment",
+    "commentCount_other": "{{count}} comments"
   },
   "users": {
     "title": "Users",
@@ -2173,6 +2207,7 @@
       "factory-disabled": "Factory turned off",
       "repo-published": "Repository published",
       "issue-deleted": "Issue deleted",
+      "issue-labeled": "Issue labeled",
       "file-reverted": "File reverted",
       "changes-discarded": "Changes discarded",
       "commits-reset": "Reset",

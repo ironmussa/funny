@@ -72,7 +72,7 @@ export function resolveLane(
     return { kind: 'invalid', label, message: `"${branch}" is not a valid branch name` };
   }
   if (reserved.some((taken) => taken.toLowerCase() === branch.toLowerCase())) {
-    return { kind: 'invalid', label, message: `"${branch}" is the branch the factory merges into` };
+    return { kind: 'invalid', label, message: `"${branch}" is a branch the factory merges into` };
   }
   return { kind: 'lane', name, branch };
 }
@@ -84,6 +84,10 @@ export interface FactoryLaneView {
   factoryId: string;
   name: string;
   branch: string;
+  /** The branch it starts from and syncs with; null: the factory's "merge into" branch. */
+  baseBranch: string | null;
+  /** The branch its finish pull request merges into; null: the factory's "Finish into". */
+  finishBranch: string | null;
   state: FactoryLaneState;
   /** Why the repository's workflows may not run for the lane's branch, or null. */
   ciWarning: string | null;
@@ -136,6 +140,8 @@ const toView = (row: Row): FactoryLaneView => ({
   factoryId: row.factoryId,
   name: row.name,
   branch: row.branch,
+  baseBranch: row.baseBranch ?? null,
+  finishBranch: row.finishBranch ?? null,
   state: row.state === 'finished' ? 'finished' : 'active',
   ciWarning: row.ciWarning ?? null,
   createdAt: row.createdAt,
@@ -251,13 +257,21 @@ export function createFactoryLanesRepository(
      */
     ensure(
       factoryId: string,
-      lane: { name: string; branch: string },
+      lane: {
+        name: string;
+        branch: string;
+        /** The branches its first send chose (D13); absent: the factory's settings. */
+        baseBranch?: string | null;
+        finishBranch?: string | null;
+      },
     ): ResultAsync<FactoryLaneView, FactoryLanesError> {
       const row = {
         id: deps.newId(),
         factoryId,
         name: lane.name,
         branch: lane.branch,
+        baseBranch: lane.baseBranch ?? null,
+        finishBranch: lane.finishBranch ?? null,
         createdAt: new Date().toISOString(),
       };
       return ResultAsync.fromPromise(

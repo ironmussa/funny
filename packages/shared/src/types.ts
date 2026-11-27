@@ -60,6 +60,7 @@ export type {
   GitHubPR,
   GitHubUserRef,
   PRFilterOptions,
+  IssueFilterOptions,
   PRSortKey,
   CICheckConclusion,
   CICheck,

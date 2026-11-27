@@ -94,6 +94,7 @@ function SearchablePickerContent({
   icon,
   testId,
   mobile = false,
+  compact = false,
 }: {
   items: SearchablePickerItem[];
   label: string;
@@ -114,6 +115,8 @@ function SearchablePickerContent({
   icon?: React.ReactNode;
   testId?: string;
   mobile?: boolean;
+  /** A shorter list, for a picker inside a dialog. */
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -310,7 +313,8 @@ function SearchablePickerContent({
         className={cn(
           // oxlint-disable-next-line shadcn/require-static-classes -- width is a Tailwind class prop from the caller
           width,
-          'flex flex-col overflow-hidden max-h-[min(70vh,520px)]',
+          'flex flex-col overflow-hidden',
+          compact ? 'max-h-[min(50vh,280px)]' : 'max-h-[min(70vh,520px)]',
         )}
         onOpenAutoFocus={(e) => {
           e.preventDefault();
@@ -347,6 +351,7 @@ export function BranchPicker({
   showCreateNew = false,
   testId,
   mobilePresentation,
+  compact,
 }: {
   branches: string[];
   remoteBranches?: string[];
@@ -364,6 +369,8 @@ export function BranchPicker({
   showCreateNew?: boolean;
   testId?: string;
   mobilePresentation?: 'drawer';
+  /** A shorter list, for a picker inside a dialog. */
+  compact?: boolean;
 }) {
   const { t } = useTranslation();
   const isMobile = useIsMobile();
@@ -534,6 +541,7 @@ export function BranchPicker({
       side={side}
       align={align}
       testId={testId}
+      compact={compact}
     />
   );
 }

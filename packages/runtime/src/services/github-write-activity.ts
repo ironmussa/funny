@@ -21,7 +21,7 @@ export interface GithubWrite {
   projectId: string;
   title: string;
   input: {
-    action: 'pr-merge' | 'pr-revert-file' | 'repo-publish' | 'issue-delete';
+    action: 'pr-merge' | 'pr-revert-file' | 'repo-publish' | 'issue-delete' | 'issue-label';
     prNumber?: number;
     filePath?: string;
     repo?: string;

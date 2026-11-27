@@ -407,7 +407,8 @@ async function syncLanes(factory: WatchedFactory, repo: string, mode: LaunchMode
       lanes: laneRows,
       branches: github.laneBranches!(reader),
       pullRequests: github.pullRequests,
-      baseBranch: async () => (await github.defaultBranch(reader)).unwrapOr(null),
+      baseBranch: async (lane) =>
+        lane.baseBranch ?? (await github.defaultBranch(reader)).unwrapOr(null),
       activities: deps.activities ?? serverActivities,
       mergeTurn: {
         holders: async (group) => {

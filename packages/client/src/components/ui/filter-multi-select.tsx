@@ -18,6 +18,8 @@ export interface MultiSelectOption {
   label: string;
   /** Optional color dot (labels) — a hex string without the leading `#`. */
   color?: string;
+  /** Optional color dot given as a theme class (e.g. `bg-status-error`), for named colors. */
+  dotClassName?: string;
   /** Optional avatar (users). */
   avatarUrl?: string;
 }
@@ -118,6 +120,9 @@ export function FilterMultiSelect({
                           className="size-2.5 shrink-0 rounded-full"
                           style={{ backgroundColor: `#${opt.color}` }}
                         />
+                      )}
+                      {opt.dotClassName && (
+                        <span className={cn('size-2.5 shrink-0 rounded-full', opt.dotClassName)} />
                       )}
                       {opt.avatarUrl && (
                         <img

@@ -96,6 +96,7 @@ const configured = (over: Partial<FactorySettings> = {}): FactorySettings => ({
   baseBranch: '',
   laneLabelPrefix: 'feature:',
   laneBranchPrefix: 'feature/',
+  laneFinishBranch: '',
   blockedReason: null,
   updatedAt: '2026-11-16T00:00:00.000Z',
   ...over,

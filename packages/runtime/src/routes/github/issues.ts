@@ -5,9 +5,11 @@ import { Hono } from 'hono';
 import { log } from '../../lib/logger.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 import { fetchIssue, fetchRepoIssues, githubRepoFor, resolveGithubToken } from './helpers.js';
+import { fetchIssueFilterOptions } from './issue-filter-options.js';
+import { type IssueFilters, issueRestSort, readIssueFilters } from './issue-filters.js';
 import { linkIssues, type LinkablePR } from './issue-links.js';
 import { fetchIssueTimeline } from './issue-timeline.js';
-import { fetchIssuesWithLinks } from './issues-graphql.js';
+import { fetchIssuesWithLinks, issueSearchQuery } from './issues-graphql.js';
 import { type GithubListContext, readGithubListContext } from './list-context.js';
 import { positiveIntParam } from './query.js';
 
@@ -53,10 +55,19 @@ function suggestBranchName(number: number, title: string): string {
  * needs authentication, so without one fall back to the anonymous REST search
  * (public repos only) and show no PR badges.
  */
-async function loadIssuesPage(ctx: GithubListContext, token: string | null) {
+async function loadIssuesPage(ctx: GithubListContext, token: string | null, filters: IssueFilters) {
   const { owner, repo, state, page, perPage, cursor } = ctx;
-  if (token) return fetchIssuesWithLinks(owner, repo, { state, perPage, cursor, token });
-  const rest = await fetchRepoIssues(owner, repo, { state, page, perPage, token: null });
+  if (token) return fetchIssuesWithLinks(owner, repo, { state, perPage, cursor, token, filters });
+  const rest = await fetchRepoIssues(owner, repo, {
+    state,
+    page,
+    perPage,
+    token: null,
+    search: {
+      query: issueSearchQuery(owner, repo, state, filters),
+      ...issueRestSort(filters.sort),
+    },
+  });
   if (!rest) return null;
   const pullRequests: LinkablePR[] = [];
   return { ...rest, pullRequests, nextCursor: null };
@@ -70,7 +81,7 @@ issueRoutes.get('/issues-enriched', async (c) => {
   try {
     const resolved = await resolveGithubToken(userId);
     const [issuesData, branchesResult] = await Promise.all([
-      loadIssuesPage(list.ctx, resolved?.token ?? null),
+      loadIssuesPage(list.ctx, resolved?.token ?? null, readIssueFilters(c)),
       listBranches(projectPath),
     ]);
     if (!issuesData) {
@@ -93,6 +104,25 @@ issueRoutes.get('/issues-enriched', async (c) => {
     });
   } catch (error: any) {
     log.warn('failed to load issues', {
+      namespace: 'github-issues',
+      repo: `${owner}/${repo}`,
+      error: error?.message,
+    });
+    return c.json({ error: error.message }, 502);
+  }
+});
+
+// ── GET /issue-filter-options — what the Issues filter dropdowns offer ──────
+
+issueRoutes.get('/issue-filter-options', async (c) => {
+  const list = await readGithubListContext(c);
+  if (!list.ok) return list.response;
+  const { userId, owner, repo } = list.ctx;
+  try {
+    const resolved = await resolveGithubToken(userId);
+    return c.json(await fetchIssueFilterOptions(owner, repo, resolved?.token ?? null));
+  } catch (error: any) {
+    log.warn('failed to load issue filter options', {
       namespace: 'github-issues',
       repo: `${owner}/${repo}`,
       error: error?.message,

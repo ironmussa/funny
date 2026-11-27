@@ -253,4 +253,24 @@ describe('factory port lanes (3.3, 6.6, 8.1)', () => {
     const second = (await port.finishLane('alice', 'p1', 'auth'))._unsafeUnwrap();
     expect(second.prNumber).toBe(50);
   });
+
+  test('finishLane opens the finish PR into "Finish into" when it is set, not into "merge into"', async () => {
+    const woken: string[] = [];
+    const { github, opened } = makeFakeGithub();
+    const { settings, lanes, port } = makePort(github, woken);
+
+    (await settings.save('alice', 'p1', { enabled: true }))._unsafeUnwrap();
+    const factoryId = (await settings.factoryId('alice', 'p1'))._unsafeUnwrap()!;
+    (await lanes.ensure(factoryId, { name: 'hotfix', branch: 'lane/hotfix' }))._unsafeUnwrap();
+    // "Finish into" is not fixed by the lanes: it only matters when one finishes.
+    (
+      await settings.save('alice', 'p1', { enabled: true, laneFinishBranch: ' qa ' })
+    )._unsafeUnwrap();
+    expect((await settings.get('alice', 'p1'))._unsafeUnwrap()!.laneFinishBranch).toBe('qa');
+
+    const finished = (await port.finishLane('alice', 'p1', 'hotfix'))._unsafeUnwrap();
+    expect(finished.base).toBe('qa');
+    expect(opened[0]!.base).toBe('qa');
+    expect(opened[0]!.title).toBe('Finish hotfix: merge lane/hotfix into qa');
+  });
 });

@@ -500,7 +500,34 @@
       "loading": "Cargando issues…",
       "noProject": "Selecciona un proyecto para ver issues",
       "noOpenIssues": "No hay issues abiertos",
-      "noClosedIssues": "No hay issues cerrados"
+      "noClosedIssues": "No hay issues cerrados",
+      "noMatchingIssues": "Ningún issue coincide con estos filtros",
+      "filter": {
+        "author": "Autor",
+        "labels": "Etiquetas",
+        "projects": "Proyectos",
+        "milestones": "Hitos",
+        "assignees": "Asignados",
+        "types": "Tipos",
+        "searchUsers": "Buscar usuarios…",
+        "noUsers": "Sin usuarios",
+        "searchLabels": "Buscar etiquetas…",
+        "noLabels": "Sin etiquetas",
+        "searchProjects": "Buscar proyectos…",
+        "noProjects": "Sin proyectos",
+        "searchMilestones": "Buscar hitos…",
+        "noMilestones": "Sin hitos",
+        "searchTypes": "Buscar tipos…",
+        "noTypes": "Sin tipos",
+        "clear": "Limpiar"
+      },
+      "sort": {
+        "newest": "Más recientes",
+        "oldest": "Más antiguos",
+        "recentlyUpdated": "Actualizados recientemente",
+        "leastRecentlyUpdated": "Actualizados hace más tiempo",
+        "mostCommented": "Más comentados"
+      }
     },
     "progress": {
       "description": "Progreso de operación git",
@@ -827,6 +854,9 @@
     "projectFactoryLaneLabelPrefixDesc": "Un issue necesita tanto la etiqueta de la fábrica ({{label}}) como una etiqueta {{prefix}}<nombre> para ejecutarse en un carril. Fijo mientras existan carriles",
     "projectFactoryLaneBranchPrefix": "Prefijo de rama de carril",
     "projectFactoryLaneBranchPrefixDesc": "Prefijo para las ramas de carril creadas desde Fusionar en ({{prefix}}<nombre>). Fijo mientras existan carriles",
+    "projectFactoryLaneFinishBranch": "Finalizar en",
+    "projectFactoryLaneFinishBranchDesc": "Rama a la que se fusiona el pull request de Finalizar carril. Los carriles siguen naciendo de Fusionar en y sincronizándose con ella. Vacío: Fusionar en",
+    "projectFactoryLaneFinishBranchPlaceholder": "Fusionar en",
     "projectFactoryLanes": "Carriles",
     "projectFactoryLanesDesc": "Ramas de funcionalidad en paralelo creadas desde Fusionar en. Un issue necesita la etiqueta de la fábrica ({{label}}) y una etiqueta {{prefix}}<nombre> para unirse a un carril",
     "projectFactoryLaneStateActive": "Activo",
@@ -1658,7 +1688,11 @@
       "assigned": "asignó a",
       "unassigned": "desasignó a",
       "commitReferenced": "añadió un commit que referencia este issue"
-    }
+    },
+    "openedBy": "{{author}} lo abrió hace {{time}}",
+    "opened": "abierto hace {{time}}",
+    "commentCount_one": "{{count}} comentario",
+    "commentCount_other": "{{count}} comentarios"
   },
   "users": {
     "title": "Usuarios",
@@ -2166,6 +2200,7 @@
       "factory-disabled": "Factory desactivada",
       "repo-published": "Repositorio publicado",
       "issue-deleted": "Issue eliminado",
+      "issue-labeled": "Issue etiquetado",
       "file-reverted": "Archivo revertido",
       "changes-discarded": "Cambios descartados",
       "commits-reset": "Reset",

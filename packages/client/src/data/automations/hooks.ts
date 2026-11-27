@@ -19,6 +19,19 @@ import {
 
 const NONE: never[] = [];
 
+/** The caller's automations in every project, in list order. */
+export function useAllAutomations(): Automation[] {
+  const data = getAutomationsData(useDataLayer());
+  const { data: rows } = useLiveQuery({
+    queryKey: liveQueryKey('automations:useAllAutomations', data.collection),
+    query: (q) => q.from({ a: data.collection }),
+  });
+  return useMemo(() => {
+    if (!rows || rows.length === 0) return NONE;
+    return rows.map((row) => data.fromRow(row)).sort(compareAutomations(data));
+  }, [rows, data]);
+}
+
 /** One project's automations, newest created first, then server order. */
 export function useProjectAutomations(projectId: string | null | undefined): Automation[] {
   const data = getAutomationsData(useDataLayer());

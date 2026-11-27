@@ -313,7 +313,7 @@
 ## 14. Automation Inbox — `automation-inbox.spec.ts`
 
 - [x] 14.1 Inbox renders — Lista resultados de automaciones
-- [x] 14.2 Manage automations — `inbox-manage-automations` navega a settings
+- [x] 14.2 Manage automations — `inbox-manage-automations` muestra la lista en la misma vista (`inbox-manage-back` vuelve)
 - [x] 14.3 Tab filter — `inbox-tab-{status}` filtra por pending/reviewed/dismissed
 - [x] 14.4 Search — `inbox-search` busca en resultados
 - [x] 14.5 Project filter — `inbox-project-filter` filtra por proyecto

@@ -1,5 +1,5 @@
 import type { AgentModel } from '../models.js';
-import type { AgentProvider, PermissionMode, ThreadMode } from '../primitives.js';
+import type { AgentProvider, EffortLevel, PermissionMode, ThreadMode } from '../primitives.js';
 import type { AutomationSource } from './funny-config.js';
 import type { Thread } from './thread.js';
 
@@ -18,6 +18,8 @@ export interface Automation {
   schedule: AutomationSchedule;
   provider: AgentProvider;
   model: AgentModel;
+  /** Reasoning effort for runs; absent: the model's default. */
+  effort?: EffortLevel;
   mode: ThreadMode;
   permissionMode: PermissionMode;
   baseBranch?: string;

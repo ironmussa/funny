@@ -1,4 +1,5 @@
-import type { AgentModel, AutomationSchedule, PermissionMode } from '@funny/shared';
+import type { AgentProvider, AutomationSchedule, PermissionMode } from '@funny/shared';
+import { DEFAULT_PROVIDER, getDefaultModel } from '@funny/shared/models';
 
 export const SCHEDULE_PRESETS: { value: string; label: string }[] = [
   { value: '*/15 * * * *', label: 'Every 15 min' },
@@ -21,7 +22,10 @@ export interface FormState {
   name: string;
   prompt: string;
   schedule: AutomationSchedule;
-  model: AgentModel;
+  provider: AgentProvider;
+  model: string;
+  /** '' when the model has no effort levels (the field is then not sent). */
+  effort: string;
   permissionMode: PermissionMode;
 }
 
@@ -29,6 +33,8 @@ export const defaultForm: FormState = {
   name: '',
   prompt: '',
   schedule: '0 * * * *',
-  model: 'sonnet',
+  provider: DEFAULT_PROVIDER,
+  model: getDefaultModel(DEFAULT_PROVIDER),
+  effort: 'high',
   permissionMode: 'autoEdit',
 };

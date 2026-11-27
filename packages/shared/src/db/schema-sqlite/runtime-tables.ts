@@ -210,6 +210,7 @@ export const automations = sqliteTable('automations', {
   model: text('model').notNull().default(DEFAULT_MODEL),
   mode: text('mode').notNull().default(DEFAULT_THREAD_MODE),
   permissionMode: text('permission_mode').notNull().default(DEFAULT_PERMISSION_MODE),
+  effort: text('effort'),
   baseBranch: text('base_branch'),
   enabled: integer('enabled').notNull().default(1),
   maxRunHistory: integer('max_run_history').notNull().default(20),

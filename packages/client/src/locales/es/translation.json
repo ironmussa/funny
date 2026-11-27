@@ -1056,6 +1056,9 @@
     "filterMode": "Modo",
     "filterOrigin": "Origen",
     "originFactory": "Factory",
+    "originAutomation": "Automatización",
+    "viewThreads": "Ver hilos",
+    "viewThreadsTooltip": "Abrir los hilos de estas ejecuciones en la vista de búsqueda",
     "originUser": "Usuario",
     "showArchived": "Archivados",
     "clearFilters": "Limpiar filtros",
@@ -1341,7 +1344,8 @@
     "worktreeDeleted": "Worktree \"{{branch}}\" eliminado",
     "worktreeDeleteFailed": "Error al eliminar worktree: {{message}}",
     "threadMoved": "\"{{title}}\" movido de {{from}} a {{to}}",
-    "convertToWorktreeStarted": "Convirtiendo a worktree..."
+    "convertToWorktreeStarted": "Convirtiendo a worktree...",
+    "automationTriggered": "Automatización \"{{name}}\" iniciada"
   },
   "confirm": {
     "notGitRepo": "\"{{path}}\" no es un repositorio git.\n\n¿Quieres inicializarlo con git init?",

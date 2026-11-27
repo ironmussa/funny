@@ -5,6 +5,7 @@ import {
   writeListFilters,
   type ListFilters,
 } from '@/components/all-threads/list-filter-params';
+import { viewThreadsPath } from '@/components/all-threads/ViewThreadsButton';
 
 const filters: ListFilters = {
   status: new Set(['running', 'failed']),
@@ -50,5 +51,19 @@ describe('list filter params', () => {
   test('drops unknown origins', () => {
     const parsed = parseListFilters(new URLSearchParams('origin=factory,bogus'));
     expect(parsed.origin).toEqual(new Set(['factory']));
+  });
+
+  test('keeps the automation origin the inbox links with', () => {
+    const parsed = parseListFilters(new URLSearchParams('origin=automation'));
+    expect(parsed.origin).toEqual(new Set(['automation']));
+  });
+});
+
+describe('viewThreadsPath', () => {
+  test('links the search view to one origin and project', () => {
+    expect(viewThreadsPath('factory')).toBe('/list?sort=updated&origin=factory');
+    expect(viewThreadsPath('automation', 'p1')).toBe(
+      '/list?sort=updated&origin=automation&project=p1',
+    );
   });
 });

@@ -92,12 +92,28 @@ export function deleteAutomation(
   });
 }
 
-/** Start a run now; the run shows up through the realtime run events. */
-export function triggerAutomation(automationId: string): ResultAsync<unknown, DomainError> {
-  return automationsApi.triggerAutomation(automationId).mapErr((error) => {
-    toastError('errors.automationTriggerFailed', error);
-    return error;
-  });
+/** Start a run now; the run shows up through the realtime run events.
+ *  A toast confirms the start once the server accepted it. */
+export function triggerAutomation(
+  automationId: string,
+  name?: string,
+): ResultAsync<unknown, DomainError> {
+  return automationsApi
+    .triggerAutomation(automationId)
+    .map((value) => {
+      clientComposition.platform.effects.emit({
+        type: 'toast',
+        level: 'success',
+        message: i18n.t('toast.automationTriggered', {
+          name: name ?? getAutomationsData(getDataLayer()).collection.get(automationId)?.name ?? '',
+        }),
+      });
+      return value;
+    })
+    .mapErr((error) => {
+      toastError('errors.automationTriggerFailed', error);
+      return error;
+    });
 }
 
 /** Mark an inbox run reviewed or dismissed (or back to pending). */

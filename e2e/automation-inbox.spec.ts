@@ -16,7 +16,11 @@ test.describe('14. Automation Inbox', () => {
     const manageBtn = page.getByTestId('inbox-manage-automations');
     if (await manageBtn.isVisible()) {
       await manageBtn.click();
-      await expect(page).toHaveURL(/settings\/automations/);
+      // The list opens in place: the inbox URL stays, and Back returns to it.
+      await expect(page).toHaveURL(/\/inbox/);
+      await expect(page.getByTestId('inbox-manage-back')).toBeVisible();
+      await page.getByTestId('inbox-manage-back').click();
+      await expect(manageBtn).toBeVisible();
     }
   });
 

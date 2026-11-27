@@ -15,12 +15,18 @@ import type {
   Automation,
   AutomationRun,
   AutomationSource,
+  EffortLevel,
   InboxThread,
   PermissionMode,
   ThreadMode,
 } from '@funny/shared';
 import type { UpdateAutomationRequest } from '@funny/shared/contracts/automations';
-import { DEFAULT_MODEL, DEFAULT_THREAD_MODE, DEFAULT_PERMISSION_MODE } from '@funny/shared/models';
+import {
+  DEFAULT_MODEL,
+  DEFAULT_PROVIDER,
+  DEFAULT_THREAD_MODE,
+  DEFAULT_PERMISSION_MODE,
+} from '@funny/shared/models';
 import { eq, and, or, desc, type SQL } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { err, ok } from 'neverthrow';
@@ -59,6 +65,8 @@ function toAutomation(row: AutomationRow): Automation {
     provider: row.provider as AgentProvider,
     // SAFETY: model is DEFAULT_MODEL or a string the automation bodies accepted.
     model: row.model as AgentModel,
+    // SAFETY: effort is null or a string the automation bodies accepted.
+    effort: (row.effort as EffortLevel | null) ?? undefined,
     // SAFETY: mode is DEFAULT_THREAD_MODE or a string updateAutomationBody accepted.
     mode: row.mode as ThreadMode,
     // SAFETY: permission_mode is DEFAULT_PERMISSION_MODE or a string the automation bodies accepted.
@@ -213,7 +221,9 @@ export const automationsPort: AutomationsPort = {
       name: data.name,
       prompt: data.prompt,
       schedule: data.schedule,
+      provider: data.provider || DEFAULT_PROVIDER,
       model: data.model || DEFAULT_MODEL,
+      effort: data.effort ?? null,
       mode: DEFAULT_THREAD_MODE,
       permissionMode: data.permissionMode || DEFAULT_PERMISSION_MODE,
       baseBranch: null,

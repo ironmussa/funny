@@ -165,7 +165,9 @@ export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: 
             onClick={() =>
               navigate(
                 buildPath(
-                  hideFactoryThreads ? '/list?sort=updated&origin=user' : '/list?sort=updated',
+                  hideFactoryThreads
+                    ? '/list?sort=updated&origin=user,automation'
+                    : '/list?sort=updated',
                 ),
               )
             }

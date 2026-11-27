@@ -335,6 +335,8 @@ export async function runAutomation(
         source: 'automation',
         provider: automation.provider,
         model: automation.model,
+        // Absent (dropped from the JSON): the run uses the model's default effort.
+        effort: automation.effort ?? undefined,
         permissionMode: automation.permissionMode,
         prompt: automation.prompt,
         disallowedTools: [...AUTOMATION_DISALLOWED_TOOLS],

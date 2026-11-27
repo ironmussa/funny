@@ -178,6 +178,42 @@ describe('automation scheduler', () => {
       expect(launcher.calls[0].userId).toBe('alice');
     });
 
+    test('a run starts with the automation’s provider, model and effort', async () => {
+      seedAutomation(t.db, {
+        id: 'on',
+        projectId: 'p1',
+        userId: 'alice',
+        schedule: '0 9 * * *',
+        provider: 'codex',
+        model: 'gpt-5.5',
+        effort: 'low',
+      });
+      const cron = fakeCron();
+      const launcher = fakeLauncher('ok', register);
+      await startAutomationScheduler({ ports, createJob: cron.createJob, launch: launcher.launch });
+
+      cron.live.get('0 9 * * *')!.onTick();
+      await Bun.sleep(20);
+
+      expect(launcher.calls[0].body).toMatchObject({
+        provider: 'codex',
+        model: 'gpt-5.5',
+        effort: 'low',
+      });
+    });
+
+    test('a run without an effort sends none (the model’s default)', async () => {
+      seedAutomation(t.db, { id: 'on', projectId: 'p1', userId: 'alice', schedule: '0 9 * * *' });
+      const cron = fakeCron();
+      const launcher = fakeLauncher('ok', register);
+      await startAutomationScheduler({ ports, createJob: cron.createJob, launch: launcher.launch });
+
+      cron.live.get('0 9 * * *')!.onTick();
+      await Bun.sleep(20);
+
+      expect(launcher.calls[0].body.effort).toBeUndefined();
+    });
+
     // #185: croner's `protect` only skips a tick while the previous one's
     // promise is pending; `void fire(id)` made every tick look finished at once.
     test('a tick settles only once its run is recorded, so protect can skip overlaps', async () => {

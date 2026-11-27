@@ -117,9 +117,9 @@ export function useThreadFilterCounts(
     return counts;
   }, [allThreads]);
 
-  // Counts for the origin filter (factory vs user)
+  // Counts for the origin filter (factory, automation, user)
   const originCounts = useMemo(() => {
-    const counts = { factory: 0, user: 0 };
+    const counts = { factory: 0, automation: 0, user: 0 };
     for (const t of allThreads) counts[threadOrigin(t)]++;
     return counts;
   }, [allThreads]);
@@ -149,6 +149,7 @@ export function useThreadFilterCounts(
 }
 
 /** Who started a thread, as the origin filter names it. */
-function threadOrigin(thread: Thread): 'factory' | 'user' {
-  return isFactoryThread(thread) ? 'factory' : 'user';
+function threadOrigin(thread: Thread): 'factory' | 'automation' | 'user' {
+  if (isFactoryThread(thread)) return 'factory';
+  return thread.automationId ? 'automation' : 'user';
 }

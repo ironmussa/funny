@@ -6,7 +6,8 @@ import { getDataLayer } from '../runtime';
 
 /**
  * Automations, their run history and the inbox, as three collections:
- * - automations, loaded per project (`replaceWhere` on `projectId`);
+ * - automations, loaded per project (`replaceWhere` on `projectId`) or all at
+ *   once (`replaceAll`);
  * - runs, loaded per automation while its history is open;
  * - inbox rows (completed/failed runs with their automation and thread),
  *   keyed by run id.

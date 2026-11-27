@@ -216,6 +216,10 @@ export function AllThreadsToolbar(props: Props) {
             label: t('allThreads.originFactory', { defaultValue: 'Factory' }),
           },
           {
+            value: 'automation',
+            label: t('allThreads.originAutomation', { defaultValue: 'Automation' }),
+          },
+          {
             value: 'user',
             label: t('allThreads.originUser', { defaultValue: 'User' }),
           },

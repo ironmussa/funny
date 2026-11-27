@@ -46,6 +46,22 @@ export function loadAutomations(
   });
 }
 
+/** Load the caller's automations in every project (server order). */
+export function loadAllAutomations(
+  layer: DataLayer = getDataLayer(),
+): ResultAsync<Automation[], DomainError> {
+  const data = getAutomationsData(layer);
+  return fetchInto(layer, 'automations', {
+    queryKey: ['automations', '*'],
+    queryFn: async () => {
+      const rows = await unwrapResult(automationsApi.listAutomations());
+      rows.forEach((a, i) => data.position.set(a.id, i));
+      data.replaceAll(rows);
+      return rows;
+    },
+  });
+}
+
 /** Load one automation's run history; realtime run events keep it current afterwards. */
 export function loadAutomationRuns(
   automationId: string,

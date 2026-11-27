@@ -17,13 +17,13 @@ export interface ListFilters {
   sortDir: SortDir;
 }
 
-const THREAD_ORIGINS = new Set(['factory', 'user']);
+const THREAD_ORIGINS = new Set(['factory', 'automation', 'user']);
 
 function parseList(param: string | null): Set<string> {
   return new Set((param ?? '').split(',').filter(Boolean));
 }
 
-/** `?origin=factory,user` as a filter set; unknown values are dropped. */
+/** `?origin=factory,automation,user` as a filter set; unknown values are dropped. */
 function parseOrigin(param: string | null): Set<string> {
   return new Set([...parseList(param)].filter((value) => THREAD_ORIGINS.has(value)));
 }

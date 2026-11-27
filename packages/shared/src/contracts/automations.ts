@@ -12,7 +12,9 @@ export const createAutomationBody = z.object({
   name: z.string().min(1, required),
   prompt: z.string().min(1, required),
   schedule: z.string().min(1, required),
+  provider: z.string().min(1).optional(),
   model: z.string().optional(),
+  effort: z.string().min(1).nullable().optional(),
   permissionMode: z.string().optional(),
 });
 
@@ -27,6 +29,8 @@ export const updateAutomationBody = z
     schedule: z.string().min(1).optional(),
     provider: z.string().min(1).optional(),
     model: z.string().min(1).optional(),
+    // null clears it: runs use the model's default effort.
+    effort: z.string().min(1).nullable().optional(),
     mode: z.string().min(1).optional(),
     permissionMode: z.string().min(1).optional(),
     enabled: z.boolean().optional(),

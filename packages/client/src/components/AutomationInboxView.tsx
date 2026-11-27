@@ -1,17 +1,25 @@
 import type { RunTriageStatus } from '@funny/shared';
 import { includesSearchText } from '@funny/shared/lib/text-search';
-import { Inbox, Settings } from 'lucide-react';
+import { ArrowLeft, Inbox, Settings } from 'lucide-react';
 import { useEffect, useId, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { ViewThreadsButton } from '@/components/all-threads/ViewThreadsButton';
+import { AutomationSettings } from '@/components/AutomationSettings';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchBar } from '@/components/ui/search-bar';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useAutomationInbox } from '@/data/automations/hooks';
 import { loadInbox } from '@/data/automations/loaders';
 import { useProjects } from '@/data/projects/hooks';
-import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
 import { goToThread } from '@/navigation/go-to-thread';
 import { useThreadStore } from '@/stores/thread-store';
@@ -19,6 +27,8 @@ import { useUIStore } from '@/stores/ui-store';
 
 import { InboxItemCard } from './automation-inbox/InboxItemCard';
 import { InboxProjectFilter } from './automation-inbox/InboxProjectFilter';
+
+const ALL_PROJECTS = '__all__';
 
 export function AutomationInboxView() {
   const navigate = useNavigate();
@@ -36,6 +46,11 @@ export function AutomationInboxView() {
   const [triageStatusFilter, setTriageStatusFilter] = useState<RunTriageStatus | 'all'>('pending');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchCaseSensitive, setSearchCaseSensitive] = useState(false);
+  // "manage" shows the automation list in place of the inbox, without leaving
+  // this view for Settings.
+  const [mode, setMode] = useState<'inbox' | 'manage'>('inbox');
+  // A project id, or ALL_PROJECTS for every project's automations.
+  const [manageProjectId, setManageProjectId] = useState<string | null>(null);
 
   // Always load all inbox items so tab counts stay accurate; filter client-side
   useEffect(() => {
@@ -79,14 +94,61 @@ export function AutomationInboxView() {
     selectThread(threadId);
   };
 
-  const handleGoToSettings = () => {
-    setAutomationInboxOpen(false);
-    if (filterProjectId) {
-      navigate(buildPath(`/projects/${filterProjectId}/settings/automations`));
-    } else {
-      navigate(buildPath('/settings/automations'));
-    }
+  const handleManageAutomations = () => {
+    setManageProjectId(filterProjectId ?? ALL_PROJECTS);
+    setMode('manage');
   };
+
+  if (mode === 'manage') {
+    const showAll = manageProjectId === ALL_PROJECTS;
+    const manageProject = projects.find((p) => p.id === manageProjectId);
+    return (
+      <div className="flex flex-1 flex-col overflow-hidden">
+        <div className="border-border flex items-center justify-between gap-3 border-b px-6 py-4">
+          <div className="flex min-w-0 items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label="Back to inbox"
+              data-testid="inbox-manage-back"
+              onClick={() => setMode('inbox')}
+            >
+              <ArrowLeft className="icon-sm" />
+            </Button>
+            <h2 className="text-sm font-medium">Automations</h2>
+          </div>
+          {projects.length > 0 && (
+            <Select
+              value={showAll ? ALL_PROJECTS : manageProject?.id}
+              onValueChange={setManageProjectId}
+            >
+              <SelectTrigger
+                size="xs"
+                className="w-[200px]"
+                data-testid="inbox-manage-project"
+                aria-label="Project"
+              >
+                <SelectValue placeholder="Select a project" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL_PROJECTS}>All projects</SelectItem>
+                {projects.map((p) => (
+                  <SelectItem key={p.id} value={p.id}>
+                    {p.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+        <ScrollArea className="flex-1">
+          <div className="mx-auto max-w-2xl p-6">
+            <AutomationSettings projectId={manageProject?.id ?? null} allProjects={showAll} />
+          </div>
+        </ScrollArea>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -101,16 +163,23 @@ export function AutomationInboxView() {
             </Badge>
           )}
         </div>
-        <Button
-          variant="muted"
-          size="xs"
-          gap="snug"
-          data-testid="inbox-manage-automations"
-          onClick={handleGoToSettings}
-        >
-          <Settings className="icon-sm" />
-          Manage Automations
-        </Button>
+        <div className="flex items-center gap-1">
+          <ViewThreadsButton
+            origin="automation"
+            projectId={filterProjectId}
+            testId="inbox-view-threads"
+          />
+          <Button
+            variant="muted"
+            size="xs"
+            gap="snug"
+            data-testid="inbox-manage-automations"
+            onClick={handleManageAutomations}
+          >
+            <Settings className="icon-sm" />
+            Manage Automations
+          </Button>
+        </div>
       </div>
       {/* Triage Status Filter Tabs */}
       <div className="border-border/40 flex items-center gap-0 border-b px-6">

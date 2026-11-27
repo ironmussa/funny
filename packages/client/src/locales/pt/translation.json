@@ -1046,6 +1046,9 @@
     "filterMode": "Modo",
     "filterOrigin": "Origem",
     "originFactory": "Fábrica",
+    "originAutomation": "Automação",
+    "viewThreads": "Ver threads",
+    "viewThreadsTooltip": "Abrir os threads destas execuções na visualização de busca",
     "originUser": "Usuário",
     "showArchived": "Arquivadas",
     "clearFilters": "Limpar filtros",
@@ -1323,7 +1326,8 @@
     "projectClosed": "Projeto \"{{name}}\" fechado",
     "projectReopened": "Projeto \"{{name}}\" reaberto",
     "threadMoved": "\"{{title}}\" movido de {{from}} para {{to}}",
-    "convertToWorktreeStarted": "Convertendo para worktree..."
+    "convertToWorktreeStarted": "Convertendo para worktree...",
+    "automationTriggered": "Automação \"{{name}}\" iniciada"
   },
   "confirm": {
     "notGitRepo": "\"{{path}}\" não é um repositório git.\n\nDeseja inicializá-lo com git init?",

@@ -2,12 +2,12 @@ import type { AgentProvider, Project } from '@funny/shared';
 import { DEFAULT_PROVIDER, getDefaultModel } from '@funny/shared/models';
 import { useTranslation } from 'react-i18next';
 
-import { useAcpModels } from '@/data/runner/hooks';
 import type { UpdateProjectInput } from '@/lib/api/projects';
-import { getEffortLevels, getModelOptions, normalizeEffort, PROVIDERS } from '@/lib/providers';
+import { getEffortLevels, normalizeEffort, PROVIDERS } from '@/lib/providers';
 
 import { ModelCombobox } from './ModelCombobox';
 import { SegmentedControl, ProjectSettingRow } from './setting-primitives';
+import { useProviderModelOptions } from './use-provider-model-options';
 
 /** The project's default provider, model and effort for new threads. */
 export function ProjectDefaultModelSetting({
@@ -19,13 +19,6 @@ export function ProjectDefaultModelSetting({
 }) {
   const { t } = useTranslation();
 
-  // Dynamic catalogs (pi / cursor / opencode) are discovered at runtime so
-  // the Settings combobox lists what each agent actually advertises (e.g.
-  // zai/glm-5.1) instead of just the `default` sentinel from the static
-  // registry. One query per provider; the dynamic set comes from the
-  // manifest registry.
-  const acpByProvider = useAcpModels();
-
   const projectDefaultProvider = selectedProject.defaultProvider || DEFAULT_PROVIDER;
   const projectDefaultModel =
     selectedProject.defaultModel || getDefaultModel(projectDefaultProvider);
@@ -35,19 +28,7 @@ export function ProjectDefaultModelSetting({
     projectDefaultProvider,
     selectedProject.defaultEffort,
   );
-  const projectModelOptions = (() => {
-    const base = getModelOptions(projectDefaultProvider, t);
-    const dynamic = acpByProvider[projectDefaultProvider];
-    if (dynamic?.status === 'ready') {
-      const seen = new Set(base.map((o) => o.value));
-      for (const m of dynamic.models) {
-        if (seen.has(m.modelId)) continue;
-        base.push({ value: m.modelId, label: m.name || m.modelId });
-        seen.add(m.modelId);
-      }
-    }
-    return base;
-  })();
+  const projectModelOptions = useProviderModelOptions(projectDefaultProvider);
 
   return (
     <>

@@ -9,6 +9,7 @@ import {
   createAutomation,
   deleteAutomation,
   triageRun,
+  triggerAutomation,
   updateAutomation,
 } from '@/data/automations/actions';
 import { handleRunCompleted } from '@/data/automations/events';
@@ -81,6 +82,24 @@ describe('automations', () => {
     api.createAutomation.mockReturnValueOnce(errAsync(failure));
     expect((await createAutomation(newAutomation)).isErr()).toBe(true);
     expect(effects.emit).toHaveBeenCalledWith(expect.objectContaining({ level: 'error' }));
+  });
+
+  test('run now toasts success once the server accepts it, and error when it refuses', async () => {
+    seedAutomations({ automations: [automation('a1', { name: 'Nightly triage' })] });
+    api.triggerAutomation.mockReturnValueOnce(okAsync({ runId: 'r1', threadId: 't1' }));
+    expect((await triggerAutomation('a1')).isOk()).toBe(true);
+    expect(effects.emit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        level: 'success',
+        message: expect.stringContaining('Nightly triage'),
+      }),
+    );
+
+    effects.emit.mockClear();
+    api.triggerAutomation.mockReturnValueOnce(errAsync(failure));
+    expect((await triggerAutomation('a1')).isErr()).toBe(true);
+    expect(effects.emit).toHaveBeenCalledWith(expect.objectContaining({ level: 'error' }));
+    expect(effects.emit).not.toHaveBeenCalledWith(expect.objectContaining({ level: 'success' }));
   });
 
   test('a refused edit rolls back; a confirmed delete removes the row', async () => {

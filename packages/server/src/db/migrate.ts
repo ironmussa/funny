@@ -2677,6 +2677,14 @@ const migrations: Migration[] = [
       await ctx().addColumn('factory_settings', 'commit_spec_path', 'TEXT');
     },
   },
+  {
+    // An automation's reasoning effort for its runs (null: the model's default),
+    // chosen with its provider and model like a project's default.
+    name: '143_automation_effort',
+    async up() {
+      await ctx().addColumn('automations', 'effort', 'TEXT');
+    },
+  },
 ];
 
 /**

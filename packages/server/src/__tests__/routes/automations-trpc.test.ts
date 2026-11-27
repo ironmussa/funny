@@ -191,6 +191,32 @@ describe('automations tRPC procedures', () => {
     });
   });
 
+  describe('provider, model and effort', () => {
+    test('create stores them, and update can clear the effort', async () => {
+      const created = await mutate('user-1', 'create', {
+        projectId: 'p1',
+        name: 'Nightly',
+        prompt: 'check',
+        schedule: '0 3 * * *',
+        provider: 'codex',
+        model: 'gpt-5.5',
+        effort: 'xhigh',
+      });
+      expect(created.status).toBe(200);
+      const id = created.body.result.data.id;
+      expect(created.body.result.data).toMatchObject({
+        provider: 'codex',
+        model: 'gpt-5.5',
+        effort: 'xhigh',
+      });
+
+      const cleared = await mutate('user-1', 'update', { id, data: { effort: null } });
+      expect(cleared.status).toBe(200);
+      expect(cleared.body.result.data.effort).toBeUndefined();
+      expect(cleared.body.result.data.provider).toBe('codex');
+    });
+  });
+
   describe('ported from the removed REST route tests', () => {
     test('list filters by projectId', async () => {
       seedProject(t.db, { id: 'p1b', userId: 'user-1', path: '/tmp/p1b' });

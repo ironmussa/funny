@@ -48,8 +48,6 @@ import { useQueueEditing } from './prompt-input/use-queue-editing';
 import type { ModelSelectGroup } from './PromptSelectors';
 export { ModelSelect, type ModelSelectGroup } from './PromptSelectors';
 
-export { formatRemoteUrl, remoteUrlToBrowseUrl } from '@/lib/git-remote-url';
-
 // ── Props ────────────────────────────────────────────────────────
 
 export interface PromptInputUIProps {

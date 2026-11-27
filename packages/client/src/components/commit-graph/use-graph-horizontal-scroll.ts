@@ -4,7 +4,7 @@ import { useElementWidth } from '@/hooks/use-element-width';
 import { graphGutterViewportWidth } from '@/lib/commit-graph-layout';
 
 /** Marks a row's lane gutter: a wheel over it scrolls the lanes sideways. */
-export const GRAPH_GUTTER_WHEEL_ATTR = 'data-graph-gutter';
+const GRAPH_GUTTER_WHEEL_ATTR = 'data-graph-gutter';
 
 /**
  * Horizontal scroll of the lane gutter when it is wider than its viewport: the

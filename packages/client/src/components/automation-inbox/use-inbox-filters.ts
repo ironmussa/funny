@@ -2,11 +2,11 @@ import type { InboxItem, RunTriageStatus } from '@funny/shared';
 import { includesSearchText } from '@funny/shared/lib/text-search';
 import { useMemo, useState } from 'react';
 
-export const TRIAGE_STATUSES: RunTriageStatus[] = ['pending', 'reviewed', 'dismissed'];
+const TRIAGE_STATUSES: RunTriageStatus[] = ['pending', 'reviewed', 'dismissed'];
 /** The status the list shows: one triage status, or every run. */
 export type InboxStatus = RunTriageStatus | 'all';
 export const INBOX_STATUSES: InboxStatus[] = [...TRIAGE_STATUSES, 'all'];
-export type FindingsValue = 'with' | 'without';
+type FindingsValue = 'with' | 'without';
 /** The run states the inbox lists (archived runs leave it). */
 export type InboxRunState = 'running' | 'completed' | 'failed';
 export const INBOX_RUN_STATES: InboxRunState[] = ['running', 'completed', 'failed'];
@@ -14,7 +14,7 @@ export const INBOX_RUN_STATES: InboxRunState[] = ['running', 'completed', 'faile
 const DEFAULT_STATUS: InboxStatus = 'pending';
 
 /** How many runs carry each filter value, as the filter chips show it. */
-export type FilterCounts = Record<string, number>;
+type FilterCounts = Record<string, number>;
 
 function countBy<T>(items: T[], key: (item: T) => string) {
   const counts: FilterCounts = {};

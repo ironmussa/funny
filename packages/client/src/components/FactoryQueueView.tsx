@@ -47,6 +47,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { useFactoryQueueLanes, useFactoryQueueRuns } from '@/data/factory/hooks';
 import { useProjects } from '@/data/projects/hooks';
+import { useLeftViewPath } from '@/hooks/use-left-view';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import type { FactoryQueueRun, FactoryRun } from '@/lib/api/factory';
@@ -89,11 +90,11 @@ const FactoryRunRow = memo(function FactoryRunRow({ run, projectName, now, onSel
   const thread = useThreadById(lastThreadId);
   const title = factoryRunTitle(t, run, thread?.title);
   const detail = runDetail(t, run);
+  const besideQueue = useLeftViewPath();
   const open = () => {
     if (!lastThreadId) return;
-    navigate(
-      buildPath(getThreadRoute({ id: lastThreadId, projectId: run.projectId, isScratch: false })),
-    );
+    const route = getThreadRoute({ id: lastThreadId, projectId: run.projectId, isScratch: false });
+    navigate(besideQueue(buildPath(route)));
   };
 
   return (

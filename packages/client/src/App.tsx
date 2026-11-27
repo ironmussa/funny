@@ -4,7 +4,6 @@ import {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type ComponentProps,
   type ComponentType,
@@ -37,14 +36,15 @@ import { useAutomationInboxPolling } from '@/hooks/use-automation-inbox-polling'
 import { useDisplayThreadId } from '@/hooks/use-display-thread-id';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useGlobalShortcuts } from '@/hooks/use-global-shortcuts';
+import { LeftViewScope, useLeftView } from '@/hooks/use-left-view';
 import { useRouteSync } from '@/hooks/use-route-sync';
 import { useTauriAnnotatorEvents } from '@/hooks/use-tauri-annotator-events';
 import { useThreadHistoryTracker } from '@/hooks/use-thread-history-tracker';
 import { useWS } from '@/hooks/use-ws';
 import { resolveLeftPaneOpen } from '@/lib/app-layout';
 import { effectiveThreadId, isRightPaneVisible } from '@/lib/grid-right-pane';
+import type { LeftView } from '@/lib/left-view';
 import { canDoGitOps } from '@/lib/thread-variant';
-import { buildPath, stripOrgPrefix } from '@/lib/url';
 import { cn } from '@/lib/utils';
 import { loadInstalledVisualizers } from '@/lib/visualizer-loader';
 import { preloadAllThreadsView } from '@/platform/shortcut-target-preloads';
@@ -57,12 +57,7 @@ import {
   useThreadViewSelect,
 } from '@/stores/thread-context';
 import { setAppNavigate, useThreadStore } from '@/stores/thread-store';
-import {
-  selectRightPaneOpen,
-  selectRightPanel,
-  useUIStore,
-  type LeftPanelMode,
-} from '@/stores/ui-store';
+import { selectRightPaneOpen, selectRightPanel, useUIStore } from '@/stores/ui-store';
 import { registerBuiltinVisualizers } from '@/visualizers/builtin';
 import { installVisualizerHostGlobals } from '@/visualizers/host-runtime';
 
@@ -249,22 +244,17 @@ function useRightPaneCanShowGit(liveColumnsOpen: boolean, gridSelectedThreadId: 
 
 /**
  * The left sidebar: the thread list, or the kanban board, factory queue or
- * automation inbox in its place (`leftPanelMode`, toggled from the tool rail).
- * Opening a thread from them shows it in the center while they stay here; the
- * inbox moves here when a thread is opened from its full-window view.
- * The old `/factory` and `/kanban` routes open them here and land on the home
- * page.
+ * automation inbox in its place. The URL decides which (`lib/left-view.ts`):
+ * a thread opened from one of them carries `?left=<view>`, so the view stays
+ * here beside the thread, and the back button undoes it. On its own route
+ * (`/kanban`, `/factory`, `/inbox`) the view fills the window instead.
  */
 function LeftSidebar() {
-  const mode = useUIStore((s) => s.leftPanelMode);
-  useLegacyLeftViewRoutes();
-  // While the board or the queue fills the window, it is drawn over everything
-  // (FullWindowLeftView): mounting it here as well would load it twice.
-  const fillsWindow = useUIStore((s) => s.leftViewFillsWindow);
-  if (fillsWindow && boardOrQueue(mode)) {
-    return <div className="bg-sidebar h-full w-full" />;
-  }
-  if (mode === 'threads') {
+  const { view, fillsWindow } = useLeftView();
+  // A view that fills the window is drawn over everything (FullWindowLeftView,
+  // FullWindowInbox): mounting it here as well would load it twice.
+  if (fillsWindow) return <div className="bg-sidebar h-full w-full" />;
+  if (view === 'threads') {
     return (
       <ErrorBoundary area="sidebar">
         <Suspense fallback={<SidebarPlaceholder />}>
@@ -273,43 +263,26 @@ function LeftSidebar() {
       </ErrorBoundary>
     );
   }
-  const View = LEFT_SIDEBAR_VIEWS[mode];
+  const View = LEFT_SIDEBAR_VIEWS[view];
   return (
-    <ErrorBoundary area={`${mode}-sidebar`}>
+    <ErrorBoundary area={`${view}-sidebar`}>
       <Suspense fallback={<SidebarPlaceholder />}>
-        <div className="bg-sidebar flex h-full w-full" data-testid={`${mode}-sidebar`}>
-          <View />
+        <div className="bg-sidebar flex h-full w-full" data-testid={`${view}-sidebar`}>
+          <LeftViewScope value={view}>
+            <View />
+          </LeftViewScope>
         </div>
       </Suspense>
     </ErrorBoundary>
   );
 }
 
-/** What takes the thread list's place in the left sidebar, by mode. */
+/** What takes the thread list's place in the left sidebar, by view. */
 const LEFT_SIDEBAR_VIEWS = {
   kanban: KanbanSidebarView,
   factory: FactoryQueueView,
   inbox: AutomationInboxView,
 };
-
-/** The mode when it is the board or the queue (the two views that can fill the window). */
-function boardOrQueue(mode: LeftPanelMode): 'kanban' | 'factory' | null {
-  return mode === 'kanban' || mode === 'factory' ? mode : null;
-}
-
-/** The old `/factory` and `/kanban` routes: open the view in the sidebar and land on the home page. */
-function useLegacyLeftViewRoutes() {
-  const setMode = useUIStore((s) => s.setLeftPanelMode);
-  const { pathname } = useLocation();
-  const navigate = useNavigate();
-  const factoryRoute = parseRoute(pathname).factory;
-  const kanbanRoute = stripOrgPrefix(pathname)[1] === '/kanban';
-  useEffect(() => {
-    if (!factoryRoute && !kanbanRoute) return;
-    setMode(factoryRoute ? 'factory' : 'kanban');
-    navigate(buildPath('/'), { replace: true });
-  }, [factoryRoute, kanbanRoute, navigate, setMode]);
-}
 
 /** The tool rail, able to expand the left sidebar (it opens the sidebar's views there). */
 function AppToolRail({ viewsOnly }: { viewsOnly: boolean }) {
@@ -318,23 +291,17 @@ function AppToolRail({ viewsOnly }: { viewsOnly: boolean }) {
 }
 
 /**
- * The inbox over the whole window. Opening a thread from it moves the inbox
- * into the left sidebar, as a column beside the thread (like the factory
- * queue), and makes sure the sidebar is expanded.
+ * The inbox over the whole window (`/inbox`). A thread opened from it carries
+ * `?left=inbox`, which shows the inbox as a column beside the thread.
  */
 function FullWindowInbox() {
-  const { setOpen } = useSidebar();
-  const setLeftPanelMode = useUIStore((s) => s.setLeftPanelMode);
   return (
     <div className="bg-background absolute inset-0 z-30 flex">
       <ErrorBoundary area="automation-inbox">
         <Suspense>
-          <AutomationInboxView
-            onBeforeOpenThread={() => {
-              setLeftPanelMode('inbox');
-              setOpen(true);
-            }}
-          />
+          <LeftViewScope value="inbox">
+            <AutomationInboxView />
+          </LeftViewScope>
         </Suspense>
       </ErrorBoundary>
     </div>
@@ -342,28 +309,19 @@ function FullWindowInbox() {
 }
 
 /**
- * The kanban board or the factory queue over the whole window, with no thread
- * column beside it. Opening a thread from it (the open thread changes) moves
- * it into the left sidebar, beside the thread, and expands the sidebar.
+ * The kanban board or the factory queue over the whole window (`/kanban`,
+ * `/factory`), with no thread column beside it. A thread opened from it
+ * carries `?left=<view>`, which shows the view beside the thread.
  */
 function FullWindowLeftView({ mode }: { mode: 'kanban' | 'factory' }) {
-  const { setOpen } = useSidebar();
-  const setFillsWindow = useUIStore((s) => s.setLeftViewFillsWindow);
-  const activeThreadId = useActiveThreadId();
-  const previousThreadId = useRef(activeThreadId);
-  useEffect(() => {
-    const opened = activeThreadId && activeThreadId !== previousThreadId.current;
-    previousThreadId.current = activeThreadId;
-    if (!opened) return;
-    setFillsWindow(false);
-    setOpen(true);
-  }, [activeThreadId, setFillsWindow, setOpen]);
   return (
     <div className="bg-background absolute inset-0 z-30 flex">
       <ErrorBoundary area={`${mode}-full-window`}>
         <Suspense fallback={<SidebarPlaceholder />}>
           <div className="flex h-full w-full" data-testid={`${mode}-full-window`}>
-            {mode === 'kanban' ? <KanbanSidebarView /> : <FactoryQueueView />}
+            <LeftViewScope value={mode}>
+              {mode === 'kanban' ? <KanbanSidebarView /> : <FactoryQueueView />}
+            </LeftViewScope>
           </div>
         </Suspense>
       </ErrorBoundary>
@@ -385,16 +343,22 @@ function anotherViewOpen(s: ReturnType<typeof useUIStore.getState>): boolean {
   ].some(Boolean);
 }
 
+/** The view when it is the board or the queue (the inbox has its own full-window overlay). */
+function boardOrQueue(view: LeftView): 'kanban' | 'factory' | null {
+  return view === 'kanban' || view === 'factory' ? view : null;
+}
+
 /** Which of the board or the queue fills the window, if one does (see FullWindowLeftView). */
 function useLeftViewFillingWindow(
   workflowsProjectId: string | null,
   externalClaudeSessionId: string | null,
 ): 'kanban' | 'factory' | null {
-  const mode = useUIStore((s) => s.leftPanelMode);
-  const fills = useUIStore((s) => s.leftViewFillsWindow);
+  const { view, fillsWindow } = useLeftView();
   const otherViewOpen = useUIStore(anotherViewOpen);
-  const hidden = [!fills, otherViewOpen, workflowsProjectId, externalClaudeSessionId].some(Boolean);
-  return hidden ? null : boardOrQueue(mode);
+  const hidden = [!fillsWindow, otherViewOpen, workflowsProjectId, externalClaudeSessionId].some(
+    Boolean,
+  );
+  return hidden ? null : boardOrQueue(view);
 }
 
 /**
@@ -774,9 +738,15 @@ function SidebarAwareDockview({
   togglebrowserPanel: () => void;
   browserPanelWidth: number;
 }) {
-  const { open: sidebarOpen } = useSidebar();
+  const { open: sidebarOpen, setOpen: setSidebarOpen } = useSidebar();
   // The board and the factory queue need more room than the thread list: each keeps its width.
-  const leftWidthMode = LEFT_WIDTH_BY_MODE[useUIStore((s) => s.leftPanelMode)];
+  const leftView = useLeftView();
+  const leftWidthMode = LEFT_WIDTH_BY_MODE[leftView.view];
+  // A view beside a thread needs the sidebar expanded to be seen.
+  const viewBesideThread = leftView.view !== 'threads' && !leftView.fillsWindow;
+  useEffect(() => {
+    if (viewBesideThread) setSidebarOpen(true);
+  }, [viewBesideThread, leftView.view, setSidebarOpen]);
   const browserPanel = useMemo(
     () => (
       <Suspense fallback={null}>

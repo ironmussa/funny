@@ -31,6 +31,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { HighlightText, normalize } from '@/components/ui/highlight-text';
+import { useLeftViewPath } from '@/hooks/use-left-view';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { setDashedDragPreview } from '@/lib/drag-preview';
 import { timeAgo } from '@/lib/thread-utils';
@@ -257,6 +258,27 @@ function KanbanCardSnippet({
   );
 }
 
+/**
+ * Opens the card's thread. From the board as a left view, the board stays
+ * beside the thread (`?left=kanban`), so the thread needs no way back to it:
+ * only a search is handed over (to reopen it in the thread).
+ */
+function useOpenCardThread(
+  thread: Props['thread'],
+  { projectId, search, caseSensitive }: Pick<Props, 'projectId' | 'search' | 'caseSensitive'>,
+) {
+  const navigate = useNavigate();
+  const besideBoard = useLeftViewPath();
+  const setKanbanContext = useUIStore((s) => s.setKanbanContext);
+  return () =>
+    startTransition(() => {
+      setKanbanContext(
+        search?.trim() ? { projectId, search, caseSensitive, threadId: thread.id } : null,
+      );
+      navigate(besideBoard(buildPath(`/projects/${thread.projectId}/threads/${thread.id}`)));
+    });
+}
+
 export const KanbanCard = memo(function KanbanCard({
   thread,
   projectInfo,
@@ -285,8 +307,7 @@ export const KanbanCard = memo(function KanbanCard({
   const title = titleProp ?? thread.title;
   const { t } = useTranslation();
   const now = useMinuteTick();
-  const navigate = useNavigate();
-  const setKanbanContext = useUIStore((s) => s.setKanbanContext);
+  const openThread = useOpenCardThread(thread, { projectId, search, caseSensitive });
   const pinThread = useThreadStore((s) => s.pinThread);
   const ref = useRef<HTMLDivElement>(null);
   const isDragging = useKanbanCardDrag(ref, thread, canDrag, highlighted);
@@ -297,14 +318,7 @@ export const KanbanCard = memo(function KanbanCard({
   const open = () => {
     if (isDragging) return;
     if (onOpen) return onOpen();
-    startTransition(() => {
-      // The board stays open in the left sidebar, so the thread needs no way
-      // back to it: only a search is handed over (to reopen it in the thread).
-      setKanbanContext(
-        search?.trim() ? { projectId, search, caseSensitive, threadId: thread.id } : null,
-      );
-      navigate(buildPath(`/projects/${thread.projectId}/threads/${thread.id}`));
-    });
+    openThread();
   };
 
   return (

@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { memo, startTransition, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useLocation } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { ShortcutHint } from '@/components/ui/kbd';
@@ -19,10 +20,12 @@ import { Separator } from '@/components/ui/separator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAutomationInbox } from '@/data/automations/hooks';
 import { useProjects } from '@/data/projects/hooks';
+import { useLeftView } from '@/hooks/use-left-view';
 import { usePanelParam } from '@/hooks/use-panel-param';
 import { usePreviewWindow } from '@/hooks/use-preview-window';
 import { useRightPaneProjectId } from '@/hooks/use-right-pane-target';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
+import { LEFT_VIEW_ROUTES, withLeftView, type LeftView } from '@/lib/left-view';
 import * as variant from '@/lib/thread-variant';
 import { TOOL_PANELS, type ToolPanelContext, type ToolPanelDef } from '@/lib/tool-panels/registry';
 import { buildPath } from '@/lib/url';
@@ -32,7 +35,7 @@ import { useBrowserPanelStore } from '@/stores/browser-panel-store';
 import { useTerminalStore } from '@/stores/terminal-store';
 import { useThreadId, useThreadSelector, useThreadWorktreePath } from '@/stores/thread-context';
 import { useThreadHistoryStore } from '@/stores/thread-history-store';
-import { selectRightPanel, useUIStore, type LeftPanelMode } from '@/stores/ui-store';
+import { selectRightPanel, useUIStore } from '@/stores/ui-store';
 
 /** What the registry's availability rules need, for the thread the rail acts on. */
 function useToolPanelContext(): ToolPanelContext {
@@ -229,7 +232,7 @@ function BrowserButton({ disabled }: { disabled?: boolean }) {
 
 /** The views the left sidebar can show, in rail order. */
 const LEFT_VIEWS: readonly {
-  mode: LeftPanelMode;
+  mode: LeftView;
   icon: LucideIcon;
   labelKey: string;
   labelFallback: string;
@@ -259,29 +262,32 @@ function pathBehindGrid(): string {
 }
 
 /**
- * Leave the grid or the inbox for the left view just chosen. The board and the
- * queue open alone, with no thread beside them (opening a thread from them
- * brings the thread back, App.tsx), so they land on the home page. The thread
- * list and the inbox column go back to the thread that was open before. The
- * grid's flag and the URL change in the same click (see PageButton).
+ * Changes the left view, through the URL (`lib/left-view.ts`), so the back
+ * button undoes it. The board, the queue and the inbox open alone on their own
+ * route. Going back to the thread list keeps the open thread (the `left`
+ * parameter goes); from a view with no thread in its URL (a full-window view,
+ * the grid) it goes to the thread that was open before.
  */
-function leaveOtherViewsFor(
-  nextMode: LeftPanelMode,
-  open: { grid: boolean; inbox: boolean },
-  navigate: (path: string) => void,
-) {
-  if (open.grid) useUIStore.getState().setLiveColumnsOpen(false);
-  if (nextMode === 'kanban' || nextMode === 'factory') navigate(buildPath('/'));
-  else if (open.grid || open.inbox) navigate(buildPath(pathBehindGrid()));
+function useShowLeftView(): (view: LeftView) => void {
+  const navigate = useStableNavigate();
+  const { pathname, search } = useLocation();
+  const { fillsWindow } = useLeftView();
+  const gridOpen = useUIStore((s) => s.liveColumnsOpen);
+  const setLiveColumnsOpen = useUIStore((s) => s.setLiveColumnsOpen);
+  return (view) => {
+    // The grid's flag and the URL change in the same click (see PageButton).
+    if (gridOpen) setLiveColumnsOpen(false);
+    if (view !== 'threads') navigate(buildPath(LEFT_VIEW_ROUTES[view]));
+    else if (fillsWindow || gridOpen) navigate(buildPath(pathBehindGrid()));
+    else navigate(withLeftView(`${pathname}${search}`, null));
+  };
 }
 
 /**
- * Shows one view in the left sidebar: the thread list, the kanban board or
- * the factory queue. Pressing the active board or queue goes back to the
- * thread list. The board and the queue open alone, filling the window with no
- * thread; opening a thread from them moves them into the sidebar beside it.
- * The thread list keeps the thread in the center, except when leaving the
- * grid, which goes back to the thread that was open before it.
+ * Shows one view on the left: the thread list, the kanban board or the factory
+ * queue. Pressing the active board or queue goes back to the thread list. The
+ * board and the queue open alone, filling the window with no thread; a thread
+ * opened from them shows them in the sidebar beside it.
  */
 function LeftViewButton({
   view,
@@ -291,14 +297,11 @@ function LeftViewButton({
   onShowSidebar?: () => void;
 }) {
   const { t } = useTranslation();
-  const navigate = useStableNavigate();
-  const gridOpen = useUIStore((s) => s.liveColumnsOpen);
+  const showLeftView = useShowLeftView();
+  const current = useLeftView().view;
   // The views are one choice: while the grid is shown, none of these is lit.
-  const inboxOpen = useUIStore((s) => s.automationInboxOpen);
-  const active = useUIStore(
-    (s) => !s.liveColumnsOpen && !s.automationInboxOpen && s.leftPanelMode === view.mode,
-  );
-  const setLeftPanelMode = useUIStore((s) => s.setLeftPanelMode);
+  const gridOpen = useUIStore((s) => s.liveColumnsOpen);
+  const active = !gridOpen && current === view.mode;
   const label = t(view.labelKey, view.labelFallback);
   const Icon = view.icon;
   return (
@@ -307,11 +310,9 @@ function LeftViewButton({
       testId={`tool-rail-${view.mode}`}
       ariaLabel={label}
       onClick={() => {
-        const closing = active && view.mode !== 'threads';
-        const nextMode = closing ? 'threads' : view.mode;
-        setLeftPanelMode(nextMode);
-        leaveOtherViewsFor(nextMode, { grid: gridOpen, inbox: inboxOpen }, navigate);
-        if (!closing) onShowSidebar?.();
+        if (active && view.mode === 'threads') return;
+        showLeftView(active ? 'threads' : view.mode);
+        if (!active) onShowSidebar?.();
       }}
       label={label}
     >
@@ -321,32 +322,24 @@ function LeftViewButton({
 }
 
 /**
- * Opens the automation inbox, which fills the window beside the rail. Opening
- * a thread from it moves the inbox into the left sidebar, as a column beside
- * the thread (like the factory queue). Pressing the button while the inbox
- * shows closes it: back to the thread open before, with the thread list. The badge counts the pending runs; the
- * app shell polls them (`useAutomationInboxPolling`).
+ * Opens the automation inbox, which fills the window beside the rail. A thread
+ * opened from it shows the inbox as a column beside the thread (like the
+ * factory queue). Pressing the button while the inbox shows closes it: back to
+ * the thread list. The badge counts the pending runs; the app shell polls them
+ * (`useAutomationInboxPolling`).
  */
 function InboxButton() {
   const { t } = useTranslation();
-  const navigate = useStableNavigate();
-  const fullWindow = useUIStore((s) => s.automationInboxOpen);
-  const inSidebar = useUIStore((s) => s.leftPanelMode === 'inbox');
-  const setLeftPanelMode = useUIStore((s) => s.setLeftPanelMode);
+  const showLeftView = useShowLeftView();
+  const active = useLeftView().view === 'inbox';
   const { pendingCount } = useAutomationInbox();
   const label = t('automationInbox.title', 'Automation Inbox');
   return (
     <RailButton
-      active={fullWindow || inSidebar}
+      active={active}
       testId="tool-rail-inbox"
       ariaLabel={label}
-      onClick={() => {
-        // Pressing it while the inbox shows (full window or beside a thread)
-        // closes it and brings the thread list back.
-        if (inSidebar) setLeftPanelMode('threads');
-        if (fullWindow) navigate(buildPath(pathBehindGrid()));
-        else if (!inSidebar) navigate(buildPath('/inbox'));
-      }}
+      onClick={() => showLeftView(active ? 'threads' : 'inbox')}
       label={label}
     >
       <Inbox className="icon-base" />
@@ -401,7 +394,6 @@ function PageButton({ page }: { page: RailPage }) {
   const { t } = useTranslation();
   const navigate = useStableNavigate();
   const active = useUIStore((s) => (page.id === 'grid' ? s.liveColumnsOpen : s.analyticsOpen));
-  const setLeftPanelMode = useUIStore((s) => s.setLeftPanelMode);
   const setLiveColumnsOpen = useUIStore((s) => s.setLiveColumnsOpen);
   const label = t(page.labelKey, page.labelFallback);
   const Icon = page.icon;
@@ -413,8 +405,7 @@ function PageButton({ page }: { page: RailPage }) {
       onClick={() => {
         if (page.id === 'grid') {
           if (active) return;
-          // The grid is its own view, with the thread list beside it.
-          setLeftPanelMode('threads');
+          // The grid is its own view, with the thread list beside it (`/grid` names no left view).
           setLiveColumnsOpen(true);
         }
         navigate(buildPath(active ? '/' : page.path));

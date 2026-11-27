@@ -36,6 +36,8 @@ export interface GoToThreadOptions {
    * thread). Navigation still happens.
    */
   skipSelect?: boolean;
+  /** Changes the thread's path before navigating (a left view keeps itself beside the thread). */
+  mapPath?: (path: string) => string;
 }
 
 /**
@@ -76,10 +78,12 @@ export function goToThread(
 
   // Keep the bare `navigate(path)` form when not replacing so the call is
   // identical to the pre-facade call sites (no behavior drift).
+  const path = buildThreadPath(thread);
+  const target = opts.mapPath ? opts.mapPath(path) : path;
   if (opts.replace) {
-    navigate(buildThreadPath(thread), { replace: true });
+    navigate(target, { replace: true });
   } else {
-    navigate(buildThreadPath(thread));
+    navigate(target);
   }
 }
 

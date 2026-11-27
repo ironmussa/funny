@@ -7,8 +7,8 @@
 import { beforeEach, describe, expect, test, mock } from 'bun:test';
 
 import type { Thread } from '@funny/shared';
-import { act, fireEvent, screen } from '@testing-library/react';
-import { useLocation } from 'react-router-dom';
+import { fireEvent, screen } from '@testing-library/react';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 mock.module('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en' } }),
@@ -101,49 +101,69 @@ describe('ToolRail', () => {
     expect(screen.getByTestId('tool-rail-threads')).toBeEnabled();
   });
 
-  test('the factory button swaps the left sidebar to the factory and back', () => {
-    seedThread({});
-    useUIStore.setState({ leftPanelMode: 'threads' });
-    renderWithProviders(<ToolRail />, { threadId: 't1' });
-    const button = screen.getByTestId('tool-rail-factory');
+  for (const view of ['factory', 'kanban'] as const) {
+    test(`with the ${view} view beside a thread, its button brings the thread list back`, () => {
+      seedThread({});
+      renderWithProviders(
+        <>
+          <ToolRail />
+          <LocationProbe />
+        </>,
+        { threadId: 't1', route: `/projects/p1/threads/t1?left=${view}&panel=files` },
+      );
+      const button = screen.getByTestId(`tool-rail-${view}`);
+      expect(button).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.getByTestId('tool-rail-threads')).toHaveAttribute('aria-pressed', 'false');
 
-    fireEvent.click(button);
-    expect(useUIStore.getState().leftPanelMode).toBe('factory');
-    expect(button).toHaveAttribute('aria-pressed', 'true');
-    // The thread in the center is not touched.
-    expect(useThreadStore.getState().activeThread?.id).toBe('t1');
-
-    fireEvent.click(button);
-    expect(useUIStore.getState().leftPanelMode).toBe('threads');
-  });
-
-  test('the kanban button shows the board in the left sidebar and back', () => {
-    seedThread({});
-    useUIStore.setState({ leftPanelMode: 'threads' });
-    renderWithProviders(<ToolRail />, { threadId: 't1' });
-    const kanban = screen.getByTestId('tool-rail-kanban');
-
-    fireEvent.click(kanban);
-    expect(useUIStore.getState().leftPanelMode).toBe('kanban');
-    expect(kanban).toHaveAttribute('aria-pressed', 'true');
-    expect(useThreadStore.getState().activeThread?.id).toBe('t1');
-
-    fireEvent.click(kanban);
-    expect(useUIStore.getState().leftPanelMode).toBe('threads');
-  });
+      fireEvent.click(button);
+      // The thread stays open; only the left view leaves the URL.
+      expect(screen.getByTestId('location')).toHaveTextContent(
+        '/projects/p1/threads/t1?panel=files',
+      );
+      expect(screen.getByTestId('tool-rail-threads')).toHaveAttribute('aria-pressed', 'true');
+    });
+  }
 
   test('the threads button brings the thread list back from another view', () => {
     seedThread({});
-    useUIStore.setState({ leftPanelMode: 'factory' });
-    renderWithProviders(<ToolRail />, { threadId: 't1' });
+    renderWithProviders(
+      <>
+        <ToolRail />
+        <LocationProbe />
+      </>,
+      { threadId: 't1', route: '/projects/p1/threads/t1?left=factory' },
+    );
     const threads = screen.getByTestId('tool-rail-threads');
     expect(threads).toHaveAttribute('aria-pressed', 'false');
 
     fireEvent.click(threads);
-    expect(useUIStore.getState().leftPanelMode).toBe('threads');
+    expect(screen.getByTestId('location')).toHaveTextContent('/projects/p1/threads/t1');
+    expect(threads).toHaveAttribute('aria-pressed', 'true');
     // Pressing it again keeps the thread list: it is the sidebar's home view.
     fireEvent.click(threads);
-    expect(useUIStore.getState().leftPanelMode).toBe('threads');
+    expect(screen.getByTestId('location')).toHaveTextContent('/projects/p1/threads/t1');
+  });
+
+  // Regression: the view used to be a stored mode, so going back from
+  // `/factory` to a thread left the queue open beside it.
+  test('a thread URL with no left view shows the thread list, whatever was open before', () => {
+    seedThread({});
+    renderWithProviders(
+      <>
+        <ToolRail />
+        <LocationProbe />
+        <BackButton />
+      </>,
+      { threadId: 't1', route: '/projects/p1/threads/t1' },
+    );
+    fireEvent.click(screen.getByTestId('tool-rail-factory'));
+    expect(screen.getByTestId('location')).toHaveTextContent('/factory');
+    expect(screen.getByTestId('tool-rail-factory')).toHaveAttribute('aria-pressed', 'true');
+
+    fireEvent.click(screen.getByTestId('go-back'));
+    expect(screen.getByTestId('location')).toHaveTextContent('/projects/p1/threads/t1');
+    expect(screen.getByTestId('tool-rail-factory')).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByTestId('tool-rail-threads')).toHaveAttribute('aria-pressed', 'true');
   });
 
   test('under a full-screen view the panel tools stay, disabled', () => {
@@ -169,7 +189,7 @@ describe('ToolRail', () => {
 
   test('the grid is its own view: no other view button stays lit', () => {
     seedThread({});
-    useUIStore.setState({ leftPanelMode: 'threads', liveColumnsOpen: true });
+    useUIStore.setState({ liveColumnsOpen: true });
     renderWithProviders(<ToolRail />, { threadId: 't1' });
     expect(screen.getByTestId('tool-rail-grid')).toHaveAttribute('aria-pressed', 'true');
     for (const id of ['threads', 'kanban', 'factory']) {
@@ -179,25 +199,23 @@ describe('ToolRail', () => {
 
   test('opening the grid sets its flag in the same click as its URL', () => {
     seedThread({});
-    useUIStore.setState({ leftPanelMode: 'factory' });
     renderWithProviders(
       <>
         <ToolRail />
         <LocationProbe />
       </>,
-      { threadId: 't1', route: '/projects/p1/threads/t1' },
+      { threadId: 't1', route: '/projects/p1/threads/t1?left=factory' },
     );
 
     fireEvent.click(screen.getByTestId('tool-rail-grid'));
     expect(screen.getByTestId('location')).toHaveTextContent('/grid');
     // No render where the URL is the grid's and the flag is still closed.
     expect(useUIStore.getState().liveColumnsOpen).toBe(true);
-    expect(useUIStore.getState().leftPanelMode).toBe('threads');
   });
 
   test('pressing the grid while it is shown does nothing', () => {
     seedThread({});
-    useUIStore.setState({ leftPanelMode: 'threads', liveColumnsOpen: true });
+    useUIStore.setState({ liveColumnsOpen: true });
     renderWithProviders(
       <>
         <ToolRail />
@@ -214,7 +232,7 @@ describe('ToolRail', () => {
   test('leaving the grid for the thread list goes back to the thread open before it', () => {
     seedThread({});
     useThreadHistoryStore.setState({ past: [{ threadId: 't1', projectId: 'p1' }], future: [] });
-    useUIStore.setState({ leftPanelMode: 'threads', liveColumnsOpen: true });
+    useUIStore.setState({ liveColumnsOpen: true });
     renderWithProviders(
       <>
         <ToolRail />
@@ -226,7 +244,6 @@ describe('ToolRail', () => {
     fireEvent.click(screen.getByTestId('tool-rail-threads'));
     expect(screen.getByTestId('location')).toHaveTextContent('/projects/p1/threads/t1');
     expect(useUIStore.getState().liveColumnsOpen).toBe(false);
-    expect(useUIStore.getState().leftPanelMode).toBe('threads');
   });
 
   test('the inbox button opens the inbox and goes back to the thread open before it', () => {
@@ -243,7 +260,6 @@ describe('ToolRail', () => {
     fireEvent.click(screen.getByTestId('tool-rail-inbox'));
     expect(screen.getByTestId('location')).toHaveTextContent('/inbox');
 
-    act(() => useUIStore.setState({ automationInboxOpen: true }));
     expect(screen.getByTestId('tool-rail-inbox')).toHaveAttribute('aria-pressed', 'true');
     // The inbox takes the sidebar's place: no sidebar view is lit.
     expect(screen.getByTestId('tool-rail-threads')).toHaveAttribute('aria-pressed', 'false');
@@ -254,19 +270,18 @@ describe('ToolRail', () => {
 
   test('with the inbox beside a thread, the inbox button brings the thread list back', () => {
     seedThread({});
-    useUIStore.setState({ leftPanelMode: 'inbox' });
     renderWithProviders(
       <>
         <ToolRail />
         <LocationProbe />
       </>,
-      { threadId: 't1', route: '/projects/p1/threads/t1' },
+      { threadId: 't1', route: '/projects/p1/threads/t1?left=inbox' },
     );
 
     const inbox = screen.getByTestId('tool-rail-inbox');
     expect(inbox).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(inbox);
-    expect(useUIStore.getState().leftPanelMode).toBe('threads');
+    expect(inbox).toHaveAttribute('aria-pressed', 'false');
     // The thread stays open in the center.
     expect(screen.getByTestId('location')).toHaveTextContent('/projects/p1/threads/t1');
   });
@@ -274,7 +289,7 @@ describe('ToolRail', () => {
   test('choosing a sidebar view while the inbox is open leaves the inbox', () => {
     seedThread({});
     useThreadHistoryStore.setState({ past: [{ threadId: 't1', projectId: 'p1' }], future: [] });
-    useUIStore.setState({ automationInboxOpen: true, leftPanelMode: 'threads' });
+    useUIStore.setState({ automationInboxOpen: true });
     renderWithProviders(
       <>
         <ToolRail />
@@ -285,13 +300,12 @@ describe('ToolRail', () => {
 
     fireEvent.click(screen.getByTestId('tool-rail-threads'));
     expect(screen.getByTestId('location')).toHaveTextContent('/projects/p1/threads/t1');
-    expect(useUIStore.getState().leftPanelMode).toBe('threads');
   });
 
   for (const mode of ['factory', 'kanban'] as const) {
-    test(`entering the ${mode} view shows it alone, with no thread in the center`, () => {
+    test(`entering the ${mode} view shows it alone, on its own URL`, () => {
       seedThread({});
-      useUIStore.setState({ leftPanelMode: 'threads', leftViewFillsWindow: false });
+      useThreadHistoryStore.setState({ past: [{ threadId: 't1', projectId: 'p1' }], future: [] });
       renderWithProviders(
         <>
           <ToolRail />
@@ -301,19 +315,27 @@ describe('ToolRail', () => {
       );
 
       fireEvent.click(screen.getByTestId(`tool-rail-${mode}`));
-      expect(useUIStore.getState().leftPanelMode).toBe(mode);
-      expect(useUIStore.getState().leftViewFillsWindow).toBe(true);
-      expect(screen.getByTestId('location')).toHaveTextContent(/^\/$/);
+      // The view has its own URL, so a reload or a shared link opens it again.
+      expect(screen.getByTestId('location')).toHaveTextContent(`/${mode}`);
+      expect(screen.getByTestId(`tool-rail-${mode}`)).toHaveAttribute('aria-pressed', 'true');
 
-      // Pressing it again goes back to the thread list, which does not fill the window.
+      // Pressing it again goes back to the thread that was open before.
       fireEvent.click(screen.getByTestId(`tool-rail-${mode}`));
-      expect(useUIStore.getState().leftPanelMode).toBe('threads');
-      expect(useUIStore.getState().leftViewFillsWindow).toBe(false);
+      expect(screen.getByTestId('location')).toHaveTextContent('/projects/p1/threads/t1');
     });
   }
 });
 
 function LocationProbe() {
-  const { pathname } = useLocation();
-  return <span data-testid="location">{pathname}</span>;
+  const { pathname, search } = useLocation();
+  return <span data-testid="location">{pathname + search}</span>;
+}
+
+function BackButton() {
+  const navigate = useNavigate();
+  return (
+    <button type="button" data-testid="go-back" onClick={() => navigate(-1)}>
+      back
+    </button>
+  );
 }

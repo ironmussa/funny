@@ -19,6 +19,7 @@ import { loadInbox } from '@/data/automations/loaders';
 import { useProjects } from '@/data/projects/hooks';
 import { parseRoute } from '@/hooks/route-parser';
 import { useActiveThreadId } from '@/hooks/use-active-thread-id';
+import { useLeftViewPath } from '@/hooks/use-left-view';
 import { buildPath } from '@/lib/url';
 import { goToThread } from '@/navigation/go-to-thread';
 
@@ -31,13 +32,9 @@ const ALL_PROJECTS = '__all__';
 /** Query param of `/inbox/automations` naming the project shown; absent = all projects. */
 const MANAGE_PROJECT_PARAM = 'project';
 
-export function AutomationInboxView({
-  onBeforeOpenThread,
-}: {
-  /** Runs before a thread opens: the full-window inbox moves itself into the
-   *  left sidebar, so it stays beside the thread. */
-  onBeforeOpenThread?: () => void;
-} = {}) {
+export function AutomationInboxView() {
+  // A thread opened from the inbox keeps the inbox beside it (`?left=inbox`).
+  const besideInbox = useLeftViewPath();
   const { t } = useTranslation();
   const activeThreadId = useActiveThreadId();
   const navigate = useNavigate();
@@ -179,10 +176,7 @@ export function AutomationInboxView({
           // Only navigate: the route sync closes the inbox in the same render
           // as the URL change. Closing it first showed the new-thread input
           // for a frame, since the URL (still /inbox) had no thread yet.
-          onOpen={(thread) => {
-            onBeforeOpenThread?.();
-            goToThread(navigate, thread);
-          }}
+          onOpen={(thread) => goToThread(navigate, thread, { mapPath: besideInbox })}
         />
       </div>
     </div>

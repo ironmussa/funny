@@ -7,6 +7,7 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 
 import { seedAutomations } from '@/data/automations/testing';
 import { buildProject, seedProjects } from '@/data/projects/testing';
+import { LeftViewScope } from '@/hooks/use-left-view';
 import { setActiveOrgSlug } from '@/lib/url-state';
 import { useProjectStore } from '@/stores/project-store';
 import { useUIStore } from '@/stores/ui-store';
@@ -54,7 +55,7 @@ function LocationProbe() {
   return <div data-testid="location">{location.pathname + location.search}</div>;
 }
 
-function renderAt(path: string, onBeforeOpenThread?: () => void) {
+function renderAt(path: string, scope: 'inbox' | null = null) {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <Routes>
@@ -62,7 +63,9 @@ function renderAt(path: string, onBeforeOpenThread?: () => void) {
           path="*"
           element={
             <>
-              <AutomationInboxView onBeforeOpenThread={onBeforeOpenThread} />
+              <LeftViewScope value={scope}>
+                <AutomationInboxView />
+              </LeftViewScope>
               <LocationProbe />
             </>
           }
@@ -241,13 +244,11 @@ describe('AutomationInboxView — run list', () => {
     expect(useUIStore.getState().automationInboxOpen).toBe(true);
   });
 
-  test('opening a run tells the full-window inbox first, so it can move beside the thread', () => {
-    const calls: string[] = [];
-    renderAt('/inbox', () => calls.push(window.location.pathname));
+  test('a run opened from the inbox as a left view keeps the inbox beside the thread', () => {
+    renderAt('/inbox', 'inbox');
     fireEvent.click(screen.getByTestId('inbox-row-open-run-1'));
-    expect(calls).toHaveLength(1);
     expect(screen.getByTestId('location').textContent).toBe(
-      '/projects/proj-1/threads/thread-run-1',
+      '/projects/proj-1/threads/thread-run-1?left=inbox',
     );
   });
 

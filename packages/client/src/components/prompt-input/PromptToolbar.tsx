@@ -29,8 +29,6 @@ export interface PromptToolbarProps {
   mode: string;
   onModeChange: (v: string) => void;
   modes: { value: string; label: string }[];
-  /** Show the project's execution profile (new threads only). */
-  showAgentProfile: boolean;
   // Backlog
   showBacklog: boolean;
   sendToBacklog: boolean;
@@ -75,12 +73,11 @@ export function PromptToolbar(props: PromptToolbarProps) {
               templates={props.templates}
             />
           )}
-          {props.showAgentProfile && (
-            <AgentProfileIndicator
-              projectId={props.projectId}
-              provider={parseUnifiedModel(props.unifiedModel).provider}
-            />
-          )}
+          {/* The runner applies the project's profile on every start, follow-ups included. */}
+          <AgentProfileIndicator
+            projectId={props.projectId}
+            provider={parseUnifiedModel(props.unifiedModel).provider}
+          />
           <ModeSelect value={props.mode} onChange={props.onModeChange} modes={props.modes} />
           {props.showBacklog && (
             <BacklogToggle

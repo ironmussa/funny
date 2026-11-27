@@ -59,7 +59,6 @@ describe('ModelSelect', () => {
         mode="autoEdit"
         onModeChange={vi.fn()}
         modes={[{ value: 'autoEdit', label: 'Auto Edit' }]}
-        showAgentProfile={false}
         showBacklog={true}
         sendToBacklog={false}
         onAttach={vi.fn()}

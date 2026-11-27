@@ -11,8 +11,8 @@ interface Props {
 }
 
 /**
- * Read-only label with the execution profile bound to the project, the one a
- * new thread will run with. Hidden when no profile is bound or it targets
+ * Read-only label with the execution profile bound to the project, the one the
+ * next message (new thread or follow-up) will run with. Hidden when no profile is bound or it targets
  * another provider (the runner's default login applies then).
  */
 export function AgentProfileIndicator({ projectId, provider }: Props) {

@@ -473,7 +473,6 @@ export const PromptInputUI = memo(function PromptInputUI(rawProps: PromptInputUI
           mode={mode}
           onModeChange={onModeChange}
           modes={modes}
-          showAgentProfile={isNewThread}
           showBacklog={visible.backlog}
           sendToBacklog={props.sendToBacklog}
           onSendToBacklogChange={props.onSendToBacklogChange}

@@ -48,7 +48,7 @@ function buildPRBody(setup: FactoryFlowSetupRow): string {
   return lines.join('\n');
 }
 
-export async function settleCommittingSetupOp(
+async function settleCommittingSetupOp(
   ctx: SetupServiceContext,
   setup: FactoryFlowSetupRow,
 ): Promise<FactoryFlowSetupRow | null> {

@@ -188,6 +188,7 @@ describe('split shared entry points keep their exports', () => {
       'factoryApprovalRequests',
       'factoryBatchAttempts',
       'factoryBatches',
+      'factoryFlowSetups',
       'factoryIncidents',
       'factoryLanes',
       'factoryRuns',

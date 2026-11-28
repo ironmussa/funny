@@ -2762,6 +2762,17 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    // Every foreign key is indexed: a thread's terminal status looks its setup
+    // up by `thread_id`, and deleting a thread sets it to null.
+    name: '148_factory_flow_setups_thread_index',
+    async up() {
+      await ctx().exec(sql`
+        CREATE INDEX IF NOT EXISTS factory_flow_setups_thread
+        ON factory_flow_setups (thread_id)
+      `);
+    },
+  },
 ];
 
 /**

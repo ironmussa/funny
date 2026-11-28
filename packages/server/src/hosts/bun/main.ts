@@ -387,10 +387,13 @@ async function startIssueFactory(
   const { createFactoryGithub } = await import('../../services/factory/factory-github.js');
   const { factorySandboxLauncher } =
     await import('../../services/factory/factory-sandbox-launch.js');
+  const { reconcileFactoryFlowSetups } =
+    await import('../../services/factory/factory-flow-setup-live.js');
   await startFactoryWatcher({
     ports,
     github: createFactoryGithub(ports),
     launchSandbox: factorySandboxLauncher(ports, browserEvents),
     browserEvents,
+    reconcileFlowSetups: reconcileFactoryFlowSetups,
   });
 }

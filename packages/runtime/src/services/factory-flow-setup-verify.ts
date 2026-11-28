@@ -44,7 +44,7 @@ import {
 
 const ns = 'factory-flow-setup-verify';
 
-export const DEFAULT_VERIFY_TIMEOUT_MS = 30 * 60 * 1000;
+const DEFAULT_VERIFY_TIMEOUT_MS = 30 * 60 * 1000;
 const MAX_OUTPUT_BYTES = 20 * 1024 * 1024;
 const OUTPUT_TAIL = 4000;
 const MAX_EXISTING_CANDIDATES = 3;

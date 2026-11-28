@@ -47,8 +47,6 @@ export type {
   FlowSetupActor,
   FlowSetupError,
   FlowSetupRepoReader,
-  StoredSetupPromptFile,
-  StoredSetupVerdicts,
 } from './factory-flow-setup-types.js';
 
 const ns = 'factory-flow-setup';

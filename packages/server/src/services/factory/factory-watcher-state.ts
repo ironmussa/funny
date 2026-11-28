@@ -65,6 +65,12 @@ export interface FactoryWatcherDeps {
   github: FactoryGithubPort;
   runs?: ReturnType<typeof createFactoryRunsRepository>;
   createPoll?: CreatePoll;
+  /**
+   * Settles in-flight guided flow setups (`factory-flow-setup-live.ts`), on start
+   * and on the watcher's timer. Injected so the watcher does not import the
+   * setup service, which reads the watcher's ports.
+   */
+  reconcileFlowSetups?: () => Promise<void>;
   /** Launcher override for tests. */
   launch?: typeof startThreadOnRunner;
   /** Access check override for tests; defaults to `steer` via the server's role resolver. */

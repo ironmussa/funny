@@ -46,7 +46,6 @@ import {
 } from '../workflow-engine/lease-store.js';
 import { integrateEarly, integrateStacked } from './factory-early-watch.js';
 import { createFactoryFlowRuns } from './factory-flow-runs.js';
-import { reconcileFactoryFlowSetups } from './factory-flow-setup-live.js';
 import { type FactoryGithubPort } from './factory-github.js';
 import { createFactoryIncidentsRepository } from './factory-incidents.js';
 import { checkLaneConflicts } from './factory-lane-conflicts.js';
@@ -205,8 +204,9 @@ export async function startFactoryWatcher(d: FactoryWatcherDeps): Promise<void> 
   setFactorySpecHost(createSpecHost(d, repository, (factory) => checkFactoryTarget(factory)));
   for (const factory of await listWatchedFactories([...IN_FLIGHT_STATES])) schedule(factory);
   // Reconcile any in-flight factory flow setups on server start and periodically.
-  if (!d.createPoll) {
-    void reconcileFactoryFlowSetups().catch((cause: unknown) =>
+  const reconcileFlowSetups = d.reconcileFlowSetups;
+  if (!d.createPoll && reconcileFlowSetups) {
+    void reconcileFlowSetups().catch((cause: unknown) =>
       log.warn('Initial factory flow setup reconciliation failed', {
         namespace: 'factory',
         error: errorMessage(cause),
@@ -214,7 +214,7 @@ export async function startFactoryWatcher(d: FactoryWatcherDeps): Promise<void> 
     );
     const setupJob = startIntervalPoll(async () => {
       try {
-        await reconcileFactoryFlowSetups();
+        await reconcileFlowSetups();
       } catch (cause: unknown) {
         log.warn('Periodic factory flow setup reconciliation failed', {
           namespace: 'factory',

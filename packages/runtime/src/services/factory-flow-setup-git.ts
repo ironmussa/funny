@@ -92,7 +92,7 @@ export function sha256Hex(content: string): string {
  * Validates that a setup file path is strictly relative, normalized, and lives
  * under `.funny/`.
  */
-export function isSafeSetupFilePath(relPath: string): boolean {
+function isSafeSetupFilePath(relPath: string): boolean {
   if (!relPath || relPath.startsWith('/') || relPath.startsWith('\\') || relPath.includes('\0')) {
     return false;
   }
@@ -123,11 +123,11 @@ const NON_FAST_FORWARD_PATTERNS = [
   /tip of your current branch is behind/i,
 ];
 
-export function isBranchRuleRejection(output: string): boolean {
+function isBranchRuleRejection(output: string): boolean {
   return BRANCH_RULE_PATTERNS.some((re) => re.test(output));
 }
 
-export function isNonFastForwardRejection(output: string): boolean {
+function isNonFastForwardRejection(output: string): boolean {
   if (isBranchRuleRejection(output)) return false;
   return NON_FAST_FORWARD_PATTERNS.some((re) => re.test(output));
 }
@@ -136,7 +136,7 @@ export function isNonFastForwardRejection(output: string): boolean {
  * Extracts the human-readable `remote:` lines from git push stderr when
  * available, falling back to the trimmed stderr/stdout.
  */
-export function extractGitPushMessage(stderr: string, stdout: string): string {
+function extractGitPushMessage(stderr: string, stdout: string): string {
   const combined = [stderr, stdout].filter(Boolean).join('\n');
   const remoteLines = combined
     .split(/\r?\n/)

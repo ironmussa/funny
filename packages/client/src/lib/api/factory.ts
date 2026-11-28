@@ -14,11 +14,8 @@ import { trpc, trpcCall } from './_trpc';
 export type {
   FactoryFlowAgentStep,
   FactoryFlowProblem,
-  FactoryFlowSetupFacts,
   FactoryFlowSetupRuleCheckRun,
   FactoryFlowSetupRuleVerdict,
-  FactoryFlowSetupState,
-  FactoryFlowSetupVerdicts,
   FactoryFlowSetupView,
   FactoryFlowValidation,
   FactoryIssuelessFlow,

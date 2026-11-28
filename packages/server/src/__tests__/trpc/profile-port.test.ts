@@ -127,9 +127,9 @@ describe('profile router: utility model and thread recap', () => {
     expect(
       await postUpdate('alice', { utilityModel: { provider: 'openai-compatible', model: 'm' } }),
     ).toBe(400);
-    expect(await postUpdate('alice', { utilityModel: { provider: 'gemini', model: 'x' } })).toBe(
-      400,
-    );
+    expect(
+      await postUpdate('alice', { utilityModel: { provider: 'not-a-provider', model: 'x' } }),
+    ).toBe(400);
     await expect(
       caller().profile.update({
         utilityModel: { provider: 'openai-compatible', model: 'm' },
@@ -145,7 +145,7 @@ describe('profile router: utility model and thread recap', () => {
   test('a stored value the schema refuses reads as the default', async () => {
     await caller().profile.update({ gitName: 'Alice' });
     db.run(
-      `UPDATE user_profiles SET utility_model = '{"provider":"gemini","model":"x"}' WHERE user_id = 'alice'`,
+      `UPDATE user_profiles SET utility_model = '{"provider":"not-a-provider","model":"x"}' WHERE user_id = 'alice'`,
     );
     expect((await caller().profile.get()).utilityModel).toBeNull();
   });

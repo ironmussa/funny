@@ -70,7 +70,7 @@ export function toFlowSetupView(row: FactoryFlowSetupRow): FactoryFlowSetupView 
   };
 }
 
-export function flowSetupFailure(error: FlowSetupError): ApiFailure {
+function flowSetupFailure(error: FlowSetupError): ApiFailure {
   return {
     status: error.status,
     message: error.message,

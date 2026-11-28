@@ -135,49 +135,37 @@ function RecapAbsenceSetting({ minutes, disabled }: { minutes: number; disabled:
   );
 }
 
-function UtilityModelForm({ setting }: { setting: UtilityModelSetting | null }) {
-  const { t } = useTranslation();
+/** The setting the form would save, from what the member picked. */
+function buildDraft(
+  provider: UtilityProvider,
+  model: string,
+  effort: string,
+  baseURL: string,
+): UtilityModelSetting {
+  const draft: UtilityModelSetting = { provider, model: model.trim() };
+  if (effort) {
+    // SAFETY: effort comes from normalizeEffort / getEffortLevels, which only yields EffortLevel values.
+    draft.effort = effort as EffortLevel;
+  }
+  const trimmedBaseUrl = baseURL.trim();
+  if (supportsBaseUrl(provider) && trimmedBaseUrl) draft.baseURL = trimmedBaseUrl;
+  return draft;
+}
+
+/** The form's state: provider, model, effort and base URL, and how a provider change resets them. */
+function useUtilityModelDraft(setting: UtilityModelSetting | null) {
   const initial = resolveUtilityModel(setting);
-  const initialProvider = normalizeProvider(initial.provider);
-  const [provider, setProvider] = useState<UtilityProvider>(initialProvider);
+  const [provider, setProvider] = useState<UtilityProvider>(normalizeProvider(initial.provider));
   const [model, setModel] = useState(initial.model);
   const [effort, setEffort] = useState<string>(initial.effort ?? '');
   const [baseURL, setBaseURL] = useState(initial.baseURL ?? '');
-  const [saving, setSaving] = useState(false);
 
   const agentProvider = isAgentProvider(provider) ? provider : null;
-  const rawModelOptions = useProviderModelOptions(agentProvider ?? 'claude');
-  const modelOptions =
-    agentProvider && model && !rawModelOptions.some((o) => o.value === model)
-      ? [{ value: model, label: model }, ...rawModelOptions]
-      : rawModelOptions;
-
   const effortOptions = agentProvider ? getEffortLevels(model, agentProvider) : [];
   const currentEffort = agentProvider ? normalizeEffort(model, agentProvider, effort) : '';
+  const draft = buildDraft(provider, model, effortOptions.length > 0 ? currentEffort : '', baseURL);
 
-  const providerOptions = [
-    ...PROVIDERS.map((p) => ({ value: p.value, label: p.label })),
-    ...DIRECT_LLM_PROVIDERS.map((id) => ({
-      value: id,
-      label: t(`settings.utilityModelProviders.${id}`),
-    })),
-  ];
-
-  const draft: UtilityModelSetting = {
-    provider,
-    model: model.trim(),
-  };
-  if (effortOptions.length > 0 && currentEffort) {
-    // SAFETY: currentEffort comes from normalizeEffort / getEffortLevels, which only yields EffortLevel values.
-    draft.effort = currentEffort as EffortLevel;
-  }
-  if (supportsBaseUrl(provider)) {
-    const trimmedBaseUrl = baseURL.trim();
-    if (trimmedBaseUrl) draft.baseURL = trimmedBaseUrl;
-  }
-  const parsed = UtilityModelSetting.safeParse(draft);
-
-  const handleProviderChange = (nextRaw: string) => {
+  const changeProvider = (nextRaw: string) => {
     // SAFETY: options are built from PROVIDERS and DIRECT_LLM_PROVIDERS, all of which are UtilityProvider.
     const next = nextRaw as UtilityProvider;
     setProvider(next);
@@ -185,18 +173,140 @@ function UtilityModelForm({ setting }: { setting: UtilityModelSetting | null }) 
       const nextModel = getDefaultModel(next);
       setModel(nextModel);
       setEffort(normalizeEffort(nextModel, next, effort));
-    } else {
-      if (isAgentProvider(provider)) setModel('');
-      setEffort('');
+      return;
     }
+    if (agentProvider) setModel('');
+    setEffort('');
   };
 
-  const handleModelChange = (nextModel: string) => {
+  const changeModel = (nextModel: string) => {
     setModel(nextModel);
-    if (agentProvider) {
-      setEffort(normalizeEffort(nextModel, agentProvider, effort));
-    }
+    if (agentProvider) setEffort(normalizeEffort(nextModel, agentProvider, effort));
   };
+
+  return {
+    provider,
+    model,
+    baseURL,
+    agentProvider,
+    effortOptions,
+    currentEffort,
+    parsed: UtilityModelSetting.safeParse(draft),
+    changeProvider,
+    changeModel,
+    setModel,
+    setEffort,
+    setBaseURL,
+  };
+}
+
+type UtilityModelDraft = ReturnType<typeof useUtilityModelDraft>;
+
+function UtilityProviderRow({ form }: { form: UtilityModelDraft }) {
+  const { t } = useTranslation();
+  const rawModelOptions = useProviderModelOptions(form.agentProvider ?? 'claude');
+  // A saved model the provider no longer lists stays selectable.
+  const modelKnown = !form.model || rawModelOptions.some((o) => o.value === form.model);
+  const modelOptions = modelKnown
+    ? rawModelOptions
+    : [{ value: form.model, label: form.model }, ...rawModelOptions];
+  const providerOptions = [
+    ...PROVIDERS.map((p) => ({ value: p.value, label: p.label })),
+    ...DIRECT_LLM_PROVIDERS.map((id) => ({
+      value: id,
+      label: t(`settings.utilityModelProviders.${id}`),
+    })),
+  ];
+  return (
+    <SettingRow
+      settingId="models.utility-model-provider"
+      title={t('settings.utilityModelProvider')}
+      description={t('settings.utilityModelProviderDesc')}
+    >
+      <div className="flex items-center gap-2">
+        <ModelCombobox
+          value={form.provider}
+          onChange={form.changeProvider}
+          options={providerOptions}
+          placeholder={t('settings.selectProvider')}
+          searchPlaceholder={t('settings.searchProvider')}
+          testId="settings-utility-model-provider"
+        />
+        {form.agentProvider && (
+          <ModelCombobox
+            value={form.model}
+            onChange={form.changeModel}
+            options={modelOptions}
+            placeholder={t('settings.selectModel')}
+            searchPlaceholder={t('settings.searchModel')}
+            testId="settings-utility-model-select"
+          />
+        )}
+      </div>
+    </SettingRow>
+  );
+}
+
+/** The rows a provider needs besides its model: a typed name, a reasoning effort, a base URL. */
+function UtilityProviderDetailRows({ form }: { form: UtilityModelDraft }) {
+  const { t } = useTranslation();
+  return (
+    <>
+      {!form.agentProvider && (
+        <SettingRow
+          settingId="models.utility-model-name"
+          title={t('settings.utilityModelName')}
+          description={t('settings.utilityModelNameDesc')}
+        >
+          <Input
+            value={form.model}
+            onChange={(e) => form.setModel(e.target.value)}
+            className="w-[180px]"
+            data-testid="settings-utility-model-name"
+          />
+        </SettingRow>
+      )}
+      {form.effortOptions.length > 0 && (
+        <SettingRow
+          settingId="models.utility-model-effort"
+          title={t('settings.utilityModelEffort')}
+          description={t('settings.utilityModelEffortDesc')}
+        >
+          <SegmentedControl<string>
+            value={form.currentEffort}
+            onChange={form.setEffort}
+            options={form.effortOptions.map((level) => ({
+              value: level.value,
+              label: t(`settings.effort.${level.value}`, level.label),
+              testId: `settings-utility-model-effort-${level.value}`,
+            }))}
+          />
+        </SettingRow>
+      )}
+      {supportsBaseUrl(form.provider) && (
+        <SettingRow
+          settingId="models.utility-model-base-url"
+          title={t('settings.utilityModelBaseUrl')}
+          description={t('settings.utilityModelBaseUrlDesc')}
+        >
+          <Input
+            value={form.baseURL}
+            onChange={(e) => form.setBaseURL(e.target.value)}
+            placeholder="https://"
+            className="w-[240px]"
+            data-testid="settings-utility-model-base-url"
+          />
+        </SettingRow>
+      )}
+    </>
+  );
+}
+
+function UtilityModelForm({ setting }: { setting: UtilityModelSetting | null }) {
+  const { t } = useTranslation();
+  const form = useUtilityModelDraft(setting);
+  const [saving, setSaving] = useState(false);
+  const { parsed } = form;
 
   const save = async (value: UtilityModelSetting | null) => {
     setSaving(true);
@@ -206,78 +316,8 @@ function UtilityModelForm({ setting }: { setting: UtilityModelSetting | null }) 
 
   return (
     <>
-      <SettingRow
-        settingId="models.utility-model-provider"
-        title={t('settings.utilityModelProvider')}
-        description={t('settings.utilityModelProviderDesc')}
-      >
-        <div className="flex items-center gap-2">
-          <ModelCombobox
-            value={provider}
-            onChange={handleProviderChange}
-            options={providerOptions}
-            placeholder={t('settings.selectProvider')}
-            searchPlaceholder={t('settings.searchProvider')}
-            testId="settings-utility-model-provider"
-          />
-          {agentProvider && (
-            <ModelCombobox
-              value={model}
-              onChange={handleModelChange}
-              options={modelOptions}
-              placeholder={t('settings.selectModel')}
-              searchPlaceholder={t('settings.searchModel')}
-              testId="settings-utility-model-select"
-            />
-          )}
-        </div>
-      </SettingRow>
-      {!agentProvider && (
-        <SettingRow
-          settingId="models.utility-model-name"
-          title={t('settings.utilityModelName')}
-          description={t('settings.utilityModelNameDesc')}
-        >
-          <Input
-            value={model}
-            onChange={(e) => setModel(e.target.value)}
-            className="w-[180px]"
-            data-testid="settings-utility-model-name"
-          />
-        </SettingRow>
-      )}
-      {effortOptions.length > 0 && (
-        <SettingRow
-          settingId="models.utility-model-effort"
-          title={t('settings.utilityModelEffort')}
-          description={t('settings.utilityModelEffortDesc')}
-        >
-          <SegmentedControl<string>
-            value={currentEffort}
-            onChange={setEffort}
-            options={effortOptions.map((level) => ({
-              value: level.value,
-              label: t(`settings.effort.${level.value}`, level.label),
-              testId: `settings-utility-model-effort-${level.value}`,
-            }))}
-          />
-        </SettingRow>
-      )}
-      {supportsBaseUrl(provider) && (
-        <SettingRow
-          settingId="models.utility-model-base-url"
-          title={t('settings.utilityModelBaseUrl')}
-          description={t('settings.utilityModelBaseUrlDesc')}
-        >
-          <Input
-            value={baseURL}
-            onChange={(e) => setBaseURL(e.target.value)}
-            placeholder="https://"
-            className="w-[240px]"
-            data-testid="settings-utility-model-base-url"
-          />
-        </SettingRow>
-      )}
+      <UtilityProviderRow form={form} />
+      <UtilityProviderDetailRows form={form} />
       <div className="flex items-center justify-end gap-2 px-4 py-3">
         {!parsed.success && (
           <p className="text-muted-foreground mr-auto text-xs">

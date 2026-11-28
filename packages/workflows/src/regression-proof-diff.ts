@@ -52,71 +52,64 @@ function diffEntries(
   return changed;
 }
 
+/** Steps removed, added or (when nothing else changed before them) reordered. */
+function diffStepIds(
+  starting: ParsedWorkflow,
+  candidate: ParsedWorkflow,
+  earlierDiffs: number,
+): string[] {
+  const startingIds = starting.nodes.map((n) => n.id);
+  const candidateIds = candidate.nodes.map((n) => n.id);
+  const startingSet = new Set(startingIds);
+  const candidateSet = new Set(candidateIds);
+  const diffs = [
+    ...startingIds.filter((id) => !candidateSet.has(id)).map((id) => `step "${id}" was removed`),
+    ...candidateIds.filter((id) => !startingSet.has(id)).map((id) => `step "${id}" was added`),
+  ];
+  if (earlierDiffs + diffs.length === 0 && !isDeepStrictEqual(startingIds, candidateIds)) {
+    diffs.push('step order changed');
+  }
+  return diffs;
+}
+
+/** What changed on one step outside its `regression_proof` block. */
+function diffNode(startNode: ParsedNode, candNode: ParsedNode): string[] {
+  const id = startNode.id;
+  const startHasProof = startNode.regression_proof !== undefined;
+  const candHasProof = candNode.regression_proof !== undefined;
+  if (startHasProof && !candHasProof) return [`step "${id}" removed its regression_proof action`];
+  if (!startHasProof && candHasProof)
+    return [`step "${id}" changed its action to regression_proof`];
+  if (startHasProof) {
+    // Only `regression_proof` may differ on this node.
+    return diffEntries(
+      Object.entries(stripRegressionProof(startNode)),
+      Object.entries(stripRegressionProof(candNode)),
+    ).map((key) => `step "${id}" changed field "${key}" outside regression_proof`);
+  }
+  if (isDeepStrictEqual(startNode, candNode)) return [];
+  return diffEntries(Object.entries(startNode), Object.entries(candNode)).map(
+    (key) => `step "${id}" changed field "${key}"`,
+  );
+}
+
 function diffWorkflowsOutsideRegressionProof(
   starting: ParsedWorkflow,
   candidate: ParsedWorkflow,
 ): string[] {
-  const diffs: string[] = [];
-
-  // Compare all top-level keys except `nodes`.
-  for (const key of diffEntries(
+  // Every top-level key except `nodes`.
+  const topLevel = diffEntries(
     Object.entries(stripNodes(starting)),
     Object.entries(stripNodes(candidate)),
-  )) {
-    diffs.push(`top-level field "${key}" changed`);
-  }
+  ).map((key) => `top-level field "${key}" changed`);
 
-  // Compare nodes in order by id and content.
-  const startingIds = starting.nodes.map((n) => n.id);
-  const candidateIds = candidate.nodes.map((n) => n.id);
-
-  const startingSet = new Set(startingIds);
-  const candidateSet = new Set(candidateIds);
-  for (const id of startingIds) {
-    if (!candidateSet.has(id)) diffs.push(`step "${id}" was removed`);
-  }
-  for (const id of candidateIds) {
-    if (!startingSet.has(id)) diffs.push(`step "${id}" was added`);
-  }
-
-  if (diffs.length === 0 && !isDeepStrictEqual(startingIds, candidateIds)) {
-    diffs.push('step order changed');
-  }
-
-  // Compare each matching node by id.
   const candidateById = new Map(candidate.nodes.map((n) => [n.id, n]));
-  for (const startNode of starting.nodes) {
+  const nodes = starting.nodes.flatMap((startNode) => {
     const candNode = candidateById.get(startNode.id);
-    if (!candNode) continue;
+    return candNode ? diffNode(startNode, candNode) : [];
+  });
 
-    const startHasProof = startNode.regression_proof !== undefined;
-    const candHasProof = candNode.regression_proof !== undefined;
-
-    if (startHasProof && !candHasProof) {
-      diffs.push(`step "${startNode.id}" removed its regression_proof action`);
-      continue;
-    }
-    if (!startHasProof && candHasProof) {
-      diffs.push(`step "${startNode.id}" changed its action to regression_proof`);
-      continue;
-    }
-
-    if (startHasProof) {
-      // Only `regression_proof` may differ on this node.
-      for (const key of diffEntries(
-        Object.entries(stripRegressionProof(startNode)),
-        Object.entries(stripRegressionProof(candNode)),
-      )) {
-        diffs.push(`step "${startNode.id}" changed field "${key}" outside regression_proof`);
-      }
-    } else if (!isDeepStrictEqual(startNode, candNode)) {
-      for (const key of diffEntries(Object.entries(startNode), Object.entries(candNode))) {
-        diffs.push(`step "${startNode.id}" changed field "${key}"`);
-      }
-    }
-  }
-
-  return diffs;
+  return [...topLevel, ...diffStepIds(starting, candidate, topLevel.length), ...nodes];
 }
 
 /**

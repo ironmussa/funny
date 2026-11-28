@@ -155,6 +155,122 @@ async function resolveHeadSha(cwd: string): Promise<string> {
   return head.exitCode === 0 ? head.stdout.trim() : '';
 }
 
+type CommitFailure = Extract<CommitAndPushSetupResult, { ok: false }>;
+
+const pushFailed = (message: string): CommitFailure => ({
+  ok: false,
+  kind: 'push-failed',
+  message,
+});
+
+const gitOutput = (res: { stderr: string; stdout: string }): string =>
+  res.stderr.trim() || res.stdout.trim();
+
+/** Refuse a request outside `.funny/`, with bad refs, or whose flow file is not the confirmed one. */
+function validateCommitRequest(
+  request: CommitAndPushSetupRequest,
+  remote: string,
+): CommitFailure | null {
+  if (!isSafeGitRefArg(request.defaultBranch) || !isSafeGitRefArg(remote)) {
+    return { ok: false, kind: 'invalid-path', message: 'Invalid git branch or remote name' };
+  }
+  if (request.files.length === 0) {
+    return { ok: false, kind: 'invalid-path', message: 'No setup files provided' };
+  }
+  const outside = request.files.find((file) => !isSafeSetupFilePath(file.path));
+  if (outside) {
+    return {
+      ok: false,
+      kind: 'invalid-path',
+      message: `Refusing to commit path outside .funny/: ${outside.path}`,
+    };
+  }
+  const actualSha = sha256Hex(request.files[0]!.content);
+  if (actualSha !== request.expectedFlowSha) {
+    return {
+      ok: false,
+      kind: 'sha-mismatch',
+      message: `Flow file digest mismatch (expected ${request.expectedFlowSha.slice(0, 12)}, got ${actualSha.slice(0, 12)})`,
+    };
+  }
+  return null;
+}
+
+/**
+ * Discard the agent's other edits and canaries, write ONLY the setup files and
+ * commit them (no commit when nothing changed, so a retry is idempotent).
+ */
+async function stageSetupFiles(
+  cwd: string,
+  request: CommitAndPushSetupRequest,
+): Promise<CommitFailure | null> {
+  const reset = await gitWrite(['reset', '--hard', 'HEAD'], { cwd, reject: false });
+  if (reset.exitCode !== 0)
+    return pushFailed(`Failed to clean setup worktree: ${gitOutput(reset)}`);
+  await gitWrite(['clean', '-fd'], { cwd, reject: false });
+
+  const relPaths = request.files.map((file) => {
+    const normalizedRel = normalize(file.path).replace(/\\/g, '/');
+    const absPath = resolve(cwd, normalizedRel);
+    mkdirSync(dirname(absPath), { recursive: true });
+    writeFileSync(absPath, file.content, 'utf8');
+    return normalizedRel;
+  });
+
+  const add = await gitWrite(['add', '--', ...relPaths], { cwd, reject: false });
+  if (add.exitCode !== 0) return pushFailed(`Failed to stage setup files: ${gitOutput(add)}`);
+
+  const diffCached = await gitRead(['diff', '--cached', '--quiet'], { cwd, reject: false });
+  if (diffCached.exitCode === 0) return null;
+  const commitRes = await gitWrite(['commit', '-m', request.commitMessage, '--', ...relPaths], {
+    cwd,
+    reject: false,
+  });
+  return commitRes.exitCode === 0
+    ? null
+    : pushFailed(`Failed to commit setup files: ${gitOutput(commitRes)}`);
+}
+
+/** Fetch the moved default branch and rebase the setup commit onto it, once. */
+async function rebaseOntoRemote(
+  cwd: string,
+  remote: string,
+  defaultBranch: string,
+): Promise<CommitFailure | null> {
+  log.info('Default branch moved; rebasing setup commit once', { namespace: ns, defaultBranch });
+  const fetchRes = await gitWrite(['fetch', remote, defaultBranch], {
+    cwd,
+    reject: false,
+    timeout: 60_000,
+  });
+  if (fetchRes.exitCode !== 0) {
+    return pushFailed(
+      `Failed to fetch ${remote}/${defaultBranch}: ${extractGitPushMessage(fetchRes.stderr, fetchRes.stdout)}`,
+    );
+  }
+  const rebaseRes = await gitWrite(['rebase', `${remote}/${defaultBranch}`], {
+    cwd,
+    reject: false,
+  });
+  if (rebaseRes.exitCode === 0) return null;
+  await gitWrite(['rebase', '--abort'], { cwd, reject: false });
+  return {
+    ok: false,
+    kind: 'conflict',
+    message: `Rebase onto ${remote}/${defaultBranch} conflicted: ${extractGitPushMessage(rebaseRes.stderr, rebaseRes.stdout)}`,
+  };
+}
+
+async function pushed(
+  cwd: string,
+  defaultBranch: string,
+  logMessage: string,
+): Promise<CommitAndPushSetupResult> {
+  const commitSha = await resolveHeadSha(cwd);
+  log.info(logMessage, { namespace: ns, defaultBranch, commitSha });
+  return { ok: true, commitSha };
+}
+
 /**
  * Commits ONLY `request.files` on the setup worktree's current branch and
  * pushes `HEAD:refs/heads/<defaultBranch>` without force.
@@ -166,155 +282,38 @@ export async function commitAndPushSetup(
   request: CommitAndPushSetupRequest,
 ): Promise<CommitAndPushSetupResult> {
   const remote = request.remote ?? 'origin';
-
-  if (!isSafeGitRefArg(request.defaultBranch) || !isSafeGitRefArg(remote)) {
-    return { ok: false, kind: 'invalid-path', message: 'Invalid git branch or remote name' };
-  }
-  if (request.files.length === 0) {
-    return { ok: false, kind: 'invalid-path', message: 'No setup files provided' };
-  }
-
-  for (const file of request.files) {
-    if (!isSafeSetupFilePath(file.path)) {
-      return {
-        ok: false,
-        kind: 'invalid-path',
-        message: `Refusing to commit path outside .funny/: ${file.path}`,
-      };
-    }
-  }
-
-  const actualSha = sha256Hex(request.files[0]!.content);
-  if (actualSha !== request.expectedFlowSha) {
-    return {
-      ok: false,
-      kind: 'sha-mismatch',
-      message: `Flow file digest mismatch (expected ${request.expectedFlowSha.slice(0, 12)}, got ${actualSha.slice(0, 12)})`,
-    };
-  }
+  const invalid = validateCommitRequest(request, remote);
+  if (invalid) return invalid;
 
   const cwd = request.worktreePath;
+  const { defaultBranch } = request;
+  const staged = await stageSetupFiles(cwd, request);
+  if (staged) return staged;
 
-  // Discard any unrelated agent edits or canary files before staging only the
-  // approved setup files.
-  const reset = await gitWrite(['reset', '--hard', 'HEAD'], { cwd, reject: false });
-  if (reset.exitCode !== 0) {
-    return {
-      ok: false,
-      kind: 'push-failed',
-      message: `Failed to clean setup worktree: ${reset.stderr.trim() || reset.stdout.trim()}`,
-    };
-  }
-  await gitWrite(['clean', '-fd'], { cwd, reject: false });
-
-  // Write ONLY the exact setup files.
-  const relPaths: string[] = [];
-  for (const file of request.files) {
-    const normalizedRel = normalize(file.path).replace(/\\/g, '/');
-    const absPath = resolve(cwd, normalizedRel);
-    mkdirSync(dirname(absPath), { recursive: true });
-    writeFileSync(absPath, file.content, 'utf8');
-    relPaths.push(normalizedRel);
-  }
-
-  // Stage only the exact setup paths.
-  const add = await gitWrite(['add', '--', ...relPaths], { cwd, reject: false });
-  if (add.exitCode !== 0) {
-    return {
-      ok: false,
-      kind: 'push-failed',
-      message: `Failed to stage setup files: ${add.stderr.trim() || add.stdout.trim()}`,
-    };
-  }
-
-  // Commit if there are staged changes (idempotent if retrying after a failed push).
-  const diffCached = await gitRead(['diff', '--cached', '--quiet'], { cwd, reject: false });
-  if (diffCached.exitCode !== 0) {
-    const commitRes = await gitWrite(['commit', '-m', request.commitMessage, '--', ...relPaths], {
-      cwd,
-      reject: false,
-    });
-    if (commitRes.exitCode !== 0) {
-      return {
-        ok: false,
-        kind: 'push-failed',
-        message: `Failed to commit setup files: ${commitRes.stderr.trim() || commitRes.stdout.trim()}`,
-      };
-    }
-  }
-
-  const refspec = `HEAD:refs/heads/${request.defaultBranch}`;
-
-  const attemptPush = async () =>
-    gitWrite(['push', remote, refspec], { cwd, reject: false, timeout: 60_000 });
-
-  let pushRes = await attemptPush();
-  if (pushRes.exitCode === 0) {
-    const commitSha = await resolveHeadSha(cwd);
-    log.info('Committed and pushed factory setup', {
-      namespace: ns,
-      defaultBranch: request.defaultBranch,
-      commitSha,
-    });
-    return { ok: true, commitSha };
-  }
-
-  const firstOutput = `${pushRes.stderr}\n${pushRes.stdout}`;
-  if (isNonFastForwardRejection(firstOutput)) {
-    log.info('Default branch moved; rebasing setup commit once', {
-      namespace: ns,
-      defaultBranch: request.defaultBranch,
-    });
-    const fetchRes = await gitWrite(['fetch', remote, request.defaultBranch], {
+  const push = () =>
+    gitWrite(['push', remote, `HEAD:refs/heads/${defaultBranch}`], {
       cwd,
       reject: false,
       timeout: 60_000,
     });
-    if (fetchRes.exitCode !== 0) {
-      return {
-        ok: false,
-        kind: 'push-failed',
-        message: `Failed to fetch ${remote}/${request.defaultBranch}: ${extractGitPushMessage(fetchRes.stderr, fetchRes.stdout)}`,
-      };
-    }
 
-    const rebaseRes = await gitWrite(['rebase', `${remote}/${request.defaultBranch}`], {
-      cwd,
-      reject: false,
-    });
-    if (rebaseRes.exitCode !== 0) {
-      await gitWrite(['rebase', '--abort'], { cwd, reject: false });
-      return {
-        ok: false,
-        kind: 'conflict',
-        message: `Rebase onto ${remote}/${request.defaultBranch} conflicted: ${extractGitPushMessage(rebaseRes.stderr, rebaseRes.stdout)}`,
-      };
-    }
+  let pushRes = await push();
+  if (pushRes.exitCode === 0)
+    return pushed(cwd, defaultBranch, 'Committed and pushed factory setup');
 
-    pushRes = await attemptPush();
+  if (isNonFastForwardRejection(`${pushRes.stderr}\n${pushRes.stdout}`)) {
+    const rebased = await rebaseOntoRemote(cwd, remote, defaultBranch);
+    if (rebased) return rebased;
+    pushRes = await push();
     if (pushRes.exitCode === 0) {
-      const commitSha = await resolveHeadSha(cwd);
-      log.info('Committed and pushed factory setup after rebase', {
-        namespace: ns,
-        defaultBranch: request.defaultBranch,
-        commitSha,
-      });
-      return { ok: true, commitSha };
+      return pushed(cwd, defaultBranch, 'Committed and pushed factory setup after rebase');
     }
   }
 
-  const finalOutput = `${pushRes.stderr}\n${pushRes.stdout}`;
   const message = extractGitPushMessage(pushRes.stderr, pushRes.stdout);
-  if (isBranchRuleRejection(finalOutput)) {
-    log.info('Direct push rejected by branch rule', {
-      namespace: ns,
-      defaultBranch: request.defaultBranch,
-      message,
-    });
-    return { ok: false, kind: 'branch-rule-rejected', message };
-  }
-
-  return { ok: false, kind: 'push-failed', message };
+  if (!isBranchRuleRejection(`${pushRes.stderr}\n${pushRes.stdout}`)) return pushFailed(message);
+  log.info('Direct push rejected by branch rule', { namespace: ns, defaultBranch, message });
+  return { ok: false, kind: 'branch-rule-rejected', message };
 }
 
 /**

@@ -424,6 +424,119 @@ function canaryForRule(
   return { ok: true, canary };
 }
 
+/** One rule being verified: its base verdict and the runs made so far. */
+interface RuleAttempt {
+  rc: RuleCheckContext;
+  rule: ProofRule;
+  base: RuleVerificationVerdict;
+  runs: RuleRuns;
+}
+
+/** A check's answer: the rule's final outcome, or null to go on to the next check. */
+type CheckStep = RuleOutcome | null;
+
+const rejectRule = (a: RuleAttempt, reason: string): RuleOutcome => ({
+  verdict: { ...a.base, ...a.runs, reason },
+});
+
+const stopRule = (a: RuleAttempt, kind: StopKind): RuleOutcome => ({
+  verdict: { ...a.base, ...a.runs, reason: kind === 'aborted' ? 'Aborted' : 'Timed out' },
+  stop: kind,
+});
+
+async function execRule(a: RuleAttempt, files: string[]) {
+  const command = fillCommand(a.rule.command, files, a.rule.cwd);
+  const outcome = await a.rc.run(command, a.rule.cwd);
+  return { outcome, checkRun: toCheckRun(command, files, outcome) };
+}
+
+/** Check 1: the passing canary exits 0 and the output names it. */
+async function checkPassingCanary(a: RuleAttempt, canary: SetupCanarySpec): Promise<CheckStep> {
+  const pass = await execRule(a, [canary.passingPath]);
+  a.runs.passingRun = pass.checkRun;
+  if (pass.outcome.kind !== 'exited') return stopRule(a, pass.outcome.kind);
+  if (pass.outcome.exitCode !== 0) {
+    return rejectRule(a, `Passing canary exited with code ${pass.outcome.exitCode}`);
+  }
+  if (!outputNamesFile(pass.outcome.output, canary.passingPath, a.rule.cwd)) {
+    return rejectRule(a, `Command output did not name the passing canary "${canary.passingPath}"`);
+  }
+  return null;
+}
+
+/** Check 2: the failing canary fails conclusively and the output names it. */
+async function checkFailingCanary(a: RuleAttempt, canary: SetupCanarySpec): Promise<CheckStep> {
+  const fail = await execRule(a, [canary.failingPath]);
+  a.runs.failingRun = fail.checkRun;
+  if (fail.outcome.kind !== 'exited') return stopRule(a, fail.outcome.kind);
+  if (fail.outcome.exitCode === 0) {
+    return rejectRule(a, 'Failing canary unexpectedly exited with code 0');
+  }
+  const inconclusive = inconclusiveBaseFailure(fail.outcome);
+  if (inconclusive) return rejectRule(a, `Failing canary was inconclusive: ${inconclusive}`);
+  if (!outputNamesFile(fail.outcome.output, canary.failingPath, a.rule.cwd)) {
+    return rejectRule(a, `Command output did not name the failing canary "${canary.failingPath}"`);
+  }
+  return null;
+}
+
+/** Up to 3 existing test files the rule covers, leaving out canaries, infrastructure and support files. */
+function existingCandidates(a: RuleAttempt): string[] {
+  const { rc, rule } = a;
+  return rc.trackedFiles
+    .filter(
+      (file) =>
+        !rc.canaryPaths.has(file) &&
+        !rc.infraSet.has(file) &&
+        !matchesAnyGlob(file, rc.supportGlobs) &&
+        matchesAnyGlob(file, rule.globs),
+    )
+    .slice(0, MAX_EXISTING_CANDIDATES);
+}
+
+/** Check 3: at least one existing matched test file passes; returns it. */
+async function findPassingExisting(
+  a: RuleAttempt,
+): Promise<{ ok: true; file: string } | { ok: false; outcome: RuleOutcome }> {
+  const candidates = existingCandidates(a);
+  if (candidates.length === 0) {
+    return {
+      ok: false,
+      outcome: rejectRule(a, 'No existing non-infrastructure test file matched the rule globs'),
+    };
+  }
+  for (const candidate of candidates) {
+    const existing = await execRule(a, [candidate]);
+    a.runs.existingRun = existing.checkRun;
+    if (existing.outcome.kind !== 'exited') {
+      return { ok: false, outcome: stopRule(a, existing.outcome.kind) };
+    }
+    if (existing.outcome.exitCode === 0) return { ok: true, file: candidate };
+  }
+  return {
+    ok: false,
+    outcome: rejectRule(a, `None of the ${candidates.length} matched existing test file(s) passed`),
+  };
+}
+
+/** Check 4: passing canary + that existing file in one run exit 0 and both are named. */
+async function checkTwoFileRun(
+  a: RuleAttempt,
+  canary: SetupCanarySpec,
+  existingFile: string,
+): Promise<CheckStep> {
+  const two = await execRule(a, [canary.passingPath, existingFile]);
+  a.runs.twoFileRun = two.checkRun;
+  if (two.outcome.kind !== 'exited') return stopRule(a, two.outcome.kind);
+  if (two.outcome.exitCode !== 0) {
+    return rejectRule(a, `Two-file run exited with code ${two.outcome.exitCode}`);
+  }
+  const namesBoth =
+    outputNamesFile(two.outcome.output, canary.passingPath, a.rule.cwd) &&
+    outputNamesFile(two.outcome.output, existingFile, a.rule.cwd);
+  return namesBoth ? null : rejectRule(a, 'Two-file run output did not name both files');
+}
+
 /** Run one rule's four checks (see the module comment). */
 async function verifyRule(
   rc: RuleCheckContext,
@@ -437,88 +550,63 @@ async function verifyRule(
     accepted: false,
   };
   if (rule.cwd) base.cwd = rule.cwd;
-  const runs: RuleRuns = {};
-  const reject = (reason: string): RuleOutcome => ({ verdict: { ...base, ...runs, reason } });
-  const stopped = (kind: StopKind): RuleOutcome => ({
-    verdict: { ...base, ...runs, reason: kind === 'aborted' ? 'Aborted' : 'Timed out' },
-    stop: kind,
-  });
-  const exec = async (files: string[]) => {
-    const command = fillCommand(rule.command, files, rule.cwd);
-    const outcome = await rc.run(command, rule.cwd);
-    return { outcome, checkRun: toCheckRun(command, files, outcome) };
-  };
+  const a: RuleAttempt = { rc, rule, base, runs: {} };
 
   const pair = canaryForRule(rc, rule, ruleIndex);
-  if (!pair.ok) return reject(pair.reason);
+  if (!pair.ok) return rejectRule(a, pair.reason);
   const { canary } = pair;
 
-  // Check 1: Passing canary exits 0 and output names it.
-  const pass = await exec([canary.passingPath]);
-  runs.passingRun = pass.checkRun;
-  if (pass.outcome.kind !== 'exited') return stopped(pass.outcome.kind);
-  if (pass.outcome.exitCode !== 0) {
-    return reject(`Passing canary exited with code ${pass.outcome.exitCode}`);
-  }
-  if (!outputNamesFile(pass.outcome.output, canary.passingPath, rule.cwd)) {
-    return reject(`Command output did not name the passing canary "${canary.passingPath}"`);
-  }
+  const afterCanaries =
+    (await checkPassingCanary(a, canary)) ?? (await checkFailingCanary(a, canary));
+  if (afterCanaries) return afterCanaries;
+  const existing = await findPassingExisting(a);
+  if (!existing.ok) return existing.outcome;
+  const afterTwo = await checkTwoFileRun(a, canary, existing.file);
+  return afterTwo ?? { verdict: { ...base, ...a.runs, accepted: true } };
+}
 
-  // Check 2: Failing canary exits non-zero, inconclusiveBaseFailure is null, output names it.
-  const fail = await exec([canary.failingPath]);
-  runs.failingRun = fail.checkRun;
-  if (fail.outcome.kind !== 'exited') return stopped(fail.outcome.kind);
-  if (fail.outcome.exitCode === 0) {
-    return reject('Failing canary unexpectedly exited with code 0');
+/** Verify each rule in order; the job ends at the first cancellation or out of time. */
+async function verifyRules(
+  rc: RuleCheckContext,
+  request: VerifyFlowSetupRequest,
+  signal: AbortSignal,
+  remaining: () => number,
+): Promise<{ verdicts: RuleVerificationVerdict[]; stop: StopKind | null }> {
+  const verdicts: RuleVerificationVerdict[] = [];
+  for (let i = 0; i < request.rules.length; i++) {
+    if (signal.aborted) return { verdicts, stop: 'aborted' };
+    if (remaining() <= 0) return { verdicts, stop: 'timed-out' };
+    const outcome = await verifyRule(rc, request.rules[i]!, i);
+    verdicts.push(outcome.verdict);
+    if (outcome.stop) return { verdicts, stop: outcome.stop };
   }
-  const inconclusive = inconclusiveBaseFailure(fail.outcome);
-  if (inconclusive) return reject(`Failing canary was inconclusive: ${inconclusive}`);
-  if (!outputNamesFile(fail.outcome.output, canary.failingPath, rule.cwd)) {
-    return reject(`Command output did not name the failing canary "${canary.failingPath}"`);
-  }
+  return { verdicts, stop: null };
+}
 
-  // Check 3: Up to 3 existing non-infra matched test files; at least one must exit 0.
-  const candidates = rc.trackedFiles
-    .filter(
-      (file) =>
-        !rc.canaryPaths.has(file) &&
-        !rc.infraSet.has(file) &&
-        !matchesAnyGlob(file, rc.supportGlobs) &&
-        matchesAnyGlob(file, rule.globs),
-    )
-    .slice(0, MAX_EXISTING_CANDIDATES);
-  if (candidates.length === 0) {
-    return reject('No existing non-infrastructure test file matched the rule globs');
+/** The job's result from its verdicts: the pruned flow file, or why nothing survived. */
+function resultOf(
+  request: VerifyFlowSetupRequest,
+  verdicts: RuleVerificationVerdict[],
+): VerifyFlowSetupResult {
+  const total = request.rules.length;
+  const acceptedIndices = new Set<number>();
+  for (const v of verdicts) if (v.accepted) acceptedIndices.add(v.ruleIndex);
+  const acceptedCount = acceptedIndices.size;
+  if (acceptedCount === 0) {
+    return failedResult(
+      'no-rules-survived',
+      'No generated regression proof rule passed verification',
+      total,
+      verdicts,
+    );
   }
-
-  let matchedExisting: string | null = null;
-  for (const candidate of candidates) {
-    const existing = await exec([candidate]);
-    runs.existingRun = existing.checkRun;
-    if (existing.outcome.kind !== 'exited') return stopped(existing.outcome.kind);
-    if (existing.outcome.exitCode === 0) {
-      matchedExisting = candidate;
-      break;
-    }
-  }
-  if (!matchedExisting) {
-    return reject(`None of the ${candidates.length} matched existing test file(s) passed`);
-  }
-
-  // Check 4: Two-file run (passing canary + matched existing test file) exits 0 and names both.
-  const two = await exec([canary.passingPath, matchedExisting]);
-  runs.twoFileRun = two.checkRun;
-  if (two.outcome.kind !== 'exited') return stopped(two.outcome.kind);
-  if (two.outcome.exitCode !== 0) {
-    return reject(`Two-file run exited with code ${two.outcome.exitCode}`);
-  }
-  const namesCanary = outputNamesFile(two.outcome.output, canary.passingPath, rule.cwd);
-  const namesExisting = outputNamesFile(two.outcome.output, matchedExisting, rule.cwd);
-  if (!namesCanary || !namesExisting) {
-    return reject('Two-file run output did not name both files');
-  }
-
-  return { verdict: { ...base, ...runs, accepted: true } };
+  return {
+    ok: true,
+    verdicts,
+    prunedYaml: pruneRegressionProofRules(request.workflowYaml, acceptedIndices),
+    acceptedCount,
+    rejectedCount: total - acceptedCount,
+  };
 }
 
 export async function runFlowSetupVerification(
@@ -550,53 +638,24 @@ export async function runFlowSetupVerification(
     const setupFailure = await runSetupCommands(deps, worktreePath, request, signal, remaining);
     if (setupFailure) return setupFailure;
 
+    const supportGlobs = request.supportGlobs?.length
+      ? request.supportGlobs
+      : DEFAULT_SUPPORT_GLOBS;
     const rc: RuleCheckContext = {
       ...staged,
       trackedFiles,
       infraSet: new Set(request.infraFiles ?? []),
-      supportGlobs:
-        request.supportGlobs && request.supportGlobs.length > 0
-          ? request.supportGlobs
-          : DEFAULT_SUPPORT_GLOBS,
+      supportGlobs,
       run: (command, ruleCwd) => {
         const dir = ruleCwd ? assertSafeRelativePath(worktreePath, ruleCwd) : worktreePath;
         return deps.runCommand(command, dir, signal, remaining());
       },
     };
 
-    const verdicts: RuleVerificationVerdict[] = [];
-    for (let i = 0; i < request.rules.length; i++) {
-      if (signal.aborted) return failedResult('aborted', STOP_FINDINGS.aborted, total, verdicts);
-      if (remaining() <= 0) {
-        return failedResult('timed-out', STOP_FINDINGS['timed-out'], total, verdicts);
-      }
-      const outcome = await verifyRule(rc, request.rules[i]!, i);
-      verdicts.push(outcome.verdict);
-      if (outcome.stop) {
-        return failedResult(outcome.stop, STOP_FINDINGS[outcome.stop], total, verdicts);
-      }
-    }
-
-    const acceptedIndices = new Set<number>();
-    for (const v of verdicts) if (v.accepted) acceptedIndices.add(v.ruleIndex);
-    const acceptedCount = acceptedIndices.size;
-
-    if (acceptedCount === 0) {
-      return failedResult(
-        'no-rules-survived',
-        'No generated regression proof rule passed verification',
-        total,
-        verdicts,
-      );
-    }
-
-    return {
-      ok: true,
-      verdicts,
-      prunedYaml: pruneRegressionProofRules(request.workflowYaml, acceptedIndices),
-      acceptedCount,
-      rejectedCount: total - acceptedCount,
-    };
+    const { verdicts, stop } = await verifyRules(rc, request, signal, remaining);
+    return stop
+      ? failedResult(stop, STOP_FINDINGS[stop], total, verdicts)
+      : resultOf(request, verdicts);
   } finally {
     await deps.removeTempWorktree(projectPath, worktreePath).match(
       () => {},

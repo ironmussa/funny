@@ -154,6 +154,50 @@ export function createFactoryQueueFlows(ctx: FactoryQueueFlowsContext) {
     });
   }
 
+  type ValidationReader = { port: FactoryGithubPort; reader: FactoryRepoReader };
+  type ReaderOptions = { userId?: string; requireRepo?: boolean };
+
+  /** No reader: an error for the enable gate, built-ins only otherwise. */
+  const unreadable = (
+    options: ReaderOptions | undefined,
+    message: string,
+  ): Result<ValidationReader | null, FactoryQueueError> =>
+    options?.requireRepo ? err({ kind: 'cannot-work', message }) : ok(null);
+
+  async function readerForFactory(
+    port: FactoryGithubPort,
+    factoryId: string,
+    options: ReaderOptions | undefined,
+  ): Promise<Result<ValidationReader | null, FactoryQueueError>> {
+    const factory = await loadFactory(factoryId);
+    if (!factory) return unreadable(options, NOT_RUNNING_HERE);
+    const where = await target(factory);
+    if (!where || 'reason' in where) {
+      return unreadable(options, where ? where.reason : NOT_RUNNING_HERE);
+    }
+    return ok({
+      port,
+      reader: { repo: where.repo, ownerId: factory.userId, projectId: factory.projectId },
+    });
+  }
+
+  /** A project whose factory was never saved: read its repository as the member. */
+  async function readerForProject(
+    port: FactoryGithubPort,
+    projectId: string,
+    options: ReaderOptions | undefined,
+  ): Promise<Result<ValidationReader | null, FactoryQueueError>> {
+    const userId = options?.userId;
+    const repo = userId ? await port.resolveRepo(userId, projectId) : null;
+    if (!userId || !repo) {
+      return unreadable(
+        options,
+        "The project's repository could not be read (is your runner online, and does the project have a GitHub origin?).",
+      );
+    }
+    return ok({ port, reader: { repo, ownerId: userId, projectId } });
+  }
+
   /**
    * Resolve the repository reader for `validateFlow`, supporting both an
    * existing factory row and a project whose factory has never been saved yet
@@ -163,45 +207,13 @@ export function createFactoryQueueFlows(ctx: FactoryQueueFlowsContext) {
   async function readerForValidation(
     factoryId: string | null,
     projectId: string,
-    options?: { userId?: string; requireRepo?: boolean },
-  ): Promise<
-    Result<{ port: FactoryGithubPort; reader: FactoryRepoReader } | null, FactoryQueueError>
-  > {
+    options?: ReaderOptions,
+  ): Promise<Result<ValidationReader | null, FactoryQueueError>> {
     const port = github();
-    if (!port) {
-      return options?.requireRepo
-        ? err({ kind: 'cannot-work', message: NOT_RUNNING_HERE })
-        : ok(null);
-    }
-    if (factoryId) {
-      const factory = await loadFactory(factoryId);
-      if (!factory) {
-        return options?.requireRepo
-          ? err({ kind: 'cannot-work', message: NOT_RUNNING_HERE })
-          : ok(null);
-      }
-      const where = await target(factory);
-      if (!where || 'reason' in where) {
-        return options?.requireRepo
-          ? err({ kind: 'cannot-work', message: where ? where.reason : NOT_RUNNING_HERE })
-          : ok(null);
-      }
-      return ok({
-        port,
-        reader: { repo: where.repo, ownerId: factory.userId, projectId: factory.projectId },
-      });
-    }
-    const repo = options?.userId ? await port.resolveRepo(options.userId, projectId) : null;
-    if (!repo) {
-      return options?.requireRepo
-        ? err({
-            kind: 'cannot-work',
-            message:
-              "The project's repository could not be read (is your runner online, and does the project have a GitHub origin?).",
-          })
-        : ok(null);
-    }
-    return ok({ port, reader: { repo, ownerId: options!.userId!, projectId } });
+    if (!port) return unreadable(options, NOT_RUNNING_HERE);
+    return factoryId
+      ? readerForFactory(port, factoryId, options)
+      : readerForProject(port, projectId, options);
   }
 
   /**

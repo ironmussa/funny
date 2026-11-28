@@ -63,45 +63,40 @@ async function readStartingFlowFile(
   });
 }
 
-export async function startFlowSetupOp(
+type SetupResult<T> = Result<T, FlowSetupError>;
+
+const unavailable = (message: string): FlowSetupError => ({
+  kind: 'unavailable',
+  status: 503,
+  message,
+});
+
+/** A runner failure as the error the member sees: offline (502) or otherwise unavailable. */
+function runnerFailure(error: { kind: string; message: string }): FlowSetupError {
+  return error.kind === 'runner-unavailable'
+    ? { kind: 'runner-offline', status: 502, message: error.message }
+    : unavailable(error.message);
+}
+
+interface FlowToConfigure extends StartingFlowFile {
+  defaultBranch: string;
+  baseSha: string;
+}
+
+/** The default branch's head and the flow file to start from, refused when already proof-ready. */
+async function loadFlowToConfigure(
   ctx: SetupServiceContext,
   actor: FlowSetupActor,
   projectId: string,
-  explicitFlowName?: string,
-): Promise<Result<FactoryFlowSetupRow, FlowSetupError>> {
-  const { deps, emit } = ctx;
-  const { repo, runner } = deps;
-  if (deps.canSteer) {
-    const allowed = await deps.canSteer(actor.userId, projectId);
-    if (!allowed) {
-      return err({
-        kind: 'forbidden',
-        status: 403,
-        message: 'Requires steer permission on this project',
-      });
-    }
-  }
-
-  const flowName = await ctx.resolveFlowName(actor.userId, projectId, explicitFlowName);
-
-  // Return existing open setup if one is already in progress.
-  const existing = await repo.getOpenByUserProjectFlow(actor.userId, projectId, flowName);
-  if (existing) return ok(existing);
-
+  flowName: string,
+): Promise<SetupResult<FlowToConfigure>> {
+  const { deps } = ctx;
   const reader = await deps.repoReader(actor.userId, projectId);
-  if (!reader) {
-    return err({
-      kind: 'unavailable',
-      status: 503,
-      message: 'The repository could not be read.',
-    });
-  }
+  if (!reader) return err(unavailable('The repository could not be read.'));
 
-  const headResult = await reader.defaultBranchHead();
-  if (headResult.isErr()) {
-    return err({ kind: 'unavailable', status: 503, message: headResult.error.message });
-  }
-  const { branch: defaultBranch, sha: baseSha } = headResult.value;
+  const head = await reader.defaultBranchHead();
+  if (head.isErr()) return err(unavailable(head.error.message));
+  const { branch: defaultBranch, sha: baseSha } = head.value;
 
   const loadDeps: LoadFactoryFlowDeps = {
     readDefaultBranchFile: (p) => reader.readDefaultBranchFile(p),
@@ -109,15 +104,14 @@ export async function startFlowSetupOp(
     readFileAt: reader.readFileAt ? (p, ref) => reader.readFileAt!(p, ref) : undefined,
     defaultsDir: deps.defaultsDir,
   };
-
   const loaded = await loadFactoryFlow(flowName, loadDeps);
   if (loaded.isErr()) {
-    if (loaded.error.kind === 'unavailable') {
-      return err({ kind: 'unavailable', status: 503, message: loaded.error.message });
-    }
-    return err({ kind: 'invalid-flow', status: 409, message: loaded.error.message });
+    return err(
+      loaded.error.kind === 'unavailable'
+        ? unavailable(loaded.error.message)
+        : { kind: 'invalid-flow', status: 409, message: loaded.error.message },
+    );
   }
-
   if (loaded.value.proofReady) {
     return err({
       kind: 'already-ready',
@@ -132,13 +126,24 @@ export async function startFlowSetupOp(
     loaded.value.source,
     deps.defaultsDir,
   );
-  if (starting.isErr()) return err(starting.error);
-  const { startingFile, startingSource, builtinPrompts } = starting.value;
+  return starting.map((file) => ({ ...file, defaultBranch, baseSha }));
+}
 
-  const setupId = randomUUID();
-  const branch = `funny/factory-setup/${setupId.slice(0, 8)}`;
+interface LaunchedThread {
+  threadId: string;
+  worktreePath: string | null;
+  runnerId: string;
+}
 
-  // Launch the factory-setup worktree thread idle on the member's own runner.
+/** Launch the factory-setup worktree thread idle on the member's own runner. */
+async function launchSetupWorktree(
+  ctx: SetupServiceContext,
+  actor: FlowSetupActor,
+  projectId: string,
+  flowName: string,
+  branch: string,
+  baseBranch: string,
+): Promise<SetupResult<LaunchedThread>> {
   const started = await ctx.launchSetupThread({
     userId: actor.userId,
     orgId: actor.orgId,
@@ -150,31 +155,92 @@ export async function startFlowSetupOp(
       title: `[Factory Setup] Configure ${flowName}`,
       mode: 'worktree',
       branch,
-      baseBranch: defaultBranch,
+      baseBranch,
       source: 'factory-setup',
     },
   });
-
-  if (started.isErr()) {
-    if (started.error.kind === 'runner-unavailable') {
-      return err({ kind: 'runner-offline', status: 502, message: started.error.message });
-    }
-    return err({ kind: 'unavailable', status: 503, message: started.error.message });
-  }
+  if (started.isErr()) return err(runnerFailure(started.error));
 
   const threadId = started.value.threadId ?? started.value.thread?.id;
-  const worktreePath = started.value.thread?.worktreePath
-    ? String(started.value.thread.worktreePath)
-    : null;
-  const runnerId = started.value.runnerId;
+  if (!threadId) return err(unavailable('Runner did not return a thread ID for setup'));
+  const worktreePath = started.value.thread?.worktreePath;
+  return ok({
+    threadId,
+    worktreePath: worktreePath ? String(worktreePath) : null,
+    runnerId: started.value.runnerId,
+  });
+}
 
-  if (!threadId) {
+/** Detect the stack, then send the setup agent its first message. */
+async function startSetupAgent(
+  ctx: SetupServiceContext,
+  row: FactoryFlowSetupRow,
+  threadId: string,
+): Promise<SetupResult<FactoryFlowSetupRow>> {
+  const { repo, runner } = ctx.deps;
+  const factsResult = await runner.detectStack(row.userId, threadId);
+  const facts: TestStackFacts | { recognized: false; error: string } = factsResult.isOk()
+    ? factsResult.value
+    : { recognized: false, error: factsResult.error.message };
+  const factsJson = JSON.stringify(facts);
+  await repo.update(row.id, { facts: factsJson });
+
+  const prompt = await renderFactoryFlowSetupPrompt({
+    flowName: row.flowName,
+    flowPath: flowFilePath(row.flowName),
+    defaultBranch: row.defaultBranch,
+    facts,
+    startingFile: row.startingFile,
+  });
+  const sent = await runner.sendFirstMessage(row.userId, threadId, prompt, row.branch);
+  if (sent.isErr()) {
+    await repo.transition(row.id, 'failed', {
+      error: `Could not start setup agent: ${sent.error.message}`,
+    });
+    ctx.emit(row.userId, row.projectId, row.id, 'failed');
+    return err(runnerFailure(sent.error));
+  }
+
+  ctx.emit(row.userId, row.projectId, row.id, 'generating');
+  return ok({ ...row, facts: factsJson });
+}
+
+export async function startFlowSetupOp(
+  ctx: SetupServiceContext,
+  actor: FlowSetupActor,
+  projectId: string,
+  explicitFlowName?: string,
+): Promise<SetupResult<FactoryFlowSetupRow>> {
+  const { repo, canSteer } = ctx.deps;
+  if (canSteer && !(await canSteer(actor.userId, projectId))) {
     return err({
-      kind: 'unavailable',
-      status: 503,
-      message: 'Runner did not return a thread ID for setup',
+      kind: 'forbidden',
+      status: 403,
+      message: 'Requires steer permission on this project',
     });
   }
+
+  const flowName = await ctx.resolveFlowName(actor.userId, projectId, explicitFlowName);
+  // Return the open setup when one is already in progress.
+  const existing = await repo.getOpenByUserProjectFlow(actor.userId, projectId, flowName);
+  if (existing) return ok(existing);
+
+  const flow = await loadFlowToConfigure(ctx, actor, projectId, flowName);
+  if (flow.isErr()) return err(flow.error);
+  const { defaultBranch, baseSha, startingFile, startingSource, builtinPrompts } = flow.value;
+
+  const setupId = randomUUID();
+  const branch = `funny/factory-setup/${setupId.slice(0, 8)}`;
+  const launched = await launchSetupWorktree(
+    ctx,
+    actor,
+    projectId,
+    flowName,
+    branch,
+    defaultBranch,
+  );
+  if (launched.isErr()) return err(launched.error);
+  const { threadId, worktreePath, runnerId } = launched.value;
 
   const now = new Date().toISOString();
   let row: FactoryFlowSetupRow;
@@ -198,45 +264,10 @@ export async function startFlowSetupOp(
       updatedAt: now,
     });
   } catch {
-    // Concurrent start won the partial unique index; return that open row.
+    // A concurrent start won the partial unique index: answer with its open row.
     const raced = await repo.getOpenByUserProjectFlow(actor.userId, projectId, flowName);
-    if (raced) return ok(raced);
-    return err({
-      kind: 'unavailable',
-      status: 503,
-      message: 'Could not create factory flow setup',
-    });
+    return raced ? ok(raced) : err(unavailable('Could not create factory flow setup'));
   }
 
-  // Detect test stack facts in the new setup worktree.
-  const factsResult = await runner.detectStack(actor.userId, threadId);
-  const facts: TestStackFacts | { recognized: false; error: string } = factsResult.isOk()
-    ? factsResult.value
-    : { recognized: false, error: factsResult.error.message };
-  const factsJson = JSON.stringify(facts);
-  await repo.update(setupId, { facts: factsJson });
-  row = { ...row, facts: factsJson };
-
-  // Render and send the first message to start the setup agent.
-  const prompt = await renderFactoryFlowSetupPrompt({
-    flowName,
-    flowPath: flowFilePath(flowName),
-    defaultBranch,
-    facts,
-    startingFile,
-  });
-  const sent = await runner.sendFirstMessage(actor.userId, threadId, prompt, branch);
-  if (sent.isErr()) {
-    await repo.transition(setupId, 'failed', {
-      error: `Could not start setup agent: ${sent.error.message}`,
-    });
-    emit(actor.userId, projectId, setupId, 'failed');
-    if (sent.error.kind === 'runner-unavailable') {
-      return err({ kind: 'runner-offline', status: 502, message: sent.error.message });
-    }
-    return err({ kind: 'unavailable', status: 503, message: sent.error.message });
-  }
-
-  emit(actor.userId, projectId, setupId, 'generating');
-  return ok(row);
+  return startSetupAgent(ctx, row, threadId);
 }

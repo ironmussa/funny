@@ -1,3 +1,4 @@
+import type { TFunction } from 'i18next';
 /**
  * The issue factory for a project (change issue-factory): a per-user running /
  * paused toggle, the mode (manual: only the issues sent from the Issues tab;
@@ -203,74 +204,54 @@ function FactoryModeRows({
   );
 }
 
-function ProjectFactorySettingRows({ projectId }: { projectId: string }) {
-  const { t } = useTranslation();
-  const settings = useFactorySettings(projectId);
-  // Bumped after every save settles, so the inputs re-read the confirmed row —
-  // also after a refused save, which leaves the row (and its updatedAt) unchanged.
-  const [revision, setRevision] = useState(0);
-  const [saveError, setSaveError] = useState<string | null>(null);
+type FactorySettingsRow = ReturnType<typeof useFactorySettings>;
+type SaveFactory = (input: Omit<SaveFactorySettingsInput, 'projectId'>) => void;
+type FlowValidationState = ReturnType<typeof useFactoryFlowValidation>;
 
-  const save = (input: Omit<SaveFactorySettingsInput, 'projectId'>) => {
-    setSaveError(null);
-    return saveFactorySettings({ projectId, ...input })
-      .orTee((error) => {
-        setSaveError(error.friendlyMessage ?? error.message);
-        toastError(error, 'factory');
-      })
-      .match(
-        () => setRevision((r) => r + 1),
-        () => setRevision((r) => r + 1),
-      );
-  };
-
-  const form = formValues(settings);
-  const { enabled, mode, label, flowName, maxConcurrent } = form;
-  const rowKey = `${settings?.updatedAt ?? 'none'}-${revision}`;
-
-  const { validation, error: validationError } = useFactoryFlowValidation(
-    projectId,
-    flowName,
-    true,
-    form.stepOverrides,
+/** Why the factory cannot be turned on with this flow, or null when it can. */
+function enableBlockedReason(
+  t: TFunction,
+  flowName: string,
+  { validation, error }: FlowValidationState,
+): string | null {
+  if (error) {
+    return t(
+      'settings.projectFactoryFlowNotChecked',
+      'The flow "{{flow}}" could not be checked: {{message}}',
+      { flow: flowName, message: error.message },
+    );
+  }
+  if (!validation) return null;
+  if (!validation.ok) return validation.message;
+  if (validation.proofReady) return null;
+  return t(
+    'settings.projectFactoryFlowNotProofReady',
+    'The flow "{{flow}}" has no regression proof rules. Generate or configure regression proof, or opt out, before enabling.',
+    { flow: flowName },
   );
+}
 
-  const enableBlockedReason = (() => {
-    if (validationError) {
-      return t(
-        'settings.projectFactoryFlowNotChecked',
-        'The flow "{{flow}}" could not be checked: {{message}}',
-        { flow: flowName, message: validationError.message },
-      );
-    }
-    if (validation && !validation.ok) return validation.message;
-    if (validation && !validation.proofReady) {
-      return t(
-        'settings.projectFactoryFlowNotProofReady',
-        'The flow "{{flow}}" has no regression proof rules. Generate or configure regression proof, or opt out, before enabling.',
-        { flow: flowName },
-      );
-    }
-    return null;
-  })();
+function FactoryAlert({ testId, children }: { testId: string; children: string }) {
+  return (
+    <Alert variant="destructive" className="mx-4 my-2 w-auto" data-testid={testId}>
+      <AlertDescription>{children}</AlertDescription>
+    </Alert>
+  );
+}
 
-  const showGenerateConfig = Boolean(validation?.ok && !validation.proofReady);
-
-  const setEnabled = (value: OnOff) => void save({ enabled: value === 'on' });
-  const setMode = (value: FactoryMode) => void save({ enabled, mode: value });
-  const setLabel = (value: string) => {
-    const next = changedText(value, label);
-    if (next) void save({ enabled, label: next });
-  };
-  const setFlow = (value: string) => {
-    const next = changedText(value, flowName);
-    if (next) void save({ enabled, flowName: next });
-  };
-  const setConcurrency = (value: string) => {
-    const next = changedConcurrency(value, maxConcurrent);
-    if (next !== null) void save({ enabled, maxConcurrent: next });
-  };
-
+/** Running / paused, why it cannot run yet, and why the last save was refused. */
+function FactoryStatusRows({
+  enabled,
+  blockedReason,
+  saveError,
+  onEnabled,
+}: {
+  enabled: boolean;
+  blockedReason: string | null;
+  saveError: string | null;
+  onEnabled: (value: OnOff) => void;
+}) {
+  const { t } = useTranslation();
   return (
     <>
       <ProjectSettingRow
@@ -283,7 +264,7 @@ function ProjectFactorySettingRows({ projectId }: { projectId: string }) {
       >
         <SegmentedControl<OnOff>
           value={enabled ? 'on' : 'off'}
-          onChange={setEnabled}
+          onChange={onEnabled}
           options={[
             {
               value: 'off',
@@ -294,57 +275,224 @@ function ProjectFactorySettingRows({ projectId }: { projectId: string }) {
               value: 'on',
               label: t('settings.projectFactoryRunning', 'Running'),
               testId: 'settings-factory-on',
-              disabled: !enabled && Boolean(enableBlockedReason),
+              disabled: !enabled && Boolean(blockedReason),
             },
           ]}
         />
       </ProjectSettingRow>
-
-      {!enabled && enableBlockedReason && (
-        <Alert
-          variant="destructive"
-          className="mx-4 my-2 w-auto"
-          data-testid="settings-factory-flow-status"
-        >
-          <AlertDescription>{enableBlockedReason}</AlertDescription>
-        </Alert>
+      {!enabled && blockedReason && (
+        <FactoryAlert testId="settings-factory-flow-status">{blockedReason}</FactoryAlert>
       )}
+      {saveError && <FactoryAlert testId="settings-factory-save-error">{saveError}</FactoryAlert>}
+    </>
+  );
+}
 
-      {saveError && (
-        <Alert
-          variant="destructive"
-          className="mx-4 my-2 w-auto"
-          data-testid="settings-factory-save-error"
-        >
-          <AlertDescription>{saveError}</AlertDescription>
-        </Alert>
+function FactoryGenerateConfigRow({
+  projectId,
+  flowName,
+}: {
+  projectId: string;
+  flowName: string;
+}) {
+  const { t } = useTranslation();
+  return (
+    <ProjectSettingRow
+      settingId="factory.proofConfig"
+      title={t('settings.projectFactoryProofConfig', 'Regression proof')}
+      description={t(
+        'settings.projectFactoryProofConfigDesc',
+        'Generate verified regression proof rules for this flow from the repository stack',
       )}
+    >
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        data-testid="factory-generate-config"
+        onClick={() => {
+          void startFactoryFlowSetup(projectId, flowName).then((res) => {
+            if (res.isErr()) toastError(res.error);
+          });
+        }}
+      >
+        {t('settings.projectFactoryGenerateConfig', 'Generate configuration')}
+      </Button>
+    </ProjectSettingRow>
+  );
+}
 
-      {showGenerateConfig && (
-        <ProjectSettingRow
-          settingId="factory.proofConfig"
-          title={t('settings.projectFactoryProofConfig', 'Regression proof')}
-          description={t(
-            'settings.projectFactoryProofConfigDesc',
-            'Generate verified regression proof rules for this flow from the repository stack',
-          )}
-        >
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            data-testid="factory-generate-config"
-            onClick={() => {
-              void startFactoryFlowSetup(projectId, flowName).then((res) => {
-                if (res.isErr()) toastError(res.error);
-              });
-            }}
-          >
-            {t('settings.projectFactoryGenerateConfig', 'Generate configuration')}
-          </Button>
-        </ProjectSettingRow>
+/** What a running factory lets a member tune: flow, concurrency, base branch, merge, spec, steps. */
+function FactoryEnabledRows({
+  projectId,
+  form,
+  rowKey,
+  save,
+}: {
+  projectId: string;
+  form: FactoryForm;
+  rowKey: string;
+  save: SaveFactory;
+}) {
+  const { t } = useTranslation();
+  const { enabled, flowName, maxConcurrent } = form;
+  const setFlow = (value: string) => {
+    const next = changedText(value, flowName);
+    if (next) save({ enabled, flowName: next });
+  };
+  const setConcurrency = (value: string) => {
+    const next = changedConcurrency(value, maxConcurrent);
+    if (next !== null) save({ enabled, maxConcurrent: next });
+  };
+  return (
+    <>
+      <ProjectSettingRow
+        settingId="factory.flow"
+        title={t('settings.projectFactoryFlow', 'Flow')}
+        description={t(
+          'settings.projectFactoryFlowDesc',
+          'The default flow: preselected when you send issues, and run for labelled ones',
+        )}
+      >
+        <Input
+          key={`flow-${rowKey}`}
+          defaultValue={flowName}
+          className="w-[220px]"
+          data-testid="settings-factory-flow"
+          onBlur={(e) => setFlow(e.target.value)}
+        />
+      </ProjectSettingRow>
+
+      <ProjectSettingRow
+        settingId="factory.concurrency"
+        title={t('settings.projectFactoryConcurrency', 'Max in flight')}
+        description={t('settings.projectFactoryConcurrencyDesc', 'How many issues run at once')}
+      >
+        <Input
+          key={`conc-${rowKey}`}
+          type="number"
+          min={1}
+          max={20}
+          defaultValue={maxConcurrent}
+          className="w-[220px]"
+          data-testid="settings-factory-concurrency"
+          onBlur={(e) => setConcurrency(e.target.value)}
+        />
+      </ProjectSettingRow>
+
+      <ProjectFactoryBaseBranch
+        projectId={projectId}
+        baseBranch={form.baseBranch}
+        onSave={(baseBranch) => save({ enabled, baseBranch })}
+      />
+
+      <ProjectFactoryMergeRows
+        projectId={projectId}
+        flowName={flowName}
+        settings={form}
+        rowKey={rowKey}
+        onSave={(input) => save({ enabled, ...input })}
+      />
+
+      <ProjectFactorySpecRows
+        specStage={form.specStage}
+        commitSpecPath={form.commitSpecPath}
+        rowKey={rowKey}
+        onSave={(input) => save({ enabled, ...input })}
+      />
+
+      <ProjectFactoryStepOptions
+        projectId={projectId}
+        flowName={flowName}
+        overrides={form.stepOverrides}
+        onSave={(stepOverrides) => save({ enabled, stepOverrides })}
+      />
+    </>
+  );
+}
+
+/** Shown running or paused: schedules, lanes, the incident that pauses it, or another block. */
+function FactoryOverviewRows({
+  projectId,
+  settings,
+  form,
+  rowKey,
+  save,
+}: {
+  projectId: string;
+  settings: NonNullable<FactorySettingsRow>;
+  form: FactoryForm;
+  rowKey: string;
+  save: SaveFactory;
+}) {
+  return (
+    <>
+      {/* Listed while paused too: a paused factory keeps its schedules and starts none. */}
+      <ProjectFactoryTriggers projectId={projectId} />
+      <ProjectFactoryLanes
+        projectId={projectId}
+        label={form.label}
+        laneLabelPrefix={form.laneLabelPrefix}
+        laneBranchPrefix={form.laneBranchPrefix}
+        laneFinishBranch={form.laneFinishBranch}
+        rowKey={rowKey}
+        onSave={(input) => save({ enabled: form.enabled, ...input })}
+      />
+      {settings.incident && (
+        <ProjectFactoryIncident projectId={projectId} incident={settings.incident} />
       )}
+      {/* An incident says why itself; any other reason is shown as the watcher wrote it. */}
+      {settings.blockedReason && !settings.incident && (
+        <FactoryAlert testId="settings-factory-blocked">{settings.blockedReason}</FactoryAlert>
+      )}
+    </>
+  );
+}
 
+function ProjectFactorySettingRows({ projectId }: { projectId: string }) {
+  const { t } = useTranslation();
+  const settings = useFactorySettings(projectId);
+  // Bumped after every save settles, so the inputs re-read the confirmed row —
+  // also after a refused save, which leaves the row (and its updatedAt) unchanged.
+  const [revision, setRevision] = useState(0);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  const saveNow = (input: Omit<SaveFactorySettingsInput, 'projectId'>) => {
+    setSaveError(null);
+    return saveFactorySettings({ projectId, ...input })
+      .orTee((error) => {
+        setSaveError(error.friendlyMessage ?? error.message);
+        toastError(error, 'factory');
+      })
+      .match(
+        () => setRevision((r) => r + 1),
+        () => setRevision((r) => r + 1),
+      );
+  };
+  const save: SaveFactory = (input) => void saveNow(input);
+
+  const form = formValues(settings);
+  const { enabled, mode, label, flowName } = form;
+  const rowKey = `${settings?.updatedAt ?? 'none'}-${revision}`;
+  const flowValidation = useFactoryFlowValidation(projectId, flowName, true, form.stepOverrides);
+  const { validation } = flowValidation;
+
+  const setLabel = (value: string) => {
+    const next = changedText(value, label);
+    if (next) save({ enabled, label: next });
+  };
+
+  return (
+    <>
+      <FactoryStatusRows
+        enabled={enabled}
+        blockedReason={enableBlockedReason(t, flowName, flowValidation)}
+        saveError={saveError}
+        onEnabled={(value) => save({ enabled: value === 'on' })}
+      />
+      {validation?.ok && !validation.proofReady && (
+        <FactoryGenerateConfigRow projectId={projectId} flowName={flowName} />
+      )}
       <ProjectFactoryFlowSetupCard projectId={projectId} flowName={flowName} />
 
       {/* The mode can change while paused, so switching to manual never lets labelled issues in. */}
@@ -352,104 +500,21 @@ function ProjectFactorySettingRows({ projectId }: { projectId: string }) {
         mode={mode}
         label={label}
         labelKey={`label-${rowKey}`}
-        onMode={setMode}
+        onMode={(value) => save({ enabled, mode: value })}
         onLabel={setLabel}
       />
 
       {enabled && (
-        <>
-          <ProjectSettingRow
-            settingId="factory.flow"
-            title={t('settings.projectFactoryFlow', 'Flow')}
-            description={t(
-              'settings.projectFactoryFlowDesc',
-              'The default flow: preselected when you send issues, and run for labelled ones',
-            )}
-          >
-            <Input
-              key={`flow-${rowKey}`}
-              defaultValue={flowName}
-              className="w-[220px]"
-              data-testid="settings-factory-flow"
-              onBlur={(e) => setFlow(e.target.value)}
-            />
-          </ProjectSettingRow>
-
-          <ProjectSettingRow
-            settingId="factory.concurrency"
-            title={t('settings.projectFactoryConcurrency', 'Max in flight')}
-            description={t('settings.projectFactoryConcurrencyDesc', 'How many issues run at once')}
-          >
-            <Input
-              key={`conc-${rowKey}`}
-              type="number"
-              min={1}
-              max={20}
-              defaultValue={maxConcurrent}
-              className="w-[220px]"
-              data-testid="settings-factory-concurrency"
-              onBlur={(e) => setConcurrency(e.target.value)}
-            />
-          </ProjectSettingRow>
-
-          <ProjectFactoryBaseBranch
-            projectId={projectId}
-            baseBranch={form.baseBranch}
-            onSave={(baseBranch) => void save({ enabled, baseBranch })}
-          />
-
-          <ProjectFactoryMergeRows
-            projectId={projectId}
-            flowName={flowName}
-            settings={form}
-            rowKey={rowKey}
-            onSave={(input) => void save({ enabled, ...input })}
-          />
-
-          <ProjectFactorySpecRows
-            specStage={form.specStage}
-            commitSpecPath={form.commitSpecPath}
-            rowKey={rowKey}
-            onSave={(input) => void save({ enabled, ...input })}
-          />
-
-          <ProjectFactoryStepOptions
-            projectId={projectId}
-            flowName={flowName}
-            overrides={form.stepOverrides}
-            onSave={(stepOverrides) => void save({ enabled, stepOverrides })}
-          />
-        </>
+        <FactoryEnabledRows projectId={projectId} form={form} rowKey={rowKey} save={save} />
       )}
-
-      {/* Listed while paused too: a paused factory keeps its schedules and starts none. */}
-      {settings && <ProjectFactoryTriggers projectId={projectId} />}
-
       {settings && (
-        <ProjectFactoryLanes
+        <FactoryOverviewRows
           projectId={projectId}
-          label={label}
-          laneLabelPrefix={form.laneLabelPrefix}
-          laneBranchPrefix={form.laneBranchPrefix}
-          laneFinishBranch={form.laneFinishBranch}
+          settings={settings}
+          form={form}
           rowKey={rowKey}
-          onSave={(input) => void save({ enabled, ...input })}
+          save={save}
         />
-      )}
-
-      {settings?.incident && (
-        <ProjectFactoryIncident projectId={projectId} incident={settings.incident} />
-      )}
-
-      {/* An incident says why itself; any other reason is shown as the watcher wrote it. */}
-      {settings?.blockedReason && !settings.incident && (
-        <Alert
-          variant="destructive"
-          className="mx-4 my-2 w-auto"
-          data-testid="settings-factory-blocked"
-        >
-          <AlertDescription>{settings.blockedReason}</AlertDescription>
-        </Alert>
       )}
     </>
   );

@@ -48,36 +48,238 @@ function buildPRBody(setup: FactoryFlowSetupRow): string {
   return lines.join('\n');
 }
 
+type SetupResult = Result<FactoryFlowSetupRow, FlowSetupError>;
+type SetupState = FactoryFlowSetupRow['state'];
+
+async function reload(ctx: SetupServiceContext, setupId: string): Promise<FactoryFlowSetupRow> {
+  // The row was just written by this service, so it exists.
+  return (await ctx.deps.repo.getById(setupId))!;
+}
+
+/** Move `from` → `to` (compare-and-set), then clean up and tell the browsers when it moved. */
+async function moveTo(
+  ctx: SetupServiceContext,
+  setup: FactoryFlowSetupRow,
+  from: SetupState,
+  to: SetupState,
+  opts: {
+    cleanup?: 'all' | 'worktree';
+    fields?: Parameters<SetupServiceContext['deps']['repo']['transition']>[2];
+  } = {},
+): Promise<boolean> {
+  const moved = await ctx.deps.repo.transition(setup.id, to, opts.fields ?? { error: null }, {
+    fromState: from,
+  });
+  if (!moved) return false;
+  if (opts.cleanup) await ctx.doCleanup(setup, opts.cleanup === 'all');
+  ctx.emit(setup.userId, setup.projectId, setup.id, to);
+  return true;
+}
+
+/** Whether the setup's proposed flow file is already on the default branch. */
+async function landedOnDefaultBranch(
+  ctx: SetupServiceContext,
+  setup: FactoryFlowSetupRow,
+): Promise<boolean> {
+  if (!setup.proposedFileSha) return false;
+  const reader = await ctx.deps.repoReader(setup.userId, setup.projectId);
+  if (!reader) return false;
+  const file = await reader.readDefaultBranchFile(flowFilePath(setup.flowName));
+  return file.isOk() && !!file.value && sha256Hex(file.value) === setup.proposedFileSha;
+}
+
 async function settleCommittingSetupOp(
   ctx: SetupServiceContext,
   setup: FactoryFlowSetupRow,
 ): Promise<FactoryFlowSetupRow | null> {
-  const { repo } = ctx.deps;
-  const reader = await ctx.deps.repoReader(setup.userId, setup.projectId);
-  if (reader && setup.proposedFileSha) {
-    const file = await reader.readDefaultBranchFile(flowFilePath(setup.flowName));
-    if (file.isOk() && file.value && sha256Hex(file.value) === setup.proposedFileSha) {
-      const moved = await repo.transition(
-        setup.id,
-        'committed',
-        { error: null },
-        { fromState: 'committing' },
-      );
-      if (moved) {
-        await ctx.doCleanup(setup, true);
-        ctx.emit(setup.userId, setup.projectId, setup.id, 'committed');
-        return (await repo.getById(setup.id)) ?? null;
-      }
+  if (await landedOnDefaultBranch(ctx, setup)) {
+    if (await moveTo(ctx, setup, 'committing', 'committed', { cleanup: 'all' })) {
+      return (await ctx.deps.repo.getById(setup.id)) ?? null;
     }
   }
-
   const rollback = setup.commitVariant === 'opt-out' ? 'failed' : 'proposed';
-  const moved = await repo.transition(setup.id, rollback, {}, { fromState: 'committing' });
-  if (moved) {
-    ctx.emit(setup.userId, setup.projectId, setup.id, rollback);
-    return (await repo.getById(setup.id)) ?? null;
+  if (await moveTo(ctx, setup, 'committing', rollback, { fields: {} })) {
+    return (await ctx.deps.repo.getById(setup.id)) ?? null;
   }
   return null;
+}
+
+/** The setup, when it exists and belongs to the actor. */
+async function loadOwnSetup(
+  ctx: SetupServiceContext,
+  actor: FlowSetupActor,
+  setupId: string,
+  action: string,
+): Promise<Result<FactoryFlowSetupRow, FlowSetupError>> {
+  const setup = await ctx.deps.repo.getById(setupId);
+  if (!setup) return err({ kind: 'not-found', status: 404, message: 'Flow setup not found' });
+  if (setup.userId !== actor.userId) {
+    return err({
+      kind: 'forbidden',
+      status: 403,
+      message: `Only the member who started this setup can ${action}.`,
+    });
+  }
+  return ok(setup);
+}
+
+const invalidState = (message: string): FlowSetupError => ({
+  kind: 'invalid-state',
+  status: 409,
+  message,
+});
+
+interface CommitPlan {
+  content: string;
+  sha: string;
+  /** Where a failed push returns the setup. */
+  fromState: 'proposed' | 'failed';
+}
+
+/** What a confirmation commits: the verified proposal, or the explicit opt-out. */
+function planCommit(
+  setup: FactoryFlowSetupRow,
+  fileSha: string,
+  variant: 'rules' | 'opt-out',
+): Result<CommitPlan, FlowSetupError> {
+  if (variant === 'opt-out') {
+    if (setup.state !== 'proposed' && setup.state !== 'failed') {
+      return err(invalidState(`Cannot confirm opt-out from state "${setup.state}".`));
+    }
+    const content = buildOptOutWorkflowYaml(setup.startingFile);
+    return ok({ content, sha: sha256Hex(content), fromState: setup.state });
+  }
+  if (setup.state !== 'proposed' || !setup.proposedFile || !setup.proposedFileSha) {
+    return err(invalidState(`Cannot confirm rules from state "${setup.state}".`));
+  }
+  if (setup.proposedFileSha !== fileSha) {
+    return err({
+      kind: 'file-changed',
+      status: 409,
+      message:
+        'The proposed flow file changed since it was shown. Please review and confirm again.',
+      currentSha: setup.proposedFileSha,
+      currentFile: setup.proposedFile,
+    });
+  }
+  return ok({ content: setup.proposedFile, sha: setup.proposedFileSha, fromState: 'proposed' });
+}
+
+/** Take the setup to `committing` (compare-and-set on the shown proposal). */
+async function claimCommitting(
+  ctx: SetupServiceContext,
+  setup: FactoryFlowSetupRow,
+  plan: CommitPlan,
+  variant: 'rules' | 'opt-out',
+  fileSha: string,
+): Promise<Result<void, FlowSetupError>> {
+  const { repo } = ctx.deps;
+  const moved = await repo.transition(
+    setup.id,
+    'committing',
+    { proposedFile: plan.content, proposedFileSha: plan.sha, commitVariant: variant, error: null },
+    variant === 'rules'
+      ? { fromState: 'proposed', proposedFileSha: plan.sha }
+      : { fromState: plan.fromState },
+  );
+  if (moved) {
+    ctx.emit(setup.userId, setup.projectId, setup.id, 'committing');
+    return ok(undefined);
+  }
+  const fresh = await repo.getById(setup.id);
+  const changedUnderUs =
+    variant === 'rules' &&
+    fresh?.state === 'proposed' &&
+    !!fresh.proposedFileSha &&
+    !!fresh.proposedFile &&
+    fresh.proposedFileSha !== fileSha;
+  if (changedUnderUs) {
+    return err({
+      kind: 'file-changed',
+      status: 409,
+      message: 'The proposed flow file changed since it was shown.',
+      currentSha: fresh.proposedFileSha!,
+      currentFile: fresh.proposedFile!,
+    });
+  }
+  return err(invalidState('Setup state changed concurrently.'));
+}
+
+function recordPush(
+  ctx: SetupServiceContext,
+  setup: FactoryFlowSetupRow,
+  variant: 'rules' | 'opt-out',
+  outcome: { ok: true; commitSha: string } | { ok: false; error: string },
+): Promise<void> {
+  const input = {
+    setupId: setup.id,
+    flowName: setup.flowName,
+    branch: setup.defaultBranch,
+    variant,
+  };
+  return ctx.recordAct({
+    kind: 'factory.setup_push',
+    userId: setup.userId,
+    projectId: setup.projectId,
+    threadId: setup.threadId ?? undefined,
+    title: `Push factory flow ${setup.flowName} to ${setup.defaultBranch}`,
+    input: outcome.ok ? { ...input, commitSha: outcome.commitSha } : input,
+    ...(outcome.ok ? { ok: true } : { ok: false, error: outcome.error }),
+  });
+}
+
+async function pushCommit(
+  ctx: SetupServiceContext,
+  setup: FactoryFlowSetupRow,
+  plan: CommitPlan,
+  variant: 'rules' | 'opt-out',
+): Promise<SetupResult> {
+  const builtinPrompts =
+    parseSetupColumn(storedPromptFilesSchema, setup.builtinPrompts, 'builtin_prompts') ?? [];
+  const pushed = await ctx.deps.runner.commitAndPush(setup.userId, setup.threadId!, {
+    defaultBranch: setup.defaultBranch,
+    files: [{ path: flowFilePath(setup.flowName), content: plan.content }, ...builtinPrompts],
+    expectedFlowSha: plan.sha,
+    commitMessage:
+      variant === 'opt-out'
+        ? `chore(factory): configure ${setup.flowName} without regression proof`
+        : `chore(factory): configure regression proof for ${setup.flowName}`,
+  });
+
+  if (pushed.isErr()) {
+    await recordPush(ctx, setup, variant, { ok: false, error: pushed.error.message });
+    // The push may have landed before the runner went away: settle from the default branch.
+    const settled = await settleCommittingSetupOp(ctx, {
+      ...setup,
+      state: 'committing',
+      proposedFile: plan.content,
+      proposedFileSha: plan.sha,
+      commitVariant: variant,
+    });
+    if (settled) return ok(settled);
+    const offline = pushed.error.kind === 'runner-unavailable';
+    return err(
+      offline
+        ? { kind: 'runner-offline', status: 502, message: pushed.error.message }
+        : { kind: 'unavailable', status: 503, message: pushed.error.message },
+    );
+  }
+
+  const res = pushed.value;
+  if (res.ok) {
+    await recordPush(ctx, setup, variant, { ok: true, commitSha: res.commitSha });
+    await moveTo(ctx, setup, 'committing', 'committed', {
+      cleanup: 'all',
+      fields: { commitSha: res.commitSha, error: null },
+    });
+    return ok(await reload(ctx, setup.id));
+  }
+
+  await recordPush(ctx, setup, variant, { ok: false, error: res.message });
+  // A branch rule refused the push: the member can open a pull request instead.
+  const next = res.kind === 'branch-rule-rejected' ? 'push_rejected' : plan.fromState;
+  await moveTo(ctx, setup, 'committing', next, { fields: { error: res.message } });
+  return ok(await reload(ctx, setup.id));
 }
 
 export async function confirmFlowSetupOp(
@@ -86,402 +288,121 @@ export async function confirmFlowSetupOp(
   setupId: string,
   fileSha: string,
   variant: 'rules' | 'opt-out',
-): Promise<Result<FactoryFlowSetupRow, FlowSetupError>> {
-  const { repo, runner } = ctx.deps;
-  const setup = await repo.getById(setupId);
-  if (!setup) {
-    return err({ kind: 'not-found', status: 404, message: 'Flow setup not found' });
-  }
-  if (setup.userId !== actor.userId) {
-    return err({
-      kind: 'forbidden',
-      status: 403,
-      message: 'Only the member who started this setup can confirm it.',
-    });
-  }
-  if (!setup.threadId) {
-    return err({
-      kind: 'invalid-state',
-      status: 409,
-      message: 'Setup has no associated thread.',
-    });
-  }
+): Promise<SetupResult> {
+  const loaded = await loadOwnSetup(ctx, actor, setupId, 'confirm it');
+  if (loaded.isErr()) return err(loaded.error);
+  const setup = loaded.value;
+  if (!setup.threadId) return err(invalidState('Setup has no associated thread.'));
 
-  let contentToCommit: string;
-  let expectedSha: string;
-  let fromState: 'proposed' | 'failed';
+  const plan = planCommit(setup, fileSha, variant);
+  if (plan.isErr()) return err(plan.error);
+  const claimed = await claimCommitting(ctx, setup, plan.value, variant, fileSha);
+  if (claimed.isErr()) return err(claimed.error);
+  return pushCommit(ctx, setup, plan.value, variant);
+}
 
-  if (variant === 'rules') {
-    if (setup.state !== 'proposed' || !setup.proposedFile || !setup.proposedFileSha) {
-      return err({
-        kind: 'invalid-state',
-        status: 409,
-        message: `Cannot confirm rules from state "${setup.state}".`,
-      });
-    }
-    if (setup.proposedFileSha !== fileSha) {
-      return err({
-        kind: 'file-changed',
-        status: 409,
-        message:
-          'The proposed flow file changed since it was shown. Please review and confirm again.',
-        currentSha: setup.proposedFileSha,
-        currentFile: setup.proposedFile,
-      });
-    }
-    contentToCommit = setup.proposedFile;
-    expectedSha = setup.proposedFileSha;
-    fromState = 'proposed';
-  } else {
-    if (setup.state !== 'proposed' && setup.state !== 'failed') {
-      return err({
-        kind: 'invalid-state',
-        status: 409,
-        message: `Cannot confirm opt-out from state "${setup.state}".`,
-      });
-    }
-    contentToCommit = buildOptOutWorkflowYaml(setup.startingFile);
-    expectedSha = sha256Hex(contentToCommit);
-    fromState = setup.state;
-  }
-
-  const moved = await repo.transition(
-    setup.id,
-    'committing',
-    {
-      proposedFile: contentToCommit,
-      proposedFileSha: expectedSha,
-      commitVariant: variant,
-      error: null,
-    },
-    variant === 'rules' ? { fromState: 'proposed', proposedFileSha: expectedSha } : { fromState },
-  );
-  if (!moved) {
-    const fresh = await repo.getById(setup.id);
-    if (
-      variant === 'rules' &&
-      fresh?.state === 'proposed' &&
-      fresh.proposedFileSha &&
-      fresh.proposedFile &&
-      fresh.proposedFileSha !== fileSha
-    ) {
-      return err({
-        kind: 'file-changed',
-        status: 409,
-        message: 'The proposed flow file changed since it was shown.',
-        currentSha: fresh.proposedFileSha,
-        currentFile: fresh.proposedFile,
-      });
-    }
-    return err({
-      kind: 'invalid-state',
-      status: 409,
-      message: 'Setup state changed concurrently.',
-    });
-  }
-  ctx.emit(setup.userId, setup.projectId, setup.id, 'committing');
-
-  const builtinPrompts =
-    parseSetupColumn(storedPromptFilesSchema, setup.builtinPrompts, 'builtin_prompts') ?? [];
-  const files = [
-    { path: flowFilePath(setup.flowName), content: contentToCommit },
-    ...builtinPrompts,
-  ];
-  const commitMessage =
-    variant === 'opt-out'
-      ? `chore(factory): configure ${setup.flowName} without regression proof`
-      : `chore(factory): configure regression proof for ${setup.flowName}`;
-
-  const pushed = await runner.commitAndPush(setup.userId, setup.threadId, {
-    defaultBranch: setup.defaultBranch,
-    files,
-    expectedFlowSha: expectedSha,
-    commitMessage,
-  });
-
-  if (pushed.isErr()) {
-    await ctx.recordAct({
-      kind: 'factory.setup_push',
-      userId: setup.userId,
-      projectId: setup.projectId,
-      threadId: setup.threadId,
-      title: `Push factory flow ${setup.flowName} to ${setup.defaultBranch}`,
-      input: {
-        setupId: setup.id,
-        flowName: setup.flowName,
-        branch: setup.defaultBranch,
-        variant,
-      },
-      ok: false,
-      error: pushed.error.message,
-    });
-
-    const settled = await settleCommittingSetupOp(ctx, {
-      ...setup,
-      state: 'committing',
-      proposedFile: contentToCommit,
-      proposedFileSha: expectedSha,
-      commitVariant: variant,
-    });
-    if (settled) return ok(settled);
-
-    if (pushed.error.kind === 'runner-unavailable') {
-      return err({ kind: 'runner-offline', status: 502, message: pushed.error.message });
-    }
-    return err({ kind: 'unavailable', status: 503, message: pushed.error.message });
-  }
-
-  const res = pushed.value;
-  if (res.ok) {
-    await ctx.recordAct({
-      kind: 'factory.setup_push',
-      userId: setup.userId,
-      projectId: setup.projectId,
-      threadId: setup.threadId,
-      title: `Push factory flow ${setup.flowName} to ${setup.defaultBranch}`,
-      input: {
-        setupId: setup.id,
-        flowName: setup.flowName,
-        branch: setup.defaultBranch,
-        variant,
-        commitSha: res.commitSha,
-      },
-      ok: true,
-    });
-    await repo.transition(
-      setup.id,
-      'committed',
-      { commitSha: res.commitSha, error: null },
-      { fromState: 'committing' },
-    );
-    await ctx.doCleanup(setup, true);
-    ctx.emit(setup.userId, setup.projectId, setup.id, 'committed');
-    return ok((await repo.getById(setup.id))!);
-  }
-
-  await ctx.recordAct({
-    kind: 'factory.setup_push',
+function recordPr(
+  ctx: SetupServiceContext,
+  setup: FactoryFlowSetupRow,
+  outcome: { ok: true; prNumber: number | null } | { ok: false; error: string },
+): Promise<void> {
+  const input = {
+    setupId: setup.id,
+    flowName: setup.flowName,
+    branch: setup.branch,
+    base: setup.defaultBranch,
+  };
+  return ctx.recordAct({
+    kind: 'factory.setup_pr',
     userId: setup.userId,
     projectId: setup.projectId,
-    threadId: setup.threadId,
-    title: `Push factory flow ${setup.flowName} to ${setup.defaultBranch}`,
-    input: {
-      setupId: setup.id,
-      flowName: setup.flowName,
-      branch: setup.defaultBranch,
-      variant,
-    },
-    ok: false,
-    error: res.message,
+    threadId: setup.threadId ?? undefined,
+    title: `Open pull request for factory flow ${setup.flowName}`,
+    input: outcome.ok ? { ...input, prNumber: outcome.prNumber ?? undefined } : input,
+    ...(outcome.ok ? { ok: true } : { ok: false, error: outcome.error }),
   });
-
-  if (res.kind === 'branch-rule-rejected') {
-    await repo.transition(
-      setup.id,
-      'push_rejected',
-      { error: res.message },
-      { fromState: 'committing' },
-    );
-    ctx.emit(setup.userId, setup.projectId, setup.id, 'push_rejected');
-    return ok((await repo.getById(setup.id))!);
-  }
-
-  await repo.transition(setup.id, fromState, { error: res.message }, { fromState: 'committing' });
-  ctx.emit(setup.userId, setup.projectId, setup.id, fromState);
-  return ok((await repo.getById(setup.id))!);
 }
 
 export async function openFlowSetupPullRequestOp(
   ctx: SetupServiceContext,
   actor: FlowSetupActor,
   setupId: string,
-): Promise<Result<FactoryFlowSetupRow, FlowSetupError>> {
-  const { repo, runner } = ctx.deps;
-  const setup = await repo.getById(setupId);
-  if (!setup) {
-    return err({ kind: 'not-found', status: 404, message: 'Flow setup not found' });
-  }
-  if (setup.userId !== actor.userId) {
-    return err({
-      kind: 'forbidden',
-      status: 403,
-      message: 'Only the member who started this setup can open its pull request.',
-    });
-  }
+): Promise<SetupResult> {
+  const loaded = await loadOwnSetup(ctx, actor, setupId, 'open its pull request');
+  if (loaded.isErr()) return err(loaded.error);
+  const setup = loaded.value;
   if (setup.state !== 'push_rejected' || !setup.threadId) {
-    return err({
-      kind: 'invalid-state',
-      status: 409,
-      message: `Cannot open a pull request from state "${setup.state}".`,
-    });
+    return err(invalidState(`Cannot open a pull request from state "${setup.state}".`));
   }
 
-  const title =
-    setup.commitVariant === 'opt-out'
-      ? `Configure factory flow ${setup.flowName} (no regression proof)`
-      : `Configure regression proof for factory flow ${setup.flowName}`;
-  const body = buildPRBody(setup);
-
-  const opened = await runner.openPullRequest(setup.userId, setup.threadId, {
+  const opened = await ctx.deps.runner.openPullRequest(setup.userId, setup.threadId, {
     setupBranch: setup.branch,
     defaultBranch: setup.defaultBranch,
-    title,
-    body,
+    title:
+      setup.commitVariant === 'opt-out'
+        ? `Configure factory flow ${setup.flowName} (no regression proof)`
+        : `Configure regression proof for factory flow ${setup.flowName}`,
+    body: buildPRBody(setup),
   });
 
   if (opened.isErr()) {
-    const errorMsg = opened.error.message;
-    await ctx.recordAct({
-      kind: 'factory.setup_pr',
-      userId: setup.userId,
-      projectId: setup.projectId,
-      threadId: setup.threadId,
-      title: `Open pull request for factory flow ${setup.flowName}`,
-      input: {
-        setupId: setup.id,
-        flowName: setup.flowName,
-        branch: setup.branch,
-        base: setup.defaultBranch,
-      },
-      ok: false,
-      error: errorMsg,
-    });
-    if (opened.error.kind === 'runner-unavailable') {
-      return err({ kind: 'runner-offline', status: 502, message: errorMsg });
-    }
-    return err({ kind: 'unavailable', status: 503, message: errorMsg });
+    await recordPr(ctx, setup, { ok: false, error: opened.error.message });
+    const offline = opened.error.kind === 'runner-unavailable';
+    return err(
+      offline
+        ? { kind: 'runner-offline', status: 502, message: opened.error.message }
+        : { kind: 'unavailable', status: 503, message: opened.error.message },
+    );
   }
-
   if (!opened.value.ok) {
-    const errorMsg = opened.value.message;
-    await ctx.recordAct({
-      kind: 'factory.setup_pr',
-      userId: setup.userId,
-      projectId: setup.projectId,
-      threadId: setup.threadId,
-      title: `Open pull request for factory flow ${setup.flowName}`,
-      input: {
-        setupId: setup.id,
-        flowName: setup.flowName,
-        branch: setup.branch,
-        base: setup.defaultBranch,
-      },
-      ok: false,
-      error: errorMsg,
-    });
-    return err({ kind: 'unavailable', status: 503, message: errorMsg });
+    await recordPr(ctx, setup, { ok: false, error: opened.value.message });
+    return err({ kind: 'unavailable', status: 503, message: opened.value.message });
   }
 
   const { prUrl, prNumber } = opened.value;
-  await ctx.recordAct({
-    kind: 'factory.setup_pr',
-    userId: setup.userId,
-    projectId: setup.projectId,
-    threadId: setup.threadId,
-    title: `Open pull request for factory flow ${setup.flowName}`,
-    input: {
-      setupId: setup.id,
-      flowName: setup.flowName,
-      branch: setup.branch,
-      base: setup.defaultBranch,
-      prNumber: prNumber ?? undefined,
-    },
-    ok: true,
+  await recordPr(ctx, setup, { ok: true, prNumber });
+  // Keep the branch: the open pull request needs it.
+  await moveTo(ctx, setup, 'push_rejected', 'pr_open', {
+    cleanup: 'worktree',
+    fields: { prNumber, prUrl, error: null },
   });
-
-  await repo.transition(
-    setup.id,
-    'pr_open',
-    { prNumber, prUrl, error: null },
-    { fromState: 'push_rejected' },
-  );
-  await ctx.doCleanup(setup, false);
-  ctx.emit(setup.userId, setup.projectId, setup.id, 'pr_open');
-  return ok((await repo.getById(setup.id))!);
+  return ok(await reload(ctx, setup.id));
 }
 
 export async function discardFlowSetupOp(
   ctx: SetupServiceContext,
   actor: FlowSetupActor,
   setupId: string,
-): Promise<Result<FactoryFlowSetupRow, FlowSetupError>> {
-  const { repo } = ctx.deps;
-  const setup = await repo.getById(setupId);
-  if (!setup) {
-    return err({ kind: 'not-found', status: 404, message: 'Flow setup not found' });
-  }
-  if (setup.userId !== actor.userId) {
-    return err({
-      kind: 'forbidden',
-      status: 403,
-      message: 'Only the member who started this setup can discard it.',
-    });
-  }
+): Promise<SetupResult> {
+  const loaded = await loadOwnSetup(ctx, actor, setupId, 'discard it');
+  if (loaded.isErr()) return err(loaded.error);
+  const setup = loaded.value;
 
-  const moved = await repo.transition(setup.id, 'discarded');
-  if (!moved) {
-    return err({
-      kind: 'invalid-state',
-      status: 409,
-      message: `Cannot discard setup in state "${setup.state}".`,
-    });
-  }
+  const moved = await ctx.deps.repo.transition(setup.id, 'discarded');
+  if (!moved) return err(invalidState(`Cannot discard setup in state "${setup.state}".`));
 
   await ctx.doCleanup(setup, true);
   ctx.emit(setup.userId, setup.projectId, setup.id, 'discarded');
-  return ok((await repo.getById(setup.id))!);
+  return ok(await reload(ctx, setup.id));
 }
 
+/** Settle an open pull request: merged (or the file landed) → committed, closed → discarded. */
 async function settlePrOpenSetupOp(
   ctx: SetupServiceContext,
   setup: FactoryFlowSetupRow,
 ): Promise<void> {
-  const { repo } = ctx.deps;
-  const reader = await ctx.deps.repoReader(setup.userId, setup.projectId);
-  if (!reader) return;
-
-  if (setup.proposedFileSha) {
-    const file = await reader.readDefaultBranchFile(flowFilePath(setup.flowName));
-    if (file.isOk() && file.value && sha256Hex(file.value) === setup.proposedFileSha) {
-      const moved = await repo.transition(
-        setup.id,
-        'committed',
-        { error: null },
-        { fromState: 'pr_open' },
-      );
-      if (moved) {
-        await ctx.doCleanup(setup, true);
-        ctx.emit(setup.userId, setup.projectId, setup.id, 'committed');
-      }
-      return;
-    }
+  if (await landedOnDefaultBranch(ctx, setup)) {
+    await moveTo(ctx, setup, 'pr_open', 'committed', { cleanup: 'all' });
+    return;
   }
-
-  if (setup.prNumber && reader.getPullRequestState) {
-    const prState = await reader.getPullRequestState(setup.prNumber);
-    if (prState.isOk() && prState.value === 'merged') {
-      const moved = await repo.transition(
-        setup.id,
-        'committed',
-        { error: null },
-        { fromState: 'pr_open' },
-      );
-      if (moved) {
-        await ctx.doCleanup(setup, true);
-        ctx.emit(setup.userId, setup.projectId, setup.id, 'committed');
-      }
-    } else if (prState.isOk() && prState.value === 'closed') {
-      const moved = await repo.transition(
-        setup.id,
-        'discarded',
-        { error: null },
-        { fromState: 'pr_open' },
-      );
-      if (moved) {
-        await ctx.doCleanup(setup, true);
-        ctx.emit(setup.userId, setup.projectId, setup.id, 'discarded');
-      }
-    }
+  const reader = await ctx.deps.repoReader(setup.userId, setup.projectId);
+  if (!setup.prNumber || !reader?.getPullRequestState) return;
+  const prState = await reader.getPullRequestState(setup.prNumber);
+  if (prState.isErr()) return;
+  if (prState.value === 'merged') {
+    await moveTo(ctx, setup, 'pr_open', 'committed', { cleanup: 'all' });
+  } else if (prState.value === 'closed') {
+    await moveTo(ctx, setup, 'pr_open', 'discarded', { cleanup: 'all' });
   }
 }
 

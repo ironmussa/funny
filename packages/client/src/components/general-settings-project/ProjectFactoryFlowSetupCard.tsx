@@ -114,6 +114,220 @@ function RuleVerdictSection({ rules }: { rules: FactoryFlowSetupRuleVerdict[] })
   );
 }
 
+interface SetupActions {
+  busy: boolean;
+  confirm: (variant: 'rules' | 'opt-out') => void;
+  openPr: () => void;
+  discard: () => void;
+}
+
+interface SetupStateProps {
+  setup: FactoryFlowSetupView;
+  projectId: string;
+  actions: SetupActions;
+}
+
+function SetupThreadLink({ setup, projectId }: Omit<SetupStateProps, 'actions'>) {
+  const { t } = useTranslation();
+  if (!setup.threadId) return null;
+  return (
+    <a
+      href={`/projects/${projectId}/threads/${setup.threadId}`}
+      className="text-primary text-xs font-medium underline"
+      data-testid="factory-setup-thread-link"
+    >
+      {t('settings.factorySetupOpenThread', 'Open setup thread')}
+    </a>
+  );
+}
+
+/** Generating on the runner, or verifying in a clean checkout: say so and link the thread. */
+function InProgressState({ setup, projectId }: Omit<SetupStateProps, 'actions'>) {
+  const { t } = useTranslation();
+  const generating = setup.state === 'generating';
+  return (
+    <div
+      className="space-y-2"
+      data-testid={generating ? 'factory-setup-generating' : 'factory-setup-verifying'}
+    >
+      <p className="text-muted-foreground">
+        {generating
+          ? t(
+              'settings.factorySetupGenerating',
+              'Generating regression proof rules on your runner…',
+            )
+          : t(
+              'settings.factorySetupVerifying',
+              'Verifying generated rules in a clean checkout of {{branch}}…',
+              { branch: setup.defaultBranch },
+            )}
+      </p>
+      <SetupThreadLink setup={setup} projectId={projectId} />
+    </div>
+  );
+}
+
+function FailedState({ setup, actions }: SetupStateProps) {
+  const { t } = useTranslation();
+  return (
+    <div className="space-y-3" data-testid="factory-setup-failed">
+      {setup.error && (
+        <Alert variant="destructive" data-testid="factory-setup-error">
+          <AlertDescription>{setup.error}</AlertDescription>
+        </Alert>
+      )}
+      {setup.verdicts && <RuleVerdictSection rules={setup.verdicts.rules} />}
+      <div className="border-border space-y-1.5 border-t pt-3">
+        <p className="text-muted-foreground text-xs">
+          {t(
+            'settings.factorySetupOptOutNote',
+            'Or opt out explicitly: runs will merge without showing their test catches the bug.',
+          )}
+        </p>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={actions.busy}
+          data-testid="factory-setup-opt-out"
+          onClick={() => actions.confirm('opt-out')}
+        >
+          {t('settings.factorySetupOptOut', 'Merge without regression proof')}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function DiscardButton({ actions }: { actions: SetupActions }) {
+  const { t } = useTranslation();
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      disabled={actions.busy}
+      data-testid="factory-setup-discard"
+      onClick={actions.discard}
+    >
+      {t('settings.factorySetupDiscard', 'Discard')}
+    </Button>
+  );
+}
+
+function PushRejectedState({ setup, actions }: SetupStateProps) {
+  const { t } = useTranslation();
+  return (
+    <div className="space-y-3" data-testid="factory-setup-push-rejected">
+      <Alert variant="destructive" data-testid="factory-setup-push-rejected-reason">
+        <AlertDescription>
+          {setup.error ??
+            t(
+              'settings.factorySetupPushRejectedFallback',
+              'Push to {{branch}} was rejected by branch rules.',
+              { branch: setup.defaultBranch },
+            )}
+        </AlertDescription>
+      </Alert>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          size="sm"
+          disabled={actions.busy}
+          data-testid="factory-setup-open-pr"
+          onClick={actions.openPr}
+        >
+          {t('settings.factorySetupOpenPr', 'Open a pull request')}
+        </Button>
+        <DiscardButton actions={actions} />
+      </div>
+    </div>
+  );
+}
+
+function PrOpenState({ setup, actions }: SetupStateProps) {
+  const { t } = useTranslation();
+  return (
+    <div className="space-y-2" data-testid="factory-setup-pr-open">
+      <p className="text-muted-foreground">
+        {t(
+          'settings.factorySetupPrOpen',
+          'Pull request opened against {{branch}}. The factory can be enabled once it merges.',
+          { branch: setup.defaultBranch },
+        )}
+      </p>
+      <div className="flex flex-wrap items-center gap-3">
+        {setup.prUrl && (
+          <a
+            href={setup.prUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="text-primary text-xs font-medium underline"
+            data-testid="factory-setup-pr-link"
+          >
+            {setup.prNumber
+              ? t('settings.factorySetupViewPrNumber', 'View pull request #{{number}}', {
+                  number: setup.prNumber,
+                })
+              : t('settings.factorySetupViewPr', 'View pull request')}
+          </a>
+        )}
+        <DiscardButton actions={actions} />
+      </div>
+    </div>
+  );
+}
+
+function CommittedState({ setup }: Omit<SetupStateProps, 'actions'>) {
+  const { t } = useTranslation();
+  return (
+    <div className="text-muted-foreground text-xs" data-testid="factory-setup-committed">
+      {t('settings.factorySetupCommitted', 'Committed to {{branch}}', {
+        branch: setup.defaultBranch,
+      })}
+      {setup.commitSha ? ` (${setup.commitSha.slice(0, 7)})` : ''}.
+    </div>
+  );
+}
+
+/** What the card shows for the setup's state. */
+function SetupStateBody(props: SetupStateProps) {
+  const { t } = useTranslation();
+  const { setup, actions } = props;
+  switch (setup.state) {
+    case 'generating':
+    case 'verifying':
+      return <InProgressState setup={setup} projectId={props.projectId} />;
+    case 'committing':
+      return (
+        <p className="text-muted-foreground" data-testid="factory-setup-committing">
+          {t('settings.factorySetupCommitting', 'Committing and pushing to {{branch}}…', {
+            branch: setup.defaultBranch,
+          })}
+        </p>
+      );
+    case 'proposed':
+      return (
+        <ProposedContent
+          setup={setup}
+          busy={actions.busy}
+          onConfirm={actions.confirm}
+          onDiscard={actions.discard}
+        />
+      );
+    case 'failed':
+      return <FailedState {...props} />;
+    case 'push_rejected':
+      return <PushRejectedState {...props} />;
+    case 'pr_open':
+      return <PrOpenState {...props} />;
+    case 'committed':
+      return <CommittedState setup={setup} projectId={props.projectId} />;
+    default:
+      return null;
+  }
+}
+
 export function ProjectFactoryFlowSetupCard({
   projectId,
   flowName,
@@ -136,18 +350,14 @@ export function ProjectFactoryFlowSetupCard({
     }
   }
 
-  const handleConfirm = (variant: 'rules' | 'opt-out') => {
-    void runAction(() =>
-      confirmFactoryFlowSetup(projectId, setup.id, setup.proposedFileSha ?? '', variant),
-    );
-  };
-
-  const handleOpenPr = () => {
-    void runAction(() => openFactoryFlowSetupPR(projectId, setup.id));
-  };
-
-  const handleDiscard = () => {
-    void runAction(() => discardFactoryFlowSetup(projectId, setup.id));
+  const actions: SetupActions = {
+    busy,
+    confirm: (variant) =>
+      void runAction(() =>
+        confirmFactoryFlowSetup(projectId, setup.id, setup.proposedFileSha ?? '', variant),
+      ),
+    openPr: () => void runAction(() => openFactoryFlowSetupPR(projectId, setup.id)),
+    discard: () => void runAction(() => discardFactoryFlowSetup(projectId, setup.id)),
   };
 
   return (
@@ -171,176 +381,7 @@ export function ProjectFactoryFlowSetupCard({
         </Alert>
       )}
 
-      {setup.state === 'generating' && (
-        <div className="space-y-2" data-testid="factory-setup-generating">
-          <p className="text-muted-foreground">
-            {t(
-              'settings.factorySetupGenerating',
-              'Generating regression proof rules on your runner…',
-            )}
-          </p>
-          {setup.threadId && (
-            <a
-              href={`/projects/${projectId}/threads/${setup.threadId}`}
-              className="text-primary text-xs font-medium underline"
-              data-testid="factory-setup-thread-link"
-            >
-              {t('settings.factorySetupOpenThread', 'Open setup thread')}
-            </a>
-          )}
-        </div>
-      )}
-
-      {setup.state === 'verifying' && (
-        <div className="space-y-2" data-testid="factory-setup-verifying">
-          <p className="text-muted-foreground">
-            {t(
-              'settings.factorySetupVerifying',
-              'Verifying generated rules in a clean checkout of {{branch}}…',
-              { branch: setup.defaultBranch },
-            )}
-          </p>
-          {setup.threadId && (
-            <a
-              href={`/projects/${projectId}/threads/${setup.threadId}`}
-              className="text-primary text-xs font-medium underline"
-              data-testid="factory-setup-thread-link"
-            >
-              {t('settings.factorySetupOpenThread', 'Open setup thread')}
-            </a>
-          )}
-        </div>
-      )}
-
-      {setup.state === 'committing' && (
-        <p className="text-muted-foreground" data-testid="factory-setup-committing">
-          {t('settings.factorySetupCommitting', 'Committing and pushing to {{branch}}…', {
-            branch: setup.defaultBranch,
-          })}
-        </p>
-      )}
-
-      {setup.state === 'proposed' && (
-        <ProposedContent
-          setup={setup}
-          busy={busy}
-          onConfirm={handleConfirm}
-          onDiscard={handleDiscard}
-        />
-      )}
-
-      {setup.state === 'failed' && (
-        <div className="space-y-3" data-testid="factory-setup-failed">
-          {setup.error && (
-            <Alert variant="destructive" data-testid="factory-setup-error">
-              <AlertDescription>{setup.error}</AlertDescription>
-            </Alert>
-          )}
-          {setup.verdicts && <RuleVerdictSection rules={setup.verdicts.rules} />}
-          <div className="border-border space-y-1.5 border-t pt-3">
-            <p className="text-muted-foreground text-xs">
-              {t(
-                'settings.factorySetupOptOutNote',
-                'Or opt out explicitly: runs will merge without showing their test catches the bug.',
-              )}
-            </p>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={busy}
-              data-testid="factory-setup-opt-out"
-              onClick={() => handleConfirm('opt-out')}
-            >
-              {t('settings.factorySetupOptOut', 'Merge without regression proof')}
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {setup.state === 'push_rejected' && (
-        <div className="space-y-3" data-testid="factory-setup-push-rejected">
-          <Alert variant="destructive" data-testid="factory-setup-push-rejected-reason">
-            <AlertDescription>
-              {setup.error ??
-                t(
-                  'settings.factorySetupPushRejectedFallback',
-                  'Push to {{branch}} was rejected by branch rules.',
-                  { branch: setup.defaultBranch },
-                )}
-            </AlertDescription>
-          </Alert>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              size="sm"
-              disabled={busy}
-              data-testid="factory-setup-open-pr"
-              onClick={handleOpenPr}
-            >
-              {t('settings.factorySetupOpenPr', 'Open a pull request')}
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              disabled={busy}
-              data-testid="factory-setup-discard"
-              onClick={handleDiscard}
-            >
-              {t('settings.factorySetupDiscard', 'Discard')}
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {setup.state === 'pr_open' && (
-        <div className="space-y-2" data-testid="factory-setup-pr-open">
-          <p className="text-muted-foreground">
-            {t(
-              'settings.factorySetupPrOpen',
-              'Pull request opened against {{branch}}. The factory can be enabled once it merges.',
-              { branch: setup.defaultBranch },
-            )}
-          </p>
-          <div className="flex flex-wrap items-center gap-3">
-            {setup.prUrl && (
-              <a
-                href={setup.prUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="text-primary text-xs font-medium underline"
-                data-testid="factory-setup-pr-link"
-              >
-                {setup.prNumber
-                  ? t('settings.factorySetupViewPrNumber', 'View pull request #{{number}}', {
-                      number: setup.prNumber,
-                    })
-                  : t('settings.factorySetupViewPr', 'View pull request')}
-              </a>
-            )}
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              disabled={busy}
-              data-testid="factory-setup-discard"
-              onClick={handleDiscard}
-            >
-              {t('settings.factorySetupDiscard', 'Discard')}
-            </Button>
-          </div>
-        </div>
-      )}
-
-      {setup.state === 'committed' && (
-        <div className="text-muted-foreground text-xs" data-testid="factory-setup-committed">
-          {t('settings.factorySetupCommitted', 'Committed to {{branch}}', {
-            branch: setup.defaultBranch,
-          })}
-          {setup.commitSha ? ` (${setup.commitSha.slice(0, 7)})` : ''}.
-        </div>
-      )}
+      <SetupStateBody setup={setup} projectId={projectId} actions={actions} />
     </div>
   );
 }

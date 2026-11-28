@@ -48,40 +48,36 @@ export interface FactoryFlowSetupTransitionExpect {
   proposedFileSha?: string;
 }
 
+/** What an insert stores for the columns it leaves out. */
+const INSERT_DEFAULTS = {
+  threadId: null,
+  worktreePath: null,
+  runnerId: null,
+  state: 'generating',
+  builtinPrompts: null,
+  proposedFile: null,
+  proposedFileSha: null,
+  commitVariant: null,
+  facts: null,
+  verifyJobId: null,
+  verdicts: null,
+  error: null,
+  commitSha: null,
+  prNumber: null,
+  prUrl: null,
+  endedAt: null,
+} as const satisfies Partial<FactoryFlowSetupRow>;
+
 export function createFactoryFlowSetupRepository(deps: FactoryFlowSetupRepositoryDeps) {
   const { db, schema, dbAll, dbGet, dbRun } = deps;
   const table = schema.factoryFlowSetups;
 
   async function insert(row: FactoryFlowSetupInsert): Promise<FactoryFlowSetupRow> {
-    const full: FactoryFlowSetupRow = {
-      id: row.id,
-      projectId: row.projectId,
-      userId: row.userId,
-      flowName: row.flowName,
-      defaultBranch: row.defaultBranch,
-      baseSha: row.baseSha,
-      threadId: row.threadId ?? null,
-      branch: row.branch,
-      worktreePath: row.worktreePath ?? null,
-      runnerId: row.runnerId ?? null,
-      state: row.state ?? 'generating',
-      startingFile: row.startingFile,
-      startingSource: row.startingSource,
-      builtinPrompts: row.builtinPrompts ?? null,
-      proposedFile: row.proposedFile ?? null,
-      proposedFileSha: row.proposedFileSha ?? null,
-      commitVariant: row.commitVariant ?? null,
-      facts: row.facts ?? null,
-      verifyJobId: row.verifyJobId ?? null,
-      verdicts: row.verdicts ?? null,
-      error: row.error ?? null,
-      commitSha: row.commitSha ?? null,
-      prNumber: row.prNumber ?? null,
-      prUrl: row.prUrl ?? null,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-      endedAt: row.endedAt ?? null,
-    };
+    // SAFETY: the same object without its undefined fields, so still a FactoryFlowSetupInsert.
+    const given = Object.fromEntries(
+      Object.entries(row).filter(([, value]) => value !== undefined),
+    ) as FactoryFlowSetupInsert;
+    const full: FactoryFlowSetupRow = { ...INSERT_DEFAULTS, ...given };
     await dbRun(db.insert(table).values(full));
     return full;
   }

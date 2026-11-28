@@ -12,7 +12,10 @@ import {
   isProofReady,
   parseSetupAgentManifest,
   parseWorkflowYaml,
+  type ParsedNode,
+  type SetupAgentManifest,
 } from '@funny/workflows';
+import { err, ok, type Result } from 'neverthrow';
 
 import { flowFilePath, sha256Hex } from './factory-flow-setup-helpers.js';
 import type { VerifyFlowSetupResult } from './factory-flow-setup-runner.js';
@@ -112,6 +115,101 @@ export async function pollVerifyOnceOp(
   return 'done';
 }
 
+type ProofRules = NonNullable<ParsedNode['regression_proof']>;
+
+/**
+ * The generated flow file may differ from its starting file only in
+ * `regression_proof` (Task 3.2), must parse, and must be proof-ready with
+ * rules to verify. Returns those rules, or why the file is refused.
+ */
+function checkGeneratedFlow(
+  setup: FactoryFlowSetupRow,
+  generatedYaml: string,
+): Result<ProofRules, string> {
+  const diffCheck = checkOnlyRegressionProofChanged(setup.startingFile, generatedYaml);
+  if (!diffCheck.ok) return err(diffCheck.message);
+
+  const parsed = parseWorkflowYaml(generatedYaml, flowFilePath(setup.flowName));
+  if (!parsed.ok) return err(`Generated flow file is invalid: ${formatParseError(parsed.error)}`);
+  if (!isProofReady(parsed.workflow)) {
+    return err('Generated flow file is not proof-ready (no regression_proof rules).');
+  }
+  const proof = parsed.workflow.nodes.find((n) => n.regression_proof)?.regression_proof;
+  if (!proof || proof.rules.length === 0) {
+    return err('Generated flow file has no regression_proof rules to verify.');
+  }
+  return ok(proof);
+}
+
+/** The canary manifest the setup agent ends with, in its final message. */
+async function readCanaryManifest(
+  ctx: SetupServiceContext,
+  threadId: string,
+): Promise<Result<SetupAgentManifest, string>> {
+  const lastMessage = await ctx.deps.getLastAssistantMessage(threadId);
+  const manifest = lastMessage ? parseSetupAgentManifest(lastMessage) : null;
+  if (!manifest || manifest.canaries.length === 0) {
+    return err('Setup agent did not provide a valid JSON canary manifest in its final message.');
+  }
+  return ok(manifest);
+}
+
+/** Start the runner's verification job for the generated rules. */
+async function startVerificationJob(
+  ctx: SetupServiceContext,
+  setup: FactoryFlowSetupRow,
+  threadId: string,
+  generatedYaml: string,
+  proof: ProofRules,
+  manifest: SetupAgentManifest,
+): Promise<Result<void, string>> {
+  const { repo, runner } = ctx.deps;
+  // Store the uncovered list first so pollVerifyOnce has it even after a server restart.
+  await repo.update(setup.id, {
+    verdicts: JSON.stringify({
+      rules: [],
+      uncovered: manifest.uncovered,
+      timedOut: false,
+    } satisfies StoredSetupVerdicts),
+  });
+
+  const facts = parseSetupColumn(storedFactsSchema, setup.facts, 'facts');
+  const started = await runner.startVerify(setup.userId, threadId, {
+    baseSha: setup.baseSha,
+    workflowYaml: generatedYaml,
+    rules: proof.rules,
+    setupCommand: proof.setup_command,
+    supportGlobs: proof.support_globs,
+    canaries: manifest.canaries,
+    infraFiles:
+      facts && 'infrastructureTests' in facts ? facts.infrastructureTests.map((i) => i.path) : [],
+  });
+  if (started.isErr()) return err(`Could not start verification job: ${started.error.message}`);
+
+  await repo.update(setup.id, { verifyJobId: started.value.jobId });
+  ctx.scheduleVerifyPoll(setup.id, manifest.uncovered);
+  return ok(undefined);
+}
+
+/** Read, check and start verifying what the setup agent generated. */
+async function verifyGenerated(
+  ctx: SetupServiceContext,
+  setup: FactoryFlowSetupRow,
+  threadId: string,
+): Promise<Result<void, string>> {
+  const flowPath = flowFilePath(setup.flowName);
+  const file = await ctx.deps.runner.readSetupFile(setup.userId, threadId, flowPath);
+  if (file.isErr()) {
+    return err(`Could not read generated flow file ${flowPath}: ${file.error.message}`);
+  }
+  const generatedYaml = file.value.content;
+  const proof = checkGeneratedFlow(setup, generatedYaml);
+  if (proof.isErr()) return err(proof.error);
+  const manifest = await readCanaryManifest(ctx, threadId);
+  if (manifest.isErr()) return err(manifest.error);
+  return startVerificationJob(ctx, setup, threadId, generatedYaml, proof.value, manifest.value);
+}
+
 /**
  * Handle the setup thread reaching a terminal status (`completed`, `stopped`,
  * `failed`, `interrupted`, or `deleted`).
@@ -121,7 +219,7 @@ export async function onSetupThreadTerminalOp(
   threadId: string,
   status: string,
 ): Promise<void> {
-  const { repo, runner } = ctx.deps;
+  const { repo } = ctx.deps;
   const setup = await repo.getByThreadId(threadId);
   if (!setup || setup.state !== 'generating') return;
 
@@ -141,83 +239,14 @@ export async function onSetupThreadTerminalOp(
   if (!moved) return;
   ctx.emit(setup.userId, setup.projectId, setup.id, 'verifying');
 
-  const failVerifying = async (errorMsg: string) => {
-    await repo.transition(setup.id, 'failed', { error: errorMsg }, { fromState: 'verifying' });
-    ctx.emit(setup.userId, setup.projectId, setup.id, 'failed');
-  };
-
-  // 1. Read generated flow file from the setup worktree.
-  const flowPath = flowFilePath(setup.flowName);
-  const fileRes = await runner.readSetupFile(setup.userId, threadId, flowPath);
-  if (fileRes.isErr()) {
-    await failVerifying(`Could not read generated flow file ${flowPath}: ${fileRes.error.message}`);
-    return;
-  }
-  const generatedYaml = fileRes.value.content;
-
-  // 2. Pure check (Task 3.2): only `regression_proof` may differ from the starting file.
-  const diffCheck = checkOnlyRegressionProofChanged(setup.startingFile, generatedYaml);
-  if (!diffCheck.ok) {
-    await failVerifying(diffCheck.message);
-    return;
-  }
-
-  // 3. Parse with flow parser and verify `isProofReady`.
-  const parsed = parseWorkflowYaml(generatedYaml, flowPath);
-  if (!parsed.ok) {
-    await failVerifying(`Generated flow file is invalid: ${formatParseError(parsed.error)}`);
-    return;
-  }
-  if (!isProofReady(parsed.workflow)) {
-    await failVerifying('Generated flow file is not proof-ready (no regression_proof rules).');
-    return;
-  }
-
-  const proofNode = parsed.workflow.nodes.find((n) => n.regression_proof);
-  const rules = proofNode?.regression_proof?.rules ?? [];
-  if (rules.length === 0) {
-    await failVerifying('Generated flow file has no regression_proof rules to verify.');
-    return;
-  }
-
-  // 4. Extract canary manifest & uncovered list from the agent's final message.
-  const lastMessage = await ctx.deps.getLastAssistantMessage(threadId);
-  const manifest = lastMessage ? parseSetupAgentManifest(lastMessage) : null;
-  if (!manifest || manifest.canaries.length === 0) {
-    await failVerifying(
-      'Setup agent did not provide a valid JSON canary manifest in its final message.',
+  const verified = await verifyGenerated(ctx, setup, threadId);
+  if (verified.isErr()) {
+    await repo.transition(
+      setup.id,
+      'failed',
+      { error: verified.error },
+      { fromState: 'verifying' },
     );
-    return;
+    ctx.emit(setup.userId, setup.projectId, setup.id, 'failed');
   }
-
-  // Store uncovered list early so pollVerifyOnce has it even after a server restart.
-  await repo.update(setup.id, {
-    verdicts: JSON.stringify({
-      rules: [],
-      uncovered: manifest.uncovered,
-      timedOut: false,
-    } satisfies StoredSetupVerdicts),
-  });
-
-  const facts = parseSetupColumn(storedFactsSchema, setup.facts, 'facts');
-  const infraFiles =
-    facts && 'infrastructureTests' in facts ? facts.infrastructureTests.map((i) => i.path) : [];
-
-  // 5. Start verification job on the runner.
-  const started = await runner.startVerify(setup.userId, threadId, {
-    baseSha: setup.baseSha,
-    workflowYaml: generatedYaml,
-    rules,
-    setupCommand: proofNode?.regression_proof?.setup_command,
-    supportGlobs: proofNode?.regression_proof?.support_globs,
-    canaries: manifest.canaries,
-    infraFiles,
-  });
-  if (started.isErr()) {
-    await failVerifying(`Could not start verification job: ${started.error.message}`);
-    return;
-  }
-
-  await repo.update(setup.id, { verifyJobId: started.value.jobId });
-  ctx.scheduleVerifyPoll(setup.id, manifest.uncovered);
 }

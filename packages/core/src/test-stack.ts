@@ -12,7 +12,7 @@
  * with a summary stating no test runner was recognized.
  */
 
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { type Dirent, existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { basename, join, relative, sep } from 'node:path';
 
 import { badRequest, internal, type DomainError } from '@funny/shared/errors';
@@ -223,25 +223,25 @@ function detectMonorepo(
   return null;
 }
 
+function readDirEntries(dir: string): Dirent[] {
+  try {
+    return readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+}
+
+/** Every file of the checkout outside `IGNORED_DIRS`, sorted, up to `MAX_WALKED_FILES`. */
 function walkCheckout(checkout: string): string[] {
   const files: string[] = [];
   const stack: string[] = [checkout];
   while (stack.length > 0 && files.length < MAX_WALKED_FILES) {
     const dir = stack.pop()!;
-    let entries;
-    try {
-      entries = readdirSync(dir, { withFileTypes: true });
-    } catch {
-      continue;
-    }
-    for (const entry of entries) {
-      if (entry.isDirectory()) {
-        if (IGNORED_DIRS.has(entry.name)) continue;
-        stack.push(join(dir, entry.name));
-      } else if (entry.isFile()) {
-        files.push(toPosix(relative(checkout, join(dir, entry.name))));
-        if (files.length >= MAX_WALKED_FILES) break;
-      }
+    for (const entry of readDirEntries(dir)) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory() && !IGNORED_DIRS.has(entry.name)) stack.push(full);
+      else if (entry.isFile()) files.push(toPosix(relative(checkout, full)));
+      if (files.length >= MAX_WALKED_FILES) break;
     }
   }
   files.sort();
@@ -261,6 +261,51 @@ function testScriptOf(pkg: ParsedPackageJson | null): string {
   return pkg?.scripts?.test ?? '';
 }
 
+const NO_CONFIG = null;
+
+function runnerFromConfigFile(dirFiles: string[]): InferredRunner | null {
+  const jestCfg = dirFiles.find((f) => JEST_CONFIG_RE.test(basename(f)));
+  if (jestCfg) return { runner: 'jest', configFile: jestCfg };
+  const vitestCfg = dirFiles.find((f) => VITEST_CONFIG_RE.test(basename(f)));
+  if (vitestCfg) return { runner: 'vitest', configFile: vitestCfg };
+  return null;
+}
+
+function runnerFromNxExecutor(projectJson: ParsedNxProjectJson | null): DetectedTestRunner {
+  const executor = projectJson?.targets?.test?.executor ?? '';
+  if (executor.includes('jest')) return 'jest';
+  if (executor.includes('vite') || executor.includes('vitest')) return 'vitest';
+  return null;
+}
+
+function runnerFromScript(script: string): DetectedTestRunner {
+  if (/\bvitest\b/.test(script)) return 'vitest';
+  if (/\bjest\b/.test(script)) return 'jest';
+  if (/\bbun\s+test\b/.test(script)) return 'bun';
+  return null;
+}
+
+function runnerFromDeps(pkg: ParsedPackageJson | null): DetectedTestRunner {
+  if (hasDep(pkg, 'vitest')) return 'vitest';
+  if (hasDep(pkg, 'jest') || hasDep(pkg, '@jest/globals')) return 'jest';
+  return null;
+}
+
+/** The repository root's runner, which a package without its own falls back to. */
+function runnerFromRoot(
+  absRoot: string,
+  rootPkgJson: ParsedPackageJson | null,
+  pm: DetectedPackageManager,
+): DetectedTestRunner {
+  const rootScript = testScriptOf(rootPkgJson);
+  if (/\bvitest\b/.test(rootScript) || hasDep(rootPkgJson, 'vitest')) return 'vitest';
+  if (/\bjest\b/.test(rootScript) || hasDep(rootPkgJson, 'jest')) return 'jest';
+  const bunRoot =
+    pm === 'bun' || /\bbun\s+test\b/.test(rootScript) || existsSync(join(absRoot, 'bunfig.toml'));
+  return bunRoot ? 'bun' : null;
+}
+
+/** A package's runner, from the most to the least specific evidence. */
 function inferRunner(
   absRoot: string,
   dirFiles: string[],
@@ -269,44 +314,14 @@ function inferRunner(
   projectJson: ParsedNxProjectJson | null,
   pm: DetectedPackageManager,
 ): InferredRunner {
-  const jestCfg = dirFiles.find((f) => JEST_CONFIG_RE.test(basename(f)));
-  if (jestCfg) return { runner: 'jest', configFile: jestCfg };
-
-  const vitestCfg = dirFiles.find((f) => VITEST_CONFIG_RE.test(basename(f)));
-  if (vitestCfg) return { runner: 'vitest', configFile: vitestCfg };
-
-  const executor = projectJson?.targets?.test?.executor ?? '';
-  if (executor.includes('jest')) return { runner: 'jest', configFile: null };
-  if (executor.includes('vite') || executor.includes('vitest')) {
-    return { runner: 'vitest', configFile: null };
-  }
-
-  const script = testScriptOf(pkgJson);
-  if (/\bvitest\b/.test(script)) return { runner: 'vitest', configFile: null };
-  if (/\bjest\b/.test(script)) return { runner: 'jest', configFile: null };
-  if (/\bbun\s+test\b/.test(script)) return { runner: 'bun', configFile: null };
-
-  if (hasDep(pkgJson, 'vitest')) return { runner: 'vitest', configFile: null };
-  if (hasDep(pkgJson, 'jest') || hasDep(pkgJson, '@jest/globals')) {
-    return { runner: 'jest', configFile: null };
-  }
-
-  const rootScript = testScriptOf(rootPkgJson);
-  if (/\bvitest\b/.test(rootScript) || hasDep(rootPkgJson, 'vitest')) {
-    return { runner: 'vitest', configFile: null };
-  }
-  if (/\bjest\b/.test(rootScript) || hasDep(rootPkgJson, 'jest')) {
-    return { runner: 'jest', configFile: null };
-  }
-  if (
-    pm === 'bun' ||
-    /\bbun\s+test\b/.test(rootScript) ||
-    existsSync(join(absRoot, 'bunfig.toml'))
-  ) {
-    return { runner: 'bun', configFile: null };
-  }
-
-  return { runner: null, configFile: null };
+  const fromConfig = runnerFromConfigFile(dirFiles);
+  if (fromConfig) return fromConfig;
+  const runner =
+    runnerFromNxExecutor(projectJson) ??
+    runnerFromScript(testScriptOf(pkgJson)) ??
+    runnerFromDeps(pkgJson) ??
+    runnerFromRoot(absRoot, rootPkgJson, pm);
+  return { runner, configFile: NO_CONFIG };
 }
 
 function infraReason(checkout: string, relPath: string): string | null {
@@ -330,139 +345,179 @@ function dirOf(relPath: string): string {
   return idx === -1 ? '.' : relPath.slice(0, idx);
 }
 
-/**
- * Inspect `checkout` and return deterministic facts about its test stack.
- */
-export function detectTestStack(checkout: string): Result<TestStackFacts, DomainError> {
-  try {
-    if (!existsSync(checkout) || !statSync(checkout).isDirectory()) {
-      return err(badRequest(`Checkout directory does not exist: ${checkout}`));
-    }
-  } catch (cause) {
-    return err(internal(`Failed to inspect checkout: ${String(cause)}`));
-  }
+interface CheckoutIndex {
+  files: string[];
+  /** Directories holding a `package.json` or `project.json`. */
+  pkgRoots: Set<string>;
+  dirToFiles: Map<string, string[]>;
+}
 
-  const files = walkCheckout(checkout);
-  const rootPkg = readPackageJson(join(checkout, 'package.json'));
-  const packageManager = detectPackageManager(checkout);
-  const monorepo = detectMonorepo(checkout, packageManager, rootPkg);
+function pushTo(map: Map<string, string[]>, key: string, value: string): void {
+  const list = map.get(key);
+  if (list) list.push(value);
+  else map.set(key, [value]);
+}
 
+function indexCheckout(files: string[]): CheckoutIndex {
   const pkgRoots = new Set<string>();
   const dirToFiles = new Map<string, string[]>();
   for (const f of files) {
     const d = dirOf(f);
-    const list = dirToFiles.get(d);
-    if (list) list.push(f);
-    else dirToFiles.set(d, [f]);
-
+    pushTo(dirToFiles, d, f);
     const name = basename(f);
-    if (name === 'package.json' || name === 'project.json') {
-      pkgRoots.add(d);
-    }
+    if (name === 'package.json' || name === 'project.json') pkgRoots.add(d);
   }
+  return { files, pkgRoots, dirToFiles };
+}
 
-  const sortedRoots = [...pkgRoots].sort((a, b) => {
+interface ClassifiedTests {
+  testsByPkg: Map<string, string[]>;
+  infrastructureTests: DetectedInfraTest[];
+  allPatterns: Set<string>;
+}
+
+/** Each test file goes to its deepest package, or to the infrastructure list. */
+function classifyTests(checkout: string, index: CheckoutIndex): ClassifiedTests {
+  const deepestFirst = [...index.pkgRoots].sort((a, b) => {
     if (a === '.') return 1;
     if (b === '.') return -1;
     return b.length - a.length || a.localeCompare(b);
   });
-
-  const testsByPkg = new Map<string, string[]>();
-  const infrastructureTests: DetectedInfraTest[] = [];
-  const allPatterns = new Set<string>();
-
-  for (const f of files) {
+  const classified: ClassifiedTests = {
+    testsByPkg: new Map(),
+    infrastructureTests: [],
+    allPatterns: new Set(),
+  };
+  for (const f of index.files) {
     if (!TEST_FILE_RE.test(f)) continue;
-    allPatterns.add(patternOfTestFile(f));
+    classified.allPatterns.add(patternOfTestFile(f));
     const reason = infraReason(checkout, f);
     if (reason) {
-      infrastructureTests.push({ path: f, reason });
+      classified.infrastructureTests.push({ path: f, reason });
+      continue;
     }
     const owner =
-      sortedRoots.find((root) => root === '.' || f === root || f.startsWith(`${root}/`)) ?? '.';
-    if (!reason) {
-      const list = testsByPkg.get(owner);
-      if (list) list.push(f);
-      else testsByPkg.set(owner, [f]);
-    }
+      deepestFirst.find((root) => root === '.' || f === root || f.startsWith(`${root}/`)) ?? '.';
+    pushTo(classified.testsByPkg, owner, f);
   }
+  return classified;
+}
 
-  const packages: DetectedTestPackage[] = [];
-  const orderedRoots = [...pkgRoots].sort((a, b) =>
+interface StackContext {
+  checkout: string;
+  index: CheckoutIndex;
+  tests: ClassifiedTests;
+  rootPkg: ParsedPackageJson | null;
+  packageManager: DetectedPackageManager;
+  monorepo: DetectedMonorepo;
+  rootCount: number;
+}
+
+/** Whether a package root adds nothing a member could run tests with. */
+function isEmptyPackage(
+  ctx: StackContext,
+  root: string,
+  pkg: Pick<DetectedTestPackage, 'runner' | 'configFile' | 'nxTestTarget' | 'sampleTests'>,
+  hasProjectJson: boolean,
+): boolean {
+  const noTestsOrConfig = pkg.sampleTests.length === 0 && !pkg.configFile;
+  // A monorepo's root package only aggregates its members.
+  const isAggregatingRoot = root === '.' && ctx.monorepo !== null && ctx.rootCount > 1;
+  if (isAggregatingRoot && noTestsOrConfig && !pkg.nxTestTarget) return true;
+  if (hasProjectJson && !pkg.nxTestTarget && noTestsOrConfig) return true;
+  return !pkg.runner && !pkg.nxTestTarget && pkg.sampleTests.length === 0;
+}
+
+function describePackage(ctx: StackContext, root: string): DetectedTestPackage | null {
+  const absRoot = root === '.' ? ctx.checkout : join(ctx.checkout, root);
+  const pkgJson = readPackageJson(join(absRoot, 'package.json'));
+  const projectJson = readNxProjectJson(join(absRoot, 'project.json'));
+  const ownTests = ctx.tests.testsByPkg.get(root) ?? [];
+  const { runner, configFile } = inferRunner(
+    absRoot,
+    ctx.index.dirToFiles.get(root) ?? [],
+    pkgJson,
+    ctx.rootPkg,
+    projectJson,
+    ctx.packageManager,
+  );
+  const pkg = {
+    runner,
+    configFile,
+    nxTestTarget: Boolean(projectJson?.targets?.test),
+    sampleTests: ownTests.slice(0, MAX_SAMPLE_TESTS),
+  };
+  if (isEmptyPackage(ctx, root, pkg, projectJson !== null)) return null;
+
+  const infraPaths = ctx.tests.infrastructureTests.flatMap((i) =>
+    root === '.' || i.path.startsWith(`${root}/`) ? [i.path] : [],
+  );
+  const testPatterns = [...new Set(ownTests.concat(infraPaths).map(patternOfTestFile))].sort();
+  return { name: projectJson?.name || pkgJson?.name || root, root, ...pkg, testPatterns };
+}
+
+function summarize(
+  packageManager: DetectedPackageManager,
+  monorepo: DetectedMonorepo,
+  packages: DetectedTestPackage[],
+): string {
+  const runners = [...new Set(packages.flatMap((p) => (p.runner ? [p.runner] : [])))];
+  return [
+    packageManager ? `package manager: ${packageManager}` : 'package manager: unknown',
+    monorepo ? `monorepo: ${monorepo}` : 'single package',
+    `packages with tests: ${packages.length}`,
+    `runners: ${runners.join(', ')}`,
+  ].join('; ');
+}
+
+function checkCheckoutDir(checkout: string): Result<void, DomainError> {
+  try {
+    if (!existsSync(checkout) || !statSync(checkout).isDirectory()) {
+      return err(badRequest(`Checkout directory does not exist: ${checkout}`));
+    }
+    return ok(undefined);
+  } catch (cause) {
+    return err(internal(`Failed to inspect checkout: ${String(cause)}`));
+  }
+}
+
+/**
+ * Inspect `checkout` and return deterministic facts about its test stack.
+ */
+export function detectTestStack(checkout: string): Result<TestStackFacts, DomainError> {
+  const valid = checkCheckoutDir(checkout);
+  if (valid.isErr()) return err(valid.error);
+
+  const index = indexCheckout(walkCheckout(checkout));
+  const rootPkg = readPackageJson(join(checkout, 'package.json'));
+  const packageManager = detectPackageManager(checkout);
+  const monorepo = detectMonorepo(checkout, packageManager, rootPkg);
+  const tests = classifyTests(checkout, index);
+  const ctx: StackContext = {
+    checkout,
+    index,
+    tests,
+    rootPkg,
+    packageManager,
+    monorepo,
+    rootCount: index.pkgRoots.size,
+  };
+
+  const rootsInOrder = [...index.pkgRoots].sort((a, b) =>
     a === '.' ? -1 : b === '.' ? 1 : a.localeCompare(b),
   );
-
-  for (const root of orderedRoots) {
-    const absRoot = root === '.' ? checkout : join(checkout, root);
-    const pkgJson = readPackageJson(join(absRoot, 'package.json'));
-    const projectJson = readNxProjectJson(join(absRoot, 'project.json'));
-    const nxTestTarget = Boolean(projectJson?.targets?.test);
-    const directFiles = dirToFiles.get(root) ?? [];
-    const sampleTests = (testsByPkg.get(root) ?? []).slice(0, MAX_SAMPLE_TESTS);
-    const pkgAllTests = (testsByPkg.get(root) ?? []).concat(
-      infrastructureTests.flatMap((i) =>
-        root === '.' || i.path.startsWith(`${root}/`) ? [i.path] : [],
-      ),
-    );
-    const { runner, configFile } = inferRunner(
-      absRoot,
-      directFiles,
-      pkgJson,
-      rootPkg,
-      projectJson,
-      packageManager,
-    );
-
-    if (
-      root === '.' &&
-      monorepo !== null &&
-      orderedRoots.length > 1 &&
-      sampleTests.length === 0 &&
-      !configFile &&
-      !nxTestTarget
-    ) {
-      continue;
-    }
-
-    if (projectJson && !nxTestTarget && sampleTests.length === 0 && !configFile) {
-      continue;
-    }
-
-    if (!runner && !nxTestTarget && sampleTests.length === 0) continue;
-
-    const name = projectJson?.name || pkgJson?.name || root;
-    const pkgPatterns = [...new Set(pkgAllTests.map(patternOfTestFile))].sort();
-
-    packages.push({
-      name,
-      root,
-      runner,
-      configFile,
-      nxTestTarget,
-      testPatterns: pkgPatterns,
-      sampleTests,
-    });
-  }
-
+  const packages = rootsInOrder.flatMap((root) => describePackage(ctx, root) ?? []);
   const recognized = packages.some((p) => p.runner !== null);
-  const testPatterns = [...allPatterns].sort();
-
-  const summary = recognized
-    ? [
-        packageManager ? `package manager: ${packageManager}` : 'package manager: unknown',
-        monorepo ? `monorepo: ${monorepo}` : 'single package',
-        `packages with tests: ${packages.length}`,
-        `runners: ${[...new Set(packages.flatMap((p) => (p.runner ? [p.runner] : [])))].join(', ')}`,
-      ].join('; ')
-    : 'No test runner recognized in this repository.';
 
   return ok({
     packageManager,
     monorepo,
     recognized,
-    summary,
+    summary: recognized
+      ? summarize(packageManager, monorepo, packages)
+      : 'No test runner recognized in this repository.',
     packages,
-    testPatterns,
-    infrastructureTests,
+    testPatterns: [...tests.allPatterns].sort(),
+    infrastructureTests: tests.infrastructureTests,
   });
 }

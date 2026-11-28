@@ -42,6 +42,18 @@ describe('shouldForceColdPathRecovery', () => {
     ).toBe(false);
   });
 
+  // Antigravity (`agy acp`) supports ACP `session/resume` without history
+  // replay, so cold-path recovery must not wipe its sessionId on restarts.
+  test('returns false for antigravity even when the process is gone', () => {
+    expect(
+      shouldForceColdPathRecovery({
+        thread: baseThread,
+        isRunning: false,
+        provider: 'antigravity',
+      }),
+    ).toBe(false);
+  });
+
   test('returns false when the agent process is still running', () => {
     expect(
       shouldForceColdPathRecovery({

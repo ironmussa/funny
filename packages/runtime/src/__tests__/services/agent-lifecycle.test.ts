@@ -399,6 +399,32 @@ describe('AgentLifecycleManager', () => {
         expect.objectContaining({ contextRecoveryReason: 'process_lost' }),
       );
     });
+
+    test('skips cold-path recovery for antigravity provider with existing session', async () => {
+      seedProjectThread({
+        status: 'completed',
+        sessionId: 'sess-antigravity',
+      });
+      mocks.orchestrator.isRunning.mockReturnValue(false);
+
+      const manager = createManager();
+      await manager.startAgent(
+        'thread-1',
+        'follow up',
+        '/tmp/repo',
+        'default',
+        'autoEdit',
+        undefined,
+        undefined,
+        undefined,
+        'antigravity',
+      );
+
+      expect(mocks.threadManager.updateThread).not.toHaveBeenCalledWith(
+        'thread-1',
+        expect.objectContaining({ contextRecoveryReason: 'process_lost' }),
+      );
+    });
   });
 
   describe('startAgent — scratch threads', () => {

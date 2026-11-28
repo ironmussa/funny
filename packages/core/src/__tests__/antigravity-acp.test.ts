@@ -331,3 +331,119 @@ describe('extractACPAccountInfo', () => {
     expect(extractACPAccountInfo({ version: '1.5.14' })).toBeNull();
   });
 });
+
+describe('AntigravityACPProcess session/resume', () => {
+  const sessionMethods = {
+    agent: {
+      session: {
+        resume: 'session/resume',
+        load: 'session/load',
+        new: 'session/new',
+      },
+    },
+  };
+
+  test('prefers session/resume over session/load when the agent supports resume', async () => {
+    const { proc } = makeProcess({ sessionId: 'sess-agy-1' });
+    const calls: Array<{ method: unknown; params: unknown }> = [];
+    const agent = {
+      request: async (method: unknown, params: unknown) => {
+        calls.push({ method, params });
+        return {
+          configOptions: [
+            {
+              id: 'thought_level',
+              name: 'Thought Level',
+              category: 'thought_level',
+              type: 'select',
+              currentValue: 'medium',
+              options: [
+                { value: 'low', name: 'Low' },
+                { value: 'medium', name: 'Medium' },
+                { value: 'high', name: 'High' },
+              ],
+            },
+          ],
+          _meta: { account: { email: 'dev@google.com', tier: 'pro' } },
+        };
+      },
+    };
+
+    const result = await proc['openSession'](
+      agent as never,
+      sessionMethods as never,
+      [],
+      true,
+      true,
+    );
+
+    expect(calls).toEqual([
+      {
+        method: 'session/resume',
+        params: { sessionId: 'sess-agy-1', cwd: '/tmp/test', mcpServers: [] },
+      },
+    ]);
+    expect(result).toEqual({
+      isResume: true,
+      sessionAccount: { email: 'dev@google.com', subscriptionType: 'pro' },
+    });
+    expect(proc['activeSessionId']).toBe('sess-agy-1');
+    expect(proc['thoughtLevelConfigOption']?.configId).toBe('thought_level');
+  });
+
+  test('falls back to session/load when resume is unsupported', async () => {
+    const { proc } = makeProcess({ sessionId: 'sess-agy-2' });
+    const calls: Array<{ method: unknown; params: unknown }> = [];
+    const agent = {
+      request: async (method: unknown, params: unknown) => {
+        calls.push({ method, params });
+        return {};
+      },
+    };
+
+    const result = await proc['openSession'](
+      agent as never,
+      sessionMethods as never,
+      [],
+      true,
+      false,
+    );
+
+    expect(calls).toEqual([
+      {
+        method: 'session/load',
+        params: { sessionId: 'sess-agy-2', cwd: '/tmp/test', mcpServers: [] },
+      },
+    ]);
+    expect(result.isResume).toBe(true);
+    expect(proc['activeSessionId']).toBe('sess-agy-2');
+  });
+
+  test('opens a fresh session/new when no sessionId is provided', async () => {
+    const { proc } = makeProcess();
+    const calls: Array<{ method: unknown; params: unknown }> = [];
+    const agent = {
+      request: async (method: unknown, params: unknown) => {
+        calls.push({ method, params });
+        return { sessionId: 'sess-fresh-1' };
+      },
+    };
+
+    const result = await proc['openSession'](
+      agent as never,
+      sessionMethods as never,
+      [],
+      true,
+      true,
+    );
+
+    expect(calls).toEqual([
+      {
+        method: 'session/new',
+        params: { cwd: '/tmp/test', mcpServers: [] },
+      },
+    ]);
+    expect(result.isResume).toBe(false);
+    expect(proc['activeSessionId']).toBe('sess-fresh-1');
+  });
+});

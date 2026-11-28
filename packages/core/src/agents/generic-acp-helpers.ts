@@ -8,11 +8,12 @@
 import { randomUUID } from 'crypto';
 
 import type { AgentAccountInfo } from '@funny/shared';
-import type { JsonObject } from '@funny/shared/json';
+import { definedJsonFields, type JsonObject } from '@funny/shared/json';
 import { parseStoredJson } from '@funny/shared/json-validation';
 import { z } from 'zod';
 
 import type { DebugLogger } from '../debug.js';
+import { toACPMcpServers } from './acp-mcp.js';
 import {
   buildTodoWriteInputFromRaw,
   enrichTodoWriteInputFromOutput,
@@ -385,6 +386,33 @@ export async function ensureGeminiTrustedFolder(cwd: string, dlog: DebugLogger):
     // SAFETY: fs and JSON errors are Error instances; the message is only logged.
     dlog.warn('failed to mark gemini trusted folder', { cwd, error: (e as Error)?.message });
   }
+}
+
+/** Filter configured MCP servers against the agent's advertised HTTP/SSE support. */
+export function filterACPMcpServers(
+  mcpServers: Parameters<typeof toACPMcpServers>[0],
+  filterByCapability: boolean | undefined,
+  mcpCaps: { http?: boolean; sse?: boolean } | undefined,
+  dlog: DebugLogger,
+): ReturnType<typeof toACPMcpServers> {
+  const allMcp = toACPMcpServers(mcpServers);
+  if (!filterByCapability) return allMcp;
+
+  const supportsHttp = mcpCaps?.http === true;
+  const supportsSse = mcpCaps?.sse === true;
+  const filtered = allMcp.filter((s) => {
+    const t = 'type' in s ? s.type : undefined;
+    if (t === 'http') return supportsHttp;
+    if (t === 'sse') return supportsSse;
+    return true;
+  });
+  if (allMcp.length !== filtered.length) {
+    dlog.warn('dropped MCP servers unsupported by agent', {
+      dropped: allMcp.length - filtered.length,
+      mcpCapabilities: mcpCaps && definedJsonFields({ http: mcpCaps.http, sse: mcpCaps.sse }),
+    });
+  }
+  return filtered;
 }
 
 function isString<T>(value: T): value is T & string {

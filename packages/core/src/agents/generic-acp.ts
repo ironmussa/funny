@@ -20,13 +20,12 @@ import { spawn, type ChildProcess } from 'child_process';
 import { randomUUID } from 'crypto';
 
 import type { AgentAccountInfo } from '@funny/shared';
-import { definedJsonFields, type JsonObject } from '@funny/shared/json';
+import type { JsonObject } from '@funny/shared/json';
 import type { ProviderManifest } from '@funny/shared/provider-manifest';
 import { resolveSpawnCommand, type SpawnCommand } from '@funny/shared/provider-manifest';
 
 import { createDebugLogger, type DebugLogger } from '../debug.js';
 import { toACPImageBlocks, type ACPImageBlock } from './acp-image.js';
-import { toACPMcpServers } from './acp-mcp.js';
 import { childAcpStream } from './acp-stream.js';
 import {
   buildACPToolInput,
@@ -39,6 +38,7 @@ import { BaseAgentProcess, killProcessTree } from './base-process.js';
 import {
   ensureGeminiTrustedFolder,
   extractACPAccountInfo,
+  filterACPMcpServers,
   readToolCallFields,
   isTerminalToolStatus,
   finalizeTodoInput,
@@ -195,52 +195,34 @@ export class GenericACPProcess extends BaseAgentProcess {
     }
   }
 
-  private filterMcpServers(
-    mcpCaps: { http?: boolean; sse?: boolean } | undefined,
-  ): ReturnType<typeof toACPMcpServers> {
-    const allMcp = toACPMcpServers(this.options.mcpServers);
-    if (!this.manifest.quirks.filterMcpByCapability) return allMcp;
-
-    const supportsHttp = mcpCaps?.http === true;
-    const supportsSse = mcpCaps?.sse === true;
-    const filtered = allMcp.filter((s) => {
-      const t = 'type' in s ? s.type : undefined;
-      if (t === 'http') return supportsHttp;
-      if (t === 'sse') return supportsSse;
-      return true;
-    });
-    if (allMcp.length !== filtered.length) {
-      this.dlog.warn('dropped MCP servers unsupported by agent', {
-        dropped: allMcp.length - filtered.length,
-        mcpCapabilities: mcpCaps && definedJsonFields({ http: mcpCaps.http, sse: mcpCaps.sse }),
-      });
-    }
-    return filtered;
-  }
-
   private async openSession(
     agent: ACPConnection['agent'],
     methods: ACPMethods,
-    mcpServerList: ReturnType<typeof toACPMcpServers>,
+    mcpServerList: ReturnType<typeof filterACPMcpServers>,
     supportsLoadSession: boolean,
+    supportsResumeSession = false,
   ): Promise<{ isResume: boolean; sessionAccount: AgentAccountInfo | null }> {
-    const isResume = Boolean(this.options.sessionId && supportsLoadSession);
-    if (isResume) {
-      this.activeSessionId = this.options.sessionId!;
+    const requestedSessionId = this.options.sessionId;
+    const resumeMethod =
+      requestedSessionId && supportsResumeSession
+        ? methods.agent.session.resume
+        : requestedSessionId && supportsLoadSession
+          ? methods.agent.session.load
+          : null;
+    if (requestedSessionId && resumeMethod) {
+      this.activeSessionId = requestedSessionId;
       this.replayingHistory = true;
       try {
-        const loadResponse = await agent.request(methods.agent.session.load, {
-          sessionId: this.options.sessionId!,
+        const response = await agent.request(resumeMethod, {
+          sessionId: requestedSessionId,
           cwd: this.options.cwd,
           mcpServers: mcpServerList,
         });
-        // `loadSession` returns the same `configOptions` as `newSession`
-        // (ACP 0.26+). Capture them here too, otherwise `applyModelSelection`
-        // has no model config option to set on resume and silently falls back
-        // to the provider default — losing the user's model choice on every
-        // follow-up message.
-        this.captureSessionConfigOptions(loadResponse?.configOptions);
-        return { isResume: true, sessionAccount: extractACPAccountInfo(loadResponse?._meta) };
+        // `session/resume` and `session/load` return `configOptions` (ACP 0.26+);
+        // capture them so model and thought-level selection keep working on resume.
+        this.captureSessionConfigOptions(response?.configOptions);
+        this.dlog.info('session resumed', { via: resumeMethod, sessionId: requestedSessionId });
+        return { isResume: true, sessionAccount: extractACPAccountInfo(response?._meta) };
       } finally {
         this.replayingHistory = false;
       }
@@ -320,9 +302,17 @@ export class GenericACPProcess extends BaseAgentProcess {
         clientCapabilities: { fs: { readTextFile: true, writeTextFile: true } },
       });
 
+      const supportsResumeSession = Boolean(
+        initResult.agentCapabilities?.sessionCapabilities?.resume,
+      );
       const supportsLoadSession = initResult.agentCapabilities?.loadSession === true;
       this.supportsImages = initResult.agentCapabilities?.promptCapabilities?.image === true;
-      const mcpServerList = this.filterMcpServers(initResult.agentCapabilities?.mcpCapabilities);
+      const mcpServerList = filterACPMcpServers(
+        this.options.mcpServers,
+        this.manifest.quirks.filterMcpByCapability,
+        initResult.agentCapabilities?.mcpCapabilities,
+        this.dlog,
+      );
 
       const initAccount = extractACPAccountInfo(initResult._meta);
       const { isResume, sessionAccount } = await this.openSession(
@@ -330,6 +320,7 @@ export class GenericACPProcess extends BaseAgentProcess {
         methods,
         mcpServerList,
         supportsLoadSession,
+        supportsResumeSession,
       );
 
       this.emitInit(

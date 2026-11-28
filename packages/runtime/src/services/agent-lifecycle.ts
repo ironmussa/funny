@@ -538,9 +538,10 @@ export class AgentLifecycleManager {
    * DB-side context (via `recoverThreadContext`) gives the agent
    * equivalent continuity without triggering the replay race.
    *
-   * The Claude and Pi SDK integrations resume without that race, so they are
-   * exempted — forcing recovery there invalidates the prompt cache on
-   * every follow-up and regenerates ~25k tokens of cache_creation per turn.
+   * The Claude and Pi SDK integrations — and Antigravity (`agy acp`), which
+   * supports ACP `session/resume` without history replay — resume without that
+   * race, so they are exempted. Forcing recovery there discards native session
+   * state and invalidates the prompt cache on every restart/follow-up.
    */
   private async guardColdPathSession(
     threadId: string,

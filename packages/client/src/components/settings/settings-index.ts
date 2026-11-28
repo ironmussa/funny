@@ -144,6 +144,15 @@ const ENTRIES = [
     keywords: ['utility model', 'recap', 'summary', 'resumen', 'haiku'],
   },
   {
+    id: 'models.utility-model-effort',
+    scope: 'preferences',
+    page: 'models',
+    kind: 'row',
+    title: 'settings.utilityModelEffort',
+    description: 'settings.utilityModelEffortDesc',
+    keywords: ['utility model', 'effort', 'reasoning', 'thinking', 'esfuerzo', 'esforço'],
+  },
+  {
     id: 'models.utility-model-base-url',
     scope: 'preferences',
     page: 'models',

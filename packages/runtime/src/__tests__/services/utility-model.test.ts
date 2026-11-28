@@ -1,16 +1,19 @@
 import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
+import { EventEmitter } from 'events';
 
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
 const h = (() => ({
   query: vi.fn(),
   completeOnce: vi.fn(),
+  createProcess: vi.fn(),
   getProviderKey: vi.fn(async (_userId: string, _provider: string): Promise<string | null> => null),
 }))();
 mock.module('@anthropic-ai/claude-agent-sdk', () => ({ query: h.query }));
 mock.module('@funny/core/agents', () => ({
   resolveSDKCliPath: () => '/sdk/cli.js',
   completeOnce: h.completeOnce,
+  defaultProcessFactory: { create: h.createProcess },
 }));
 mock.module('../../services/service-registry.js', () => ({
   getServices: () => ({ profile: { getProviderKey: h.getProviderKey } }),
@@ -65,13 +68,83 @@ describe('runUtilityGeneration', () => {
     expect(h.getProviderKey).not.toHaveBeenCalled();
   });
 
-  test('a claude-sdk setting passes a full model id through', async () => {
+  test('a claude setting passes effort and a full model id through', async () => {
+    sdkReplies('ok');
+    await runUtilityGeneration({
+      ...base,
+      setting: { provider: 'claude', model: 'claude-sonnet-x', effort: 'low' },
+    });
+    expect(h.query.mock.calls[0][0].options).toMatchObject({
+      model: 'claude-sonnet-x',
+      effort: 'low',
+    });
+  });
+
+  test('a legacy claude-sdk setting passes a full model id through', async () => {
     sdkReplies('ok');
     await runUtilityGeneration({
       ...base,
       setting: { provider: 'claude-sdk', model: 'claude-sonnet-x' },
     });
     expect(h.query.mock.calls[0][0].options.model).toBe('claude-sonnet-x');
+  });
+
+  test('another agent provider runs a single-turn plan-mode process with no tools', async () => {
+    const proc = Object.assign(new EventEmitter(), {
+      exited: false,
+      kill: vi.fn(async () => {
+        proc.exited = true;
+      }),
+      start: vi.fn(() => {
+        queueMicrotask(() => {
+          proc.emit('message', { type: 'result', is_error: false, result: 'codex recap' });
+          proc.exited = true;
+          proc.emit('exit', 0);
+        });
+      }),
+    });
+    h.createProcess.mockReturnValue(proc);
+
+    const result = await runUtilityGeneration({
+      ...base,
+      cwd: '/repo',
+      setting: { provider: 'codex', model: 'o4-mini', effort: 'high' },
+    });
+
+    expect(result._unsafeUnwrap()).toBe('codex recap');
+    expect(h.createProcess).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: 'codex',
+        model: 'o4-mini',
+        effort: 'high',
+        cwd: '/repo',
+        permissionMode: 'plan',
+        maxTurns: 1,
+        allowedTools: [],
+      }),
+    );
+    expect(h.query).not.toHaveBeenCalled();
+    expect(h.completeOnce).not.toHaveBeenCalled();
+  });
+
+  test('a timeout kills an agent provider process', async () => {
+    const proc = Object.assign(new EventEmitter(), {
+      exited: false,
+      kill: vi.fn(async () => {
+        proc.exited = true;
+      }),
+      start: vi.fn(),
+    });
+    h.createProcess.mockReturnValue(proc);
+
+    const result = await runUtilityGeneration({
+      ...base,
+      setting: { provider: 'gemini', model: 'gemini-2.5-flash' },
+      timeoutMs: 30,
+    });
+
+    expect(result._unsafeUnwrapErr().kind).toBe('timeout');
+    expect(proc.kill).toHaveBeenCalledTimes(1);
   });
 
   test('an LLM API setting calls completeOnce with the user key and model', async () => {

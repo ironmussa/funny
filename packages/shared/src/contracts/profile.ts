@@ -6,16 +6,44 @@
 
 import { z } from 'zod';
 
+import type { EffortLevel } from '../primitives.js';
 import type { UpdateProfileRequest, UserProfile } from '../types/auth.js';
 
-/** The backends a helper generation (thread recap, commit message) can run on. */
-export const UTILITY_MODEL_PROVIDERS = [
+/** Agent providers available in project and utility model settings. */
+export const UTILITY_MODEL_AGENT_PROVIDERS = [
+  'claude',
+  'codex',
+  'gemini',
+  'pi',
+  'cursor',
+  'opencode',
+  'antigravity',
+  'deepagent',
+] as const;
+
+/** Direct LLM API backends (plus legacy `claude-sdk` alias) kept for compatibility. */
+export const UTILITY_MODEL_LLM_PROVIDERS = [
   'claude-sdk',
   'anthropic',
   'openai',
   'ollama',
   'openai-compatible',
 ] as const;
+
+/** The backends a helper generation (thread recap, commit message) can run on. */
+export const UTILITY_MODEL_PROVIDERS = [
+  ...UTILITY_MODEL_AGENT_PROVIDERS,
+  ...UTILITY_MODEL_LLM_PROVIDERS,
+] as const;
+
+/** Effort levels accepted by a utility model setting. */
+export const UTILITY_MODEL_EFFORT_LEVELS = [
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+] as const satisfies readonly EffortLevel[];
 
 /** Providers that take a `baseURL`; `openai-compatible` cannot work without one. */
 const BASE_URL_PROVIDERS: ReadonlySet<string> = new Set(['ollama', 'openai-compatible']);
@@ -29,6 +57,7 @@ export const UtilityModelSetting = z
   .object({
     provider: z.enum(UTILITY_MODEL_PROVIDERS),
     model: z.string().min(1),
+    effort: z.enum(UTILITY_MODEL_EFFORT_LEVELS).optional(),
     baseURL: z.string().min(1).optional(),
   })
   .superRefine((setting, ctx) => {
@@ -49,7 +78,7 @@ export const UtilityModelSetting = z
 
 export type UtilityModelSetting = z.infer<typeof UtilityModelSetting>;
 
-const DEFAULT_UTILITY_MODEL: UtilityModelSetting = { provider: 'claude-sdk', model: 'haiku' };
+const DEFAULT_UTILITY_MODEL: UtilityModelSetting = { provider: 'claude', model: 'haiku' };
 
 /** The model a helper generation runs on: the user's setting, or Claude Haiku. */
 export function resolveUtilityModel(setting: UtilityModelSetting | null): UtilityModelSetting {

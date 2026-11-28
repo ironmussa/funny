@@ -11,8 +11,8 @@ import {
 } from '../contracts/profile.js';
 
 describe('resolveUtilityModel', () => {
-  test('no setting resolves to Claude Haiku through the Claude SDK', () => {
-    expect(resolveUtilityModel(null)).toEqual({ provider: 'claude-sdk', model: 'haiku' });
+  test('no setting resolves to Claude Haiku', () => {
+    expect(resolveUtilityModel(null)).toEqual({ provider: 'claude', model: 'haiku' });
   });
 
   test('a valid setting is returned unchanged', () => {
@@ -23,6 +23,17 @@ describe('resolveUtilityModel', () => {
 });
 
 describe('UtilityModelSetting', () => {
+  test('agent providers with optional effort and legacy claude-sdk are accepted', () => {
+    for (const value of [
+      { provider: 'claude', model: 'haiku', effort: 'low' },
+      { provider: 'codex', model: 'o4-mini', effort: 'high' },
+      { provider: 'gemini', model: 'gemini-2.5-flash' },
+      { provider: 'claude-sdk', model: 'haiku' },
+    ]) {
+      expect(UtilityModelSetting.safeParse(value).success).toBe(true);
+    }
+  });
+
   test('openai-compatible without a base URL is refused', () => {
     const res = UtilityModelSetting.safeParse({ provider: 'openai-compatible', model: 'llama3' });
     expect(res.success).toBe(false);
@@ -41,9 +52,10 @@ describe('UtilityModelSetting', () => {
 
   test('an unknown provider, an empty model or a base URL a provider does not use is refused', () => {
     for (const value of [
-      { provider: 'gemini', model: 'x' },
+      { provider: 'unknown-provider', model: 'x' },
       { provider: 'anthropic', model: '' },
       { provider: 'openai', model: 'gpt-4o', baseURL: 'http://evil.example' },
+      { provider: 'claude', model: 'haiku', baseURL: 'http://evil.example' },
     ]) {
       expect(UtilityModelSetting.safeParse(value).success).toBe(false);
     }

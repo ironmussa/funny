@@ -19,6 +19,7 @@ interface Props {
   options: { value: string; label: string }[];
   placeholder: string;
   searchPlaceholder: string;
+  testId?: string;
 }
 
 /**
@@ -26,7 +27,14 @@ interface Props {
  * the Popover open state. Extracted from the parent so the Command/Popover
  * clusters move out of GeneralSettings's import graph.
  */
-export function ModelCombobox({ value, onChange, options, placeholder, searchPlaceholder }: Props) {
+export function ModelCombobox({
+  value,
+  onChange,
+  options,
+  placeholder,
+  searchPlaceholder,
+  testId,
+}: Props) {
   const [open, setOpen] = useState(false);
   const listId = useId();
   const selected = options.find((o) => o.value === value);
@@ -40,6 +48,7 @@ export function ModelCombobox({ value, onChange, options, placeholder, searchPla
           role="combobox"
           aria-expanded={open}
           aria-controls={listId}
+          data-testid={testId}
           className="h-8 w-[160px] justify-between"
         >
           <span className="truncate">{selected?.label ?? placeholder}</span>

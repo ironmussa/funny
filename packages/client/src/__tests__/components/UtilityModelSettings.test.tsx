@@ -15,6 +15,7 @@ mock.module('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 mock.module('@/components/ui/toast', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+mock.module('@/data/runner/hooks', () => ({ useAcpModels: () => ({}) }));
 
 import { UtilityModelSettings } from '@/components/settings/UtilityModelSettings';
 import { profileQuery, writeProfile } from '@/data/profile/queries';
@@ -84,21 +85,34 @@ describe('UtilityModelSettings', () => {
     expect(screen.getByTestId('settings-thread-recap-absence')).toHaveAttribute('data-disabled');
   });
 
-  test('saving a model persists utilityModel', async () => {
+  test('default renders Claude Haiku comboboxes and saving effort persists utilityModel', async () => {
     writeProfile(profile());
-    const saved = { provider: 'claude-sdk' as const, model: 'sonnet' };
+    const saved = { provider: 'claude' as const, model: 'haiku', effort: 'low' as const };
     updateProfile.mockReturnValue(okAsync(profile({ utilityModel: saved })));
     render(<UtilityModelSettings />);
 
-    expect(screen.getByTestId('settings-utility-model-name')).toHaveValue('haiku');
+    expect(screen.getByTestId('settings-utility-model-provider')).toHaveTextContent('Claude');
+    expect(screen.getByTestId('settings-utility-model-select')).toBeTruthy();
+    expect(screen.queryByTestId('settings-utility-model-name')).toBeNull();
     expect(screen.queryByTestId('settings-utility-model-base-url')).toBeNull();
-    fireEvent.change(screen.getByTestId('settings-utility-model-name'), {
-      target: { value: ' sonnet ' },
-    });
+
+    fireEvent.click(screen.getByTestId('settings-utility-model-effort-low'));
     fireEvent.click(screen.getByTestId('settings-utility-model-save'));
 
     await waitFor(() => expect(updateProfile).toHaveBeenCalledWith({ utilityModel: saved }));
     await waitFor(() => expect(cached()?.utilityModel).toEqual(saved));
+  });
+
+  test('a legacy claude-sdk setting displays as Claude and saves as claude', async () => {
+    writeProfile(profile({ utilityModel: { provider: 'claude-sdk', model: 'sonnet' } }));
+    const saved = { provider: 'claude' as const, model: 'sonnet', effort: 'high' as const };
+    updateProfile.mockReturnValue(okAsync(profile({ utilityModel: saved })));
+    render(<UtilityModelSettings />);
+
+    expect(screen.getByTestId('settings-utility-model-provider')).toHaveTextContent('Claude');
+    fireEvent.click(screen.getByTestId('settings-utility-model-save'));
+
+    await waitFor(() => expect(updateProfile).toHaveBeenCalledWith({ utilityModel: saved }));
   });
 
   test('an openai-compatible model needs its base URL before it can be saved', async () => {
@@ -114,6 +128,8 @@ describe('UtilityModelSettings', () => {
     updateProfile.mockReturnValue(okAsync(profile()));
     render(<UtilityModelSettings />);
 
+    expect(screen.getByTestId('settings-utility-model-name')).toHaveValue('llama');
+    expect(screen.queryByTestId('settings-utility-model-select')).toBeNull();
     const baseUrl = screen.getByTestId('settings-utility-model-base-url');
     expect(baseUrl).toHaveValue('http://localhost:1234/v1');
     fireEvent.change(baseUrl, { target: { value: '' } });

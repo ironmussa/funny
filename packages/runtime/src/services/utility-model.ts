@@ -3,8 +3,12 @@
  * `thread-recap`, D3): commit messages and thread recaps run on the requesting
  * user's utility model, as a single turn with no tools.
  *
- * Two backends:
- * - `claude-sdk`: one Claude Agent SDK `query()` (plan mode, no tools, one turn).
+ * Three backends:
+ * - `claude` (and legacy `claude-sdk`): one Claude Agent SDK `query()` (plan
+ *   mode, no tools, one turn).
+ * - Other agent providers (`codex`, `gemini`, `pi`, `cursor`, `opencode`,
+ *   `antigravity`, `deepagent`): a single-turn `defaultProcessFactory` run in
+ *   plan mode with no tools.
  * - LLM API (`anthropic`, `openai`, `ollama`, `openai-compatible`): `completeOnce`
  *   with the user's own provider key, read the way LLM API threads read it.
  *
@@ -14,9 +18,20 @@
  */
 
 import { query } from '@anthropic-ai/claude-agent-sdk';
-import { completeOnce, resolveSDKCliPath, type CompleteOnceError } from '@funny/core/agents';
+import {
+  completeOnce,
+  defaultProcessFactory,
+  resolveSDKCliPath,
+  type CLIMessage,
+  type CompleteOnceError,
+} from '@funny/core/agents';
+import type { AgentProvider } from '@funny/shared';
 import { runAsync } from '@funny/shared/async';
-import { resolveUtilityModel, UtilityModelSetting } from '@funny/shared/contracts/profile';
+import {
+  resolveUtilityModel,
+  UTILITY_MODEL_LLM_PROVIDERS,
+  UtilityModelSetting,
+} from '@funny/shared/contracts/profile';
 import { resolveModelId, type AgentModel } from '@funny/shared/models';
 import { ResultAsync } from 'neverthrow';
 
@@ -36,7 +51,7 @@ export interface UtilityGenerationOptions {
   prompt: string;
   signal?: AbortSignal;
   timeoutMs?: number;
-  /** Working directory of the SDK query (claude-sdk backend only). */
+  /** Working directory for CLI/SDK agent backends. */
   cwd?: string;
 }
 
@@ -62,6 +77,11 @@ export function describeUtilityModelError(error: UtilityModelError): string {
 
 /** Providers whose LLM API endpoint refuses requests without the user's key. */
 const KEYED_PROVIDERS: ReadonlySet<string> = new Set(['openai', 'anthropic']);
+
+/** Direct LLM API providers dispatched through `completeOnce`. */
+const LLM_API_PROVIDERS: ReadonlySet<string> = new Set(
+  UTILITY_MODEL_LLM_PROVIDERS.filter((provider) => provider !== 'claude-sdk'),
+);
 
 /** Carries a typed error through `runAsync`, which only knows thrown values. */
 class UtilityFailure extends Error {
@@ -109,18 +129,20 @@ async function runClaudeSdk(
   signal.addEventListener('abort', abort, { once: true });
   if (signal.aborted) abort();
   try {
+    const queryOptions: Parameters<typeof query>[0]['options'] = {
+      cwd: options.cwd,
+      model: claudeModelId(setting.model),
+      maxTurns: 1,
+      permissionMode: 'plan',
+      abortController: controller,
+      pathToClaudeCodeExecutable: resolveSDKCliPath(),
+      systemPrompt: options.system,
+      tools: [],
+    };
+    if (setting.effort) queryOptions.effort = setting.effort;
     gen = query({
       prompt: options.prompt,
-      options: {
-        cwd: options.cwd,
-        model: claudeModelId(setting.model),
-        maxTurns: 1,
-        permissionMode: 'plan',
-        abortController: controller,
-        pathToClaudeCodeExecutable: resolveSDKCliPath(),
-        systemPrompt: options.system,
-        tools: [],
-      },
+      options: queryOptions,
     });
     let resultText = '';
     for await (const msg of gen) {
@@ -140,6 +162,99 @@ async function runClaudeSdk(
     signal.removeEventListener('abort', abort);
     close();
   }
+}
+
+async function runAgentProcess(
+  setting: UtilityModelSetting,
+  options: UtilityGenerationOptions,
+  signal: AbortSignal,
+): Promise<string> {
+  if (signal.aborted) throw signal.reason;
+  const prompt = options.system ? `${options.system}\n\n${options.prompt}` : options.prompt;
+  const proc = defaultProcessFactory.create({
+    // SAFETY: runUtilityGeneration only routes non-LLM, non-Claude agent providers here.
+    provider: setting.provider as AgentProvider,
+    model: setting.model,
+    effort: setting.effort,
+    cwd: options.cwd ?? process.cwd(),
+    prompt,
+    permissionMode: 'plan',
+    maxTurns: 1,
+    allowedTools: [],
+  });
+
+  return await new Promise<string>((resolve, reject) => {
+    let settled = false;
+    let resultText = '';
+
+    const cleanup = () => {
+      signal.removeEventListener('abort', onAbort);
+      proc.removeAllListeners();
+      if (!proc.exited) void proc.kill();
+    };
+
+    const finish = (outcome: { ok: true; value: string } | { ok: false; error: unknown }) => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      if (outcome.ok) resolve(outcome.value);
+      else reject(outcome.error);
+    };
+
+    const onAbort = () => {
+      finish({ ok: false, error: signal.reason });
+    };
+
+    signal.addEventListener('abort', onAbort, { once: true });
+    if (signal.aborted) {
+      onAbort();
+      return;
+    }
+
+    proc.on('message', (msg: CLIMessage) => {
+      if (msg.type === 'assistant') {
+        const text = msg.message.content
+          .filter((block): block is { type: 'text'; text: string } => block.type === 'text')
+          .map((block) => block.text)
+          .join('\n');
+        if (text) resultText = text;
+      } else if (msg.type === 'result') {
+        if (msg.is_error) {
+          finish({
+            ok: false,
+            error: new UtilityFailure({
+              kind: 'provider-error',
+              message: msg.errors?.join('; ') || msg.result || 'Utility model generation failed',
+            }),
+          });
+        } else {
+          finish({ ok: true, value: msg.result || resultText });
+        }
+      }
+    });
+
+    proc.on('error', (err) => {
+      finish({ ok: false, error: err });
+    });
+
+    proc.on('exit', (code) => {
+      if (signal.aborted) {
+        finish({ ok: false, error: signal.reason });
+      } else if (code !== 0 && code !== null && !resultText) {
+        finish({
+          ok: false,
+          error: new UtilityFailure({
+            kind: 'provider-error',
+            message: `Utility model process exited with code ${code}`,
+          }),
+        });
+      } else {
+        finish({ ok: true, value: resultText });
+      }
+    });
+
+    proc.start();
+  });
 }
 
 function fromCompleteError(error: CompleteOnceError): UtilityModelError {
@@ -186,7 +301,12 @@ export function runUtilityGeneration(
   options: UtilityGenerationOptions,
 ): ResultAsync<string, UtilityModelError> {
   const setting = resolveUtilityModel(options.setting);
-  const backend = setting.provider === 'claude-sdk' ? runClaudeSdk : runLlmApi;
+  const backend =
+    setting.provider === 'claude' || setting.provider === 'claude-sdk'
+      ? runClaudeSdk
+      : LLM_API_PROVIDERS.has(setting.provider)
+        ? runLlmApi
+        : runAgentProcess;
   return ResultAsync.fromPromise(
     runAsync((signal) => backend(setting, options, signal), {
       signal: options.signal,

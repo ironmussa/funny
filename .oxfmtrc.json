@@ -22,6 +22,7 @@
     "protocol/**/fixtures/",
     "fallow-viz.html",
     "tools/oxlint/anti-slop/",
-    "packages/workflows/defaults/prompts/"
+    "packages/workflows/defaults/prompts/",
+    "packages/workflows/defaults/setup/"
   ]
 }

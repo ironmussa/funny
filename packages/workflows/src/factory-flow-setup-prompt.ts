@@ -4,11 +4,13 @@ import { fileURLToPath } from 'node:url';
 
 import { z } from 'zod';
 
+// Not in `defaults/prompts/`: that directory holds the `prompt_file`s flow
+// steps reference (and repository flows mirror); this one the server renders.
 const DEFAULT_PROMPT_PATH = join(
   dirname(fileURLToPath(import.meta.url)),
   '..',
   'defaults',
-  'prompts',
+  'setup',
   'factory-flow-setup.md',
 );
 

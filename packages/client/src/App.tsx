@@ -11,6 +11,7 @@ import {
 } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
+import { BrowserPanelSlot } from '@/components/browser-panel/BrowserPanelSlot';
 import {
   STORAGE_KEY_FACTORY_LEFT_WIDTH,
   STORAGE_KEY_INBOX_LEFT_WIDTH,
@@ -749,9 +750,9 @@ function SidebarAwareDockview({
   }, [viewBesideThread, leftView.view, setSidebarOpen]);
   const browserPanel = useMemo(
     () => (
-      <Suspense fallback={null}>
+      <BrowserPanelSlot>
         <BrowserPanel />
-      </Suspense>
+      </BrowserPanelSlot>
     ),
     [],
   );

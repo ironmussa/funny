@@ -18,7 +18,9 @@ pre-commit:
       glob: '**/*.{ts,tsx,js,jsx,md}'
       exclude:
         - '.claude/**'
-      run: bun fmt {staged_files}
+      # A commit whose staged files are all in .oxfmtrc.json's ignorePatterns
+      # (e.g. only a prompt template) must not fail for having nothing to format.
+      run: bun fmt --no-error-on-unmatched-pattern {staged_files}
       stage_fixed: true
 
     - name: checks

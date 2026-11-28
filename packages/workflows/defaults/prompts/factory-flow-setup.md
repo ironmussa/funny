@@ -24,7 +24,7 @@ You are working unattended to configure `regression_proof` for the issue factory
 ## Starting flow file
 
 ```yaml
-{ { starting_file } }
+{{starting_file}}
 ```
 
 ## Final message format

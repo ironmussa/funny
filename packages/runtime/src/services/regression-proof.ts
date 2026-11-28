@@ -174,7 +174,8 @@ export type RunOutcome =
   | { kind: 'timed-out'; output: string }
   | { kind: 'aborted'; output: string };
 
-async function runCommand(
+/** Run `command` in `cwd` through `sh` within the time left, killing its process group. */
+export async function runShellCommand(
   command: string,
   cwd: string,
   signal: AbortSignal,
@@ -290,7 +291,7 @@ class ProofRun {
       ? [this.request.setupCommand]
       : (readProjectConfig(worktree)?.postCreate ?? []);
     for (const command of this.setupCommands) {
-      const setup = await runCommand(command, worktree, this.signal, this.remaining());
+      const setup = await runShellCommand(command, worktree, this.signal, this.remaining());
       if (setup.kind !== 'exited' || setup.exitCode !== 0) {
         const how = setup.kind === 'exited' ? `exited ${setup.exitCode}` : setup.kind;
         return {
@@ -304,7 +305,7 @@ class ProofRun {
 
   run(command: string, checkout: Checkout, cwd?: string): Promise<RunOutcome> {
     const dir = cwd ? `${checkout.path}/${cwd}` : checkout.path;
-    return runCommand(command, dir, this.signal, this.remaining());
+    return runShellCommand(command, dir, this.signal, this.remaining());
   }
 
   async cleanup(): Promise<void> {

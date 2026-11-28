@@ -7,7 +7,7 @@
 import { failure, type ApiFailure, type FactoryPort } from '@funny/api';
 import type { FactoryFlowSetupFacts, FactoryFlowSetupView } from '@funny/shared/contracts/factory';
 import type { FactoryFlowSetupRow } from '@funny/shared/repositories';
-import { err, ok } from 'neverthrow';
+import { err, ok, type Result } from 'neverthrow';
 
 import { getLiveFactoryFlowSetupService } from '../../services/factory/factory-flow-setup-live.js';
 import {
@@ -88,53 +88,44 @@ type SetupPortMethods = Pick<
   | 'discardFlowSetup'
 >;
 
+const internalFailure = (cause: unknown): ApiFailure =>
+  failure(500, cause instanceof Error ? cause.message : String(cause));
+
+/** A service operation's row as the browser's view, its error as the REST status it maps to. */
+async function viewOf(
+  run: () => Promise<Result<FactoryFlowSetupRow, FlowSetupError>>,
+): Promise<Result<FactoryFlowSetupView, ApiFailure>> {
+  try {
+    const res = await run();
+    return res.isOk() ? ok(toFlowSetupView(res.value)) : err(flowSetupFailure(res.error));
+  } catch (cause) {
+    return err(internalFailure(cause));
+  }
+}
+
 export function setupPortMethods(
   getService: () => FactoryFlowSetupService = getLiveFactoryFlowSetupService,
 ): SetupPortMethods {
   return {
-    async startFlowSetup(userId, projectId, flowName) {
-      try {
-        const res = await getService().startFlowSetup({ userId }, projectId, flowName);
-        return res.isOk() ? ok(toFlowSetupView(res.value)) : err(flowSetupFailure(res.error));
-      } catch (cause) {
-        return err(failure(500, cause instanceof Error ? cause.message : String(cause)));
-      }
-    },
+    startFlowSetup: (userId, projectId, flowName) =>
+      viewOf(() => getService().startFlowSetup({ userId }, projectId, flowName)),
 
     async flowSetup(userId, projectId, flowName) {
       try {
         const row = await getService().getFlowSetup({ userId }, projectId, flowName);
         return ok(row ? toFlowSetupView(row) : null);
       } catch (cause) {
-        return err(failure(500, cause instanceof Error ? cause.message : String(cause)));
+        return err(internalFailure(cause));
       }
     },
 
-    async confirmFlowSetup(userId, _projectId, setupId, fileSha, variant) {
-      try {
-        const res = await getService().confirmFlowSetup({ userId }, setupId, fileSha, variant);
-        return res.isOk() ? ok(toFlowSetupView(res.value)) : err(flowSetupFailure(res.error));
-      } catch (cause) {
-        return err(failure(500, cause instanceof Error ? cause.message : String(cause)));
-      }
-    },
+    confirmFlowSetup: (userId, _projectId, setupId, fileSha, variant) =>
+      viewOf(() => getService().confirmFlowSetup({ userId }, setupId, fileSha, variant)),
 
-    async openFlowSetupPullRequest(userId, _projectId, setupId) {
-      try {
-        const res = await getService().openFlowSetupPullRequest({ userId }, setupId);
-        return res.isOk() ? ok(toFlowSetupView(res.value)) : err(flowSetupFailure(res.error));
-      } catch (cause) {
-        return err(failure(500, cause instanceof Error ? cause.message : String(cause)));
-      }
-    },
+    openFlowSetupPullRequest: (userId, _projectId, setupId) =>
+      viewOf(() => getService().openFlowSetupPullRequest({ userId }, setupId)),
 
-    async discardFlowSetup(userId, _projectId, setupId) {
-      try {
-        const res = await getService().discardFlowSetup({ userId }, setupId);
-        return res.isOk() ? ok(toFlowSetupView(res.value)) : err(flowSetupFailure(res.error));
-      } catch (cause) {
-        return err(failure(500, cause instanceof Error ? cause.message : String(cause)));
-      }
-    },
+    discardFlowSetup: (userId, _projectId, setupId) =>
+      viewOf(() => getService().discardFlowSetup({ userId }, setupId)),
   };
 }

@@ -420,16 +420,26 @@ function isEmptyPackage(
   pkg: Pick<DetectedTestPackage, 'runner' | 'configFile' | 'nxTestTarget' | 'sampleTests'>,
   hasProjectJson: boolean,
 ): boolean {
-  const noTestsOrConfig = pkg.sampleTests.length === 0 && !pkg.configFile;
+  // An Nx test target or a test of its own is always worth listing.
+  if (pkg.nxTestTarget || pkg.sampleTests.length > 0) return false;
+  if (!pkg.runner) return true;
+  if (pkg.configFile) return false;
   // A monorepo's root package only aggregates its members.
   const isAggregatingRoot = root === '.' && ctx.monorepo !== null && ctx.rootCount > 1;
-  if (isAggregatingRoot && noTestsOrConfig && !pkg.nxTestTarget) return true;
-  if (hasProjectJson && !pkg.nxTestTarget && noTestsOrConfig) return true;
-  return !pkg.runner && !pkg.nxTestTarget && pkg.sampleTests.length === 0;
+  return hasProjectJson || isAggregatingRoot;
+}
+
+/** The test file patterns of a package: its own tests and the infrastructure ones under it. */
+function packageTestPatterns(ctx: StackContext, root: string, ownTests: string[]): string[] {
+  const inPackage = (path: string) => root === '.' || path.startsWith(`${root}/`);
+  const infraPaths = ctx.tests.infrastructureTests.flatMap((i) =>
+    inPackage(i.path) ? [i.path] : [],
+  );
+  return [...new Set(ownTests.concat(infraPaths).map(patternOfTestFile))].sort();
 }
 
 function describePackage(ctx: StackContext, root: string): DetectedTestPackage | null {
-  const absRoot = root === '.' ? ctx.checkout : join(ctx.checkout, root);
+  const absRoot = join(ctx.checkout, root);
   const pkgJson = readPackageJson(join(absRoot, 'package.json'));
   const projectJson = readNxProjectJson(join(absRoot, 'project.json'));
   const ownTests = ctx.tests.testsByPkg.get(root) ?? [];
@@ -449,11 +459,8 @@ function describePackage(ctx: StackContext, root: string): DetectedTestPackage |
   };
   if (isEmptyPackage(ctx, root, pkg, projectJson !== null)) return null;
 
-  const infraPaths = ctx.tests.infrastructureTests.flatMap((i) =>
-    root === '.' || i.path.startsWith(`${root}/`) ? [i.path] : [],
-  );
-  const testPatterns = [...new Set(ownTests.concat(infraPaths).map(patternOfTestFile))].sort();
-  return { name: projectJson?.name || pkgJson?.name || root, root, ...pkg, testPatterns };
+  const name = projectJson?.name || pkgJson?.name || root;
+  return { name, root, ...pkg, testPatterns: packageTestPatterns(ctx, root, ownTests) };
 }
 
 function summarize(

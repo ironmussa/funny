@@ -25,8 +25,8 @@ import {
 import { err, ok, type Result } from 'neverthrow';
 import { z } from 'zod';
 
-import { authorizedRunnerRequests, runnerActor, withRunnerFor } from '../runner-access/index.js';
 import type { RunnerPorts } from '../runner-thread-launcher.js';
+import { sendAsUser } from '../thread-runner-requests.js';
 import {
   toVerifyFlowSetupResult,
   type VerifyFlowSetupResult,
@@ -65,39 +65,41 @@ async function sendSetupRequest(
   userId: string,
   method: 'GET' | 'POST' | 'DELETE',
   path: string,
-  options?: { query?: Record<string, string>; body?: unknown },
+  options: { query?: Record<string, string>; body?: unknown } = {},
 ): Promise<Result<{ status: number; body: string | null }, SetupRunnerError>> {
-  const sink = authorizedRunnerRequests(ports.requests);
-  const query = options?.query ?? {};
-  const queryStr = new URLSearchParams(query).toString();
-  const fullPath = queryStr ? `${path}?${queryStr}` : path;
-  const hasBody = options?.body !== undefined && options?.body !== null;
+  const hasBody = options.body !== undefined && options.body !== null;
   try {
-    const sent = await withRunnerFor(
-      runnerActor({ userId }),
-      { kind: 'request', path, query },
-      ports.presence,
-      (actor, runner, proof) =>
-        sink.send(actor, runner, proof, {
-          method,
-          path: fullPath,
-          headers: hasBody ? { 'Content-Type': 'application/json' } : {},
-          body: hasBody ? JSON.stringify(options!.body) : null,
-        }),
-    );
-    if (sent.isErr()) {
-      return err({
-        kind: 'runner-unavailable',
-        message: `${RUNNER_UNAVAILABLE_PREFIX}${sent.error.reason}`,
-      });
-    }
-    return ok({ status: sent.value.status, body: sent.value.body ?? null });
+    const sent = await sendAsUser(ports, userId, {
+      method,
+      path,
+      query: options.query ?? {},
+      queryInPath: true,
+      headers: hasBody ? { 'Content-Type': 'application/json' } : {},
+      body: hasBody ? JSON.stringify(options.body) : null,
+    });
+    return sent.mapErr((reason) => ({
+      kind: 'runner-unavailable' as const,
+      message: `${RUNNER_UNAVAILABLE_PREFIX}${reason}`,
+    }));
   } catch (error) {
     return err({
       kind: 'runner-unavailable',
       message: error instanceof Error ? error.message : String(error),
     });
   }
+}
+
+/** A runner answer with no body to read: an error status is a runner error. */
+function expectSuccess(
+  sent: { status: number; body: string | null },
+  opts: { notFoundOk?: boolean } = {},
+): Result<void, SetupRunnerError> {
+  if (sent.status < 400 || (opts.notFoundOk && sent.status === 404)) return ok(undefined);
+  const info = parseRunnerError(sent.body);
+  return err({
+    kind: 'runner-error',
+    message: `runner answered ${sent.status}${info.error ? `: ${info.error}` : ''}`,
+  });
 }
 
 function decodeJson<TSchema extends z.ZodTypeAny>(
@@ -217,16 +219,7 @@ export function createFactoryFlowSetupRunnerClient(
         `/api/threads/${encodeURIComponent(threadId)}/message`,
         { body: { content, expectedBranch } },
       );
-      return sent.andThen((v) => {
-        if (v.status >= 400) {
-          const info = parseRunnerError(v.body);
-          return err({
-            kind: 'runner-error' as const,
-            message: `runner answered ${v.status}${info.error ? `: ${info.error}` : ''}`,
-          });
-        }
-        return ok(undefined);
-      });
+      return sent.andThen((v) => expectSuccess(v));
     },
 
     async startVerify(userId, threadId, body) {
@@ -259,17 +252,7 @@ export function createFactoryFlowSetupRunnerClient(
         'DELETE',
         `/api/threads/${encodeURIComponent(threadId)}/factory-flow-setup/verify/${encodeURIComponent(jobId)}`,
       );
-      return sent.andThen((v) => {
-        if (v.status === 404) return ok(undefined);
-        if (v.status >= 400) {
-          const info = parseRunnerError(v.body);
-          return err({
-            kind: 'runner-error' as const,
-            message: `runner answered ${v.status}${info.error ? `: ${info.error}` : ''}`,
-          });
-        }
-        return ok(undefined);
-      });
+      return sent.andThen((v) => expectSuccess(v, { notFoundOk: true }));
     },
 
     async commitAndPush(userId, threadId, body) {

@@ -58,36 +58,70 @@ function runnerError(body: string | null | undefined): RunnerErrorDetail {
     : { text: null, activityRecorded: false };
 }
 
+/** A request as it travels to a runner (path with its query string, JSON body). */
+export interface CertifiedRunnerRequest {
+  method: 'GET' | 'POST' | 'DELETE';
+  /** The route, without its query: what `withRunnerFor` routes by. */
+  path: string;
+  /** Routing context (`threadId`), and the query string when `queryInPath`. */
+  query: Record<string, string>;
+  /** Send the query on the path too; otherwise it only picks the runner. */
+  queryInPath: boolean;
+  headers: Record<string, string>;
+  body: string | null;
+}
+
+/**
+ * Send `request` to the runner certified for `userId` and the request's route
+ * (`withRunnerFor`: never another user's runner). Fails with the refusal's reason.
+ */
+export async function sendAsUser(
+  ports: RunnerPorts,
+  userId: string,
+  request: CertifiedRunnerRequest,
+): Promise<Result<{ status: number; body: string | null }, string>> {
+  const sink = authorizedRunnerRequests(ports.requests);
+  const queryStr = new URLSearchParams(request.query).toString();
+  const sent = await withRunnerFor(
+    runnerActor({ userId }),
+    { kind: 'request', path: request.path, query: request.query },
+    ports.presence,
+    (actor, runner, proof) =>
+      sink.send(actor, runner, proof, {
+        method: request.method,
+        path: request.queryInPath && queryStr ? `${request.path}?${queryStr}` : request.path,
+        headers: request.headers,
+        body: request.body,
+      }),
+  );
+  if (sent.isErr()) return err(sent.error.reason);
+  return ok({ status: sent.value.status, body: sent.value.body ?? null });
+}
+
 /** Send a request to the runner a thread runs on, as `userId`. Answers the response body. */
 export async function sendToThreadRunner(
   ports: RunnerPorts,
   userId: string,
   { method, path, query = {}, body }: ThreadRunnerRequest,
 ): Promise<Result<string | null, ThreadRunnerError>> {
-  const sink = authorizedRunnerRequests(ports.requests);
   try {
-    const sent = await withRunnerFor(
-      runnerActor({ userId }),
-      { kind: 'request', path, query },
-      ports.presence,
-      (actor, runner, proof) =>
-        sink.send(actor, runner, proof, {
-          method,
-          path,
-          headers: { 'Content-Type': 'application/json' },
-          body: body === null ? null : JSON.stringify(body),
-        }),
-    );
+    const sent = await sendAsUser(ports, userId, {
+      method,
+      path,
+      query,
+      queryInPath: false,
+      headers: { 'Content-Type': 'application/json' },
+      body: body === null ? null : JSON.stringify(body),
+    });
     if (sent.isErr()) {
-      const reason = sent.error.reason;
       return err({
-        message: `the thread's runner is unavailable (${reason})`,
-        sandboxAsleep: reason === 'thread-sandbox-unavailable',
+        message: `the thread's runner is unavailable (${sent.error})`,
+        sandboxAsleep: sent.error === 'thread-sandbox-unavailable',
         answered: false,
         activityRecorded: false,
       });
     }
-    if (sent.value.status < 400) return ok(sent.value.body ?? null);
+    if (sent.value.status < 400) return ok(sent.value.body);
     const reason = runnerError(sent.value.body);
     return err({
       message: `the runner answered ${sent.value.status}${reason.text ? `: ${reason.text}` : ''}`,

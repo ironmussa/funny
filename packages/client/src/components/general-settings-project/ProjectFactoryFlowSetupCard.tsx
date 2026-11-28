@@ -398,7 +398,80 @@ const DIFF_LINE_PREFIX: Record<'same' | 'add' | 'del', string> = {
   same: '  ',
 };
 
-function ProposedContent({
+function describeFacts(facts: NonNullable<FactoryFlowSetupView['facts']>): string {
+  const packages = facts.packages ?? [];
+  return [
+    facts.packageManager ? `Package manager: ${facts.packageManager}` : null,
+    packages.length > 0
+      ? `Packages: ${packages.map((p) => `${p.name} (${p.runner})`).join(', ')}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+function DetectedStack({ facts }: { facts: NonNullable<FactoryFlowSetupView['facts']> }) {
+  const { t } = useTranslation();
+  return (
+    <div className="space-y-1" data-testid="factory-setup-facts">
+      <div className="text-muted-foreground text-xs font-medium">
+        {t('settings.factorySetupDetectedStack', 'Detected stack')}
+      </div>
+      <div className="text-xs">
+        {facts.recognized
+          ? describeFacts(facts)
+          : t('settings.factorySetupStackUnrecognized', 'No test runner recognized')}
+      </div>
+    </div>
+  );
+}
+
+function ProposedDiff({
+  setup,
+  proposedFile,
+}: {
+  setup: FactoryFlowSetupView;
+  proposedFile: string;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div className="space-y-1" data-testid="factory-setup-diff">
+      <div className="text-muted-foreground text-xs font-medium">
+        {t('settings.factorySetupProposedFile', 'Proposed .funny/workflows/{{flow}}.yaml', {
+          flow: setup.flowName,
+        })}
+      </div>
+      <pre className="border-border bg-muted/30 text-compact max-h-56 overflow-auto rounded border p-2 font-mono">
+        {simpleLineDiff(setup.startingFile, proposedFile).map((entry, idx) => (
+          <div key={idx} className={DIFF_LINE_CLASS[entry.kind]}>
+            {DIFF_LINE_PREFIX[entry.kind]}
+            {entry.line}
+          </div>
+        ))}
+      </pre>
+    </div>
+  );
+}
+
+function UncoveredList({ items }: { items: Array<{ scope: string; reason: string }> }) {
+  const { t } = useTranslation();
+  return (
+    <div className="space-y-1" data-testid="factory-setup-uncovered">
+      <div className="text-muted-foreground text-xs font-medium">
+        {t('settings.factorySetupUncovered', 'Left uncovered')}
+      </div>
+      <ul className="text-muted-foreground list-disc space-y-0.5 pl-4 text-xs">
+        {items.map((item, idx) => (
+          <li key={idx}>
+            <span className="text-foreground font-mono">{item.scope}</span>: {item.reason}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function ProposalActions({
   setup,
   busy,
   onConfirm,
@@ -410,110 +483,66 @@ function ProposedContent({
   onDiscard: () => void;
 }) {
   const { t } = useTranslation();
-  const diffLines = setup.proposedFile
-    ? simpleLineDiff(setup.startingFile, setup.proposedFile)
-    : [];
+  return (
+    <div className="border-border space-y-2 border-t pt-3">
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          size="sm"
+          disabled={busy}
+          data-testid="factory-setup-commit"
+          onClick={() => onConfirm('rules')}
+        >
+          {t('settings.factorySetupCommitPush', 'Commit and push to {{branch}}', {
+            branch: setup.defaultBranch,
+          })}
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={busy}
+          data-testid="factory-setup-opt-out"
+          onClick={() => onConfirm('opt-out')}
+        >
+          {t('settings.factorySetupOptOut', 'Merge without regression proof')}
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          disabled={busy}
+          data-testid="factory-setup-discard"
+          onClick={onDiscard}
+        >
+          {t('settings.factorySetupDiscard', 'Discard')}
+        </Button>
+      </div>
+      <p className="text-muted-foreground text-xs">
+        {t(
+          'settings.factorySetupOptOutNote',
+          'Or opt out explicitly: runs will merge without showing their test catches the bug.',
+        )}
+      </p>
+    </div>
+  );
+}
 
+function ProposedContent(props: {
+  setup: FactoryFlowSetupView;
+  busy: boolean;
+  onConfirm: (variant: 'rules' | 'opt-out') => void;
+  onDiscard: () => void;
+}) {
+  const { setup } = props;
+  const uncovered = setup.verdicts?.uncovered ?? [];
   return (
     <div className="space-y-3" data-testid="factory-setup-proposed">
-      {setup.facts && (
-        <div className="space-y-1" data-testid="factory-setup-facts">
-          <div className="text-muted-foreground text-xs font-medium">
-            {t('settings.factorySetupDetectedStack', 'Detected stack')}
-          </div>
-          <div className="text-xs">
-            {setup.facts.recognized
-              ? [
-                  setup.facts.packageManager
-                    ? `Package manager: ${setup.facts.packageManager}`
-                    : null,
-                  setup.facts.packages?.length
-                    ? `Packages: ${setup.facts.packages.map((p) => `${p.name} (${p.runner})`).join(', ')}`
-                    : null,
-                ]
-                  .filter(Boolean)
-                  .join(' · ')
-              : t('settings.factorySetupStackUnrecognized', 'No test runner recognized')}
-          </div>
-        </div>
-      )}
-
-      {setup.proposedFile && (
-        <div className="space-y-1" data-testid="factory-setup-diff">
-          <div className="text-muted-foreground text-xs font-medium">
-            {t('settings.factorySetupProposedFile', 'Proposed .funny/workflows/{{flow}}.yaml', {
-              flow: setup.flowName,
-            })}
-          </div>
-          <pre className="border-border bg-muted/30 text-compact max-h-56 overflow-auto rounded border p-2 font-mono">
-            {diffLines.map((entry, idx) => (
-              <div key={idx} className={DIFF_LINE_CLASS[entry.kind]}>
-                {DIFF_LINE_PREFIX[entry.kind]}
-                {entry.line}
-              </div>
-            ))}
-          </pre>
-        </div>
-      )}
-
+      {setup.facts && <DetectedStack facts={setup.facts} />}
+      {setup.proposedFile && <ProposedDiff setup={setup} proposedFile={setup.proposedFile} />}
       {setup.verdicts && <RuleVerdictSection rules={setup.verdicts.rules} />}
-
-      {setup.verdicts && setup.verdicts.uncovered.length > 0 && (
-        <div className="space-y-1" data-testid="factory-setup-uncovered">
-          <div className="text-muted-foreground text-xs font-medium">
-            {t('settings.factorySetupUncovered', 'Left uncovered')}
-          </div>
-          <ul className="text-muted-foreground list-disc space-y-0.5 pl-4 text-xs">
-            {setup.verdicts.uncovered.map((item, idx) => (
-              <li key={idx}>
-                <span className="text-foreground font-mono">{item.scope}</span>: {item.reason}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <div className="border-border space-y-2 border-t pt-3">
-        <div className="flex flex-wrap gap-2">
-          <Button
-            type="button"
-            size="sm"
-            disabled={busy}
-            data-testid="factory-setup-commit"
-            onClick={() => onConfirm('rules')}
-          >
-            {t('settings.factorySetupCommitPush', 'Commit and push to {{branch}}', {
-              branch: setup.defaultBranch,
-            })}
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={busy}
-            data-testid="factory-setup-opt-out"
-            onClick={() => onConfirm('opt-out')}
-          >
-            {t('settings.factorySetupOptOut', 'Merge without regression proof')}
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            disabled={busy}
-            data-testid="factory-setup-discard"
-            onClick={onDiscard}
-          >
-            {t('settings.factorySetupDiscard', 'Discard')}
-          </Button>
-        </div>
-        <p className="text-muted-foreground text-xs">
-          {t(
-            'settings.factorySetupOptOutNote',
-            'Or opt out explicitly: runs will merge without showing their test catches the bug.',
-          )}
-        </p>
-      </div>
+      {uncovered.length > 0 && <UncoveredList items={uncovered} />}
+      <ProposalActions {...props} />
     </div>
   );
 }

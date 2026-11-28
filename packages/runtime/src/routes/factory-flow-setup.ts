@@ -15,9 +15,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 import { detectTestStack } from '@funny/core';
-import type { DomainError } from '@funny/shared/errors';
 import { Hono, type Context } from 'hono';
-import { err } from 'neverthrow';
 import type { z } from 'zod';
 
 import {
@@ -32,7 +30,6 @@ import {
 import { canDoGitOps, isWorktreeCheckoutMissing } from '../services/thread-context.js';
 import type { HonoEnv } from '../types/hono-env.js';
 import { resultToResponse } from '../utils/result-response.js';
-import { requireProject, requireThread } from '../utils/route-helpers.js';
 import {
   commitFlowSetupSchema,
   openFlowSetupPRSchema,
@@ -45,25 +42,17 @@ import {
   type verifyFlowSetupStartAnswerSchema,
 } from '../validation/schemas.js';
 import { resolveGithubToken } from './github/helpers.js';
+import {
+  answerRefusal,
+  type OwnedThread,
+  projectPathOf,
+  withProjectAndBody,
+  type Refusal,
+  refuse,
+  withOwnedThread,
+} from './owned-thread.js';
 
 export const factoryFlowSetupRoutes = new Hono<HonoEnv>();
-
-type OwnedThread = ReturnType<Awaited<ReturnType<typeof requireThread>>['_unsafeUnwrap']>;
-
-interface Refusal {
-  error: string;
-  code: string;
-  status: 400 | 403 | 409;
-}
-
-const refuse = (status: Refusal['status'], code: string, error: string): Refusal => ({
-  error,
-  code,
-  status,
-});
-
-const answerRefusal = (c: Context<HonoEnv>, refusal: Refusal): Response =>
-  c.json({ error: refusal.error, code: refusal.code }, refusal.status);
 
 /**
  * Require the caller's own thread AND verify its role (`source`) is `'factory-setup'`.
@@ -72,16 +61,11 @@ async function withFactorySetupThread(
   c: Context<HonoEnv>,
   handle: (thread: OwnedThread) => Response | Promise<Response>,
 ): Promise<Response> {
-  const threadResult = await requireThread(c.req.param('id') ?? '', c.get('userId'));
-  if (threadResult.isErr()) return resultToResponse(c, threadResult);
-  const thread = threadResult.value;
-  if (thread.source !== 'factory-setup') {
-    return answerRefusal(
-      c,
-      refuse(403, 'wrong-thread-role', 'Thread is not a factory setup thread'),
-    );
-  }
-  return handle(thread);
+  return withOwnedThread(c, (thread) =>
+    thread.source === 'factory-setup'
+      ? handle(thread)
+      : answerRefusal(c, refuse(403, 'wrong-thread-role', 'Thread is not a factory setup thread')),
+  );
 }
 
 function requireSetupWorktree(thread: OwnedThread): Refusal | { worktreePath: string } {
@@ -98,16 +82,35 @@ function requireSetupWorktree(thread: OwnedThread): Refusal | { worktreePath: st
   return { worktreePath: thread.worktreePath };
 }
 
-async function resolveProjectPath(
-  thread: OwnedThread,
-  userId: string,
-  organizationId: string | null | undefined,
-): Promise<Refusal | { projectPath: string } | { denied: DomainError }> {
-  if (!thread.projectId) return refuse(400, 'no-project', 'Thread has no project');
-  const project = await requireProject(thread.projectId, userId, organizationId);
-  if (project.isErr()) return { denied: project.error };
-  if (!project.value.path) return refuse(400, 'no-project', 'Thread has no project path');
-  return { projectPath: project.value.path };
+/** The worktree path of a `.funny/workflows/` file the route may read, or why it may not. */
+function setupFilePath(worktreePath: string, relPath: string): Refusal | { fullPath: string } {
+  const unsafe =
+    !relPath ||
+    relPath.startsWith('/') ||
+    relPath.includes('..') ||
+    relPath.includes('\\') ||
+    !relPath.startsWith('.funny/workflows/');
+  if (unsafe) return refuse(400, 'invalid-path', 'Only .funny/workflows/ paths may be read');
+  const fullPath = resolve(worktreePath, relPath);
+  if (!fullPath.startsWith(`${resolve(worktreePath)}/`)) {
+    return refuse(400, 'invalid-path', 'Path escapes worktree');
+  }
+  return { fullPath };
+}
+
+/** The setup thread's worktree and the request body as `schema` reads it, then `handle`. */
+function withSetupBody<T>(
+  c: Context<HonoEnv>,
+  schema: z.ZodType<T>,
+  handle: (thread: OwnedThread, worktreePath: string, body: T) => Promise<Response>,
+): Promise<Response> {
+  return withFactorySetupThread(c, async (thread) => {
+    const wt = requireSetupWorktree(thread);
+    if ('status' in wt) return answerRefusal(c, wt);
+    const parsed = validate(schema, await c.req.json().catch(() => ({})));
+    if (parsed.isErr()) return resultToResponse(c, parsed);
+    return handle(thread, wt.worktreePath, parsed.value);
+  });
 }
 
 factoryFlowSetupRoutes.post('/:id/factory-flow-setup/detect', (c) =>
@@ -127,24 +130,9 @@ factoryFlowSetupRoutes.get('/:id/factory-flow-setup/file', (c) =>
     if ('status' in wt) return answerRefusal(c, wt);
 
     const relPath = (c.req.query('path') ?? '').trim();
-    if (
-      !relPath ||
-      relPath.startsWith('/') ||
-      relPath.includes('..') ||
-      relPath.includes('\\') ||
-      !relPath.startsWith('.funny/workflows/')
-    ) {
-      return answerRefusal(
-        c,
-        refuse(400, 'invalid-path', 'Only .funny/workflows/ paths may be read'),
-      );
-    }
-
-    const fullPath = resolve(wt.worktreePath, relPath);
-    const rootPrefix = `${resolve(wt.worktreePath)}/`;
-    if (!fullPath.startsWith(rootPrefix)) {
-      return answerRefusal(c, refuse(400, 'invalid-path', 'Path escapes worktree'));
-    }
+    const target = setupFilePath(wt.worktreePath, relPath);
+    if ('status' in target) return answerRefusal(c, target);
+    const { fullPath } = target;
 
     try {
       const content = await readFile(fullPath, 'utf8');
@@ -163,23 +151,22 @@ factoryFlowSetupRoutes.post('/:id/factory-flow-setup/verify', (c) =>
     const wt = requireSetupWorktree(thread);
     if ('status' in wt) return answerRefusal(c, wt);
 
-    const project = await resolveProjectPath(thread, c.get('userId'), c.get('organizationId'));
-    if ('denied' in project) return resultToResponse(c, err(project.denied));
-    if ('status' in project) return answerRefusal(c, project);
-
-    const body = await c.req.json().catch(() => ({}));
-    const parsed = validate(verifyFlowSetupSchema, body);
-    if (parsed.isErr()) return resultToResponse(c, parsed);
-
-    const job = startFlowSetupVerifyJob(thread.id, project.projectPath, {
-      ...parsed.value,
-      agentWorktreePath: wt.worktreePath,
-    });
-    return c.json(
-      { jobId: job.id, state: job.state } satisfies z.input<
-        typeof verifyFlowSetupStartAnswerSchema
-      >,
-      200,
+    return withProjectAndBody(
+      c,
+      projectPathOf(thread, c.get('userId'), c.get('organizationId')),
+      verifyFlowSetupSchema,
+      (projectPath, body) => {
+        const job = startFlowSetupVerifyJob(thread.id, projectPath, {
+          ...body,
+          agentWorktreePath: wt.worktreePath,
+        });
+        return c.json(
+          { jobId: job.id, state: job.state } satisfies z.input<
+            typeof verifyFlowSetupStartAnswerSchema
+          >,
+          200,
+        );
+      },
     );
   }),
 );
@@ -209,47 +196,28 @@ factoryFlowSetupRoutes.delete('/:id/factory-flow-setup/verify/:jobId', (c) =>
 );
 
 factoryFlowSetupRoutes.post('/:id/factory-flow-setup/commit', (c) =>
-  withFactorySetupThread(c, async (thread) => {
-    const wt = requireSetupWorktree(thread);
-    if ('status' in wt) return answerRefusal(c, wt);
-
-    const body = await c.req.json().catch(() => ({}));
-    const parsed = validate(commitFlowSetupSchema, body);
-    if (parsed.isErr()) return resultToResponse(c, parsed);
-
-    const result = await commitAndPushSetup({
-      worktreePath: wt.worktreePath,
-      ...parsed.value,
-    });
+  withSetupBody(c, commitFlowSetupSchema, async (_thread, worktreePath, body) => {
+    const result = await commitAndPushSetup({ worktreePath, ...body });
     return c.json(result satisfies z.input<typeof commitFlowSetupAnswerSchema>, 200);
   }),
 );
 
 factoryFlowSetupRoutes.post('/:id/factory-flow-setup/pull-request', (c) =>
-  withFactorySetupThread(c, async (thread) => {
-    const wt = requireSetupWorktree(thread);
-    if ('status' in wt) return answerRefusal(c, wt);
-
-    const body = await c.req.json().catch(() => ({}));
-    const parsed = validate(openFlowSetupPRSchema, body);
-    if (parsed.isErr()) return resultToResponse(c, parsed);
-
-    const setupBranch = parsed.value.setupBranch ?? thread.branch ?? undefined;
+  withSetupBody(c, openFlowSetupPRSchema, async (thread, worktreePath, body) => {
+    const setupBranch = body.setupBranch ?? thread.branch ?? undefined;
     if (!setupBranch) {
       return answerRefusal(c, refuse(409, 'branch-missing', 'Setup thread has no branch'));
     }
-
     const githubToken =
-      parsed.value.githubToken ?? (await resolveGithubToken(c.get('userId')))?.token ?? undefined;
-
+      body.githubToken ?? (await resolveGithubToken(c.get('userId')))?.token ?? undefined;
     const result = await pushSetupBranchAndOpenPR({
-      worktreePath: wt.worktreePath,
+      worktreePath,
       setupBranch,
-      defaultBranch: parsed.value.defaultBranch,
-      title: parsed.value.title,
-      body: parsed.value.body,
+      defaultBranch: body.defaultBranch,
+      title: body.title,
+      body: body.body,
       githubToken,
-      remote: parsed.value.remote,
+      remote: body.remote,
     });
     return c.json(result satisfies z.input<typeof openFlowSetupPRAnswerSchema>, 200);
   }),

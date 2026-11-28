@@ -90,6 +90,34 @@ export function createFactoryFlowSetupRepository(deps: FactoryFlowSetupRepositor
     return dbGet<FactoryFlowSetupRow>(db.select().from(table).where(eq(table.threadId, threadId)));
   }
 
+  const sameMemberProjectFlow = (userId: string, projectId: string, flowName: string): SQL[] => [
+    eq(table.userId, userId),
+    eq(table.projectId, projectId),
+    eq(table.flowName, flowName),
+  ];
+
+  /**
+   * The compare-and-set conditions for moving `id` to `toState`: a legal
+   * from-state (only `expect.fromState` when given), and the expected
+   * proposal. Null when no such move is legal.
+   */
+  function transitionConditions(
+    id: string,
+    toState: FactoryFlowSetupState,
+    expect: FactoryFlowSetupTransitionExpect | undefined,
+  ): SQL[] | null {
+    const allowedFrom = FACTORY_FLOW_SETUP_WRITTEN_FROM[toState] ?? [];
+    const fromStates = expect?.fromState !== undefined ? [expect.fromState] : [...allowedFrom];
+    if (fromStates.length === 0 || !fromStates.every((st) => allowedFrom.includes(st))) {
+      return null;
+    }
+    const conditions: SQL[] = [eq(table.id, id), inArray(table.state, fromStates)];
+    if (expect?.proposedFileSha !== undefined) {
+      conditions.push(eq(table.proposedFileSha, expect.proposedFileSha));
+    }
+    return conditions;
+  }
+
   /** The currently open (non-ended) setup for a member, project and flow, if any. */
   async function getOpenByUserProjectFlow(
     userId: string,
@@ -102,9 +130,7 @@ export function createFactoryFlowSetupRepository(deps: FactoryFlowSetupRepositor
         .from(table)
         .where(
           and(
-            eq(table.userId, userId),
-            eq(table.projectId, projectId),
-            eq(table.flowName, flowName),
+            ...sameMemberProjectFlow(userId, projectId, flowName),
             inArray(table.state, [...FACTORY_FLOW_SETUP_OPEN_STATES]),
           ),
         ),
@@ -121,13 +147,7 @@ export function createFactoryFlowSetupRepository(deps: FactoryFlowSetupRepositor
       db
         .select()
         .from(table)
-        .where(
-          and(
-            eq(table.userId, userId),
-            eq(table.projectId, projectId),
-            eq(table.flowName, flowName),
-          ),
-        )
+        .where(and(...sameMemberProjectFlow(userId, projectId, flowName)))
         .orderBy(desc(table.createdAt))
         .limit(1),
     );
@@ -157,19 +177,11 @@ export function createFactoryFlowSetupRepository(deps: FactoryFlowSetupRepositor
     patch: FactoryFlowSetupPatch = {},
     expect?: FactoryFlowSetupTransitionExpect,
   ): Promise<boolean> {
-    const allowedFrom = FACTORY_FLOW_SETUP_WRITTEN_FROM[toState] ?? [];
-    if (allowedFrom.length === 0) return false;
-    if (expect?.fromState !== undefined && !allowedFrom.includes(expect.fromState)) {
-      return false;
-    }
-
-    const fromStates = expect?.fromState !== undefined ? [expect.fromState] : [...allowedFrom];
-    const conditions: SQL[] = [eq(table.id, id), inArray(table.state, fromStates)];
-    if (expect?.proposedFileSha !== undefined) {
-      conditions.push(eq(table.proposedFileSha, expect.proposedFileSha));
-    }
+    const conditions = transitionConditions(id, toState, expect);
+    if (!conditions) return false;
 
     const now = new Date().toISOString();
+    // An ended state stamps its end unless the patch names one.
     const endedAt =
       patch.endedAt !== undefined
         ? patch.endedAt

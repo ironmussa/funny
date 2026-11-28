@@ -25,7 +25,6 @@ import { basename, dirname, resolve } from 'node:path';
 
 import {
   createTempWorktree,
-  execute,
   gitRead,
   removeTempWorktree,
   sweepTempWorktrees,
@@ -38,6 +37,7 @@ import {
   fillCommand,
   inconclusiveBaseFailure,
   matchesGlob,
+  runShellCommand,
   type ProofRule,
   type RunOutcome,
 } from './regression-proof.js';
@@ -45,7 +45,6 @@ import {
 const ns = 'factory-flow-setup-verify';
 
 const DEFAULT_VERIFY_TIMEOUT_MS = 30 * 60 * 1000;
-const MAX_OUTPUT_BYTES = 20 * 1024 * 1024;
 const OUTPUT_TAIL = 4000;
 const MAX_EXISTING_CANDIDATES = 3;
 
@@ -147,35 +146,6 @@ export interface VerifyFlowSetupDeps {
   writeCanaryFile: (worktreePath: string, relPath: string, content: string) => void;
 }
 
-async function defaultRunCommand(
-  command: string,
-  cwd: string,
-  signal: AbortSignal,
-  timeoutMs: number,
-): Promise<RunOutcome> {
-  if (timeoutMs <= 0) return { kind: 'timed-out', output: '' };
-  try {
-    const result = await execute('sh', ['-c', command], {
-      cwd,
-      signal,
-      timeout: timeoutMs,
-      reject: false,
-      maxOutputBytes: MAX_OUTPUT_BYTES,
-      skipPool: true,
-      killProcessGroup: true,
-    });
-    return {
-      kind: 'exited',
-      exitCode: result.exitCode,
-      output: `${result.stdout}\n${result.stderr}`.slice(-OUTPUT_TAIL),
-    };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    if (signal.aborted) return { kind: 'aborted', output: message };
-    return { kind: 'timed-out', output: message };
-  }
-}
-
 async function defaultListTrackedFiles(worktreePath: string): Promise<string[]> {
   const res = await gitRead(['ls-files'], { cwd: worktreePath, reject: false });
   if (res.exitCode !== 0) return [];
@@ -205,7 +175,7 @@ function defaultWriteCanaryFile(worktreePath: string, relPath: string, content: 
 }
 
 const defaultDeps: VerifyFlowSetupDeps = {
-  runCommand: defaultRunCommand,
+  runCommand: runShellCommand,
   createTempWorktree,
   removeTempWorktree,
   listTrackedFiles: defaultListTrackedFiles,

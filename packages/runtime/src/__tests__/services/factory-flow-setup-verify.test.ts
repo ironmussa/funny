@@ -272,35 +272,28 @@ describe('runFlowSetupVerification (fake executor)', () => {
   });
 
   test('prunes rejected rules and keeps accepted rules in prunedYaml', async () => {
+    const exited = (exitCode: number, output: string): RunOutcome => ({
+      kind: 'exited',
+      exitCode,
+      output,
+    });
+    // The first case whose words are all in the command answers it (order matters).
+    const answers: Array<[string[], RunOutcome]> = [
+      [['ng test', 'web_pass', 'web.spec.ts'], exited(1, 'Unknown option: apps/web/web.spec.ts')],
+      [['ng test', 'web_fail'], exited(1, 'FAIL apps/web/web_fail.spec.ts')],
+      [['ng test', 'web_pass'], exited(0, 'PASS apps/web/web_pass.spec.ts')],
+      [['ng test'], exited(0, 'PASS apps/web/web.spec.ts')],
+      [['api_fail'], exited(1, 'FAIL apps/api/api_fail.spec.ts')],
+      [
+        ['api_pass', 'api.spec.ts'],
+        exited(0, 'PASS apps/api/api_pass.spec.ts\nPASS apps/api/api.spec.ts'),
+      ],
+      [['api_pass'], exited(0, 'PASS apps/api/api_pass.spec.ts')],
+    ];
     const deps = makeFakeDeps(
-      async (command): Promise<RunOutcome> => {
-        if (command.includes('ng test')) {
-          if (command.includes('web_pass') && command.includes('web.spec.ts')) {
-            return { kind: 'exited', exitCode: 1, output: 'Unknown option: apps/web/web.spec.ts' };
-          }
-          if (command.includes('web_fail')) {
-            return { kind: 'exited', exitCode: 1, output: 'FAIL apps/web/web_fail.spec.ts' };
-          }
-          if (command.includes('web_pass')) {
-            return { kind: 'exited', exitCode: 0, output: 'PASS apps/web/web_pass.spec.ts' };
-          }
-          return { kind: 'exited', exitCode: 0, output: 'PASS apps/web/web.spec.ts' };
-        }
-        if (command.includes('api_fail')) {
-          return { kind: 'exited', exitCode: 1, output: 'FAIL apps/api/api_fail.spec.ts' };
-        }
-        if (command.includes('api_pass') && command.includes('api.spec.ts')) {
-          return {
-            kind: 'exited',
-            exitCode: 0,
-            output: 'PASS apps/api/api_pass.spec.ts\nPASS apps/api/api.spec.ts',
-          };
-        }
-        if (command.includes('api_pass')) {
-          return { kind: 'exited', exitCode: 0, output: 'PASS apps/api/api_pass.spec.ts' };
-        }
-        return { kind: 'exited', exitCode: 0, output: 'PASS apps/api/api.spec.ts' };
-      },
+      async (command): Promise<RunOutcome> =>
+        answers.find(([words]) => words.every((w) => command.includes(w)))?.[1] ??
+        exited(0, 'PASS apps/api/api.spec.ts'),
       ['apps/api/api.spec.ts', 'apps/web/web.spec.ts'],
     );
 

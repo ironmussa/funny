@@ -11,45 +11,28 @@
 
 import { getDefaultBranch, gitRead } from '@funny/core/git';
 import type { DomainError } from '@funny/shared/errors';
-import { Hono, type Context } from 'hono';
-import { err } from 'neverthrow';
+import { Hono } from 'hono';
 import type { z } from 'zod';
 
 import { cancelProofJob, getProofJob, startProofJob } from '../services/regression-proof.js';
 import { canDoGitOps, isWorktreeCheckoutMissing } from '../services/thread-context.js';
 import type { HonoEnv } from '../types/hono-env.js';
-import { resultToResponse } from '../utils/result-response.js';
-import { requireProject, requireThread } from '../utils/route-helpers.js';
-import { startRegressionProofSchema, validate } from '../validation/schemas.js';
+import { startRegressionProofSchema } from '../validation/schemas.js';
+import {
+  answerRefusal,
+  type OwnedThread,
+  projectPathOf,
+  type Refusal,
+  refuse,
+  withOwnedThread,
+  withProjectAndBody,
+} from './owned-thread.js';
 
 export const regressionProofRoutes = new Hono<HonoEnv>();
 
-type OwnedThread = ReturnType<Awaited<ReturnType<typeof requireThread>>['_unsafeUnwrap']>;
 type StartInput = z.output<typeof startRegressionProofSchema>;
 
 /** A refusal the route answers as `{ error, code }`. */
-interface Refusal {
-  error: string;
-  code: string;
-  status: 400 | 409;
-}
-
-const refuse = (status: Refusal['status'], code: string, error: string): Refusal => ({
-  error,
-  code,
-  status,
-});
-
-/** Answer for the caller's own thread, or the 404 / 403 of `requireThread`. */
-async function withOwnedThread(
-  c: Context<HonoEnv>,
-  handle: (thread: OwnedThread) => Response | Promise<Response>,
-): Promise<Response> {
-  const threadResult = await requireThread(c.req.param('id') ?? '', c.get('userId'));
-  if (threadResult.isErr()) return resultToResponse(c, threadResult);
-  return handle(threadResult.value);
-}
-
 /**
  * Why this thread cannot be proved at all, or its project path. The thread row
  * carries only `projectId`, so the path comes from the project the caller can
@@ -70,11 +53,7 @@ async function provableProject(
   if (isWorktreeCheckoutMissing(thread)) {
     return refuse(409, 'worktree-missing', 'The thread has no checkout');
   }
-  if (!thread.projectId) return refuse(400, 'no-project', 'Thread has no project');
-  const project = await requireProject(thread.projectId, userId, organizationId);
-  if (project.isErr()) return { denied: project.error };
-  if (!project.value.path) return refuse(400, 'no-project', 'Thread has no project path');
-  return { projectPath: project.value.path };
+  return projectPathOf(thread, userId, organizationId);
 }
 
 /**
@@ -116,21 +95,17 @@ async function startProof(
   return { proofId: job.id, state: job.state };
 }
 
-const answerRefusal = (c: Context<HonoEnv>, refusal: Refusal): Response =>
-  c.json({ error: refusal.error, code: refusal.code }, refusal.status);
-
 regressionProofRoutes.post('/:id/regression-proof', (c) =>
   withOwnedThread(c, async (thread) => {
-    const project = await provableProject(thread, c.get('userId'), c.get('organizationId'));
-    if ('denied' in project) return resultToResponse(c, err(project.denied));
-    if ('status' in project) return answerRefusal(c, project);
-
-    const body = await c.req.json().catch(() => ({}));
-    const parsed = validate(startRegressionProofSchema, body);
-    if (parsed.isErr()) return resultToResponse(c, parsed);
-
-    const started = await startProof(thread, project.projectPath, parsed.value);
-    return 'status' in started ? answerRefusal(c, started) : c.json(started, 200);
+    return withProjectAndBody(
+      c,
+      provableProject(thread, c.get('userId'), c.get('organizationId')),
+      startRegressionProofSchema,
+      async (projectPath, body) => {
+        const started = await startProof(thread, projectPath, body);
+        return 'status' in started ? answerRefusal(c, started) : c.json(started, 200);
+      },
+    );
   }),
 );
 

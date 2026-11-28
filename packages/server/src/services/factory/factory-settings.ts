@@ -552,6 +552,35 @@ function changedColumns(row: Row, input: SaveFactorySettingsInput): Partial<Row>
   };
 }
 
+/** A save that turns a factory on, which the enable gate checks. */
+function isTurningOn(
+  input: SaveFactorySettingsInput,
+  existing: { enabled: number | boolean } | null,
+): boolean {
+  return Boolean(input.enabled) && !existing?.enabled;
+}
+
+/** Why a flow cannot run a factory yet (invalid, or no regression proof), or null. */
+function readinessError(
+  flowName: string,
+  validation: FactoryFlowValidation,
+): FactorySettingsError | null {
+  if (!validation.ok) {
+    return {
+      kind: 'flow-not-ready',
+      reason: 'invalid',
+      message: validation.message,
+      problems: validation.problems,
+    };
+  }
+  if (validation.proofReady) return null;
+  return {
+    kind: 'flow-not-ready',
+    reason: 'proof-not-configured',
+    message: `The flow "${flowName}" has no regression proof rules. Generate or configure regression proof, or opt out, before enabling.`,
+  };
+}
+
 export function createFactorySettingsService(deps: FactorySettingsDeps = {}) {
   const newId = deps.newId ?? (() => crypto.randomUUID());
 
@@ -575,31 +604,17 @@ export function createFactorySettingsService(deps: FactorySettingsDeps = {}) {
     input: SaveFactorySettingsInput,
     existing: Row | null,
   ): ResultAsync<void, FactorySettingsError> => {
-    if (!input.enabled || existing?.enabled || !deps.validateFlow) return okAsync(undefined);
+    const validateFlow = deps.validateFlow;
+    if (!isTurningOn(input, existing) || !validateFlow) return okAsync(undefined);
     const flowName = input.flowName?.trim() || existing?.flowName || 'issue-to-merge';
-    return deps
-      .validateFlow(existing?.id ?? null, projectId, flowName, { userId, requireRepo: true })
+    return validateFlow(existing?.id ?? null, projectId, flowName, { userId, requireRepo: true })
       .mapErr((error): FactorySettingsError => ({
         kind: 'flow-not-checked',
         message: `The flow "${flowName}" could not be checked: ${error.message}`,
       }))
       .andThen((validation) => {
-        if (!validation.ok) {
-          return errAsync<void, FactorySettingsError>({
-            kind: 'flow-not-ready',
-            reason: 'invalid',
-            message: validation.message,
-            problems: validation.problems,
-          });
-        }
-        if (!validation.proofReady) {
-          return errAsync<void, FactorySettingsError>({
-            kind: 'flow-not-ready',
-            reason: 'proof-not-configured',
-            message: `The flow "${flowName}" has no regression proof rules. Generate or configure regression proof, or opt out, before enabling.`,
-          });
-        }
-        return okAsync(undefined);
+        const refused = readinessError(flowName, validation);
+        return refused ? errAsync<void, FactorySettingsError>(refused) : okAsync(undefined);
       });
   };
 

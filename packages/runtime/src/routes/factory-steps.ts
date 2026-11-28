@@ -11,7 +11,7 @@
  * threads and threads without a checkout.
  */
 
-import { Hono, type Context } from 'hono';
+import { Hono } from 'hono';
 import { err } from 'neverthrow';
 
 import { cancelFactoryStep, getFactoryStep, startFactoryStep } from '../services/factory-steps.js';
@@ -22,21 +22,11 @@ import {
 } from '../services/thread-context.js';
 import type { HonoEnv } from '../types/hono-env.js';
 import { resultToResponse } from '../utils/result-response.js';
-import { requireProject, requireThread } from '../utils/route-helpers.js';
+import { requireProject } from '../utils/route-helpers.js';
 import { startFactoryStepSchema, validate } from '../validation/schemas.js';
+import { withOwnedThread } from './owned-thread.js';
 
 export const factoryStepRoutes = new Hono<HonoEnv>();
-
-type OwnedThread = ReturnType<Awaited<ReturnType<typeof requireThread>>['_unsafeUnwrap']>;
-
-async function withOwnedThread(
-  c: Context<HonoEnv>,
-  handle: (thread: OwnedThread) => Response | Promise<Response>,
-): Promise<Response> {
-  const threadResult = await requireThread(c.req.param('id') ?? '', c.get('userId'));
-  if (threadResult.isErr()) return resultToResponse(c, threadResult);
-  return handle(threadResult.value);
-}
 
 factoryStepRoutes.post('/:id/factory-steps', (c) =>
   withOwnedThread(c, async (thread) => {

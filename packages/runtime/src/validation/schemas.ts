@@ -832,7 +832,7 @@ export const verifyFlowSetupStartAnswerSchema = z.object({
   state: z.enum(['running', 'done']),
 });
 
-const setupCheckRunSchema = z.object({
+export const setupCheckRunSchema = z.object({
   command: z.string(),
   files: z.array(z.string()),
   exitCode: z.number().int().nullable(),
@@ -841,7 +841,7 @@ const setupCheckRunSchema = z.object({
   outputTail: z.string(),
 });
 
-const setupRuleVerdictSchema = z.object({
+export const setupRuleVerdictSchema = z.object({
   ruleIndex: z.number().int().min(0),
   globs: z.array(z.string()),
   command: z.string(),

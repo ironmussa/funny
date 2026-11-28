@@ -11,30 +11,27 @@ import type {
   FactoryFlowSetupRuleVerdict,
 } from '@funny/shared/contracts/factory';
 import { parseStoredJson } from '@funny/shared/json-validation';
-import type { verifyFlowSetupResultSchema } from '@ironmussa/funny-runtime/validation/schemas';
+import {
+  setupCheckRunSchema,
+  setupRuleVerdictSchema,
+  type verifyFlowSetupResultSchema,
+} from '@ironmussa/funny-runtime/validation/schemas';
 import { z } from 'zod';
 
-const checkRunSchema = z.object({
-  command: z.string(),
-  files: z.array(z.string()),
-  exitCode: z.number().int().nullable(),
-  timedOut: z.boolean(),
-  aborted: z.boolean(),
-  output: z.string(),
-}) satisfies z.ZodType<FactoryFlowSetupRuleCheckRun>;
+// The runner's own schemas, with the two fields the browser's contract names otherwise.
+const checkRunSchema = setupCheckRunSchema
+  .omit({ outputTail: true })
+  .extend({ output: z.string() }) satisfies z.ZodType<FactoryFlowSetupRuleCheckRun>;
 
-const ruleVerdictSchema = z.object({
-  ruleIndex: z.number().int().min(0),
-  globs: z.array(z.string()),
-  command: z.string(),
-  cwd: z.string().optional(),
-  accepted: z.boolean(),
-  rejectionReason: z.string().optional(),
-  passingCanary: checkRunSchema.optional(),
-  failingCanary: checkRunSchema.optional(),
-  existingTest: checkRunSchema.optional(),
-  twoFileRun: checkRunSchema.optional(),
-}) satisfies z.ZodType<FactoryFlowSetupRuleVerdict>;
+const ruleVerdictSchema = setupRuleVerdictSchema
+  .pick({ ruleIndex: true, globs: true, command: true, cwd: true, accepted: true })
+  .extend({
+    rejectionReason: z.string().optional(),
+    passingCanary: checkRunSchema.optional(),
+    failingCanary: checkRunSchema.optional(),
+    existingTest: checkRunSchema.optional(),
+    twoFileRun: checkRunSchema.optional(),
+  }) satisfies z.ZodType<FactoryFlowSetupRuleVerdict>;
 
 const uncoveredSchema = z.object({ scope: z.string(), reason: z.string() });
 

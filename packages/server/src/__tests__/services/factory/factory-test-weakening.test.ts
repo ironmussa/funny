@@ -391,11 +391,28 @@ describe('classifyRisk', () => {
   test('a default sensitive path makes it high', () => {
     for (const path of [
       '.github/CODEOWNERS',
+      '.funny/workflows/issue-to-merge.yaml',
+      '.funny/workflows/prompts/implement.md',
+      '.funny.json',
       'packages/server/src/db/migrate.ts',
       'db/migrations/007_users.sql',
       'packages/server/src/auth/session.ts',
     ]) {
-      const result = risk([file(path, ['+x'])]);
+      const result = risk([file(path, ['+x'], { additions: 5, deletions: 0 })]);
+      expect(result.level).toBe('high');
+      expect(result.reasons.some((reason) => reason.includes(path))).toBe(true);
+    }
+  });
+
+  test("the factory's own configuration stays sensitive even when the factory sets its own sensitive paths", () => {
+    for (const path of [
+      '.funny/workflows/issue-to-merge.yaml',
+      '.funny/workflows/prompts/implement.md',
+      '.funny.json',
+    ]) {
+      const result = risk([file(path, ['+x'], { additions: 5, deletions: 0 })], {
+        sensitivePaths: ['billing/**'],
+      });
       expect(result.level).toBe('high');
       expect(result.reasons.some((reason) => reason.includes(path))).toBe(true);
     }

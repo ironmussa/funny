@@ -71,3 +71,18 @@ export {
   type IntegrateConfigResult,
   type IntegrateRegenerator,
 } from './integrate-config.js';
+
+export {
+  checkOnlyRegressionProofChanged,
+  pruneRegressionProofRules,
+  buildOptOutWorkflowYaml,
+  type RegressionProofDiffResult,
+} from './regression-proof-diff.js';
+
+export {
+  renderFactoryFlowSetupPrompt,
+  parseSetupAgentManifest,
+  setupAgentManifestSchema,
+  type RenderFactoryFlowSetupPromptInput,
+  type SetupAgentManifest,
+} from './factory-flow-setup-prompt.js';

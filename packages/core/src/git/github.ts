@@ -289,3 +289,53 @@ export async function getPRForBranch(
 ): Promise<BranchPRInfo | null> {
   return (await lookupPRForBranch(cwd, branch, env)).unwrapOr(null);
 }
+
+export interface CreatePullRequestOptions {
+  title: string;
+  body: string;
+  baseBranch: string;
+  headBranch: string;
+  githubToken?: string;
+}
+
+export interface CreatedPullRequest {
+  prUrl: string;
+  prNumber: number | null;
+}
+
+/**
+ * Create a pull request via `gh pr create` with optional member token.
+ * Extracts the PR number from the returned URL when possible.
+ */
+export function createPullRequest(
+  cwd: string,
+  options: CreatePullRequestOptions,
+): ResultAsync<CreatedPullRequest, DomainError> {
+  const args = [
+    'pr',
+    'create',
+    '--title',
+    options.title,
+    '--body',
+    options.body,
+    '--base',
+    options.baseBranch,
+    '--head',
+    options.headBranch,
+  ];
+  const env = options.githubToken ? { GH_TOKEN: options.githubToken } : undefined;
+  return ResultAsync.fromPromise(
+    execute('gh', args, { cwd, timeout: 30_000, env }).then((r) => {
+      const prUrl = r.stdout.trim().split('\n').pop()?.trim() ?? '';
+      const match = /\/pull\/(\d+)\b/.exec(prUrl);
+      const prNumber = match ? Number(match[1]) : null;
+      return { prUrl, prNumber };
+    }),
+    (error) => {
+      if (error instanceof ProcessExecutionError) {
+        return processError(error.message, error.exitCode, error.stderr);
+      }
+      return internal(String(error));
+    },
+  );
+}

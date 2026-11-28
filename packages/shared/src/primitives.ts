@@ -31,7 +31,9 @@ export type ThreadSource =
   | 'automation'
   | 'ingest'
   // Started by a project's issue factory (server-owned watcher).
-  | 'factory';
+  | 'factory'
+  // Started by a member to bootstrap a factory flow's regression_proof rules.
+  | 'factory-setup';
 
 // ─── Agent ──────────────────────────────────────────────
 /** The bundled providers funny ships with — literal union for autocomplete + exhaustiveness. */

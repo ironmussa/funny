@@ -1,7 +1,13 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 
+import type { FactoryFlowValidation } from '@funny/shared/contracts/factory';
+import { errAsync, okAsync } from 'neverthrow';
+
 import { createFactoryRunsRepository } from '../../../services/factory/factory-runs.js';
-import { createFactorySettingsService } from '../../../services/factory/factory-settings.js';
+import {
+  createFactorySettingsService,
+  type ValidateFactoryFlow,
+} from '../../../services/factory/factory-settings.js';
 import { present } from '../../helpers/builders-services.js';
 import { createTestDb, seedProject, seedProjectMember } from '../../helpers/test-db.js';
 
@@ -342,5 +348,98 @@ describe('factory lanes in the settings', () => {
     expect((await requestLaneSync('vic', 'p1', 'payments'))._unsafeUnwrapErr().kind).toBe(
       'forbidden',
     );
+  });
+});
+
+// openspec factory-flow-bootstrap, 2.2: A factory is enabled only with a flow that can merge.
+describe('enable gate (D1)', () => {
+  const validFlow = (
+    name: string,
+    proofReady: boolean,
+  ): Extract<FactoryFlowValidation, { ok: true }> => ({
+    ok: true,
+    name,
+    source: 'repository',
+    commit: 'abc123',
+    proofReady,
+    steps: [],
+    agentSteps: [],
+    unusedOverrides: [],
+    warnings: [],
+  });
+
+  const gated = (validateFlow: ValidateFactoryFlow) =>
+    createFactorySettingsService({ newId: () => `f${++ids}`, validateFlow });
+
+  test('refuses enabling a repository without proof rules in both automatic and manual mode', async () => {
+    const svc = gated((_fid, _pid, flow) => okAsync(validFlow(flow, false)));
+    for (const mode of ['manual', 'automatic'] as const) {
+      const res = await svc.save('alice', 'p1', { enabled: true, mode });
+      expect(res.isErr()).toBe(true);
+      if (res.isErr()) {
+        expect(res.error).toMatchObject({
+          kind: 'flow-not-ready',
+          reason: 'proof-not-configured',
+        });
+        expect(res.error.message).toContain('no regression proof rules');
+      }
+      expect((await svc.get('alice', 'p1'))._unsafeUnwrap()).toBeNull();
+    }
+  });
+
+  test('refuses enabling when the flow is invalid, returning its problems', async () => {
+    const problems = [{ step: 'implement', field: 'permission_mode', message: 'cannot run' }];
+    const svc = gated(() => okAsync({ ok: false, message: 'The flow has 1 problem', problems }));
+    const res = await svc.save('alice', 'p1', { enabled: true });
+    expect(res.isErr()).toBe(true);
+    if (res.isErr()) {
+      expect(res.error).toEqual({
+        kind: 'flow-not-ready',
+        reason: 'invalid',
+        message: 'The flow has 1 problem',
+        problems,
+      });
+    }
+    expect((await svc.get('alice', 'p1'))._unsafeUnwrap()).toBeNull();
+  });
+
+  test('enables with an explicit opt-out or a flow without a merge step', async () => {
+    const svc = gated((_fid, _pid, flow) => okAsync(validFlow(flow, true)));
+    const optOut = (await svc.save('alice', 'p1', { enabled: true }))._unsafeUnwrap();
+    expect(optOut.enabled).toBe(true);
+
+    // Pause, then enable with issue-to-pr.
+    (await svc.save('alice', 'p1', { enabled: false }))._unsafeUnwrap();
+    const prOnly = (
+      await svc.save('alice', 'p1', { enabled: true, flowName: 'issue-to-pr' })
+    )._unsafeUnwrap();
+    expect(prOnly).toMatchObject({ enabled: true, flowName: 'issue-to-pr' });
+  });
+
+  test('refuses with flow-not-checked when GitHub cannot be read', async () => {
+    const svc = gated(() => errAsync({ message: 'GitHub App is not installed' }));
+    const res = await svc.save('alice', 'p1', { enabled: true });
+    expect(res.isErr()).toBe(true);
+    if (res.isErr()) {
+      expect(res.error.kind).toBe('flow-not-checked');
+      expect(res.error.message).toContain('could not be checked');
+      expect(res.error.message).toContain('GitHub App is not installed');
+    }
+    expect((await svc.get('alice', 'p1'))._unsafeUnwrap()).toBeNull();
+  });
+
+  test('skips the gate for saves of a factory already enabled before this check', async () => {
+    // Seed an already-enabled factory without proof rules (as before this change).
+    (await settings().save('alice', 'p1', { enabled: true }))._unsafeUnwrap();
+    let calls = 0;
+    const svc = gated((_fid, _pid, flow) => {
+      calls += 1;
+      return okAsync(validFlow(flow, false));
+    });
+    const updated = (
+      await svc.save('alice', 'p1', { enabled: true, label: 'new-label' })
+    )._unsafeUnwrap();
+    expect(updated).toMatchObject({ enabled: true, label: 'new-label' });
+    expect(calls).toBe(0);
   });
 });

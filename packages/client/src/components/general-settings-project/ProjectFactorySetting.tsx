@@ -10,14 +10,16 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { saveFactorySettings } from '@/data/factory/actions';
-import { useFactorySettings } from '@/data/factory/hooks';
+import { saveFactorySettings, startFactoryFlowSetup } from '@/data/factory/actions';
+import { useFactoryFlowValidation, useFactorySettings } from '@/data/factory/hooks';
 import { useCanSteerProject } from '@/data/projects/hooks';
 import type { FactoryMode, FactorySettings, SaveFactorySettingsInput } from '@/lib/api/factory';
 import { toastError } from '@/lib/toast-error';
 
 import { ProjectFactoryBaseBranch } from './ProjectFactoryBaseBranch';
+import { ProjectFactoryFlowSetupCard } from './ProjectFactoryFlowSetupCard';
 import { ProjectFactoryIncident } from './ProjectFactoryIncident';
 import { ProjectFactoryLanes } from './ProjectFactoryLanes';
 import { ProjectFactoryMergeRows } from './ProjectFactoryMergeRows';
@@ -207,18 +209,52 @@ function ProjectFactorySettingRows({ projectId }: { projectId: string }) {
   // Bumped after every save settles, so the inputs re-read the confirmed row —
   // also after a refused save, which leaves the row (and its updatedAt) unchanged.
   const [revision, setRevision] = useState(0);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
-  const save = (input: Omit<SaveFactorySettingsInput, 'projectId'>) =>
-    saveFactorySettings({ projectId, ...input })
-      .orTee((error) => toastError(error, 'factory'))
+  const save = (input: Omit<SaveFactorySettingsInput, 'projectId'>) => {
+    setSaveError(null);
+    return saveFactorySettings({ projectId, ...input })
+      .orTee((error) => {
+        setSaveError(error.friendlyMessage ?? error.message);
+        toastError(error, 'factory');
+      })
       .match(
         () => setRevision((r) => r + 1),
         () => setRevision((r) => r + 1),
       );
+  };
 
   const form = formValues(settings);
   const { enabled, mode, label, flowName, maxConcurrent } = form;
   const rowKey = `${settings?.updatedAt ?? 'none'}-${revision}`;
+
+  const { validation, error: validationError } = useFactoryFlowValidation(
+    projectId,
+    flowName,
+    true,
+    form.stepOverrides,
+  );
+
+  const enableBlockedReason = (() => {
+    if (validationError) {
+      return t(
+        'settings.projectFactoryFlowNotChecked',
+        'The flow "{{flow}}" could not be checked: {{message}}',
+        { flow: flowName, message: validationError.message },
+      );
+    }
+    if (validation && !validation.ok) return validation.message;
+    if (validation && !validation.proofReady) {
+      return t(
+        'settings.projectFactoryFlowNotProofReady',
+        'The flow "{{flow}}" has no regression proof rules. Generate or configure regression proof, or opt out, before enabling.',
+        { flow: flowName },
+      );
+    }
+    return null;
+  })();
+
+  const showGenerateConfig = Boolean(validation?.ok && !validation.proofReady);
 
   const setEnabled = (value: OnOff) => void save({ enabled: value === 'on' });
   const setMode = (value: FactoryMode) => void save({ enabled, mode: value });
@@ -258,10 +294,58 @@ function ProjectFactorySettingRows({ projectId }: { projectId: string }) {
               value: 'on',
               label: t('settings.projectFactoryRunning', 'Running'),
               testId: 'settings-factory-on',
+              disabled: !enabled && Boolean(enableBlockedReason),
             },
           ]}
         />
       </ProjectSettingRow>
+
+      {!enabled && enableBlockedReason && (
+        <Alert
+          variant="destructive"
+          className="mx-4 my-2 w-auto"
+          data-testid="settings-factory-flow-status"
+        >
+          <AlertDescription>{enableBlockedReason}</AlertDescription>
+        </Alert>
+      )}
+
+      {saveError && (
+        <Alert
+          variant="destructive"
+          className="mx-4 my-2 w-auto"
+          data-testid="settings-factory-save-error"
+        >
+          <AlertDescription>{saveError}</AlertDescription>
+        </Alert>
+      )}
+
+      {showGenerateConfig && (
+        <ProjectSettingRow
+          settingId="factory.proofConfig"
+          title={t('settings.projectFactoryProofConfig', 'Regression proof')}
+          description={t(
+            'settings.projectFactoryProofConfigDesc',
+            'Generate verified regression proof rules for this flow from the repository stack',
+          )}
+        >
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            data-testid="factory-generate-config"
+            onClick={() => {
+              void startFactoryFlowSetup(projectId, flowName).then((res) => {
+                if (res.isErr()) toastError(res.error);
+              });
+            }}
+          >
+            {t('settings.projectFactoryGenerateConfig', 'Generate configuration')}
+          </Button>
+        </ProjectSettingRow>
+      )}
+
+      <ProjectFactoryFlowSetupCard projectId={projectId} flowName={flowName} />
 
       {/* The mode can change while paused, so switching to manual never lets labelled issues in. */}
       <FactoryModeRows

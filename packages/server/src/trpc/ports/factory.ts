@@ -24,6 +24,7 @@ import { createFactorySettingsService } from '../../services/factory/factory-set
 import { lanePortMethods } from './factory-port-lanes.js';
 import { queuePortMethods } from './factory-port-queue.js';
 import { createRunControl, runPortMethods } from './factory-port-runs.js';
+import { setupPortMethods } from './factory-port-setup.js';
 import { factoryScope, type FactoryPortDeps } from './factory-port-shared.js';
 
 /** The factory port, and the run controls an agent may use. */
@@ -33,10 +34,13 @@ interface FactoryParts {
 }
 
 function createFactoryParts(
-  settings = createFactorySettingsService(),
   runs = createFactoryRunsRepository(),
   control = createFactoryRunControl(runs),
   queue = createFactoryQueue({ runs, control }),
+  settings = createFactorySettingsService({
+    validateFlow: (factoryId, projectId, flowName, options) =>
+      queue.validateFlow(factoryId, projectId, flowName, options),
+  }),
   incidents = createFactoryIncidentsRepository(),
   requests = createFactoryApprovalRequestsRepository(),
 ): FactoryParts {
@@ -47,6 +51,7 @@ function createFactoryParts(
     ...runPortMethods(deps, scope, controlled),
     ...queuePortMethods(deps, scope),
     ...lanePortMethods(deps),
+    ...setupPortMethods(),
   };
 
   return {

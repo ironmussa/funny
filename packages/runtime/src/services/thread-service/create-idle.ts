@@ -26,6 +26,7 @@ import {
   stripReferencedFilesBlock,
   withStagedUploads,
 } from './helpers.js';
+import { prepareWorktree } from './worktree-preparation.js';
 
 export interface CreateIdleThreadParams {
   projectId: string;
@@ -33,7 +34,12 @@ export interface CreateIdleThreadParams {
   title: string;
   mode: 'local' | 'worktree';
   source?: string;
+  branch?: string;
   baseBranch?: string;
+  /** When `prepareWorktree` is true, branch from `origin/<baseBranch>` fetched fresh. */
+  baseFromRemote?: boolean;
+  /** Create the worktree immediately instead of waiting for the first message. */
+  prepareWorktree?: boolean;
   prompt?: string;
   images?: ImageAttachment[];
   /** Stored as path-only entries; read when the thread starts. */
@@ -102,6 +108,10 @@ async function idleThreadBranches(
 ): Promise<{ branch?: string; baseBranch?: string }> {
   const resolvedBaseBranch = params.baseBranch?.trim() || undefined;
   if (params.mode === 'worktree') {
+    const explicitBranch = params.branch?.trim();
+    if (explicitBranch) {
+      return { branch: explicitBranch, baseBranch: resolvedBaseBranch };
+    }
     // Titles may carry the attachments block (badge) — never slug the XML.
     const slug = slugifyTitle(stripReferencedFilesBlock(params.title));
     const branch = `${slugifyTitle(projectName)}/${slug}-${threadId.slice(0, 6)}`;
@@ -118,6 +128,7 @@ function buildIdleThreadRecord(
   prompt: string | undefined,
   branch: string | undefined,
   baseBranch: string | undefined,
+  worktreePath: string | undefined,
 ) {
   const now = new Date().toISOString();
   return {
@@ -135,7 +146,7 @@ function buildIdleThreadRecord(
     stage: params.stage || ('backlog' as const),
     branch,
     baseBranch,
-    worktreePath: undefined,
+    worktreePath,
     initialPrompt: prompt,
     designId: params.designId,
     agentTemplateId: params.agentTemplateId,
@@ -185,7 +196,25 @@ async function createIdleThreadImpl(params: CreateIdleThreadParams) {
     projectPath,
   );
 
-  const thread = buildIdleThreadRecord(params, threadId, prompt, branch, baseBranch);
+  let worktreePath: string | undefined;
+  if (params.prepareWorktree && params.mode === 'worktree' && branch) {
+    const prep = await prepareWorktree({
+      projectPath,
+      branchName: branch,
+      baseBranch,
+      baseFromRemote: params.baseFromRemote,
+      userId: params.userId,
+      threadId,
+      flow: 'create',
+      projectId: params.projectId,
+    });
+    if (prep.isErr()) {
+      throw new ThreadServiceError(prep.error.message, 409);
+    }
+    worktreePath = prep.value;
+  }
+
+  const thread = buildIdleThreadRecord(params, threadId, prompt, branch, baseBranch, worktreePath);
 
   await tm.createThread(thread);
   await persistInitialIdleMessage(threadId, prompt, params.images);
@@ -194,8 +223,8 @@ async function createIdleThreadImpl(params: CreateIdleThreadParams) {
     threadId,
     projectId: params.projectId,
     userId: params.userId,
-    cwd: projectPath,
-    worktreePath: null,
+    cwd: worktreePath ?? projectPath,
+    worktreePath: worktreePath ?? null,
     stage: thread.stage,
     status: 'idle',
     initialPrompt: prompt,

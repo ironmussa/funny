@@ -1,6 +1,8 @@
 import {
   factoryBlockersInput,
+  factoryConfirmFlowSetupInput,
   factoryFlowInput,
+  factoryFlowSetupInput,
   factoryApprovalRequestInput,
   factoryApproveMergeInput,
   factoryApproveSpecInput,
@@ -9,6 +11,7 @@ import {
   factoryLintCleanupInput,
   factoryProjectInput,
   factoryRunInput,
+  factorySetupIdInput,
   factoryTriggerInput,
   runFactoryFlowInput,
   saveFactorySettingsInput,
@@ -278,4 +281,44 @@ export const factoryRouter = router({
         unwrap(await ctx.ports.factory.finishLane(ctx.userId, input.projectId, input.name)),
       ),
   }),
+  /** Guided factory flow configuration setup (openspec factory-flow-bootstrap, D4). */
+  startFlowSetup: projectProcedure('steer', CONTROL_FORBIDDEN)
+    .input(factoryFlowSetupInput)
+    .mutation(async ({ ctx, input }) =>
+      unwrap(await ctx.ports.factory.startFlowSetup(ctx.userId, input.projectId, input.flowName)),
+    ),
+  flowSetup: projectProcedure('steer', CONTROL_FORBIDDEN)
+    .input(factoryFlowSetupInput)
+    .query(async ({ ctx, input }) =>
+      unwrap(await ctx.ports.factory.flowSetup(ctx.userId, input.projectId, input.flowName)),
+    ),
+  confirmFlowSetup: projectProcedure('steer', CONTROL_FORBIDDEN)
+    .input(factoryConfirmFlowSetupInput)
+    .mutation(async ({ ctx, input }) =>
+      unwrap(
+        await ctx.ports.factory.confirmFlowSetup(
+          ctx.userId,
+          input.projectId,
+          input.setupId,
+          input.fileSha,
+          input.variant,
+        ),
+      ),
+    ),
+  openFlowSetupPullRequest: projectProcedure('steer', CONTROL_FORBIDDEN)
+    .input(factorySetupIdInput)
+    .mutation(async ({ ctx, input }) =>
+      unwrap(
+        await ctx.ports.factory.openFlowSetupPullRequest(
+          ctx.userId,
+          input.projectId,
+          input.setupId,
+        ),
+      ),
+    ),
+  discardFlowSetup: projectProcedure('steer', CONTROL_FORBIDDEN)
+    .input(factorySetupIdInput)
+    .mutation(async ({ ctx, input }) =>
+      unwrap(await ctx.ports.factory.discardFlowSetup(ctx.userId, input.projectId, input.setupId)),
+    ),
 });

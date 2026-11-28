@@ -16,6 +16,8 @@ interface FactoryMocks {
   sameReviewer: boolean | undefined;
   /** What Validate flow answers once asked. */
   validation: FactoryFlowValidation | undefined;
+  /** Error returned when Validate flow could not check the repository. */
+  validationError: Error | null;
   /** How the repository merges through the merge queue. */
   readiness: FactoryReadiness | undefined;
 }
@@ -29,6 +31,7 @@ const mocks = ((): FactoryMocks => ({
   canSteer: true,
   sameReviewer: undefined,
   validation: undefined,
+  validationError: null,
   readiness: undefined,
 }))();
 
@@ -50,7 +53,7 @@ mock.module('@/data/factory/hooks', () => ({
   }),
   useFactoryFlowValidation: (_projectId: string, _flow: string, requested: boolean) => ({
     validation: requested ? mocks.validation : undefined,
-    error: null,
+    error: requested ? mocks.validationError : null,
     loading: false,
     refresh: () => {},
   }),
@@ -111,6 +114,7 @@ beforeEach(() => {
   mocks.canSteer = true;
   mocks.sameReviewer = undefined;
   mocks.validation = undefined;
+  mocks.validationError = null;
   mocks.closeIncident.mockImplementation(() => okAsync(configured()));
   mocks.save.mockImplementation((input: Record<string, unknown>) =>
     okAsync({ ...configured(), ...input }),
@@ -199,6 +203,88 @@ describe('factory blocked reason', () => {
     mocks.settings = configured();
     render(<ProjectFactorySetting projectId="p1" />);
     expect(screen.queryByTestId('settings-factory-blocked')).toBeNull();
+  });
+});
+
+// openspec factory-flow-bootstrap, 2.3: enable gate and flow readiness in settings.
+describe('enable gate and flow readiness', () => {
+  const validFlow = (proofReady: boolean): FactoryFlowValidation => ({
+    ok: true,
+    name: 'issue-to-merge',
+    source: 'built-in',
+    commit: null,
+    proofReady,
+    steps: [],
+    agentSteps: [],
+    unusedOverrides: [],
+    warnings: [],
+  });
+
+  test('disables enable with reason and shows Generate configuration when flow is not proof-ready', () => {
+    mocks.validation = validFlow(false);
+    render(<ProjectFactorySetting projectId="p1" />);
+    expect(screen.getByTestId('settings-factory-on')).toBeDisabled();
+    expect(screen.getByTestId('settings-factory-flow-status')).toHaveTextContent(
+      'no regression proof rules',
+    );
+    expect(screen.getByTestId('factory-generate-config')).toBeInTheDocument();
+  });
+
+  test('disables enable with reason and hides Generate configuration when flow is invalid', () => {
+    mocks.validation = {
+      ok: false,
+      message: 'The flow has 1 problem: permission_mode ask is not allowed',
+      problems: [{ step: 'implement', field: 'permission_mode', message: 'not allowed' }],
+    };
+    render(<ProjectFactorySetting projectId="p1" />);
+    expect(screen.getByTestId('settings-factory-on')).toBeDisabled();
+    expect(screen.getByTestId('settings-factory-flow-status')).toHaveTextContent(
+      'permission_mode ask is not allowed',
+    );
+    expect(screen.queryByTestId('factory-generate-config')).toBeNull();
+  });
+
+  test('disables enable with reason and hides Generate configuration when flow could not be checked', () => {
+    mocks.validationError = new Error('GitHub App is not installed');
+    render(<ProjectFactorySetting projectId="p1" />);
+    expect(screen.getByTestId('settings-factory-on')).toBeDisabled();
+    expect(screen.getByTestId('settings-factory-flow-status')).toHaveTextContent(
+      'could not be checked',
+    );
+    expect(screen.getByTestId('settings-factory-flow-status')).toHaveTextContent(
+      'GitHub App is not installed',
+    );
+    expect(screen.queryByTestId('factory-generate-config')).toBeNull();
+  });
+
+  test('shows Generate configuration for an already-enabled factory blocked by missing proof rules', () => {
+    mocks.settings = configured({
+      enabled: true,
+      blockedReason: 'regression proof not configured',
+    });
+    mocks.validation = validFlow(false);
+    render(<ProjectFactorySetting projectId="p1" />);
+    expect(screen.getByTestId('settings-factory-blocked')).toHaveTextContent(
+      'regression proof not configured',
+    );
+    expect(screen.getByTestId('factory-generate-config')).toBeInTheDocument();
+  });
+
+  test('shows save refusal message inline when enabling is refused by the server', async () => {
+    mocks.validation = validFlow(true);
+    mocks.save.mockImplementation(() =>
+      errAsync({
+        type: 'CONFLICT',
+        message: 'The flow has no regression proof rules',
+      }),
+    );
+    render(<ProjectFactorySetting projectId="p1" />);
+    fireEvent.click(screen.getByTestId('settings-factory-on'));
+    await waitFor(() =>
+      expect(screen.getByTestId('settings-factory-save-error')).toHaveTextContent(
+        'The flow has no regression proof rules',
+      ),
+    );
   });
 });
 
@@ -589,6 +675,7 @@ describe('agent step options', () => {
       name: 'issue-to-merge',
       source: 'repository',
       commit: 'abc1234def',
+      proofReady: true,
       steps: [],
       agentSteps: [
         agentStep('implement', { effort: 'high' }),

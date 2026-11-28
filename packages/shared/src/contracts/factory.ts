@@ -1004,6 +1004,8 @@ export type FactoryFlowValidation =
       source: FactoryFlowSource;
       /** The default-branch commit a repository flow was read at; null for a built-in. */
       commit: string | null;
+      /** The flow can merge: a proof rule, the `merge` opt-out, or no `merge` step. */
+      proofReady: boolean;
       /** Every node in declaration order, by kind (`spawn_agent`, `wait_ci`, …). */
       steps: Array<{ id: string; kind: string }>;
       /** Every agent step, a retry's fix step included, with its resolved options. */
@@ -1014,72 +1016,9 @@ export type FactoryFlowValidation =
       warnings: string[];
     };
 
-/**
- * Triggers (change flow-triggers): what starts a flow of the caller's factory
- * besides an issue. A schedule trigger starts its flow at each occurrence of a
- * cron pattern; its runs have no issue and get the trigger's input values.
- */
+import type { FactoryFlowInput } from './factory-triggers.js';
 
-/** At most this many schedule triggers per factory. */
-export const MAX_FACTORY_TRIGGERS = 20;
-
-/** At most this many input values on a trigger or a "run a flow" start. */
-export const MAX_TRIGGER_INPUTS = 20;
-
-const triggerInputs = z
-  .record(
-    z.string().regex(/^[a-z][a-z0-9_]{0,63}$/, {
-      message: 'An input name is lowercase letters, digits and underscores, starting with a letter',
-    }),
-    z.string().max(4000),
-  )
-  .refine((inputs) => Object.keys(inputs).length <= MAX_TRIGGER_INPUTS, {
-    message: `At most ${MAX_TRIGGER_INPUTS} inputs`,
-  });
-
-export interface FactoryTrigger {
-  id: string;
-  name: string;
-  /** A cron pattern, in the server's time zone. */
-  schedule: string;
-  flowName: string;
-  /** The input values each run gets. Shown to every member who sees the factory: no secrets. */
-  inputs: Record<string, string>;
-  enabled: boolean;
-  /** The next occurrence; null while disabled. */
-  nextRunAt: string | null;
-}
-
-/** Create a schedule trigger, or change the one with `id`. */
-export const saveFactoryTriggerInput = z
-  .object({
-    projectId,
-    id: z.string().min(1).optional(),
-    name: z.string().trim().min(1).max(80),
-    schedule: z.string().trim().min(1).max(120),
-    flowName,
-    inputs: triggerInputs.default({}),
-    enabled: z.boolean().default(true),
-  })
-  .strict();
-
-export type SaveFactoryTriggerInput = z.input<typeof saveFactoryTriggerInput>;
-
-export const factoryTriggerInput = z.object({ projectId, triggerId: z.string().min(1) }).strict();
-
-/** Start one run of a flow now, without an issue, with typed input values. */
-export const runFactoryFlowInput = z
-  .object({ projectId, flowName, inputs: triggerInputs.default({}) })
-  .strict();
-
-export type RunFactoryFlowInput = z.input<typeof runFactoryFlowInput>;
-
-/** One input a flow declares and the factory does not supply itself. */
-export interface FactoryFlowInput {
-  name: string;
-  required: boolean;
-  description: string | null;
-}
+export * from './factory-triggers.js';
 
 /**
  * Whether a flow can run without an issue, and what a member has to type to
@@ -1416,6 +1355,8 @@ export interface FactoryLaneFinishResult {
 export const factoryLaneInput = z
   .object({ projectId, name: z.string().trim().min(1).max(128) })
   .strict();
+
+export * from './factory-flow-setup.js';
 
 export const factoryIncidentCandidateSchema = z.object({
   issueNumber: z.number().int(),

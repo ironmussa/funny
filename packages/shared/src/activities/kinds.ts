@@ -54,6 +54,7 @@ export const WORKSPACE_CLEANUP_REASONS = [
   'factory-no-change',
   // A retried factory run: the old worktree held the run's branch; removed only when nothing is lost.
   'factory-retried',
+  'factory-setup',
   'review-finished',
   'manual',
   'setup-undone',
@@ -330,6 +331,32 @@ export const ACTIVITY_KINDS = {
       base: z.string().max(256).optional(),
       prNumber: z.number().int(),
       stage: z.enum(['opened', 'finished']),
+    }),
+  },
+  // factory-flow-bootstrap (D4): direct commit & push of generated flow config to the default branch.
+  'factory.setup_push': {
+    scope: 'project',
+    destructive: false,
+    record: 'always',
+    input: z.object({
+      setupId: z.string().max(128),
+      flowName: z.string().max(128),
+      branch: branchName,
+      variant: z.enum(['rules', 'opt-out']),
+      commitSha: z.string().max(64).optional(),
+    }),
+  },
+  // factory-flow-bootstrap (D4): fallback pull request opened when the default branch rejected direct push.
+  'factory.setup_pr': {
+    scope: 'project',
+    destructive: false,
+    record: 'always',
+    input: z.object({
+      setupId: z.string().max(128),
+      flowName: z.string().max(128),
+      branch: branchName,
+      base: branchName,
+      prNumber: z.number().int().optional(),
     }),
   },
   'agents.stopped': {

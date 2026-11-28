@@ -67,6 +67,10 @@ const OWNERS: StatusOwners = {
     files: ['packages/shared/src/repositories/pending-permission-repository.ts'],
     why: 'compare-and-set on status = active',
   },
+  factoryFlowSetups: {
+    files: ['packages/shared/src/repositories/factory-flow-setup-repository.ts'],
+    why: 'factory-flow-setup-machine guard (factory flow setup repository transition)',
+  },
 };
 
 const TABLES = Object.keys(OWNERS).join('|');

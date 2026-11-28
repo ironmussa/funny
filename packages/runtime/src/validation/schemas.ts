@@ -86,6 +86,7 @@ const threadSourceSchema = z.enum([
   'automation',
   'ingest',
   'factory',
+  'factory-setup',
 ]);
 
 // ── Image attachment ─────────────────────────────────────────────
@@ -356,7 +357,10 @@ export const createIdleThreadSchema = z.object({
   title: z.string().min(1, 'title is required'),
   mode: threadModeSchema,
   source: threadSourceSchema.default('web'),
+  branch: branchNameSchema.optional(),
   baseBranch: optionalBaseBranchSchema,
+  baseFromRemote: z.boolean().optional(),
+  prepareWorktree: z.boolean().optional(),
   prompt: z.string().optional(),
   images: z.array(imageAttachmentSchema).optional(),
   fileReferences: z.array(fileReferenceSchema).max(20).optional(),
@@ -763,6 +767,133 @@ export const startFactoryStepSchema = z.discriminatedUnion('kind', [
     branch: factoryBranchSchema,
     timeoutMs: factoryTimeoutSchema,
   }),
+]);
+
+// ── Factory flow setup (openspec factory-flow-bootstrap) ────────
+
+const setupCanarySchema = z.object({
+  ruleIndex: z.number().int().min(0),
+  passingPath: z.string().min(1).max(500),
+  failingPath: z.string().min(1).max(500),
+  passingContent: z.string().max(200_000).optional(),
+  failingContent: z.string().max(200_000).optional(),
+});
+
+const setupProofRuleSchema = z.object({
+  globs: z.array(z.string().min(1)).min(1),
+  command: z.string().min(1).max(4000),
+  cwd: z.string().min(1).max(500).optional(),
+});
+
+export const verifyFlowSetupSchema = z.object({
+  baseSha: factoryCommitSchema,
+  workflowYaml: z.string().min(1).max(500_000),
+  rules: z.array(setupProofRuleSchema).min(1).max(50),
+  setupCommand: z.string().min(1).max(4000).optional(),
+  supportGlobs: z.array(z.string().min(1)).max(50).optional(),
+  canaries: z.array(setupCanarySchema).min(1).max(50),
+  infraFiles: z.array(z.string().min(1)).max(500).optional(),
+  timeoutMs: z.number().int().positive().max(3_600_000).optional(),
+});
+
+export const commitFlowSetupSchema = z.object({
+  defaultBranch: factoryBranchSchema,
+  files: z
+    .array(
+      z.object({
+        path: z.string().min(1).max(500),
+        content: z.string().max(500_000),
+      }),
+    )
+    .min(1)
+    .max(50),
+  expectedFlowSha: z.string().regex(/^[0-9a-f]{64}$/, 'Invalid expectedFlowSha'),
+  commitMessage: z.string().min(1).max(1000),
+  remote: factoryBranchSchema.optional(),
+});
+
+export const openFlowSetupPRSchema = z.object({
+  setupBranch: factoryBranchSchema.optional(),
+  defaultBranch: factoryBranchSchema,
+  title: z.string().min(1).max(300),
+  body: z.string().max(65_000),
+  githubToken: z.string().min(1).max(500).optional(),
+  remote: factoryBranchSchema.optional(),
+});
+
+// Answers of the setup routes, read by the server's runner client
+// (`server/services/factory/factory-flow-setup-runner.ts`). The routes check
+// what they send against these with `satisfies`.
+
+export const flowSetupFileAnswerSchema = z.object({ path: z.string(), content: z.string() });
+
+export const verifyFlowSetupStartAnswerSchema = z.object({
+  jobId: z.string().min(1),
+  state: z.enum(['running', 'done']),
+});
+
+const setupCheckRunSchema = z.object({
+  command: z.string(),
+  files: z.array(z.string()),
+  exitCode: z.number().int().nullable(),
+  timedOut: z.boolean(),
+  aborted: z.boolean(),
+  outputTail: z.string(),
+});
+
+const setupRuleVerdictSchema = z.object({
+  ruleIndex: z.number().int().min(0),
+  globs: z.array(z.string()),
+  command: z.string(),
+  cwd: z.string().optional(),
+  accepted: z.boolean(),
+  reason: z.string().optional(),
+  passingRun: setupCheckRunSchema.optional(),
+  failingRun: setupCheckRunSchema.optional(),
+  existingRun: setupCheckRunSchema.optional(),
+  twoFileRun: setupCheckRunSchema.optional(),
+});
+
+export const verifyFlowSetupResultSchema = z.object({
+  ok: z.boolean(),
+  failureReason: z
+    .enum(['setup-failed', 'no-rules-survived', 'timed-out', 'aborted', 'worktree-failed'])
+    .optional(),
+  finding: z.string().optional(),
+  setupOutputTail: z.string().optional(),
+  verdicts: z.array(setupRuleVerdictSchema),
+  prunedYaml: z.string().nullable(),
+  acceptedCount: z.number().int().min(0),
+  rejectedCount: z.number().int().min(0),
+});
+
+export const verifyFlowSetupPollAnswerSchema = z.discriminatedUnion('state', [
+  z.object({ state: z.literal('running') }),
+  z.object({ state: z.literal('done'), result: verifyFlowSetupResultSchema }),
+]);
+
+export const commitFlowSetupAnswerSchema = z.discriminatedUnion('ok', [
+  z.object({ ok: z.literal(true), commitSha: z.string().min(1) }),
+  z.object({
+    ok: z.literal(false),
+    kind: z.enum([
+      'sha-mismatch',
+      'invalid-path',
+      'conflict',
+      'branch-rule-rejected',
+      'push-failed',
+    ]),
+    message: z.string(),
+  }),
+]);
+
+export const openFlowSetupPRAnswerSchema = z.discriminatedUnion('ok', [
+  z.object({
+    ok: z.literal(true),
+    prUrl: z.string().min(1),
+    prNumber: z.number().int().nullable(),
+  }),
+  z.object({ ok: z.literal(false), message: z.string() }),
 ]);
 
 // ── Helper ───────────────────────────────────────────────────────

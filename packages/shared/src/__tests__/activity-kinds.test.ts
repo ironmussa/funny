@@ -150,6 +150,20 @@ describe('parseActivityInput for the new kinds', () => {
       prNumber: 90,
       stage: 'opened',
     },
+    'factory.setup_push': {
+      setupId: 'setup-1',
+      flowName: 'issue-to-merge',
+      branch: 'main',
+      variant: 'rules',
+      commitSha: 'abc1234',
+    },
+    'factory.setup_pr': {
+      setupId: 'setup-1',
+      flowName: 'issue-to-merge',
+      branch: 'funny/factory-setup/setup-1',
+      base: 'main',
+      prNumber: 42,
+    },
   };
 
   test('every kind has a sample', () => {

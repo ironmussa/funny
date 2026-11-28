@@ -15,6 +15,7 @@ import {
 } from '@/data/activities/apply-event';
 import { applyApprovalRequested, applyApprovalResolved } from '@/data/approvals/store';
 import { handleRunCompleted, handleRunStarted, handleRunUpdated } from '@/data/automations/events';
+import { applyFactorySetupUpdated } from '@/data/factory/queries';
 import { getThreadsData } from '@/data/threads/store';
 import { closePreviewForCommand } from '@/hooks/use-preview-window';
 import { validateContainerUrl } from '@/lib/api';
@@ -604,6 +605,7 @@ const WEB_EVENT_HANDLERS: Record<WebEventType, WebEventHandler> = {
   },
   'activity:removed': (_threadId, data) => applyActivitiesRemoved(data),
   'activity:progress': (_threadId, data) => applyActivityProgress(data),
+  'factory:setup_updated': (_threadId, data) => applyFactorySetupUpdated(data),
   'worktree:setup': (threadId, data) => {
     useThreadStore.getState().handleWSWorktreeSetup(threadId, data);
   },
@@ -696,6 +698,7 @@ const ALL_EVENT_TYPES = [
   'activity:updated',
   'activity:removed',
   'activity:progress',
+  'factory:setup_updated',
   'worktree:setup',
   'worktree:setup_complete',
   'native-git:build_output',

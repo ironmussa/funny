@@ -2,7 +2,7 @@
 // `../schema.sqlite.js`).
 import { sqliteTable, text, integer, primaryKey, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
-import { projects } from './runtime-tables.js';
+import { projects, threads } from './runtime-tables.js';
 
 /**
  * Per-(project, user) issue factory (change issue-factory): a toggle plus the
@@ -432,3 +432,50 @@ export const workflowConcurrencyWaiters = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.groupKey, t.holder] })],
 );
+
+/**
+ * Guided factory flow configuration setup (openspec `factory-flow-bootstrap`,
+ * D4): generates and verifies `regression_proof` rules in a worktree on the
+ * member's runner before committing to the default branch or opening a PR.
+ * Partial unique index `factory_flow_setups_one_open` enforces at most one
+ * non-ended setup per `(project_id, user_id, flow_name)`.
+ */
+// Dialect mirror: schema.pg.ts and schema.sqlite.ts must declare the same columns.
+// fallow-ignore-next-line code-duplication
+export const factoryFlowSetups = sqliteTable('factory_flow_setups', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id')
+    .notNull()
+    .references(() => projects.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull(),
+  flowName: text('flow_name').notNull(),
+  defaultBranch: text('default_branch').notNull(),
+  baseSha: text('base_sha').notNull(),
+  threadId: text('thread_id').references(() => threads.id, { onDelete: 'set null' }),
+  branch: text('branch').notNull(),
+  worktreePath: text('worktree_path'),
+  runnerId: text('runner_id'),
+  /** State machine: generating → verifying → proposed → committing → committed | push_rejected → pr_open | discarded | failed. */
+  state: text('state').notNull().default('generating'),
+  startingFile: text('starting_file').notNull(),
+  /** `'repo'` when copied from the default branch, `'builtin'` when starting from a built-in flow. */
+  startingSource: text('starting_source').notNull(),
+  /** JSON: array of `{ path, content }` built-in prompt files bundled when `startingSource === 'builtin'`. */
+  builtinPrompts: text('builtin_prompts'),
+  proposedFile: text('proposed_file'),
+  proposedFileSha: text('proposed_file_sha'),
+  /** `'rules'` | `'opt-out'`: recorded when entering `committing`. */
+  commitVariant: text('commit_variant'),
+  /** JSON: `TestStackFacts` returned by `detectTestStack`. */
+  facts: text('facts'),
+  verifyJobId: text('verify_job_id'),
+  /** JSON: per-rule verification verdicts and uncovered notes. */
+  verdicts: text('verdicts'),
+  error: text('error'),
+  commitSha: text('commit_sha'),
+  prNumber: integer('pr_number'),
+  prUrl: text('pr_url'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+  endedAt: text('ended_at'),
+});

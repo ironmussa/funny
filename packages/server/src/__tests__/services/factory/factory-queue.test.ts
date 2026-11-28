@@ -686,8 +686,69 @@ describe('validating a flow', () => {
       ok: true,
       source: 'built-in',
       commit: null,
+      proofReady: true,
       unusedOverrides: [],
     });
+  });
+
+  // openspec factory-flow-bootstrap, 2.1: proofReady on FactoryFlowValidation.
+  test('reports proofReady for flows with rules, without rules, with opt-out, and without a merge step', async () => {
+    const withRules = [
+      'name: with-rules',
+      'nodes:',
+      '  - id: implement',
+      '    spawn_agent: { prompt: go }',
+      '  - id: proof',
+      '    depends_on: [implement]',
+      '    regression_proof:',
+      '      rules:',
+      '        - globs: ["**/*.test.ts"]',
+      '          command: "bun test {{files}}"',
+      '  - id: merge',
+      '    depends_on: [proof]',
+      '    merge: {}',
+    ].join('\n');
+    const withoutRules = [
+      'name: without-rules',
+      'nodes:',
+      '  - id: implement',
+      '    spawn_agent: { prompt: go }',
+      '  - id: merge',
+      '    depends_on: [implement]',
+      '    merge: {}',
+    ].join('\n');
+    const optOut = [
+      'name: opt-out',
+      'nodes:',
+      '  - id: implement',
+      '    spawn_agent: { prompt: go }',
+      '  - id: merge',
+      '    depends_on: [implement]',
+      '    merge: { require_regression_proof: false }',
+    ].join('\n');
+    const { factoryId, queue } = await setUp({
+      script: {
+        repoFiles: {
+          '.funny/workflows/with-rules.yaml': withRules,
+          '.funny/workflows/without-rules.yaml': withoutRules,
+          '.funny/workflows/opt-out.yaml': optOut,
+        },
+      },
+    });
+
+    expect((await queue.validateFlow(factoryId, 'p1', 'with-rules'))._unsafeUnwrap()).toMatchObject(
+      { ok: true, proofReady: true },
+    );
+    expect(
+      (await queue.validateFlow(factoryId, 'p1', 'without-rules'))._unsafeUnwrap(),
+    ).toMatchObject({ ok: true, proofReady: false });
+    expect((await queue.validateFlow(factoryId, 'p1', 'opt-out'))._unsafeUnwrap()).toMatchObject({
+      ok: true,
+      proofReady: true,
+    });
+    expect(
+      (await queue.validateFlow(factoryId, 'p1', 'issue-to-pr'))._unsafeUnwrap(),
+    ).toMatchObject({ ok: true, proofReady: true });
   });
 });
 

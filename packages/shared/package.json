@@ -70,6 +70,7 @@
     "./project-secrets": "./src/project-secrets.ts",
     "./activities": "./src/activities/kinds.ts",
     "./activity-machine": "./src/activity-machine.ts",
+    "./factory-flow-setup-machine": "./src/factory-flow-setup-machine.ts",
     "./frame-policy": "./src/frame-policy.ts",
     "./json": "./src/json.ts"
   },

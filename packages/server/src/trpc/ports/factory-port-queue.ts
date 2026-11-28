@@ -127,7 +127,7 @@ export function queuePortMethods(
         .factoryId(userId, projectId)
         .mapErr(settingsFailure)
         .andThen((factoryId) =>
-          queue.validateFlow(factoryId, projectId, flowName).mapErr(queueFailure),
+          queue.validateFlow(factoryId, projectId, flowName, { userId }).mapErr(queueFailure),
         );
     },
 

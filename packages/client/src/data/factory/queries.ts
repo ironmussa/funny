@@ -1,6 +1,7 @@
 import type {
   FactoryApprovalRequest,
   FactoryFlowDefinition,
+  FactoryFlowSetupView,
   FactoryFlowValidation,
   FactoryFlowOption,
   FactoryIssueBlockers,
@@ -275,6 +276,17 @@ export function factoryFlowValidationQuery(
   };
 }
 
+/** Read the flow validation again after settings change or a setup settles. */
+export function refreshFactoryFlowValidation(
+  projectId: string,
+  layer: DataLayer = getDataLayer(),
+): void {
+  if (layer.disposed) return;
+  void layer.queryClient.invalidateQueries({
+    queryKey: ['factory', 'flow-validation', projectId],
+  });
+}
+
 /** The open blockers of the selected issues (the send bar's warning). */
 export function factoryBlockersQuery(projectId: string, issueNumbers: number[]) {
   const sorted = [...issueNumbers].sort((a, b) => a - b);
@@ -369,4 +381,63 @@ export function writeFactorySettings(
     factorySettingsKey(settings.projectId),
     settings,
   );
+}
+
+const factoryFlowSetupPrefix = (projectId: string) => ['factory', 'flow-setup', projectId] as const;
+
+const factoryFlowSetupKey = (projectId: string, flowName?: string) =>
+  flowName
+    ? (['factory', 'flow-setup', projectId, flowName] as const)
+    : (['factory', 'flow-setup', projectId] as const);
+
+/** The caller's current or most recent guided flow setup for a project + flow. */
+export function factoryFlowSetupQuery(projectId: string, flowName?: string) {
+  return {
+    queryKey: factoryFlowSetupKey(projectId, flowName),
+    queryFn: (): Promise<FactoryFlowSetupView | null> =>
+      unwrapResult(factoryApi.getFlowSetup(projectId, flowName)),
+    staleTime: 10_000,
+    refetchInterval: 10_000,
+  };
+}
+
+/** Write a setup row returned by a mutation into the cached query. */
+export function writeFactoryFlowSetup(
+  projectId: string,
+  setup: FactoryFlowSetupView,
+  layer: DataLayer = getDataLayer(),
+): void {
+  if (layer.disposed) return;
+  layer.queryClient.setQueryData<FactoryFlowSetupView | null>(
+    factoryFlowSetupKey(projectId, setup.flowName),
+    setup,
+  );
+  layer.queryClient.setQueryData<FactoryFlowSetupView | null>(
+    factoryFlowSetupKey(projectId),
+    setup,
+  );
+}
+
+/** Invalidate cached flow setup queries for a project. */
+export function refreshFactoryFlowSetup(
+  projectId: string,
+  layer: DataLayer = getDataLayer(),
+): void {
+  if (layer.disposed) return;
+  void layer.queryClient.invalidateQueries({ queryKey: factoryFlowSetupPrefix(projectId) });
+}
+
+/**
+ * Apply a realtime `factory:setup_updated` event: invalidates both the flow
+ * setup query and the flow validation query so settings reflect the new state
+ * (and re-enable the switch once committed).
+ */
+export function applyFactorySetupUpdated(
+  data: { projectId?: string; setupId?: string; state?: string } | null | undefined,
+  layer: DataLayer = getDataLayer(),
+): void {
+  const projectId = data?.projectId;
+  if (!projectId || layer.disposed) return;
+  refreshFactoryFlowSetup(projectId, layer);
+  refreshFactoryFlowValidation(projectId, layer);
 }

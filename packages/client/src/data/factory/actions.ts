@@ -1,5 +1,6 @@
 import type {
   FactoryApprovalRequest,
+  FactoryFlowSetupView,
   FactoryReplacedPrClose,
   FactoryRunRoute,
 } from '@funny/shared/contracts/factory';
@@ -25,11 +26,14 @@ import { getDataLayer } from '../runtime';
 import {
   refetchFactorySettings,
   refreshFactoryApprovalRequests,
+  refreshFactoryFlowSetup,
+  refreshFactoryFlowValidation,
   refreshFactoryLanes,
   refreshFactoryReadiness,
   refreshFactoryRuns,
   refreshFactoryTriggers,
   writeFactoryApprovalRequest,
+  writeFactoryFlowSetup,
   writeFactoryRun,
   writeFactorySettings,
 } from './queries';
@@ -54,6 +58,7 @@ export function saveFactorySettings(
 ): ResultAsync<FactorySettings, DomainError> {
   return factoryApi.saveSettings(data).map((settings) => {
     writeFactorySettings(settings, layer);
+    refreshFactoryFlowValidation(settings.projectId, layer);
     return settings;
   });
 }
@@ -385,5 +390,57 @@ export function finishFactoryLane(
   return factoryApi.finishLane(projectId, name).map((result) => {
     refreshFactoryLanes(projectId, layer);
     return result;
+  });
+}
+
+/** Start (or return an open) guided regression-proof setup for the project's flow. */
+export function startFactoryFlowSetup(
+  projectId: string,
+  flowName?: string,
+  layer: DataLayer = getDataLayer(),
+): ResultAsync<FactoryFlowSetupView, DomainError> {
+  return factoryApi.startFlowSetup(projectId, flowName).map((setup) => {
+    writeFactoryFlowSetup(projectId, setup, layer);
+    return setup;
+  });
+}
+
+/** Confirm and push a proposed flow configuration or opt-out to the default branch. */
+export function confirmFactoryFlowSetup(
+  projectId: string,
+  setupId: string,
+  fileSha: string,
+  variant: 'rules' | 'opt-out',
+  layer: DataLayer = getDataLayer(),
+): ResultAsync<FactoryFlowSetupView, DomainError> {
+  return factoryApi.confirmFlowSetup(projectId, setupId, fileSha, variant).map((setup) => {
+    writeFactoryFlowSetup(projectId, setup, layer);
+    refreshFactoryFlowValidation(projectId, layer);
+    return setup;
+  });
+}
+
+/** Push the setup branch and open a pull request after a branch-rule push rejection. */
+export function openFactoryFlowSetupPR(
+  projectId: string,
+  setupId: string,
+  layer: DataLayer = getDataLayer(),
+): ResultAsync<FactoryFlowSetupView, DomainError> {
+  return factoryApi.openFlowSetupPullRequest(projectId, setupId).map((setup) => {
+    writeFactoryFlowSetup(projectId, setup, layer);
+    return setup;
+  });
+}
+
+/** Discard a proposed, push-rejected, or PR-open setup. */
+export function discardFactoryFlowSetup(
+  projectId: string,
+  setupId: string,
+  layer: DataLayer = getDataLayer(),
+): ResultAsync<FactoryFlowSetupView, DomainError> {
+  return factoryApi.discardFlowSetup(projectId, setupId).map((setup) => {
+    writeFactoryFlowSetup(projectId, setup, layer);
+    refreshFactoryFlowSetup(projectId, layer);
+    return setup;
   });
 }

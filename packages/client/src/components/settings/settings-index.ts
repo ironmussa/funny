@@ -552,6 +552,15 @@ const ENTRIES = [
     keywords: ['pause', 'paused', 'running'],
   },
   {
+    id: 'factory.proofConfig',
+    scope: 'project',
+    page: 'factory',
+    kind: 'row',
+    title: 'settings.projectFactoryProofConfig',
+    description: 'settings.projectFactoryProofConfigDesc',
+    keywords: ['regression', 'proof', 'generate', 'configuration', 'flow'],
+  },
+  {
     id: 'factory.flow',
     scope: 'project',
     page: 'factory',

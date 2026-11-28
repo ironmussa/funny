@@ -1,6 +1,7 @@
 import type {
   FactoryApprovalRequest,
   FactoryFlowDefinition,
+  FactoryFlowSetupView,
   FactoryFlowValidation,
   FactoryFlowOption,
   FactoryIssueBlockers,
@@ -27,6 +28,7 @@ import {
   NO_PROJECT_FACTORY_RUNS,
   factoryBlockersQuery,
   factoryFlowDefinitionQuery,
+  factoryFlowSetupQuery,
   factoryFlowValidationQuery,
   factoryFlowsQuery,
   factoryIssuelessFlowQuery,
@@ -246,4 +248,12 @@ export function usePendingApprovalRequestOfRun(
   return (
     requests?.find((request) => request.runId === runId && request.state === 'pending') ?? null
   );
+}
+
+/** The caller's current or most recent guided flow setup for `projectId` + `flowName`. */
+export function useFactoryFlowSetup(
+  projectId: string,
+  flowName?: string,
+): FactoryFlowSetupView | null | undefined {
+  return useDataQuery(factoryFlowSetupQuery(projectId, flowName)).data;
 }

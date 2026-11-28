@@ -50,3 +50,12 @@ export {
   type ActivityPatch,
   type ActivityInsert,
 } from './activity-repository.js';
+export {
+  createFactoryFlowSetupRepository,
+  type FactoryFlowSetupRepositoryDeps,
+  type FactoryFlowSetupRepository,
+  type FactoryFlowSetupRow,
+  type FactoryFlowSetupInsert,
+  type FactoryFlowSetupPatch,
+  type FactoryFlowSetupTransitionExpect,
+} from './factory-flow-setup-repository.js';

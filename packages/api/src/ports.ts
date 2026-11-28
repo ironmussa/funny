@@ -56,6 +56,7 @@ import type { CreateDesignBody } from '@funny/shared/contracts/designs';
 import type {
   FactoryFlowDefinition,
   FactoryFlowOption,
+  FactoryFlowSetupView,
   FactoryFlowValidation,
   FactoryQueueCiProposal,
   FactoryReadiness,
@@ -650,6 +651,38 @@ export interface FactoryPort {
   syncLane(userId: string, projectId: string, name: string): PortResult<FactoryLaneSyncResult>;
   /** Open the final pull request that merges a lane into the factory's base branch. Audited. */
   finishLane(userId: string, projectId: string, name: string): PortResult<FactoryLaneFinishResult>;
+  /** Start (or return an existing open) guided regression-proof flow setup. */
+  startFlowSetup(
+    userId: string,
+    projectId: string,
+    flowName?: string,
+  ): PortResult<FactoryFlowSetupView>;
+  /** Current or most recent flow setup for the caller, project and flow. */
+  flowSetup(
+    userId: string,
+    projectId: string,
+    flowName?: string,
+  ): PortResult<FactoryFlowSetupView | null>;
+  /** Confirm and push a proposed flow file or explicit opt-out to the default branch. */
+  confirmFlowSetup(
+    userId: string,
+    projectId: string,
+    setupId: string,
+    fileSha: string,
+    variant: 'rules' | 'opt-out',
+  ): PortResult<FactoryFlowSetupView>;
+  /** Push the setup branch and open a pull request after a branch-rule push rejection. */
+  openFlowSetupPullRequest(
+    userId: string,
+    projectId: string,
+    setupId: string,
+  ): PortResult<FactoryFlowSetupView>;
+  /** Discard a proposed, push-rejected, or PR-open flow setup and clean up its workspace. */
+  discardFlowSetup(
+    userId: string,
+    projectId: string,
+    setupId: string,
+  ): PortResult<FactoryFlowSetupView>;
 }
 
 /** The server's authorization decisions that are not about one thread. */

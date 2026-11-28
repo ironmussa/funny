@@ -33,6 +33,7 @@ import type { DataMessageHandlers } from './data-message-handler-types.js';
 import { AUTOMATION_DATA_HANDLERS } from './data-message-handlers-automations.js';
 import { WATCHER_JOB_DATA_HANDLERS } from './data-message-handlers-watchers-jobs.js';
 import { forgetThreadOwnership } from './data-ownership.js';
+import { onFactoryFlowSetupThreadTerminal } from './factory/factory-flow-setup-live.js';
 import { onFactoryThreadTerminal } from './factory/factory-run-control.js';
 import * as messageQueueRepo from './message-queue-repository.js';
 import * as projectRepo from './project-repository.js';
@@ -137,6 +138,14 @@ function notifyTerminalStatusPersisted(
   // failed or parked run's thread puts the run back in flight.
   void onFactoryThreadTerminal(threadId, status).catch((error) =>
     log.error('Failed to resume factory run', {
+      namespace: 'factory',
+      threadId,
+      error: errorMessage(error),
+    }),
+  );
+  // A factory flow setup thread triggers verification (on completed) or fails.
+  void onFactoryFlowSetupThreadTerminal(threadId, status).catch((error) =>
+    log.error('Failed to advance factory flow setup', {
       namespace: 'factory',
       threadId,
       error: errorMessage(error),

@@ -2719,6 +2719,49 @@ const migrations: Migration[] = [
       await ctx().addColumn('factory_lanes', 'finish_branch', 'TEXT');
     },
   },
+  {
+    // Change factory-flow-bootstrap, D4: guided setup for a factory's
+    // `regression_proof` rules, with one open setup per (project, user, flow).
+    name: '147_factory_flow_setups',
+    async up() {
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS factory_flow_setups (
+          id TEXT PRIMARY KEY,
+          project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+          user_id TEXT NOT NULL,
+          flow_name TEXT NOT NULL,
+          default_branch TEXT NOT NULL,
+          base_sha TEXT NOT NULL,
+          thread_id TEXT REFERENCES threads(id) ON DELETE SET NULL,
+          branch TEXT NOT NULL,
+          worktree_path TEXT,
+          runner_id TEXT,
+          state TEXT NOT NULL DEFAULT 'generating',
+          starting_file TEXT NOT NULL,
+          starting_source TEXT NOT NULL,
+          builtin_prompts TEXT,
+          proposed_file TEXT,
+          proposed_file_sha TEXT,
+          commit_variant TEXT,
+          facts TEXT,
+          verify_job_id TEXT,
+          verdicts TEXT,
+          error TEXT,
+          commit_sha TEXT,
+          pr_number INTEGER,
+          pr_url TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          ended_at TEXT
+        )
+      `);
+      await ctx().exec(sql`
+        CREATE UNIQUE INDEX IF NOT EXISTS factory_flow_setups_one_open
+        ON factory_flow_setups (project_id, user_id, flow_name)
+        WHERE state NOT IN ('committed', 'discarded', 'failed')
+      `);
+    },
+  },
 ];
 
 /**

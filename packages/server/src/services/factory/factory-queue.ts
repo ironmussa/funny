@@ -503,8 +503,12 @@ export function createFactoryQueue(deps: FactoryQueueDeps = {}) {
     proposeQueueCi: (userId: string, factoryId: string) =>
       new ResultAsync(proposeQueueCi(userId, factoryId)),
 
-    validateFlow: (factoryId: string | null, projectId: string, flowName: string) =>
-      new ResultAsync(validateFlow(factoryId, projectId, flowName)),
+    validateFlow: (
+      factoryId: string | null,
+      projectId: string,
+      flowName: string,
+      options?: { userId?: string; requireRepo?: boolean },
+    ) => new ResultAsync(validateFlow(factoryId, projectId, flowName, options)),
 
     /** Remove every waiting issue from the queue; runs in progress go on. */
     clearQueue(factoryId: string): ResultAsync<FactoryQueueClearResult, FactoryQueueError> {

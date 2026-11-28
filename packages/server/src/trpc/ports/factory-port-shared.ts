@@ -29,7 +29,7 @@ import {
 } from '../../services/factory/factory-settings.js';
 import { rescheduleFactory } from '../../services/factory/factory-watcher.js';
 
-const STATUS: Record<FactorySettingsError['kind'], 400 | 403 | 404 | 500> = {
+const STATUS: Record<'not-found' | 'forbidden' | 'invalid' | 'storage', 400 | 403 | 404 | 500> = {
   'not-found': 404,
   forbidden: 403,
   invalid: 400,
@@ -40,6 +40,22 @@ export function settingsFailure(error: FactorySettingsError): ApiFailure {
   if (error.kind === 'storage') {
     log.error('Factory settings storage failure', { namespace: 'factory', error: error.message });
     return failure(500, 'Internal error');
+  }
+  if (error.kind === 'flow-not-ready') {
+    return {
+      status: 409,
+      message: error.message,
+      friendlyMessage: error.message,
+      code: 'flow-not-ready',
+    };
+  }
+  if (error.kind === 'flow-not-checked') {
+    return {
+      status: 503,
+      message: error.message,
+      friendlyMessage: error.message,
+      code: 'flow-not-checked',
+    };
   }
   return failure(STATUS[error.kind], error.message);
 }

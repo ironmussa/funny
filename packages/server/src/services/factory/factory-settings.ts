@@ -12,6 +12,8 @@ import {
   type FactoryAutoMerge,
   type FactoryBatchSettings,
   type FactoryDependencies,
+  type FactoryFlowProblem,
+  type FactoryFlowValidation,
   type FactoryMode,
   type FactorySettings,
   type FactoryStepOverrides,
@@ -60,7 +62,30 @@ export type FactorySettingsError =
   /** The caller can see the project but their role does not allow this. */
   | { kind: 'forbidden'; message: string }
   | { kind: 'invalid'; message: string }
+  /** Turning a factory on was refused because its flow is invalid or lacks proof rules (D1). */
+  | {
+      kind: 'flow-not-ready';
+      reason: 'proof-not-configured' | 'invalid';
+      message: string;
+      problems?: FactoryFlowProblem[];
+    }
+  /** Turning a factory on was refused because the repository could not be read (D1). */
+  | { kind: 'flow-not-checked'; message: string }
   | { kind: 'storage'; message: string };
+
+/** Flow validation hook injected by the tRPC port for the enable gate (D1). */
+export type ValidateFactoryFlow = (
+  factoryId: string | null,
+  projectId: string,
+  flowName: string,
+  options?: { userId?: string; requireRepo?: boolean },
+) => ResultAsync<FactoryFlowValidation, { message: string }>;
+
+export interface FactorySettingsDeps {
+  newId?: () => string;
+  /** When provided, turning a factory on validates its configured flow first (D1). */
+  validateFlow?: ValidateFactoryFlow;
+}
 
 /** The settings a member configures (the contract's), without the toggle and the bookkeeping. */
 type FactoryConfig = Omit<
@@ -527,14 +552,56 @@ function changedColumns(row: Row, input: SaveFactorySettingsInput): Partial<Row>
   };
 }
 
-export function createFactorySettingsService(
-  deps: { newId: () => string } = { newId: () => crypto.randomUUID() },
-) {
-  const find = (userId: string, projectId: string) =>
+export function createFactorySettingsService(deps: FactorySettingsDeps = {}) {
+  const newId = deps.newId ?? (() => crypto.randomUUID());
+
+  const findRow = (userId: string, projectId: string) =>
     ResultAsync.fromPromise(
       db.select().from(factorySettings).where(byOwner(userId, projectId)),
       storage,
-    ).map(([row]) => (row ? toView(row) : null));
+    ).map(([row]) => row ?? null);
+
+  const find = (userId: string, projectId: string) =>
+    findRow(userId, projectId).map((row) => (row ? toView(row) : null));
+
+  /**
+   * Enable gate (openspec factory-flow-bootstrap, D1): turning a factory on
+   * (when the row is off or absent) requires its configured flow to load and
+   * be proof-ready. Saves of an already-enabled factory skip this check.
+   */
+  const enableGate = (
+    userId: string,
+    projectId: string,
+    input: SaveFactorySettingsInput,
+    existing: Row | null,
+  ): ResultAsync<void, FactorySettingsError> => {
+    if (!input.enabled || existing?.enabled || !deps.validateFlow) return okAsync(undefined);
+    const flowName = input.flowName?.trim() || existing?.flowName || 'issue-to-merge';
+    return deps
+      .validateFlow(existing?.id ?? null, projectId, flowName, { userId, requireRepo: true })
+      .mapErr((error): FactorySettingsError => ({
+        kind: 'flow-not-checked',
+        message: `The flow "${flowName}" could not be checked: ${error.message}`,
+      }))
+      .andThen((validation) => {
+        if (!validation.ok) {
+          return errAsync<void, FactorySettingsError>({
+            kind: 'flow-not-ready',
+            reason: 'invalid',
+            message: validation.message,
+            problems: validation.problems,
+          });
+        }
+        if (!validation.proofReady) {
+          return errAsync<void, FactorySettingsError>({
+            kind: 'flow-not-ready',
+            reason: 'proof-not-configured',
+            message: `The flow "${flowName}" has no regression proof rules. Generate or configure regression proof, or opt out, before enabling.`,
+          });
+        }
+        return okAsync(undefined);
+      });
+  };
 
   /**
    * Insert the row, or on conflict change only the fields this save carries
@@ -594,10 +661,15 @@ export function createFactorySettingsService(
       // Enabling a factory starts agent threads on the project as this user,
       // so it needs the same capability as starting a thread by hand.
       return requireProjectAccess(userId, projectId, 'steer', accessErrors)
-        .andThen(() => find(userId, projectId))
+        .andThen(() => findRow(userId, projectId))
+        .andThen((existingRow) =>
+          enableGate(userId, projectId, input, existingRow).map(() =>
+            existingRow ? toView(existingRow) : null,
+          ),
+        )
         .andThen((existing) => lanesFix(userId, projectId, input, existing).map(() => existing))
         .andThen((existing) =>
-          upsert(buildRow(deps.newId(), userId, projectId, input, existing), input),
+          upsert(buildRow(newId(), userId, projectId, input, existing), input),
         );
     },
 

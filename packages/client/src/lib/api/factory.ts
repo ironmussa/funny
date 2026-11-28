@@ -14,6 +14,12 @@ import { trpc, trpcCall } from './_trpc';
 export type {
   FactoryFlowAgentStep,
   FactoryFlowProblem,
+  FactoryFlowSetupFacts,
+  FactoryFlowSetupRuleCheckRun,
+  FactoryFlowSetupRuleVerdict,
+  FactoryFlowSetupState,
+  FactoryFlowSetupVerdicts,
+  FactoryFlowSetupView,
   FactoryFlowValidation,
   FactoryIssuelessFlow,
   FactoryLaneFinishResult,
@@ -102,4 +108,19 @@ export const factoryApi = {
     trpcCall(() => procedures.lanes.sync.mutate({ projectId, name })),
   finishLane: (projectId: string, name: string) =>
     trpcCall(() => procedures.lanes.finish.mutate({ projectId, name })),
+  // Guided flow setup (openspec factory-flow-bootstrap).
+  startFlowSetup: (projectId: string, flowName?: string) =>
+    trpcCall(() => procedures.startFlowSetup.mutate({ projectId, flowName })),
+  getFlowSetup: (projectId: string, flowName?: string) =>
+    trpcCall(() => procedures.flowSetup.query({ projectId, flowName })),
+  confirmFlowSetup: (
+    projectId: string,
+    setupId: string,
+    fileSha: string,
+    variant: 'rules' | 'opt-out',
+  ) => trpcCall(() => procedures.confirmFlowSetup.mutate({ projectId, setupId, fileSha, variant })),
+  openFlowSetupPullRequest: (projectId: string, setupId: string) =>
+    trpcCall(() => procedures.openFlowSetupPullRequest.mutate({ projectId, setupId })),
+  discardFlowSetup: (projectId: string, setupId: string) =>
+    trpcCall(() => procedures.discardFlowSetup.mutate({ projectId, setupId })),
 };

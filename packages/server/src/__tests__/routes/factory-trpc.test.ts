@@ -9,9 +9,14 @@ process.env.RUNNER_AUTH_SECRET = 'test-secret';
 
 mockCoreGitRepoChecks();
 
-import { beforeAll, beforeEach, describe, expect, test } from 'bun:test';
+import { afterEach, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
+import { errAsync, okAsync } from 'neverthrow';
+
+import type { FactoryGithubPort } from '../../services/factory/factory-github.js';
 import type { FactoryRunState } from '../../services/factory/factory-runs.js';
+import { startFactoryWatcher, stopFactoryWatcher } from '../../services/factory/factory-watcher.js';
+import { proofReadyFlowFiles, unusedRunnerPorts } from '../helpers/builders-services.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
 import { seedProject, seedProjectMember } from '../helpers/test-db.js';
 
@@ -40,14 +45,40 @@ describe('factory over tRPC', () => {
     return { status: res.status, body: (await res.json()).result?.data };
   };
 
+  const startProofReadyWatcher = (files: Record<string, string> = proofReadyFlowFiles()) => {
+    const githubPartial: Partial<FactoryGithubPort> = {
+      resolveRepo: async () => 'o/r',
+      defaultBranch: () => okAsync('main'),
+      defaultBranchHead: () => okAsync({ branch: 'main', sha: 'sha-base' }),
+      readDefaultBranchFile: (_reader: unknown, path: string) => okAsync(files[path] ?? null),
+      readFileAt: (_reader: unknown, path: string) => okAsync(files[path] ?? null),
+      listDefaultBranchDir: () => okAsync([]),
+      relabelIssue: () => okAsync(undefined),
+      commentOnIssue: () => okAsync(undefined),
+      getIssue: () => errAsync({ message: 'not found', status: 404 }),
+      issueText: () => okAsync({ title: 'Issue', body: '', comments: [] }),
+    };
+    return startFactoryWatcher({
+      // SAFETY: test stub only exercises flow validation reads on the watcher's GitHub port.
+      github: githubPartial as FactoryGithubPort,
+      ports: unusedRunnerPorts(),
+      createPoll: () => ({ stop: () => {} }),
+    });
+  };
+
   beforeAll(async () => {
     t = await createTestApp({ userId: 'alice' });
   });
 
-  beforeEach(() => {
+  beforeEach(async () => {
     t.cleanup();
     seedProject(t.db, { id: 'p1', userId: 'alice', path: '/repo-a' });
     seedProject(t.db, { id: 'bob-project', userId: 'bob', path: '/repo-b' });
+    await startProofReadyWatcher();
+  });
+
+  afterEach(() => {
+    stopFactoryWatcher();
   });
 
   test('settings are null until saved, then read back', async () => {
@@ -777,8 +808,26 @@ describe('factory over tRPC', () => {
     const input = { projectId: 'p1', flowName: 'issue-to-pr' };
     const answer = await query('vic', 'validateFlow', input);
     expect(answer.status).toBe(200);
-    expect(answer.body).toMatchObject({ ok: true, name: 'issue-to-pr', source: 'built-in' });
+    expect(answer.body).toMatchObject({
+      ok: true,
+      name: 'issue-to-pr',
+      source: 'built-in',
+      proofReady: true,
+    });
     expect((await query('bob', 'validateFlow', input)).status).toBe(404);
+  });
+
+  test('enabling refuses with 409 when flow lacks proof rules and 503 when GitHub cannot be checked', async () => {
+    stopFactoryWatcher();
+    await startProofReadyWatcher({});
+    const notReady = await mutate('alice', 'save', { projectId: 'p1', enabled: true });
+    expect(notReady.status).toBe(409);
+    expect(notReady.message).toContain('no regression proof rules');
+
+    stopFactoryWatcher();
+    const notChecked = await mutate('alice', 'save', { projectId: 'p1', enabled: true });
+    expect(notChecked.status).toBe(503);
+    expect(notChecked.message).toContain('could not be checked');
   });
 
   test('a viewer cannot change step overrides', async () => {
@@ -844,6 +893,7 @@ describe('factory over tRPC', () => {
   // openspec factory-integration 6.1: how the repository merges, and why.
   test('readiness says how the repository merges; without a running factory, one at a time', async () => {
     await save('alice', { projectId: 'p1', enabled: true });
+    stopFactoryWatcher();
     const answer = await query('alice', 'readiness', { projectId: 'p1' });
     expect(answer).toMatchObject({
       status: 200,

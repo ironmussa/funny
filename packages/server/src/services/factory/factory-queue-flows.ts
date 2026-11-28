@@ -155,16 +155,68 @@ export function createFactoryQueueFlows(ctx: FactoryQueueFlowsContext) {
   }
 
   /**
+   * Resolve the repository reader for `validateFlow`, supporting both an
+   * existing factory row and a project whose factory has never been saved yet
+   * (when `userId` is passed). When `requireRepo` is true (the enable gate),
+   * an unreadable repository is an error instead of falling back to built-ins.
+   */
+  async function readerForValidation(
+    factoryId: string | null,
+    projectId: string,
+    options?: { userId?: string; requireRepo?: boolean },
+  ): Promise<
+    Result<{ port: FactoryGithubPort; reader: FactoryRepoReader } | null, FactoryQueueError>
+  > {
+    const port = github();
+    if (!port) {
+      return options?.requireRepo
+        ? err({ kind: 'cannot-work', message: NOT_RUNNING_HERE })
+        : ok(null);
+    }
+    if (factoryId) {
+      const factory = await loadFactory(factoryId);
+      if (!factory) {
+        return options?.requireRepo
+          ? err({ kind: 'cannot-work', message: NOT_RUNNING_HERE })
+          : ok(null);
+      }
+      const where = await target(factory);
+      if (!where || 'reason' in where) {
+        return options?.requireRepo
+          ? err({ kind: 'cannot-work', message: where ? where.reason : NOT_RUNNING_HERE })
+          : ok(null);
+      }
+      return ok({
+        port,
+        reader: { repo: where.repo, ownerId: factory.userId, projectId: factory.projectId },
+      });
+    }
+    const repo = options?.userId ? await port.resolveRepo(options.userId, projectId) : null;
+    if (!repo) {
+      return options?.requireRepo
+        ? err({
+            kind: 'cannot-work',
+            message:
+              "The project's repository could not be read (is your runner online, and does the project have a GitHub origin?).",
+          })
+        : ok(null);
+    }
+    return ok({ port, reader: { repo, ownerId: options!.userId!, projectId } });
+  }
+
+  /**
    * Validate flow (openspec factory-flow-step-options, D8): the flow loaded
    * exactly as an admitted run of this factory would load it now (default
    * branch at its head, prompt files, the factory checks, its step overrides
    * and the project's defaults), and its summary or every problem. Reads only:
-   * no run, no thread. Without a factory, the built-ins only.
+   * no run, no thread. Without a factory, reads the repository when `userId`
+   * resolves it, else the built-ins only (or refuses when `requireRepo` is set).
    */
   async function validateFlow(
     factoryId: string | null,
     projectId: string,
     flowName: string,
+    options?: { userId?: string; requireRepo?: boolean },
   ): Promise<Result<FactoryFlowValidation, FactoryQueueError>> {
     const factory = factoryId ? await loadFactory(factoryId) : null;
     const context = {
@@ -173,7 +225,9 @@ export function createFactoryQueueFlows(ctx: FactoryQueueFlowsContext) {
       dependencies: factory?.dependencies,
       specStage: factory?.specStage,
     };
-    const where = factoryId ? await readerOf(factoryId) : null;
+    const resolved = await readerForValidation(factoryId, projectId, options);
+    if (resolved.isErr()) return err(resolved.error);
+    const where = resolved.value;
     const reads = where
       ? flowReadsOf(where.port, where.reader)
       : { readDefaultBranchFile: () => okAsync<string | null, GithubCallError>(null) };
@@ -191,6 +245,7 @@ export function createFactoryQueueFlows(ctx: FactoryQueueFlowsContext) {
       name: flow.value.name,
       source: flow.value.source,
       commit: flow.value.commit,
+      proofReady: flow.value.proofReady,
       ...summary,
       // What loading the flow found too (stale wording of a repository copy).
       warnings: [...summary.warnings, ...flow.value.warnings.map((warning) => warning.message)],
